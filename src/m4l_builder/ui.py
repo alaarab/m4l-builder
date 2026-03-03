@@ -31,19 +31,7 @@ def panel(id: str, rect: list, *, bgcolor: list, border: int = 0,
           **kwargs) -> dict:
     """Create a panel background element.
 
-    CRITICAL: Always sets background:1 to prevent the panel from rendering
-    on top of other objects in presentation view.
-
-    Args:
-        id: Unique object ID.
-        rect: [x, y, width, height] in presentation view.
-        bgcolor: RGBA color list [r, g, b, a].
-        border: Border width in pixels.
-        bordercolor: RGBA border color.
-        rounded: Corner radius.
-        bgfillcolor: Gradient fill dict with keys: type, color1, color2, angle, proportion.
-        shadow: Positive=raised, negative=recessed.
-        shape: 0=rect, 1=circle, 2=triangle, 3=arrow.
+    Always sets background:1 so the panel renders behind other objects in presentation view.
     """
     extra = {
         "mode": 0,
@@ -75,24 +63,9 @@ def dial(id: str, varname: str, rect: list, *,
          **kwargs) -> dict:
     """Create a live.dial with parameter storage.
 
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name (stored in the Live preset).
-        rect: [x, y, width, height] in presentation view.
-        min_val: Minimum parameter value.
-        max_val: Maximum parameter value.
-        initial: Default/initial value.
-        shortname: Short display name (defaults to varname).
-        unitstyle: Unit display style (see constants.py UNITSTYLE_*).
-        patching_rect: Override patching view position.
-        appearance: 0=Vertical, 1=Tiny, 2=Panel, 3=Large.
-        activedialcolor: RGBA color of the dial arc.
-        activeneedlecolor: RGBA needle/indicator color.
-        showname: 0=hide name label, 1=show.
-        shownumber: 0=hide value, 1=show.
-        parameter_exponent: Log scaling for frequency knobs (e.g., 3.0).
-        triangle: Show reset-to-default triangle (0=hide).
-        focusbordercolor: RGBA highlight color when selected.
+    appearance: 0=Vertical, 1=Tiny, 2=Panel, 3=Large.
+    parameter_exponent: log scaling — use 3.0 for frequency knobs.
+    unitstyle: see constants.py UNITSTYLE_* values.
     """
     box = {
         "id": id,
@@ -139,22 +112,7 @@ def tab(id: str, varname: str, rect: list, *,
         patching_rect: list = None, rounded: float = 0.0,
         spacing_x: float = 0.0, appearance: int = 0,
         **kwargs) -> dict:
-    """Create a live.tab selector.
-
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        options: List of tab label strings.
-        bgcolor: Background color for unselected tabs.
-        bgoncolor: Background color for selected tab.
-        textcolor: Text color for unselected tabs.
-        textoncolor: Text color for selected tab.
-        patching_rect: Override patching view position.
-        rounded: Corner radius for pill-shaped buttons.
-        spacing_x: Gaps between tabs.
-        appearance: 0=Default, 1=LCD.
-    """
+    """Create a live.tab selector."""
     box = {
         "id": id,
         "maxclass": "live.tab",
@@ -202,17 +160,7 @@ def toggle(id: str, varname: str, rect: list, *, shortname: str = None,
            **kwargs) -> dict:
     """Create a live.toggle with parameter storage.
 
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        shortname: Short display name (defaults to varname).
-        patching_rect: Override patching view position.
-        activebgcolor: RGBA background when OFF.
-        activebgoncolor: RGBA background when ON.
-        rounded: Corner radius.
-        labels: Tuple of (off_label, on_label) for automation display.
-                Examples: ("off", "on"), ("Normal", "Inverted"), ("Stereo", "Mono").
+    labels: (off_label, on_label) for automation display, e.g. ("Normal", "Inverted").
     """
     box = {
         "id": id,
@@ -248,18 +196,7 @@ def comment(id: str, rect: list, text: str, *, textcolor: list = None,
             fontsize: float = 10.0, fontname: str = "Ableton Sans Medium",
             justification: int = 0, patching_rect: list = None,
             **kwargs) -> dict:
-    """Create a live.comment label.
-
-    Args:
-        id: Unique object ID.
-        rect: [x, y, width, height] in presentation view.
-        text: Label text.
-        textcolor: RGBA text color.
-        fontsize: Font size in points.
-        fontname: Font family name.
-        justification: Text alignment (0=left, 1=center, 2=right).
-        patching_rect: Override patching view position.
-    """
+    """Create a live.comment label."""
     box = {
         "id": id,
         "maxclass": "live.comment",
@@ -282,18 +219,7 @@ def meter(id: str, rect: list, *, orientation: int = 0,
           patching_rect: list = None, coldcolor: list = None,
           warmcolor: list = None, hotcolor: list = None,
           overloadcolor: list = None, **kwargs) -> dict:
-    """Create a live.meter~ level meter.
-
-    Args:
-        id: Unique object ID.
-        rect: [x, y, width, height] in presentation view.
-        orientation: 0 = vertical, 1 = horizontal.
-        patching_rect: Override patching view position.
-        coldcolor: RGBA color for low levels.
-        warmcolor: RGBA color for medium levels.
-        hotcolor: RGBA color for high levels.
-        overloadcolor: RGBA color for overload.
-    """
+    """Create a live.meter~ level meter."""
     extra = {
         "outlettype": [""],
         "orientation": orientation,
@@ -318,16 +244,7 @@ def meter(id: str, rect: list, *, orientation: int = 0,
 def menu(id: str, varname: str, rect: list, *, options: list,
          shortname: str = None, patching_rect: list = None,
          **kwargs) -> dict:
-    """Create a live.menu dropdown selector.
-
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        options: List of menu item strings.
-        shortname: Short display name (defaults to varname).
-        patching_rect: Override patching view position.
-    """
+    """Create a live.menu dropdown selector."""
     box = {
         "id": id,
         "maxclass": "live.menu",
@@ -357,19 +274,7 @@ def number_box(id: str, varname: str, rect: list, *,
                initial: float = 0.0, shortname: str = None,
                unitstyle: int = 1, patching_rect: list = None,
                **kwargs) -> dict:
-    """Create a live.numbox numeric display with parameter storage.
-
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        min_val: Minimum parameter value.
-        max_val: Maximum parameter value.
-        initial: Default/initial value.
-        shortname: Short display name (defaults to varname).
-        unitstyle: Unit display style (see constants.py UNITSTYLE_*).
-        patching_rect: Override patching view position.
-    """
+    """Create a live.numbox numeric display with parameter storage."""
     box = {
         "id": id,
         "maxclass": "live.numbox",
@@ -403,20 +308,7 @@ def slider(id: str, varname: str, rect: list, *,
            initial: float = 0.5, shortname: str = None,
            unitstyle: int = 1, orientation: int = 0,
            patching_rect: list = None, **kwargs) -> dict:
-    """Create a live.slider with parameter storage.
-
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        min_val: Minimum parameter value.
-        max_val: Maximum parameter value.
-        initial: Default/initial value.
-        shortname: Short display name (defaults to varname).
-        unitstyle: Unit display style (see constants.py UNITSTYLE_*).
-        orientation: 0 = vertical, 1 = horizontal.
-        patching_rect: Override patching view position.
-    """
+    """Create a live.slider with parameter storage."""
     box = {
         "id": id,
         "maxclass": "live.slider",
@@ -448,17 +340,7 @@ def slider(id: str, varname: str, rect: list, *,
 
 def button(id: str, varname: str, rect: list, *, shortname: str = None,
            patching_rect: list = None, **kwargs) -> dict:
-    """Create a live.button (momentary trigger).
-
-    Outputs a bang when clicked. Parameter-enabled for automation.
-
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        shortname: Short display name (defaults to varname).
-        patching_rect: Override patching view position.
-    """
+    """Create a live.button (momentary trigger, parameter-enabled for automation)."""
     box = {
         "id": id,
         "maxclass": "live.button",
@@ -491,20 +373,7 @@ def scope(id: str, rect: list, *, bgcolor: list = None, linecolor: list = None,
           decay_time: int = 0, **kwargs) -> dict:
     """Create a live.scope~ display.
 
-    Args:
-        id: Unique object ID.
-        rect: [x, y, width, height] in presentation view.
-        bgcolor: Background color.
-        linecolor: Waveform line color.
-        gridcolor: Grid line color.
-        range_vals: [min, max] display range.
-        calccount: Number of samples per pixel.
-        patching_rect: Override patching view position.
-        smooth: 0=off, 1=accurate, 2=pretty.
-        line_width: Waveform trace thickness.
-        mode: Display mode string.
-        activelinecolor: Visible trace color in Live.
-        decay_time: Fade-out duration in ms.
+    smooth: 0=off, 1=accurate, 2=pretty.
     """
     box = {
         "id": id,
@@ -550,22 +419,7 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
               **kwargs) -> dict:
     """Create a live.text styled button/toggle.
 
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        text_on: Text displayed when ON.
-        text_off: Text displayed when OFF.
-        bgcolor: RGBA background color (off state).
-        bgoncolor: RGBA background color (on state).
-        textcolor: RGBA text color (off state).
-        textoncolor: RGBA text color (on state).
-        fontname: Font family name.
-        fontsize: Font size in points.
-        rounded: Corner radius.
-        mode: 0=toggle, 1=button (momentary).
-        shortname: Short display name (defaults to varname).
-        patching_rect: Override patching view position.
+    mode: 0=toggle, 1=button (momentary).
     """
     box = {
         "id": id,
@@ -608,15 +462,7 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
 
 def fpic(id: str, rect: list, *, pic: str = "", autofit: int = 1,
          patching_rect: list = None, **kwargs) -> dict:
-    """Create an fpic image display.
-
-    Args:
-        id: Unique object ID.
-        rect: [x, y, width, height] in presentation view.
-        pic: Filename of image (must be in Max search path or absolute).
-        autofit: 1=scale image to fit rect.
-        patching_rect: Override patching view position.
-    """
+    """Create an fpic image display."""
     return _presentation_box(
         id, "fpic", rect,
         numinlets=1, numoutlets=1,
@@ -632,19 +478,7 @@ def live_gain(id: str, varname: str, rect: list, *, min_val: float = -70.0,
               max_val: float = 6.0, initial: float = 0.0,
               shortname: str = None, orientation: int = 0,
               patching_rect: list = None, **kwargs) -> dict:
-    """Create a live.gain~ gain fader with built-in meter.
-
-    Args:
-        id: Unique object ID.
-        varname: Parameter variable name.
-        rect: [x, y, width, height] in presentation view.
-        min_val: Minimum gain in dB.
-        max_val: Maximum gain in dB.
-        initial: Default gain in dB.
-        shortname: Short display name (defaults to varname).
-        orientation: 0=vertical, 1=horizontal.
-        patching_rect: Override patching view position.
-    """
+    """Create a live.gain~ fader with built-in meter."""
     box = {
         "id": id,
         "maxclass": "live.gain~",
@@ -681,18 +515,7 @@ def multislider(id: str, rect: list, *, size: int = 16, min_val: float = 0.0,
                 patching_rect: list = None, **kwargs) -> dict:
     """Create a multislider bar/step display.
 
-    Args:
-        id: Unique object ID.
-        rect: [x, y, width, height] in presentation view.
-        size: Number of sliders.
-        min_val: Minimum slider value.
-        max_val: Maximum slider value.
-        setminmax: [min, max] override.
-        slidercolor: RGBA bar color.
-        candicane2: RGBA alternate bar color.
-        orientation: 0=vertical bars, 1=horizontal.
-        setstyle: 0=bar, 1=line, 2=point.
-        patching_rect: Override patching view position.
+    setstyle: 0=bar, 1=line, 2=point.
     """
     box = {
         "id": id,
@@ -719,20 +542,7 @@ def multislider(id: str, rect: list, *, size: int = 16, min_val: float = 0.0,
 def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
          numoutlets: int = 0, outlettype: list = None,
          patching_rect: list = None, **kwargs) -> dict:
-    """Create a jsui JavaScript UI display.
-
-    jsui renders custom vector graphics via Max's mgraphics (Cairo) API.
-    The JS file is written alongside the .amxd by device.build().
-
-    Args:
-        id: Unique object ID.
-        rect: [x, y, width, height] in presentation view.
-        js_filename: Name of the JavaScript file to load.
-        numinlets: Number of inlets for receiving parameter data.
-        numoutlets: Number of outlets for sending data back.
-        outlettype: List of outlet type strings.
-        patching_rect: Override patching view position.
-    """
+    """Create a jsui display for custom vector graphics via Max's mgraphics (Cairo) API."""
     box = {
         "id": id,
         "maxclass": "jsui",

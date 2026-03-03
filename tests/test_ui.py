@@ -14,7 +14,7 @@ class TestPanel:
         assert "box" in result
 
     def test_background_always_set_to_1(self):
-        """CRITICAL: panel must always set background:1 to prevent rendering on top."""
+        """panel must set background:1 so it renders behind other objects in presentation view."""
         result = panel("p-1", [0, 0, 200, 100], bgcolor=[0.0, 0.0, 0.0, 1.0])
         assert result["box"]["background"] == 1
 

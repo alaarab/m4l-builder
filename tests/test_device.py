@@ -10,19 +10,11 @@ from m4l_builder.device import Device, AudioEffect, Instrument, MidiEffect
 from m4l_builder.constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _parse_amxd_json(data: bytes) -> dict:
     """Extract and parse the JSON payload from an .amxd binary."""
     json_payload = data[32:].rstrip(b"\x00").rstrip(b"\n").decode("utf-8")
     return json.loads(json_payload)
 
-
-# ---------------------------------------------------------------------------
-# TestDevice – base class
-# ---------------------------------------------------------------------------
 
 class TestDevice:
     """Tests for the Device base class."""
@@ -296,10 +288,6 @@ class TestDevice:
         assert recovered["patcher"]["project"]["amxdtype"] == 1633771873
 
 
-# ---------------------------------------------------------------------------
-# TestAudioEffect
-# ---------------------------------------------------------------------------
-
 class TestAudioEffect:
     """Tests for the AudioEffect subclass."""
 
@@ -372,10 +360,6 @@ class TestAudioEffect:
         assert os.path.exists(output)
 
 
-# ---------------------------------------------------------------------------
-# TestInstrument
-# ---------------------------------------------------------------------------
-
 class TestInstrument:
     """Tests for the Instrument subclass."""
 
@@ -415,10 +399,6 @@ class TestInstrument:
         assert os.path.exists(output)
 
 
-# ---------------------------------------------------------------------------
-# TestMidiEffect
-# ---------------------------------------------------------------------------
-
 class TestMidiEffect:
     """Tests for the MidiEffect subclass."""
 
@@ -457,10 +437,6 @@ class TestMidiEffect:
         assert count > 0
         assert os.path.exists(output)
 
-
-# ---------------------------------------------------------------------------
-# TestDeviceIntegration
-# ---------------------------------------------------------------------------
 
 class TestDeviceIntegration:
     """Integration tests building more complete devices."""

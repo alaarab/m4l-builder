@@ -14,19 +14,7 @@ def build_patcher(boxes: list, lines: list, *,
                   width: float = 400.0,
                   height: float = 170.0,
                   device_type: str = "audio_effect") -> dict:
-    """Build a complete M4L patcher dict.
-
-    Args:
-        boxes: List of box dicts (each with a "box" key).
-        lines: List of patchline dicts (each with a "patchline" key).
-        name: Device name.
-        width: Presentation width in pixels.
-        height: Presentation height in pixels.
-        device_type: One of "audio_effect", "instrument", "midi_effect".
-
-    Returns:
-        Complete patcher dict ready for JSON serialization and .amxd container.
-    """
+    """Build the complete M4L patcher dict ready for JSON serialization."""
     # Max epoch: seconds since 1970-01-01 (same as Unix time)
     now = int(time.time())
 

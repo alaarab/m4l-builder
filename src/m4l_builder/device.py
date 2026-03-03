@@ -31,13 +31,12 @@ class Device:
         self._js_files = {}  # {filename: js_code_string}
 
     def add_box(self, box_dict: dict) -> str:
-        """Add a raw box dict. Returns the object ID."""
+        """Add a raw box dict and return its object ID."""
         self.boxes.append(box_dict)
         return box_dict["box"]["id"]
 
     def add_line(self, source_id: str, source_outlet: int,
                  dest_id: str, dest_inlet: int):
-        """Add a patchline connection."""
         self.lines.append(patchline(source_id, source_outlet, dest_id, dest_inlet))
 
     def _inject_theme(self, kwargs, mapping):
@@ -54,14 +53,12 @@ class Device:
                     kwargs[kwarg_key] = val
 
     def add_panel(self, id: str, rect: list, **kwargs) -> str:
-        """Add a background panel."""
         self._inject_theme(kwargs, {
             "bgcolor": "bg",
         })
         return self.add_box(panel(id, rect, **kwargs))
 
     def add_dial(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        """Add a live.dial."""
         self._inject_theme(kwargs, {
             "activedialcolor": "dial_color",
             "activeneedlecolor": "needle_color",
@@ -69,7 +66,6 @@ class Device:
         return self.add_box(dial(id, varname, rect, **kwargs))
 
     def add_tab(self, id: str, varname: str, rect: list, options: list, **kwargs) -> str:
-        """Add a live.tab."""
         self._inject_theme(kwargs, {
             "bgcolor": "tab_bg",
             "bgoncolor": "tab_bg_on",
@@ -79,14 +75,12 @@ class Device:
         return self.add_box(tab(id, varname, rect, options=options, **kwargs))
 
     def add_toggle(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        """Add a live.toggle."""
         self._inject_theme(kwargs, {
             "activebgoncolor": "accent",
         })
         return self.add_box(toggle(id, varname, rect, **kwargs))
 
     def add_comment(self, id: str, rect: list, text: str, **kwargs) -> str:
-        """Add a live.comment label."""
         self._inject_theme(kwargs, {
             "textcolor": "text",
             "fontname": "fontname",
@@ -94,7 +88,6 @@ class Device:
         return self.add_box(comment(id, rect, text, **kwargs))
 
     def add_scope(self, id: str, rect: list, **kwargs) -> str:
-        """Add a live.scope~."""
         self._inject_theme(kwargs, {
             "bgcolor": "bg",
             "activelinecolor": "accent",
@@ -102,39 +95,30 @@ class Device:
         return self.add_box(scope(id, rect, **kwargs))
 
     def add_meter(self, id: str, rect: list, **kwargs) -> str:
-        """Add a live.meter~."""
         return self.add_box(meter(id, rect, **kwargs))
 
     def add_menu(self, id: str, varname: str, rect: list, options: list, **kwargs) -> str:
-        """Add a live.menu dropdown."""
         return self.add_box(menu(id, varname, rect, options=options, **kwargs))
 
     def add_number_box(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        """Add a live.numbox."""
         return self.add_box(number_box(id, varname, rect, **kwargs))
 
     def add_slider(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        """Add a live.slider."""
         return self.add_box(slider(id, varname, rect, **kwargs))
 
     def add_button(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        """Add a live.button."""
         return self.add_box(button(id, varname, rect, **kwargs))
 
     def add_live_text(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        """Add a live.text styled button/toggle."""
         return self.add_box(live_text(id, varname, rect, **kwargs))
 
     def add_fpic(self, id: str, rect: list, **kwargs) -> str:
-        """Add an fpic image display."""
         return self.add_box(fpic(id, rect, **kwargs))
 
     def add_live_gain(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        """Add a live.gain~ fader with built-in meter."""
         return self.add_box(live_gain(id, varname, rect, **kwargs))
 
     def add_multislider(self, id: str, rect: list, **kwargs) -> str:
-        """Add a multislider bar/step display."""
         return self.add_box(multislider(id, rect, **kwargs))
 
     def add_jsui(self, id: str, rect: list, *, js_code: str,
@@ -163,12 +147,10 @@ class Device:
 
     def add_newobj(self, id: str, text: str, *, numinlets: int, numoutlets: int,
                    **kwargs) -> str:
-        """Add a standard Max newobj."""
         return self.add_box(newobj(id, text, numinlets=numinlets,
                                    numoutlets=numoutlets, **kwargs))
 
     def to_patcher(self) -> dict:
-        """Generate the complete patcher dict."""
         patcher = build_patcher(
             self.boxes, self.lines,
             name=self.name,
@@ -186,7 +168,7 @@ class Device:
         return patcher
 
     def to_bytes(self) -> bytes:
-        """Build the .amxd binary in memory. Returns bytes."""
+        """Build the .amxd binary in memory."""
         type_code = DEVICE_TYPE_CODES[self.device_type]
         return build_amxd(self.to_patcher(), type_code)
 

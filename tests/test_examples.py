@@ -188,7 +188,7 @@ class TestExampleBuilds:
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_no_sig_tilde_objects(self, script):
-        """CRITICAL: No sig~ objects allowed (cold-start silence bug)."""
+        """sig~ starts at 0.0 on load and causes cold-start silence."""
         if script not in self.outputs:
             pytest.skip(f"{script} did not produce output")
         _, patcher = _parse_amxd(self.outputs[script])
@@ -198,7 +198,7 @@ class TestExampleBuilds:
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_no_dcblock_tilde_objects(self, script):
-        """CRITICAL: No dcblock~ objects (doesn't exist in Max 8)."""
+        """dcblock~ doesn't exist in Max 8."""
         if script not in self.outputs:
             pytest.skip(f"{script} did not produce output")
         _, patcher = _parse_amxd(self.outputs[script])
