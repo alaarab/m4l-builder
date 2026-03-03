@@ -1,7 +1,7 @@
 """Multiband Stereo Imager — 3-band crossover with per-band M/S width control."""
 
 import os
-from m4l_builder import AudioEffect, COOL
+from m4l_builder import AudioEffect, COOL, device_output_path
 
 # --- Device setup ---
 W, H = 340, 160
@@ -356,9 +356,6 @@ device.add_line("sum_all_l", 0, "vectorscope", 0)   # L → X axis
 device.add_line("sum_all_r", 0, "vectorscope", 1)   # R → Y axis
 
 # --- Build ---
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/Multiband Imager.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("Multiband Imager")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

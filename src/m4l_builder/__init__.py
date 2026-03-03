@@ -13,6 +13,7 @@ from .dsp import (stereo_io, gain_stage, dry_wet_mix, ms_encode_decode,
                    crossover_3band, envelope_follower, delay_line, lfo,
                    comb_resonator, feedback_delay, tremolo)
 from .constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
+from .paths import user_library, device_output_path
 
 __all__ = [
     "Device", "AudioEffect", "Instrument", "MidiEffect",
@@ -28,4 +29,5 @@ __all__ = [
     "crossover_3band", "envelope_follower", "delay_line", "lfo",
     "comb_resonator", "feedback_delay", "tremolo",
     "AUDIO_EFFECT", "INSTRUMENT", "MIDI_EFFECT",
+    "user_library", "device_output_path",
 ]

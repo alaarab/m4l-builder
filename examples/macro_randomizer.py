@@ -1,7 +1,7 @@
 """Macro Randomizer — 7 randomizable output params with auto/manual trigger."""
 
 import os
-from m4l_builder import AudioEffect, COOL
+from m4l_builder import AudioEffect, COOL, device_output_path
 
 device = AudioEffect("Macro Randomizer", width=330, height=140, theme=COOL)
 
@@ -121,6 +121,5 @@ output = os.path.expanduser(
     "~/Music/Ableton/User Library/Presets/Audio Effects/"
     "Max Audio Effect/Macro Randomizer.amxd"
 )
-os.makedirs(os.path.dirname(output), exist_ok=True)
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

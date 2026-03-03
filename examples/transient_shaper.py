@@ -31,7 +31,7 @@ CRITICAL RULES followed:
 """
 
 import os
-from m4l_builder import AudioEffect, WARM
+from m4l_builder import AudioEffect, WARM, device_output_path
 
 # --- Device setup --- widened 30px to accommodate meters
 device = AudioEffect("Transient Shaper", width=310, height=170, theme=WARM)
@@ -317,9 +317,6 @@ device.add_line("sum_r", 0, "meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/Transient Shaper.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("Transient Shaper")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

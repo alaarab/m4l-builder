@@ -15,7 +15,7 @@ Signal flow:
 """
 
 import os
-from m4l_builder import AudioEffect, WARM
+from m4l_builder import AudioEffect, WARM, device_output_path
 
 # -------------------------------------------------------------------
 # Device setup
@@ -509,9 +509,6 @@ device.add_line("out_r", 0, "meter_r", 0)
 # -------------------------------------------------------------------
 # Build
 # -------------------------------------------------------------------
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/Multiband Saturator.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("Multiband Saturator")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

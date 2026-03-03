@@ -51,8 +51,8 @@ device.add_line("gain", 0, "scale", 0)
 device.add_line("scale", 0, "gain_l", 1)
 device.add_line("scale", 0, "gain_r", 1)
 
-device.build("~/Music/Ableton/User Library/Presets/Audio Effects/"
-             "Max Audio Effect/Simple Gain.amxd")
+from m4l_builder import device_output_path
+device.build(device_output_path("Simple Gain"))
 ```
 
 ## Device Types
@@ -158,6 +158,16 @@ Build any example:
 
 ```bash
 uv run python examples/stereo_delay.py
+```
+
+## Output Path
+
+`device_output_path()` auto-detects your Ableton User Library on macOS, Windows, and WSL. It scans common drive locations (D:, C:, /mnt/d, /mnt/c) and creates the correct subdirectory for the device type.
+
+Override with the `M4L_USER_LIBRARY` environment variable:
+
+```bash
+export M4L_USER_LIBRARY="/path/to/your/User Library"
 ```
 
 ## Testing

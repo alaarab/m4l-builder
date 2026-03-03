@@ -34,7 +34,7 @@ CRITICAL RULES:
 """
 
 import os
-from m4l_builder import AudioEffect, COOL
+from m4l_builder import AudioEffect, COOL, device_output_path
 
 # Device dimensions: ~380 wide, 170 tall — widened 30px for L/R output meters
 W, H = 410, 170
@@ -537,9 +537,6 @@ device.add_line("out_r", 0, "meter_out_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/MidSide Suite.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("MidSide Suite")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")
