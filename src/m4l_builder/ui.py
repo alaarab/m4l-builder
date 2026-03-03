@@ -614,7 +614,8 @@ def live_drop(id: str, rect: list, *, textcolor: list = None,
 
 
 def bpatcher(id: str, rect: list, patcher_name: str, *, args: str = None,
-             embed: int = 1, patching_rect: list = None, **kwargs) -> dict:
+             embed: int = 1, numinlets: int = 0, numoutlets: int = 0,
+             patching_rect: list = None, **kwargs) -> dict:
     """Create a bpatcher embeddable sub-patcher.
 
     embed: 1 stores the sub-patch inside the device file.
@@ -622,8 +623,8 @@ def bpatcher(id: str, rect: list, patcher_name: str, *, args: str = None,
     box = {
         "id": id,
         "maxclass": "bpatcher",
-        "numinlets": 0,
-        "numoutlets": 0,
+        "numinlets": numinlets,
+        "numoutlets": numoutlets,
         "name": patcher_name,
         "embed": embed,
         "patching_rect": patching_rect or [700, 1800, rect[2], rect[3]],

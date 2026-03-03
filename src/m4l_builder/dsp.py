@@ -190,6 +190,8 @@ def selector(id_prefix: str, num_inputs: int, initial: int = 1) -> tuple:
     selector~ N initial has N+1 inlets (int selector + N signal inputs).
     selector~ N without an initial arg defaults to input 0 (silence) — always pass initial.
     """
+    if initial < 0 or initial > num_inputs:
+        raise ValueError(f"selector~ initial {initial} out of range [0, {num_inputs}]")
     boxes = [
         newobj(id_prefix, f"selector~ {num_inputs} {initial}",
                numinlets=num_inputs + 1, numoutlets=1,
