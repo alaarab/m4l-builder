@@ -6,12 +6,12 @@ Signal flow:
   plugin~ L/R
     → cross~ low_freq (L+R) → LP=LOW, HP → cross~ high_freq (L+R) → LP=MID, HP=HIGH
   Per band, per channel:
-    → *~ drive  (pre-saturation gain)
+    → *~ drive  (pre-saturation gain, smoothed via line~)
     → selector~ 4 1 → mode 1=tanh~, 2=overdrive~, 3=clip~, 4=bypass *~
-    → *~ band_gain (post-saturation level)
+    → *~ band_gain (post-saturation level, smoothed via line~)
   Sum bands: LOW + MID + HIGH via +~
   DC block: biquad~ 1. -1. 0. -0.9997 0.
-  Dry/wet mix → plugout~
+  Dry/wet mix (smoothed via line~) → plugout~
 """
 
 import os
@@ -49,14 +49,14 @@ device.add_comment("title", [6, 4, 90, 14], "MULTISAT",
 device.add_comment("lbl_out", [342, 4, 36, 14], "OUT",
                    textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0)
 device.add_meter("meter_l", [342, 20, 12, 110],
-                 coldcolor=[0.85, 0.55, 0.25, 1.0],
-                 warmcolor=[0.9, 0.75, 0.3, 1.0],
-                 hotcolor=[0.9, 0.45, 0.15, 1.0],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 device.add_meter("meter_r", [358, 20, 12, 110],
-                 coldcolor=[0.85, 0.55, 0.25, 1.0],
-                 warmcolor=[0.9, 0.75, 0.3, 1.0],
-                 hotcolor=[0.9, 0.45, 0.15, 1.0],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # -------------------------------------------------------------------
@@ -162,6 +162,29 @@ device.add_newobj("cross_high_r", "cross~",
                   patching_rect=[270, 250, 55, 20])
 
 # -------------------------------------------------------------------
+# Parameter smoothing: crossover frequencies
+# low_xover → lox_pk → lox_ln → cross_low_l/r inlet 1
+# high_xover → hix_pk → hix_ln → cross_high_l/r inlet 1
+# -------------------------------------------------------------------
+device.add_newobj("lox_pk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[50, 215, 60, 20])
+device.add_newobj("lox_ln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[50, 235, 40, 20])
+
+device.add_newobj("hix_pk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[200, 215, 60, 20])
+device.add_newobj("hix_ln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[200, 235, 40, 20])
+
+# -------------------------------------------------------------------
 # Per-band, per-channel DSP: drive *~, sat modes, selector~, gain *~
 # Bands: low, mid, high  |  Channels: l, r
 # -------------------------------------------------------------------
@@ -177,7 +200,7 @@ for band in ["low", "mid", "high"]:
     for ch in ["l", "r"]:
         cx = bx + ch_offset_x[ch]
 
-        # Drive: *~ 1.  (pre-saturation gain, inlet 1 receives float from dial scale)
+        # Drive: *~ 1.  (pre-saturation gain, inlet 1 receives smoothed signal)
         device.add_newobj(f"drv_{band}_{ch}", "*~ 1.",
                           numinlets=2, numoutlets=1,
                           outlettype=["signal"],
@@ -215,18 +238,41 @@ for band in ["low", "mid", "high"]:
                           outlettype=["signal"],
                           patching_rect=[cx, dsp_base_y + 135, 60, 20])
 
-        # Band gain: *~ 1.  (post-saturation level, inlet 1 receives float from gain dial)
+        # Band gain: *~ 1.  (post-saturation level, inlet 1 receives smoothed signal)
         device.add_newobj(f"bndg_{band}_{ch}", "*~ 1.",
                           numinlets=2, numoutlets=1,
                           outlettype=["signal"],
                           patching_rect=[cx, dsp_base_y + 165, 36, 20])
 
-    # Drive scale: dial 0.5-8.0 → already in right range, feed directly
-    # Gain scale: dial 0.0-2.0 → already in right range, feed directly
+# -------------------------------------------------------------------
+# Parameter smoothing: per-band drive and gain dials
+# drive_{band} → drv_{band}_pk → drv_{band}_ln → drv_{band}_l/r inlet 1
+# gain_{band}  → bndg_{band}_pk → bndg_{band}_ln → bndg_{band}_l/r inlet 1
+# -------------------------------------------------------------------
+smooth_y_base = 490
+for i, band in enumerate(["low", "mid", "high"]):
+    bx = band_dsp_x[band]
+    sy = smooth_y_base + i * 60   # stagger vertically to avoid overlap
 
-    # Band sum: add L and R outputs of all 3 bands
-    # We need: low_l + mid_l + high_l, and low_r + mid_r + high_r
-    # Doing this with +~ objects below
+    # Drive smoothing
+    device.add_newobj(f"drv_{band}_pk", "pack f 20",
+                      numinlets=2, numoutlets=1,
+                      outlettype=[""],
+                      patching_rect=[bx, sy, 60, 20])
+    device.add_newobj(f"drv_{band}_ln", "line~",
+                      numinlets=2, numoutlets=2,
+                      outlettype=["signal", "bang"],
+                      patching_rect=[bx, sy + 25, 40, 20])
+
+    # Gain smoothing
+    device.add_newobj(f"bndg_{band}_pk", "pack f 20",
+                      numinlets=2, numoutlets=1,
+                      outlettype=[""],
+                      patching_rect=[bx + 70, sy, 60, 20])
+    device.add_newobj(f"bndg_{band}_ln", "line~",
+                      numinlets=2, numoutlets=2,
+                      outlettype=["signal", "bang"],
+                      patching_rect=[bx + 70, sy + 25, 40, 20])
 
 # -------------------------------------------------------------------
 # Band summing: low + mid + high for each channel
@@ -273,24 +319,29 @@ device.add_newobj("dcblock_r", "biquad~ 1. -1. 0. -0.9997 0.",
 # -------------------------------------------------------------------
 # Dry/wet mix
 # Scale: dial 0-100 → 0.0-1.0
-# Trigger fan to wet_l, wet_r, and dry inverter
-# t f f f fires right-to-left: outlet 2 first, then 1, then 0
+# Smoothed via pack/line~ — line~ output (signal) goes directly to
+# wet_l/wet_r inlet 1, and mix_inv inlet 0.
 # -------------------------------------------------------------------
 device.add_newobj("mix_scale", "scale 0. 100. 0. 1.",
                   numinlets=6, numoutlets=1,
                   outlettype=[""],
                   patching_rect=[600, 60, 120, 20])
 
-device.add_newobj("mix_trig", "t f f f",
-                  numinlets=1, numoutlets=3,
-                  outlettype=["", "", ""],
-                  patching_rect=[600, 90, 55, 20])
+# Smoothing for mix
+device.add_newobj("mix_pk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[600, 85, 60, 20])
+device.add_newobj("mix_ln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[600, 110, 40, 20])
 
 # !-~ 1. gives (1.0 - mix) for dry
 device.add_newobj("mix_inv", "!-~ 1.",
                   numinlets=2, numoutlets=1,
                   outlettype=["signal"],
-                  patching_rect=[600, 120, 45, 20])
+                  patching_rect=[600, 135, 45, 20])
 
 # Wet multipliers
 device.add_newobj("wet_l", "*~ 0.",
@@ -333,17 +384,21 @@ device.add_newobj("out_r", "+~",
 device.add_line("obj-plugin", 0, "cross_low_l", 0)   # plugin~ L → low cross L
 device.add_line("obj-plugin", 1, "cross_low_r", 0)   # plugin~ R → low cross R
 
-# Low crossover frequency → both channels
-device.add_line("low_xover", 0, "cross_low_l", 1)
-device.add_line("low_xover", 0, "cross_low_r", 1)
+# Low crossover frequency: dial → pack → line~ → cross~ inlet 1 (signal)
+device.add_line("low_xover", 0, "lox_pk", 0)
+device.add_line("lox_pk", 0, "lox_ln", 0)
+device.add_line("lox_ln", 0, "cross_low_l", 1)
+device.add_line("lox_ln", 0, "cross_low_r", 1)
 
 # cross_low HP outlet → high crossover
 device.add_line("cross_low_l", 1, "cross_high_l", 0)  # LP=0, HP=1
 device.add_line("cross_low_r", 1, "cross_high_r", 0)
 
-# High crossover frequency → both channels
-device.add_line("high_xover", 0, "cross_high_l", 1)
-device.add_line("high_xover", 0, "cross_high_r", 1)
+# High crossover frequency: dial → pack → line~ → cross~ inlet 1 (signal)
+device.add_line("high_xover", 0, "hix_pk", 0)
+device.add_line("hix_pk", 0, "hix_ln", 0)
+device.add_line("hix_ln", 0, "cross_high_l", 1)
+device.add_line("hix_ln", 0, "cross_high_r", 1)
 
 # 2. Crossover outputs → band drive *~ inputs
 # LOW band: cross_low LP outlet (0) → drive
@@ -358,10 +413,12 @@ device.add_line("cross_high_r", 0, "drv_mid_r", 0)
 device.add_line("cross_high_l", 1, "drv_high_l", 0)
 device.add_line("cross_high_r", 1, "drv_high_r", 0)
 
-# 3. Drive dials → drive *~ inlet 1 (gain factor, direct float — no sig~!)
+# 3. Drive dials → smoothing → drive *~ inlet 1 (signal from line~)
 for band in ["low", "mid", "high"]:
-    device.add_line(f"drive_{band}", 0, f"drv_{band}_l", 1)
-    device.add_line(f"drive_{band}", 0, f"drv_{band}_r", 1)
+    device.add_line(f"drive_{band}", 0, f"drv_{band}_pk", 0)
+    device.add_line(f"drv_{band}_pk", 0, f"drv_{band}_ln", 0)
+    device.add_line(f"drv_{band}_ln", 0, f"drv_{band}_l", 1)
+    device.add_line(f"drv_{band}_ln", 0, f"drv_{band}_r", 1)
 
 # 4. drive *~ → all 4 saturation modes (fan out)
 for band in ["low", "mid", "high"]:
@@ -391,10 +448,12 @@ for band in ["low", "mid", "high"]:
     for ch in ["l", "r"]:
         device.add_line(f"sel_{band}_{ch}", 0, f"bndg_{band}_{ch}", 0)
 
-# 8. Gain dials → band gain *~ inlet 1 (direct float — no sig~!)
+# 8. Gain dials → smoothing → band gain *~ inlet 1 (signal from line~)
 for band in ["low", "mid", "high"]:
-    device.add_line(f"gain_{band}", 0, f"bndg_{band}_l", 1)
-    device.add_line(f"gain_{band}", 0, f"bndg_{band}_r", 1)
+    device.add_line(f"gain_{band}", 0, f"bndg_{band}_pk", 0)
+    device.add_line(f"bndg_{band}_pk", 0, f"bndg_{band}_ln", 0)
+    device.add_line(f"bndg_{band}_ln", 0, f"bndg_{band}_l", 1)
+    device.add_line(f"bndg_{band}_ln", 0, f"bndg_{band}_r", 1)
 
 # 9. Band sums: low + mid + high for L and R
 # Left: bndg_low_l + bndg_mid_l → sum_lm_l → + bndg_high_l → sum_lmh_l
@@ -413,13 +472,15 @@ device.add_line("bndg_high_r", 0, "sum_lmh_r", 1)
 device.add_line("sum_lmh_l", 0, "dcblock_l", 0)
 device.add_line("sum_lmh_r", 0, "dcblock_r", 0)
 
-# 11. Dry/wet mix
+# 11. Dry/wet mix with smoothing
+# dial → scale → pack → line~ (signal) → wet multipliers and dry inverter
 device.add_line("mix_dial", 0, "mix_scale", 0)
-device.add_line("mix_scale", 0, "mix_trig", 0)
-# t f f f fires right-to-left: outlet 2 first (inverter), then 1 (wet_r), then 0 (wet_l)
-device.add_line("mix_trig", 0, "wet_l", 1)
-device.add_line("mix_trig", 1, "wet_r", 1)
-device.add_line("mix_trig", 2, "mix_inv", 0)
+device.add_line("mix_scale", 0, "mix_pk", 0)
+device.add_line("mix_pk", 0, "mix_ln", 0)
+# mix_ln (signal) → wet_l inlet 1, wet_r inlet 1, mix_inv inlet 0
+device.add_line("mix_ln", 0, "wet_l", 1)
+device.add_line("mix_ln", 0, "wet_r", 1)
+device.add_line("mix_ln", 0, "mix_inv", 0)
 device.add_line("mix_inv", 0, "dry_l", 1)
 device.add_line("mix_inv", 0, "dry_r", 1)
 

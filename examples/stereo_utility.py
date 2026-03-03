@@ -30,15 +30,15 @@ device.add_comment("lbl_scope", [252, 116, 80, 10], "STEREO FIELD",
                     textcolor=[0.45, 0.45, 0.50, 1.0], fontsize=7.0,
                     justification=1)
 
-# Stereo output meters
+# Stereo output meters — updated colors per spec
 device.add_meter("meter_l", [220, 10, 6, 100],
-                 coldcolor=[0.2, 0.6, 0.8, 1.0],
-                 warmcolor=[0.8, 0.8, 0.2, 1.0],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 device.add_meter("meter_r", [228, 10, 6, 100],
-                 coldcolor=[0.2, 0.6, 0.8, 1.0],
-                 warmcolor=[0.8, 0.8, 0.2, 1.0],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
@@ -137,19 +137,26 @@ device.add_newobj("ms_side", "*~ 0.5", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[240, 170, 50, 20])
 
 # ── Width control ─────────────────────────────────────────────────────────
-# Multiply side by width factor (0.0–2.0). Float in via inlet 1.
+# Multiply side by width factor (0.0–2.0). Signal inlet via line~.
 device.add_newobj("width_mul", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[240, 200, 40, 20])
 # Scale: Width dial 0–200 → 0.0–2.0
 device.add_newobj("width_scale", "scale 0. 200. 0. 2.", numinlets=6, numoutlets=1,
                   outlettype=[""], patching_rect=[240, 230, 110, 20])
 
+# ── Parameter smoothing: width ───────────────────────────────────────────
+# width_scale -> width_pk -> width_ln -> width_mul inlet 1
+device.add_newobj("width_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[240, 260, 60, 20])
+device.add_newobj("width_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[240, 290, 40, 20])
+
 # ── M/S decode ────────────────────────────────────────────────────────────
 # L = mid + side, R = mid - side
 device.add_newobj("dec_add", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 260, 30, 20])
+                  outlettype=["signal"], patching_rect=[200, 320, 30, 20])
 device.add_newobj("dec_sub", "-~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 260, 30, 20])
+                  outlettype=["signal"], patching_rect=[240, 320, 30, 20])
 
 # ── Pan ───────────────────────────────────────────────────────────────────
 # Pan dial: -100..100. Center (0) → both gains = 1.0.
@@ -170,34 +177,55 @@ device.add_newobj("pan_gain_l", "* 2.", numinlets=2, numoutlets=1,
 device.add_newobj("pan_gain_r", "* 2.", numinlets=2, numoutlets=1,
                   outlettype=[""], patching_rect=[240, 330, 40, 20])
 
+# ── Parameter smoothing: pan L ───────────────────────────────────────────
+# pan_gain_l -> pan_l_pk -> pan_l_ln -> pan_sig_l inlet 1
+device.add_newobj("pan_l_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[30, 385, 60, 20])
+device.add_newobj("pan_l_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[30, 415, 40, 20])
+
+# ── Parameter smoothing: pan R ───────────────────────────────────────────
+# pan_gain_r -> pan_r_pk -> pan_r_ln -> pan_sig_r inlet 1
+device.add_newobj("pan_r_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[240, 355, 60, 20])
+device.add_newobj("pan_r_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[240, 385, 40, 20])
+
 # ── Post-pan signal gain (L and R) ────────────────────────────────────────
 device.add_newobj("pan_sig_l", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 390, 40, 20])
+                  outlettype=["signal"], patching_rect=[30, 445, 40, 20])
 device.add_newobj("pan_sig_r", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 390, 40, 20])
+                  outlettype=["signal"], patching_rect=[240, 415, 40, 20])
 
 # ── Output gain ───────────────────────────────────────────────────────────
 device.add_newobj("gain_l", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 430, 40, 20])
+                  outlettype=["signal"], patching_rect=[30, 490, 40, 20])
 device.add_newobj("gain_r", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 430, 40, 20])
+                  outlettype=["signal"], patching_rect=[240, 490, 40, 20])
 # Scale: Gain dial 0–200 → 0.0–2.0
 device.add_newobj("gain_scale", "scale 0. 200. 0. 2.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[140, 410, 110, 20])
+                  outlettype=[""], patching_rect=[140, 460, 110, 20])
+
+# ── Parameter smoothing: output gain ─────────────────────────────────────
+# gain_scale -> gain_pk -> gain_ln -> gain_l/gain_r inlet 1
+device.add_newobj("gain_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[140, 490, 60, 20])
+device.add_newobj("gain_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[140, 520, 40, 20])
 
 # ── Mono ──────────────────────────────────────────────────────────────────
 # Sum L+R, scale by 0.5 for mid
 device.add_newobj("mono_sum", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[140, 460, 30, 20])
+                  outlettype=["signal"], patching_rect=[140, 540, 30, 20])
 device.add_newobj("mono_half", "*~ 0.5", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[140, 490, 50, 20])
+                  outlettype=["signal"], patching_rect=[140, 570, 50, 20])
 # selector~ 2 1: input 1 = stereo (original L/R), input 2 = mono (mid sent to both)
 device.add_newobj("mono_sel_l", "selector~ 2 1", numinlets=3, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 520, 80, 20])
+                  outlettype=["signal"], patching_rect=[30, 600, 80, 20])
 device.add_newobj("mono_sel_r", "selector~ 2 1", numinlets=3, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 520, 80, 20])
+                  outlettype=["signal"], patching_rect=[240, 600, 80, 20])
 device.add_newobj("mono_add1", "+ 1", numinlets=2, numoutlets=1,
-                  outlettype=["int"], patching_rect=[140, 445, 35, 20])
+                  outlettype=["int"], patching_rect=[140, 525, 35, 20])
 
 # ── Wiring ───────────────────────────────────────────────────────────────
 
@@ -223,9 +251,11 @@ device.add_line("ph_sel_r", 0, "ms_sub", 1)          # R → diff inlet 1
 device.add_line("ms_add", 0, "ms_mid", 0)            # sum → *0.5 mid
 device.add_line("ms_sub", 0, "ms_side", 0)           # diff → *0.5 side
 
-# Width: dial → scale → width_mul inlet 1; ms_side → width_mul inlet 0
+# Width smoothing: dial → scale → pack → line~ → width_mul inlet 1 (signal)
 device.add_line("dial_width", 0, "width_scale", 0)
-device.add_line("width_scale", 0, "width_mul", 1)    # float → *~ inlet 1
+device.add_line("width_scale", 0, "width_pk", 0)
+device.add_line("width_pk", 0, "width_ln", 0)
+device.add_line("width_ln", 0, "width_mul", 1)       # smoothed signal → *~ inlet 1
 device.add_line("ms_side", 0, "width_mul", 0)        # side signal → *~ inlet 0
 
 # M/S decode: mid + side_w → L; mid - side_w → R
@@ -234,24 +264,36 @@ device.add_line("width_mul", 0, "dec_add", 1)        # side_w → + inlet 1
 device.add_line("ms_mid", 0, "dec_sub", 0)           # mid → - inlet 0
 device.add_line("width_mul", 0, "dec_sub", 1)        # side_w → - inlet 1
 
-# Pan: dial → normalize → L and R gains
+# Pan: dial → normalize → L and R gain floats → smoothing → pan_sig
 device.add_line("dial_pan", 0, "pan_norm", 0)
 device.add_line("pan_norm", 0, "pan_inv_l", 0)       # pan_norm → !- 1.
 device.add_line("pan_inv_l", 0, "pan_gain_l", 0)     # (1-pan) → * 2
+
+# Pan L smoothing: pan_gain_l -> pack -> line~ -> pan_sig_l inlet 1
+device.add_line("pan_gain_l", 0, "pan_l_pk", 0)
+device.add_line("pan_l_pk", 0, "pan_l_ln", 0)
+device.add_line("pan_l_ln", 0, "pan_sig_l", 1)
+
 device.add_line("pan_norm", 0, "pan_gain_r", 0)      # pan_norm → * 2
 
-# Apply pan to decoded L/R signals
-device.add_line("dec_add", 0, "pan_sig_l", 0)        # decoded L → *~ inlet 0
-device.add_line("pan_gain_l", 0, "pan_sig_l", 1)     # L gain float → inlet 1
-device.add_line("dec_sub", 0, "pan_sig_r", 0)        # decoded R → *~ inlet 0
-device.add_line("pan_gain_r", 0, "pan_sig_r", 1)     # R gain float → inlet 1
+# Pan R smoothing: pan_gain_r -> pack -> line~ -> pan_sig_r inlet 1
+device.add_line("pan_gain_r", 0, "pan_r_pk", 0)
+device.add_line("pan_r_pk", 0, "pan_r_ln", 0)
+device.add_line("pan_r_ln", 0, "pan_sig_r", 1)
 
-# Gain: dial → scale → gain_l/r inlet 1; pan_sig → gain inlet 0
+# Apply pan to decoded L/R signals (signal inlet 0)
+device.add_line("dec_add", 0, "pan_sig_l", 0)        # decoded L → *~ inlet 0
+device.add_line("dec_sub", 0, "pan_sig_r", 0)        # decoded R → *~ inlet 0
+
+# Gain smoothing: dial → scale → pack → line~ → gain_l/gain_r inlet 1
 device.add_line("dial_gain", 0, "gain_scale", 0)
+device.add_line("gain_scale", 0, "gain_pk", 0)
+device.add_line("gain_pk", 0, "gain_ln", 0)
+device.add_line("gain_ln", 0, "gain_l", 1)           # smoothed signal → *~ inlet 1
+device.add_line("gain_ln", 0, "gain_r", 1)
+
 device.add_line("pan_sig_l", 0, "gain_l", 0)
-device.add_line("gain_scale", 0, "gain_l", 1)        # gain float → *~ inlet 1
 device.add_line("pan_sig_r", 0, "gain_r", 0)
-device.add_line("gain_scale", 0, "gain_r", 1)
 
 # Mono sum: gain_l/r → mono_sum → *0.5 → mono_half
 device.add_line("gain_l", 0, "mono_sum", 0)
@@ -277,7 +319,7 @@ device.add_line("mono_sel_r", 0, "obj-plugout", 1)
 device.add_line("mono_sel_l", 0, "vectorscope", 0)
 device.add_line("mono_sel_r", 0, "vectorscope", 1)
 
-# Output meters
+# Output meters (from final output stage before plugout~)
 device.add_line("mono_sel_l", 0, "meter_l", 0)
 device.add_line("mono_sel_r", 0, "meter_r", 0)
 

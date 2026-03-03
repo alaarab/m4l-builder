@@ -2,19 +2,19 @@
 
 Showcase: MIDNIGHT theme, hero filter curve display showing frequency response.
 
-Layout (width=380, height=200):
-  ┌─────────────────────────────────────────────────┐
-  │ AUTO FILTER                           [Mix]     │
-  │ ┌───────────────────────────────────────────┐   │
-  │ │                                           │   │
-  │ │         FILTER CURVE DISPLAY              │   │
-  │ │         (hero — large jsui)               │   │
-  │ │                                           │   │
-  │ └───────────────────────────────────────────┘   │
-  │ FILTER          ENVELOPE           LFO          │
-  │ [Cutoff] [Res]  [Depth] [Atk] [Rel] [Dpth][Rate]│
-  │ [LP|HP|BP|NOTCH]                                │
-  └─────────────────────────────────────────────────┘
+Layout (width=410, height=200):
+  ┌──────────────────────────────────────────────────────┐
+  │ AUTO FILTER                              [Mix]       │
+  │ ┌──────────────────────────────────────────────┐     │
+  │ │                                              │ L R │
+  │ │         FILTER CURVE DISPLAY                │ │ │ │
+  │ │         (hero — large jsui)                 │ │ │ │
+  │ │                                              │ │ │ │
+  │ └──────────────────────────────────────────────┘     │
+  │ FILTER          ENVELOPE           LFO              │
+  │ [Cutoff] [Res]  [Depth] [Atk] [Rel] [Dpth][Rate]   │
+  │ [LP|HP|BP|NOTCH]                                    │
+  └──────────────────────────────────────────────────────┘
 
 DSP signal flow:
 
@@ -30,7 +30,7 @@ Modulation sum:
 
 Filter:
   plugin~ L -> svf_l (inlet 0), plugin~ R -> svf_r (inlet 0)
-  Resonance: res_dial -> scale 0. 100. 0. 1. -> svf~ inlet 2
+  Resonance: res_dial -> scale 0. 100. 0. 1. -> pack+line~ -> svf~ inlet 2
   Mode: svf~ 4 outlets (LP=0, HP=1, BP=2, notch=3) -> selector~ 4 1
 
 Dry/wet mix -> plugout~
@@ -39,6 +39,9 @@ Filter curve display:
   cutoff_dial -> filter_display inlet 0 (freq)
   res_scale   -> filter_display inlet 1 (resonance 0-1)
   filter_type -> filter_display inlet 2 (type 0-3)
+
+Parameter smoothing:
+  All float-to-signal connections routed through pack f 20 -> line~
 
 CRITICAL RULES:
   - No sig~ (floats sent directly to inlets)
@@ -52,15 +55,15 @@ import os
 from m4l_builder import AudioEffect, MIDNIGHT
 from m4l_builder.engines.filter_curve import filter_curve_js
 
-# --- Device setup ---
-device = AudioEffect("Auto Filter", width=380, height=200, theme=MIDNIGHT)
+# --- Device setup --- (widened 30px for meters)
+device = AudioEffect("Auto Filter", width=410, height=200, theme=MIDNIGHT)
 
 # =========================================================================
 # UI
 # =========================================================================
 
 # Background panel
-device.add_panel("bg", [0, 0, 380, 200])
+device.add_panel("bg", [0, 0, 410, 200])
 
 # Title
 device.add_comment("title", [8, 5, 130, 16], "AUTO FILTER",
@@ -83,6 +86,18 @@ device.add_jsui("filter_display", [10, 22, 360, 80],
                     cursor_color="0.8, 0.8, 0.8, 0.4",
                 ),
                 numinlets=3)
+
+# Output meters — right edge (x=382 L, x=396 R), full height
+device.add_meter("meter_l", [382, 5, 10, 190],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+device.add_meter("meter_r", [396, 5, 10, 190],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # Section labels row (y=108)
 device.add_comment("lbl_filter", [8, 108, 60, 11], "FILTER",
@@ -145,6 +160,36 @@ device.add_dial("rate_dial", "Rate", [334, 118, 42, 52],
 device.add_newobj("res_scale", "scale 0. 100. 0. 1.", numinlets=6, numoutlets=1,
                   outlettype=[""], patching_rect=[30, 300, 120, 20])
 
+# --- Parameter smoothing: resonance -> svf~ inlet 2 ---
+device.add_newobj("res_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[30, 325, 60, 20])
+device.add_newobj("res_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[30, 355, 40, 20])
+
+# --- Parameter smoothing: cutoff_dial -> mod_sum2 inlet 1 ---
+device.add_newobj("cutoff_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[160, 325, 60, 20])
+device.add_newobj("cutoff_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[160, 355, 40, 20])
+
+# --- Parameter smoothing: env_depth_dial -> env_scale inlet 1 ---
+device.add_newobj("envd_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[60, 448, 60, 20])
+device.add_newobj("envd_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[60, 478, 40, 20])
+
+# --- Parameter smoothing: rate_dial -> lfo_osc inlet 0 ---
+device.add_newobj("rate_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[200, 348, 60, 20])
+device.add_newobj("rate_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[200, 378, 40, 20])
+
+# --- Parameter smoothing: lfo_depth_dial -> lfo_depth_mul inlet 1 ---
+device.add_newobj("lfod_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[200, 423, 60, 20])
+device.add_newobj("lfod_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[200, 453, 40, 20])
+
 # --- Attack/Release: ms -> samples ---
 device.add_newobj("attack_samp", "* 44.1", numinlets=2, numoutlets=1,
                   outlettype=[""], patching_rect=[30, 330, 60, 20])
@@ -163,42 +208,42 @@ device.add_newobj("env_avg", "*~ 0.5", numinlets=2, numoutlets=1,
 device.add_newobj("env_follow", "slide~", numinlets=3, numoutlets=1,
                   outlettype=["signal"], patching_rect=[60, 435, 45, 20])
 device.add_newobj("env_scale", "*~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[60, 460, 30, 20])
+                  outlettype=["signal"], patching_rect=[60, 505, 30, 20])
 
 # --- LFO path ---
 device.add_newobj("lfo_osc", "cycle~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 360, 45, 20])
+                  outlettype=["signal"], patching_rect=[200, 403, 45, 20])
 device.add_newobj("lfo_scale", "*~ 0.5", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 385, 45, 20])
+                  outlettype=["signal"], patching_rect=[200, 428, 45, 20])
 device.add_newobj("lfo_shift", "+~ 0.5", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 410, 45, 20])
+                  outlettype=["signal"], patching_rect=[200, 453, 45, 20])
 device.add_newobj("lfo_depth_mul", "*~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 435, 30, 20])
+                  outlettype=["signal"], patching_rect=[200, 478, 30, 20])
 
 # --- Modulation sum ---
 device.add_newobj("mod_sum1", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[130, 470, 30, 20])
+                  outlettype=["signal"], patching_rect=[130, 510, 30, 20])
 device.add_newobj("mod_sum2", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[130, 495, 30, 20])
+                  outlettype=["signal"], patching_rect=[130, 535, 30, 20])
 device.add_newobj("cutoff_snap", "snapshot~ 1", numinlets=1, numoutlets=1,
-                  outlettype=[""], patching_rect=[130, 520, 70, 20])
+                  outlettype=[""], patching_rect=[130, 560, 70, 20])
 
 # --- SVF filters ---
 device.add_newobj("svf_l", "svf~", numinlets=3, numoutlets=4,
                   outlettype=["signal", "signal", "signal", "signal"],
-                  patching_rect=[30, 550, 40, 20])
+                  patching_rect=[30, 590, 40, 20])
 device.add_newobj("svf_r", "svf~", numinlets=3, numoutlets=4,
                   outlettype=["signal", "signal", "signal", "signal"],
-                  patching_rect=[150, 550, 40, 20])
+                  patching_rect=[150, 590, 40, 20])
 
 # --- Mode selector (live.tab is 0-indexed, selector~ is 1-indexed) ---
 device.add_newobj("tab_offset", "+ 1", numinlets=2, numoutlets=1,
-                  outlettype=["int"], patching_rect=[30, 590, 40, 20])
+                  outlettype=["int"], patching_rect=[30, 630, 40, 20])
 
 device.add_newobj("sel_l", "selector~ 4 1", numinlets=5, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 615, 80, 20])
+                  outlettype=["signal"], patching_rect=[30, 655, 80, 20])
 device.add_newobj("sel_r", "selector~ 4 1", numinlets=5, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[150, 615, 80, 20])
+                  outlettype=["signal"], patching_rect=[150, 655, 80, 20])
 
 # --- Dry/wet mix ---
 device.add_newobj("mix_scale", "scale 0. 100. 0. 1.", numinlets=6, numoutlets=1,
@@ -208,17 +253,17 @@ device.add_newobj("mix_trig", "t f f f", numinlets=1, numoutlets=3,
 device.add_newobj("mix_inv", "!-~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[400, 120, 45, 20])
 device.add_newobj("wet_l", "*~ 0.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[300, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[300, 690, 30, 20])
 device.add_newobj("wet_r", "*~ 0.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[340, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[340, 690, 30, 20])
 device.add_newobj("dry_l", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[460, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[460, 690, 30, 20])
 device.add_newobj("dry_r", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[500, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[500, 690, 30, 20])
 device.add_newobj("out_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[380, 690, 30, 20])
+                  outlettype=["signal"], patching_rect=[380, 730, 30, 20])
 device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[420, 690, 30, 20])
+                  outlettype=["signal"], patching_rect=[420, 730, 30, 20])
 
 # =========================================================================
 # Connections
@@ -228,11 +273,13 @@ device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
 device.add_line("obj-plugin", 0, "svf_l", 0)
 device.add_line("obj-plugin", 1, "svf_r", 0)
 
-# --- Resonance to filters and filter display ---
+# --- Resonance -> scale -> pack+line~ -> svf~ inlet 2 (smoothed) ---
 device.add_line("res_dial", 0, "res_scale", 0)
-device.add_line("res_scale", 0, "svf_l", 2)
-device.add_line("res_scale", 0, "svf_r", 2)
-device.add_line("res_scale", 0, "filter_display", 1)   # resonance 0-1 to curve display
+device.add_line("res_scale", 0, "res_pk", 0)
+device.add_line("res_pk", 0, "res_ln", 0)
+device.add_line("res_ln", 0, "svf_l", 2)
+device.add_line("res_ln", 0, "svf_r", 2)
+device.add_line("res_scale", 0, "filter_display", 1)   # resonance 0-1 to curve display (unsmoothed, UI only)
 
 # --- Attack/Release ms -> samples ---
 device.add_line("attack_dial", 0, "attack_samp", 0)
@@ -249,20 +296,35 @@ device.add_line("abs_r", 0, "env_sum", 1)
 device.add_line("env_sum", 0, "env_avg", 0)
 device.add_line("env_avg", 0, "env_follow", 0)
 device.add_line("env_follow", 0, "env_scale", 0)
-device.add_line("env_depth_dial", 0, "env_scale", 1)
 
-# --- LFO path ---
-device.add_line("rate_dial", 0, "lfo_osc", 0)
+# --- Env depth: dial -> pack+line~ -> env_scale inlet 1 (smoothed) ---
+device.add_line("env_depth_dial", 0, "envd_pk", 0)
+device.add_line("envd_pk", 0, "envd_ln", 0)
+device.add_line("envd_ln", 0, "env_scale", 1)
+
+# --- LFO rate: dial -> pack+line~ -> cycle~ inlet 0 (smoothed) ---
+device.add_line("rate_dial", 0, "rate_pk", 0)
+device.add_line("rate_pk", 0, "rate_ln", 0)
+device.add_line("rate_ln", 0, "lfo_osc", 0)
+
 device.add_line("lfo_osc", 0, "lfo_scale", 0)
 device.add_line("lfo_scale", 0, "lfo_shift", 0)
 device.add_line("lfo_shift", 0, "lfo_depth_mul", 0)
-device.add_line("lfo_depth_dial", 0, "lfo_depth_mul", 1)
+
+# --- LFO depth: dial -> pack+line~ -> lfo_depth_mul inlet 1 (smoothed) ---
+device.add_line("lfo_depth_dial", 0, "lfod_pk", 0)
+device.add_line("lfod_pk", 0, "lfod_ln", 0)
+device.add_line("lfod_ln", 0, "lfo_depth_mul", 1)
+
+# --- Cutoff: dial -> pack+line~ -> mod_sum2 inlet 1 (smoothed) ---
+device.add_line("cutoff_dial", 0, "cutoff_pk", 0)
+device.add_line("cutoff_pk", 0, "cutoff_ln", 0)
 
 # --- Modulation sum -> cutoff -> SVF ---
 device.add_line("env_scale", 0, "mod_sum1", 0)
 device.add_line("lfo_depth_mul", 0, "mod_sum1", 1)
 device.add_line("mod_sum1", 0, "mod_sum2", 0)
-device.add_line("cutoff_dial", 0, "mod_sum2", 1)
+device.add_line("cutoff_ln", 0, "mod_sum2", 1)
 device.add_line("mod_sum2", 0, "cutoff_snap", 0)
 device.add_line("cutoff_snap", 0, "svf_l", 1)
 device.add_line("cutoff_snap", 0, "svf_r", 1)
@@ -309,6 +371,10 @@ device.add_line("dry_r", 0, "out_r", 1)
 
 device.add_line("out_l", 0, "obj-plugout", 0)
 device.add_line("out_r", 0, "obj-plugout", 1)
+
+# --- Output meters: tap final output ---
+device.add_line("out_l", 0, "meter_l", 0)
+device.add_line("out_r", 0, "meter_r", 0)
 
 # =========================================================================
 # Build
