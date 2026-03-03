@@ -35,7 +35,7 @@ Parameter smoothing:
 """
 
 import os
-from m4l_builder import AudioEffect, MIDNIGHT
+from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
 # --- Device setup --- widened 30px for L/R output meters
 device = AudioEffect("Comb Resonator", width=330, height=195, theme=MIDNIGHT)
@@ -579,9 +579,6 @@ device.add_line("out_l", 0, "meter_out_l", 0)
 device.add_line("out_r", 0, "meter_out_r", 0)
 
 # --- Build ---
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/Comb Resonator.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("Comb Resonator")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -1,7 +1,7 @@
 """Stereo Utility effect — gain, pan, width (M/S), phase invert, mono."""
 
 import os
-from m4l_builder import AudioEffect, COOL
+from m4l_builder import AudioEffect, COOL, device_output_path
 
 # Device dimensions: ~250 wide, 140 tall
 W, H = 250, 140
@@ -325,9 +325,6 @@ device.add_line("mono_sel_r", 0, "meter_r", 0)
 
 # ── Build ────────────────────────────────────────────────────────────────
 
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/Stereo Utility.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("Stereo Utility")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

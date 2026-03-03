@@ -44,7 +44,7 @@ CRITICAL RULES:
 """
 
 import os
-from m4l_builder import AudioEffect, MIDNIGHT
+from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 from m4l_builder.engines.eq_curve import eq_curve_js, EQ_CURVE_INLETS, EQ_CURVE_OUTLETS
 
 # ---------------------------------------------------------------------------
@@ -675,6 +675,5 @@ output = os.path.expanduser(
     "~/Music/Ableton/User Library/Presets/Audio Effects/"
     "Max Audio Effect/Parametric EQ.amxd"
 )
-os.makedirs(os.path.dirname(output), exist_ok=True)
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

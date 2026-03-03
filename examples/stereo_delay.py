@@ -25,7 +25,7 @@ Output meters: L/R live.meter~ on the right edge for visual feedback.
 """
 
 import os
-from m4l_builder import AudioEffect, MIDNIGHT
+from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
 # --- Device setup (widened 30px for output meters) ---
 WIDTH = 350
@@ -497,9 +497,6 @@ device.add_line("sync_r_pk", 0, "sync_r_ln", 0)
 device.add_line("sync_r_ln", 0, "time_sel_r", 2)  # inlet 2 = synced time
 
 # --- Build ---
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/Stereo Delay.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("Stereo Delay")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -4,7 +4,7 @@ Showcase: WARM theme, compact vertical dial, minimal Swiss-style layout.
 """
 
 import os
-from m4l_builder import AudioEffect, WARM
+from m4l_builder import AudioEffect, WARM, device_output_path
 
 device = AudioEffect("Simple Gain", width=150, height=110, theme=WARM)
 
@@ -64,9 +64,6 @@ device.add_line("gain_ln", 0, "gain_r", 1)
 device.add_line("gain_l", 0, "meter_l", 0)
 device.add_line("gain_r", 0, "meter_r", 0)
 
-output = os.path.expanduser(
-    "~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/Simple Gain.amxd"
-)
-os.makedirs(os.path.dirname(output), exist_ok=True)
+output = device_output_path("Simple Gain")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

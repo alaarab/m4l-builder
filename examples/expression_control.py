@@ -1,7 +1,7 @@
 """Expression Control — 8 macro knobs for parameter mapping in Ableton."""
 
 import os
-from m4l_builder import AudioEffect, MIDNIGHT
+from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
 device = AudioEffect("Expression Control", width=350, height=115, theme=MIDNIGHT)
 
@@ -48,6 +48,5 @@ output = os.path.expanduser(
     "~/Music/Ableton/User Library/Presets/Audio Effects/"
     "Max Audio Effect/Expression Control.amxd"
 )
-os.makedirs(os.path.dirname(output), exist_ok=True)
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")
