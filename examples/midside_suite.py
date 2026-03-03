@@ -23,7 +23,7 @@ Saturation per channel (selector~ 4 1):
   live.tab 0-indexed + 1 -> selector~ 1-indexed
 
 Drive per channel: *~ drive_scale before saturation
-Drive dial 0-100 -> scale 0. 100. 0.0 2.0 -> *~ inlet 1
+Drive dial 0-100 -> scale 0. 100. 0.0 2.0 -> pack -> line~ -> *~ inlet 1
 
 CRITICAL RULES:
   - No sig~
@@ -36,8 +36,8 @@ CRITICAL RULES:
 import os
 from m4l_builder import AudioEffect, COOL
 
-# Device dimensions: ~320 wide, 170 tall
-W, H = 380, 170
+# Device dimensions: ~380 wide, 170 tall — widened 30px for L/R output meters
+W, H = 410, 170
 device = AudioEffect("MidSide Suite", width=W, height=H, theme=COOL)
 
 # =========================================================================
@@ -125,26 +125,24 @@ device.add_tab("side_sat_tab", "Side Sat", [168, 110, 152, 20],
                textcolor=[0.65, 0.65, 0.65, 1.0],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
-# --- M/S Level Meters ---
-device.add_comment("lbl_meters", [328, 24, 50, 12], "OUTPUT",
+# --- Output L/R Meters (right edge) ---
+device.add_comment("lbl_meters", [332, 24, 70, 12], "OUTPUT",
                    textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0)
 
-# Mid meter (green-tinted)
-device.add_comment("lbl_mid_m", [330, 130, 12, 12], "M",
-                   textcolor=[0.5, 0.75, 0.5, 1.0], fontsize=8.0)
-device.add_meter("meter_mid", [330, 38, 12, 90],
-                 coldcolor=[0.3, 0.7, 0.4, 1.0],
-                 warmcolor=[0.6, 0.8, 0.3, 1.0],
-                 hotcolor=[0.85, 0.6, 0.2, 1.0],
+device.add_comment("lbl_out_l", [333, 130, 12, 12], "L",
+                   textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
+device.add_meter("meter_out_l", [333, 38, 12, 90],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
-# Side meter (blue-tinted)
-device.add_comment("lbl_side_m", [352, 130, 12, 12], "S",
-                   textcolor=[0.5, 0.6, 0.85, 1.0], fontsize=8.0)
-device.add_meter("meter_side", [352, 38, 12, 90],
-                 coldcolor=[0.3, 0.5, 0.8, 1.0],
-                 warmcolor=[0.5, 0.6, 0.85, 1.0],
-                 hotcolor=[0.7, 0.5, 0.8, 1.0],
+device.add_comment("lbl_out_r", [356, 130, 12, 12], "R",
+                   textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
+device.add_meter("meter_out_r", [356, 38, 12, 90],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # --- Output mix dial ---
@@ -175,139 +173,171 @@ device.add_newobj("enc_mul_side", "*~ 0.5", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[100, 130, 50, 20])
 
 # ── MID channel gain ─────────────────────────────────────────────────────
-# Gain dial (-12..+12 dB) -> dbtoa -> *~ signal
+# Gain dial (-12..+12 dB) -> dbtoa -> pack/line~ -> *~ signal
 device.add_newobj("mid_gain_dbtoa", "dbtoa", numinlets=1, numoutlets=1,
                   outlettype=[""], patching_rect=[30, 170, 50, 20])
+# Smoothing for mid gain
+device.add_newobj("mid_gain_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[30, 195, 60, 20])
+device.add_newobj("mid_gain_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[30, 225, 40, 20])
 device.add_newobj("mid_gain_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 200, 40, 20])
+                  outlettype=["signal"], patching_rect=[30, 255, 40, 20])
 
 # ── MID tilt EQ ──────────────────────────────────────────────────────────
-# Tilt dial -100..100 -> crossover freq (200 Hz at center, scaled by tilt)
-# Use fixed 1000 Hz crossover — tilt adjusts lo/hi gain balance
-# Tilt -100: lo_gain=2.0, hi_gain=0.0  (all bass)
-# Tilt 0:    lo_gain=1.0, hi_gain=1.0  (flat)
-# Tilt +100: lo_gain=0.0, hi_gain=2.0  (all treble)
-# lo_gain = scale tilt -100..100 to 2.0..0.0 = (1 - tilt_norm) * 2
-# hi_gain = scale tilt -100..100 to 0.0..2.0 = tilt_norm * 2
-# where tilt_norm = scale(-100..100 -> 0..1)
-
 device.add_newobj("mid_tilt_norm", "scale -100. 100. 0. 1.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[30, 230, 130, 20])
-# Fan tilt_norm to lo and hi gain calculations
+                  outlettype=[""], patching_rect=[30, 290, 130, 20])
 device.add_newobj("mid_tilt_fan", "t f f", numinlets=1, numoutlets=2,
-                  outlettype=["", ""], patching_rect=[30, 260, 45, 20])
+                  outlettype=["", ""], patching_rect=[30, 320, 45, 20])
 # lo_gain = (1 - tilt_norm) * 2
 device.add_newobj("mid_lo_inv", "!- 1.", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[30, 290, 45, 20])
+                  outlettype=[""], patching_rect=[30, 350, 45, 20])
 device.add_newobj("mid_lo_scale", "* 2.", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[30, 320, 40, 20])
+                  outlettype=[""], patching_rect=[30, 380, 40, 20])
 # hi_gain = tilt_norm * 2
 device.add_newobj("mid_hi_scale", "* 2.", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[100, 290, 40, 20])
+                  outlettype=[""], patching_rect=[100, 350, 40, 20])
+
+# Smoothing for mid lo_gain
+device.add_newobj("mid_lo_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[30, 405, 60, 20])
+device.add_newobj("mid_lo_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[30, 435, 40, 20])
+# Smoothing for mid hi_gain
+device.add_newobj("mid_hi_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[100, 380, 60, 20])
+device.add_newobj("mid_hi_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[100, 410, 40, 20])
 
 # onepole~ for LP at 1000 Hz crossover
 device.add_newobj("mid_lp", "onepole~ 1000.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 350, 80, 20])
+                  outlettype=["signal"], patching_rect=[30, 460, 80, 20])
 # HP = signal - LP
 device.add_newobj("mid_hp_sub", "-~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[130, 350, 30, 20])
+                  outlettype=["signal"], patching_rect=[130, 460, 30, 20])
 # Apply lo_gain to LP band
 device.add_newobj("mid_lo_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 380, 40, 20])
+                  outlettype=["signal"], patching_rect=[30, 490, 40, 20])
 # Apply hi_gain to HP band
 device.add_newobj("mid_hi_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[130, 380, 40, 20])
+                  outlettype=["signal"], patching_rect=[130, 490, 40, 20])
 # Sum lo + hi
 device.add_newobj("mid_tilt_sum", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[80, 410, 30, 20])
+                  outlettype=["signal"], patching_rect=[80, 520, 30, 20])
 
 # ── MID saturation ───────────────────────────────────────────────────────
-# Drive dial 0..100 -> scale 0..2.0 -> pre-sat gain *~
+# Drive dial 0..100 -> scale 0..2.0 -> pack/line~ -> pre-sat gain *~
 device.add_newobj("mid_drive_scale", "scale 0. 100. 0. 2.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[30, 440, 120, 20])
+                  outlettype=[""], patching_rect=[30, 550, 120, 20])
+# Smoothing for mid drive
+device.add_newobj("mid_drive_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[30, 575, 60, 20])
+device.add_newobj("mid_drive_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[30, 605, 40, 20])
 device.add_newobj("mid_drive_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[80, 470, 40, 20])
+                  outlettype=["signal"], patching_rect=[80, 635, 40, 20])
 
 # Saturation modes fed into selector~
 device.add_newobj("mid_tanh", "tanh~", numinlets=1, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 500, 45, 20])
+                  outlettype=["signal"], patching_rect=[30, 665, 45, 20])
 device.add_newobj("mid_overdrive", "overdrive~", numinlets=1, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[85, 500, 70, 20])
+                  outlettype=["signal"], patching_rect=[85, 665, 70, 20])
 device.add_newobj("mid_clip", "clip~ -1. 1.", numinlets=3, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[165, 500, 70, 20])
+                  outlettype=["signal"], patching_rect=[165, 665, 70, 20])
 device.add_newobj("mid_bypass", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[245, 500, 40, 20])
+                  outlettype=["signal"], patching_rect=[245, 665, 40, 20])
 
 # selector~ 4 1: inlet 0=int select, inlets 1-4=signal inputs; init=1 (TAPE)
 device.add_newobj("mid_sel", "selector~ 4 1", numinlets=5, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[80, 540, 85, 20])
+                  outlettype=["signal"], patching_rect=[80, 700, 85, 20])
 # live.tab 0-indexed -> + 1 -> selector~ 1-indexed
 device.add_newobj("mid_sat_offset", "+ 1", numinlets=2, numoutlets=1,
-                  outlettype=["int"], patching_rect=[30, 440, 35, 20])
+                  outlettype=["int"], patching_rect=[30, 550, 35, 20])
 
 # ── SIDE channel gain ────────────────────────────────────────────────────
 device.add_newobj("side_gain_dbtoa", "dbtoa", numinlets=1, numoutlets=1,
                   outlettype=[""], patching_rect=[400, 170, 50, 20])
+# Smoothing for side gain
+device.add_newobj("side_gain_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[400, 195, 60, 20])
+device.add_newobj("side_gain_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[400, 225, 40, 20])
 device.add_newobj("side_gain_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[400, 200, 40, 20])
+                  outlettype=["signal"], patching_rect=[400, 255, 40, 20])
 
 # ── SIDE tilt EQ ─────────────────────────────────────────────────────────
 device.add_newobj("side_tilt_norm", "scale -100. 100. 0. 1.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[400, 230, 130, 20])
+                  outlettype=[""], patching_rect=[400, 290, 130, 20])
 device.add_newobj("side_tilt_fan", "t f f", numinlets=1, numoutlets=2,
-                  outlettype=["", ""], patching_rect=[400, 260, 45, 20])
+                  outlettype=["", ""], patching_rect=[400, 320, 45, 20])
 device.add_newobj("side_lo_inv", "!- 1.", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[400, 290, 45, 20])
+                  outlettype=[""], patching_rect=[400, 350, 45, 20])
 device.add_newobj("side_lo_scale", "* 2.", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[400, 320, 40, 20])
+                  outlettype=[""], patching_rect=[400, 380, 40, 20])
 device.add_newobj("side_hi_scale", "* 2.", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[470, 290, 40, 20])
+                  outlettype=[""], patching_rect=[470, 350, 40, 20])
+
+# Smoothing for side lo_gain
+device.add_newobj("side_lo_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[400, 405, 60, 20])
+device.add_newobj("side_lo_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[400, 435, 40, 20])
+# Smoothing for side hi_gain
+device.add_newobj("side_hi_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[470, 380, 60, 20])
+device.add_newobj("side_hi_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[470, 410, 40, 20])
 
 device.add_newobj("side_lp", "onepole~ 1000.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[400, 350, 80, 20])
+                  outlettype=["signal"], patching_rect=[400, 460, 80, 20])
 device.add_newobj("side_hp_sub", "-~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[500, 350, 30, 20])
+                  outlettype=["signal"], patching_rect=[500, 460, 30, 20])
 device.add_newobj("side_lo_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[400, 380, 40, 20])
+                  outlettype=["signal"], patching_rect=[400, 490, 40, 20])
 device.add_newobj("side_hi_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[500, 380, 40, 20])
+                  outlettype=["signal"], patching_rect=[500, 490, 40, 20])
 device.add_newobj("side_tilt_sum", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[450, 410, 30, 20])
+                  outlettype=["signal"], patching_rect=[450, 520, 30, 20])
 
 # ── SIDE saturation ──────────────────────────────────────────────────────
 device.add_newobj("side_drive_scale", "scale 0. 100. 0. 2.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[400, 440, 120, 20])
+                  outlettype=[""], patching_rect=[400, 550, 120, 20])
+# Smoothing for side drive
+device.add_newobj("side_drive_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[400, 575, 60, 20])
+device.add_newobj("side_drive_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[400, 605, 40, 20])
 device.add_newobj("side_drive_mul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[450, 470, 40, 20])
+                  outlettype=["signal"], patching_rect=[450, 635, 40, 20])
 
 device.add_newobj("side_tanh", "tanh~", numinlets=1, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[400, 500, 45, 20])
+                  outlettype=["signal"], patching_rect=[400, 665, 45, 20])
 device.add_newobj("side_overdrive", "overdrive~", numinlets=1, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[455, 500, 70, 20])
+                  outlettype=["signal"], patching_rect=[455, 665, 70, 20])
 device.add_newobj("side_clip", "clip~ -1. 1.", numinlets=3, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[535, 500, 70, 20])
+                  outlettype=["signal"], patching_rect=[535, 665, 70, 20])
 device.add_newobj("side_bypass", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[615, 500, 40, 20])
+                  outlettype=["signal"], patching_rect=[615, 665, 40, 20])
 
 device.add_newobj("side_sel", "selector~ 4 1", numinlets=5, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[450, 540, 85, 20])
+                  outlettype=["signal"], patching_rect=[450, 700, 85, 20])
 device.add_newobj("side_sat_offset", "+ 1", numinlets=2, numoutlets=1,
-                  outlettype=["int"], patching_rect=[400, 440, 35, 20])
+                  outlettype=["int"], patching_rect=[400, 550, 35, 20])
 
 # ── M/S Decode ───────────────────────────────────────────────────────────
 # L = Mid' + Side'
 device.add_newobj("dec_add", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 580, 30, 20])
+                  outlettype=["signal"], patching_rect=[200, 740, 30, 20])
 # R = Mid' - Side'
 device.add_newobj("dec_sub", "-~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[270, 580, 30, 20])
+                  outlettype=["signal"], patching_rect=[270, 740, 30, 20])
 
 # ── DC block (biquad~) ───────────────────────────────────────────────────
 # biquad~ 1. -1. 0. -0.9997 0. = DC block highpass
 device.add_newobj("dc_l", "biquad~ 1. -1. 0. -0.9997 0.", numinlets=6, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 610, 160, 20])
+                  outlettype=["signal"], patching_rect=[200, 770, 160, 20])
 device.add_newobj("dc_r", "biquad~ 1. -1. 0. -0.9997 0.", numinlets=6, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[370, 610, 160, 20])
+                  outlettype=["signal"], patching_rect=[370, 770, 160, 20])
 
 # ── Dry/wet mix ──────────────────────────────────────────────────────────
 # mix_dial 0..100 -> scale 0..1.0
@@ -320,17 +350,17 @@ device.add_newobj("mix_trig", "t f f f", numinlets=1, numoutlets=3,
 device.add_newobj("mix_inv", "!-~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[600, 120, 45, 20])
 device.add_newobj("wet_l", "*~ 0.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[500, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[500, 810, 30, 20])
 device.add_newobj("wet_r", "*~ 0.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[540, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[540, 810, 30, 20])
 device.add_newobj("dry_l", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[660, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[660, 810, 30, 20])
 device.add_newobj("dry_r", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[700, 650, 30, 20])
+                  outlettype=["signal"], patching_rect=[700, 810, 30, 20])
 device.add_newobj("out_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[580, 690, 30, 20])
+                  outlettype=["signal"], patching_rect=[580, 850, 30, 20])
 device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[620, 690, 30, 20])
+                  outlettype=["signal"], patching_rect=[620, 850, 30, 20])
 
 # =========================================================================
 # Connections
@@ -351,7 +381,10 @@ device.add_line("enc_sub", 0, "enc_mul_side", 0)
 # ── MID gain ─────────────────────────────────────────────────────────────
 device.add_line("mid_gain_dial", 0, "mid_gain_dbtoa", 0)
 device.add_line("enc_mul_mid", 0, "mid_gain_mul", 0)        # mid signal -> *~ signal inlet
-device.add_line("mid_gain_dbtoa", 0, "mid_gain_mul", 1)     # dbtoa float -> *~ multiplier
+# dbtoa -> pack -> line~ -> *~ multiplier (smoothed)
+device.add_line("mid_gain_dbtoa", 0, "mid_gain_pk", 0)
+device.add_line("mid_gain_pk", 0, "mid_gain_ln", 0)
+device.add_line("mid_gain_ln", 0, "mid_gain_mul", 1)
 
 # ── MID tilt EQ ──────────────────────────────────────────────────────────
 device.add_line("mid_tilt_dial", 0, "mid_tilt_norm", 0)
@@ -360,8 +393,14 @@ device.add_line("mid_tilt_norm", 0, "mid_tilt_fan", 0)
 device.add_line("mid_tilt_fan", 0, "mid_lo_inv", 0)         # tilt_norm -> !- 1.
 device.add_line("mid_tilt_fan", 1, "mid_hi_scale", 0)       # tilt_norm -> * 2. (hi gain)
 device.add_line("mid_lo_inv", 0, "mid_lo_scale", 0)         # (1-tilt_norm) -> * 2.
-device.add_line("mid_lo_scale", 0, "mid_lo_mul", 1)         # lo_gain float -> *~ inlet 1
-device.add_line("mid_hi_scale", 0, "mid_hi_mul", 1)         # hi_gain float -> *~ inlet 1
+# lo_gain -> pack -> line~ -> *~ inlet 1 (smoothed)
+device.add_line("mid_lo_scale", 0, "mid_lo_pk", 0)
+device.add_line("mid_lo_pk", 0, "mid_lo_ln", 0)
+device.add_line("mid_lo_ln", 0, "mid_lo_mul", 1)
+# hi_gain -> pack -> line~ -> *~ inlet 1 (smoothed)
+device.add_line("mid_hi_scale", 0, "mid_hi_pk", 0)
+device.add_line("mid_hi_pk", 0, "mid_hi_ln", 0)
+device.add_line("mid_hi_ln", 0, "mid_hi_mul", 1)
 
 # onepole~ LP: mid_gain_mul -> onepole~ signal
 device.add_line("mid_gain_mul", 0, "mid_lp", 0)             # signal -> onepole~ inlet 0
@@ -378,7 +417,10 @@ device.add_line("mid_hi_mul", 0, "mid_tilt_sum", 1)
 # ── MID saturation ───────────────────────────────────────────────────────
 device.add_line("mid_drive_dial", 0, "mid_drive_scale", 0)
 device.add_line("mid_tilt_sum", 0, "mid_drive_mul", 0)      # tilt output -> *~ signal
-device.add_line("mid_drive_scale", 0, "mid_drive_mul", 1)   # drive float -> *~ multiplier
+# drive_scale -> pack -> line~ -> *~ multiplier (smoothed)
+device.add_line("mid_drive_scale", 0, "mid_drive_pk", 0)
+device.add_line("mid_drive_pk", 0, "mid_drive_ln", 0)
+device.add_line("mid_drive_ln", 0, "mid_drive_mul", 1)
 
 # Drive output fans to all saturation stages
 device.add_line("mid_drive_mul", 0, "mid_tanh", 0)
@@ -399,7 +441,10 @@ device.add_line("mid_sat_offset", 0, "mid_sel", 0)
 # ── SIDE gain ────────────────────────────────────────────────────────────
 device.add_line("side_gain_dial", 0, "side_gain_dbtoa", 0)
 device.add_line("enc_mul_side", 0, "side_gain_mul", 0)
-device.add_line("side_gain_dbtoa", 0, "side_gain_mul", 1)
+# dbtoa -> pack -> line~ -> *~ multiplier (smoothed)
+device.add_line("side_gain_dbtoa", 0, "side_gain_pk", 0)
+device.add_line("side_gain_pk", 0, "side_gain_ln", 0)
+device.add_line("side_gain_ln", 0, "side_gain_mul", 1)
 
 # ── SIDE tilt EQ ─────────────────────────────────────────────────────────
 device.add_line("side_tilt_dial", 0, "side_tilt_norm", 0)
@@ -407,8 +452,14 @@ device.add_line("side_tilt_norm", 0, "side_tilt_fan", 0)
 device.add_line("side_tilt_fan", 0, "side_lo_inv", 0)
 device.add_line("side_tilt_fan", 1, "side_hi_scale", 0)
 device.add_line("side_lo_inv", 0, "side_lo_scale", 0)
-device.add_line("side_lo_scale", 0, "side_lo_mul", 1)
-device.add_line("side_hi_scale", 0, "side_hi_mul", 1)
+# lo_gain -> pack -> line~ -> *~ inlet 1 (smoothed)
+device.add_line("side_lo_scale", 0, "side_lo_pk", 0)
+device.add_line("side_lo_pk", 0, "side_lo_ln", 0)
+device.add_line("side_lo_ln", 0, "side_lo_mul", 1)
+# hi_gain -> pack -> line~ -> *~ inlet 1 (smoothed)
+device.add_line("side_hi_scale", 0, "side_hi_pk", 0)
+device.add_line("side_hi_pk", 0, "side_hi_ln", 0)
+device.add_line("side_hi_ln", 0, "side_hi_mul", 1)
 
 device.add_line("side_gain_mul", 0, "side_lp", 0)
 device.add_line("side_gain_mul", 0, "side_hp_sub", 0)
@@ -421,7 +472,10 @@ device.add_line("side_hi_mul", 0, "side_tilt_sum", 1)
 # ── SIDE saturation ──────────────────────────────────────────────────────
 device.add_line("side_drive_dial", 0, "side_drive_scale", 0)
 device.add_line("side_tilt_sum", 0, "side_drive_mul", 0)
-device.add_line("side_drive_scale", 0, "side_drive_mul", 1)
+# drive_scale -> pack -> line~ -> *~ multiplier (smoothed)
+device.add_line("side_drive_scale", 0, "side_drive_pk", 0)
+device.add_line("side_drive_pk", 0, "side_drive_ln", 0)
+device.add_line("side_drive_ln", 0, "side_drive_mul", 1)
 
 device.add_line("side_drive_mul", 0, "side_tanh", 0)
 device.add_line("side_drive_mul", 0, "side_overdrive", 0)
@@ -476,9 +530,9 @@ device.add_line("dry_r", 0, "out_r", 1)
 device.add_line("out_l", 0, "obj-plugout", 0)
 device.add_line("out_r", 0, "obj-plugout", 1)
 
-# --- M/S meters: tap mid and side signals after processing ---
-device.add_line("mid_sel", 0, "meter_mid", 0)
-device.add_line("side_sel", 0, "meter_side", 0)
+# --- Output L/R meters: tap final output signals ---
+device.add_line("out_l", 0, "meter_out_l", 0)
+device.add_line("out_r", 0, "meter_out_r", 0)
 
 # =========================================================================
 # Build

@@ -3,10 +3,10 @@
 import os
 from m4l_builder import AudioEffect, MIDNIGHT
 
-device = AudioEffect("Expression Control", width=320, height=115, theme=MIDNIGHT)
+device = AudioEffect("Expression Control", width=350, height=115, theme=MIDNIGHT)
 
 # Background
-device.add_panel("bg", [0, 0, 320, 115])
+device.add_panel("bg", [0, 0, 350, 115])
 
 # Title
 device.add_comment("title", [8, 6, 160, 16], "EXPRESSION",
@@ -23,9 +23,25 @@ for i in range(8):
                     min_val=0.0, max_val=100.0, initial=50.0,
                     annotation_name=f"Macro {i+1} — map to any parameter")
 
+# Stereo output meters — right edge
+device.add_meter("meter_l", [320, 8, 10, 96],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+device.add_meter("meter_r", [334, 8, 10, 96],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+
 # Audio passthrough (control device, no processing)
 device.add_line("obj-plugin", 0, "obj-plugout", 0)
 device.add_line("obj-plugin", 1, "obj-plugout", 1)
+
+# Meter connections — tap the passthrough signal from plugin~
+device.add_line("obj-plugin", 0, "meter_l", 0)
+device.add_line("obj-plugin", 1, "meter_r", 0)
 
 # Build
 output = os.path.expanduser(

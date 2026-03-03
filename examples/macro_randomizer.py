@@ -3,10 +3,10 @@
 import os
 from m4l_builder import AudioEffect, COOL
 
-device = AudioEffect("Macro Randomizer", width=300, height=140, theme=COOL)
+device = AudioEffect("Macro Randomizer", width=330, height=140, theme=COOL)
 
 # Background
-device.add_panel("bg", [0, 0, 300, 140])
+device.add_panel("bg", [0, 0, 330, 140])
 
 # Title
 device.add_comment("title", [8, 6, 140, 16], "RANDOMIZER",
@@ -47,6 +47,18 @@ for i in range(7):
 device.add_dial("rate_dial", "Rate", [252, 38, 40, 70],
                 min_val=0.0, max_val=100.0, initial=25.0,
                 annotation_name="Auto-randomize speed — 0 slow, 100 fast")
+
+# Stereo output meters — right edge
+device.add_meter("meter_l", [300, 8, 10, 120],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+device.add_meter("meter_r", [314, 8, 10, 120],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # --- DSP / Logic ---
 
@@ -99,6 +111,10 @@ for i in range(7):
 # Audio passthrough
 device.add_line("obj-plugin", 0, "obj-plugout", 0)
 device.add_line("obj-plugin", 1, "obj-plugout", 1)
+
+# Meter connections — tap the passthrough signal from plugin~
+device.add_line("obj-plugin", 0, "meter_l", 0)
+device.add_line("obj-plugin", 1, "meter_r", 0)
 
 # Build
 output = os.path.expanduser(

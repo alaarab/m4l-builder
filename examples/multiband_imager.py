@@ -42,15 +42,15 @@ device.add_comment("lbl_hix", [80, 90, 55, 12], "HI X",
 device.add_comment("lbl_out", [210, 6, 40, 16], "OUT",
                    textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0)
 device.add_meter("meter_l", [210, 22, 10, 66],
-                 coldcolor=[0.35, 0.60, 0.90, 1.0],
-                 warmcolor=[0.60, 0.75, 0.40, 1.0],
-                 hotcolor=[0.90, 0.55, 0.20, 1.0],
-                 overloadcolor=[0.90, 0.15, 0.15, 1.0])
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
 device.add_meter("meter_r", [224, 22, 10, 66],
-                 coldcolor=[0.35, 0.60, 0.90, 1.0],
-                 warmcolor=[0.60, 0.75, 0.40, 1.0],
-                 hotcolor=[0.90, 0.55, 0.20, 1.0],
-                 overloadcolor=[0.90, 0.15, 0.15, 1.0])
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # Vectorscope (Lissajous XY scope)
 device.add_scope("vectorscope", [244, 6, 90, 82],
@@ -86,7 +86,7 @@ device.add_dial("dial_high_w", "High Width", [145, 100, 55, 55],
 # Signal flow:
 #   plugin~ L/R → cross~ low_freq → LP=LOW, HP=MID+HIGH
 #                 MID+HIGH → cross~ high_freq → LP=MID, HP=HIGH
-#   Per band: M/S encode → width scale → M/S decode
+#   Per band: M/S encode → width scale → smoothed line~ → M/S decode
 #   Sum all 3 bands → plugout~
 
 # ── Crossover (Left channel) ───────────────────────────────────────────────
@@ -107,6 +107,27 @@ device.add_newobj("xo1_r", "cross~", numinlets=2, numoutlets=2,
 device.add_newobj("xo2_r", "cross~", numinlets=2, numoutlets=2,
                   outlettype=["signal", "signal"], patching_rect=[300, 190, 50, 20])
 
+# ── Parameter smoothing: crossover frequencies ─────────────────────────────
+# dial_low_xover → lox_pk → lox_ln → xo1_l/r inlet 1 (signal)
+device.add_newobj("lox_pk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[30, 135, 60, 20])
+device.add_newobj("lox_ln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[30, 148, 40, 20])
+
+# dial_high_xover → hix_pk → hix_ln → xo2_l/r inlet 1 (signal)
+device.add_newobj("hix_pk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[130, 135, 60, 20])
+device.add_newobj("hix_ln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[130, 148, 40, 20])
+
 # ── LOW band M/S ───────────────────────────────────────────────────────────
 # Encode: mid = (L+R)*0.5, side = (L-R)*0.5
 device.add_newobj("lo_add", "+~", numinlets=2, numoutlets=1,
@@ -118,20 +139,31 @@ device.add_newobj("lo_mid", "*~ 0.5", numinlets=2, numoutlets=1,
 device.add_newobj("lo_side", "*~ 0.5", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[70, 260, 50, 20])
 
-# Width: side * width_factor
-device.add_newobj("lo_wmul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[70, 280, 40, 20])
+# Width scale: dial 0-200 → 0.0-2.0
 device.add_newobj("lo_wscale", "scale 0. 200. 0. 2.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[70, 300, 110, 20])
+                  outlettype=[""], patching_rect=[70, 280, 110, 20])
+
+# Width smoothing: lo_wscale → lo_wpk → lo_wln → lo_wmul inlet 1
+device.add_newobj("lo_wpk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[70, 298, 60, 20])
+device.add_newobj("lo_wln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[70, 313, 40, 20])
+
+# Width: side * smoothed_width_factor
+device.add_newobj("lo_wmul", "*~ 1.", numinlets=2, numoutlets=1,
+                  outlettype=["signal"], patching_rect=[70, 330, 40, 20])
 
 # Decode: L = mid + scaled_side, R = mid - scaled_side
-# For R: invert side then add to mid
 device.add_newobj("lo_dec_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 320, 30, 20])
+                  outlettype=["signal"], patching_rect=[30, 360, 30, 20])
 device.add_newobj("lo_inv", "*~ -1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[110, 300, 50, 20])
+                  outlettype=["signal"], patching_rect=[110, 330, 50, 20])
 device.add_newobj("lo_dec_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[110, 320, 30, 20])
+                  outlettype=["signal"], patching_rect=[110, 360, 30, 20])
 
 # ── MID band M/S ──────────────────────────────────────────────────────────
 device.add_newobj("mid_add", "+~", numinlets=2, numoutlets=1,
@@ -143,17 +175,28 @@ device.add_newobj("mid_mid", "*~ 0.5", numinlets=2, numoutlets=1,
 device.add_newobj("mid_side", "*~ 0.5", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[240, 260, 50, 20])
 
-device.add_newobj("mid_wmul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 280, 40, 20])
 device.add_newobj("mid_wscale", "scale 0. 200. 0. 2.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[240, 300, 110, 20])
+                  outlettype=[""], patching_rect=[240, 280, 110, 20])
+
+# Width smoothing: mid_wscale → mid_wpk → mid_wln → mid_wmul inlet 1
+device.add_newobj("mid_wpk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[240, 298, 60, 20])
+device.add_newobj("mid_wln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[240, 313, 40, 20])
+
+device.add_newobj("mid_wmul", "*~ 1.", numinlets=2, numoutlets=1,
+                  outlettype=["signal"], patching_rect=[240, 330, 40, 20])
 
 device.add_newobj("mid_dec_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[200, 320, 30, 20])
+                  outlettype=["signal"], patching_rect=[200, 360, 30, 20])
 device.add_newobj("mid_inv", "*~ -1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[280, 300, 50, 20])
+                  outlettype=["signal"], patching_rect=[280, 330, 50, 20])
 device.add_newobj("mid_dec_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[280, 320, 30, 20])
+                  outlettype=["signal"], patching_rect=[280, 360, 30, 20])
 
 # ── HIGH band M/S ─────────────────────────────────────────────────────────
 device.add_newobj("hi_add", "+~", numinlets=2, numoutlets=1,
@@ -165,30 +208,41 @@ device.add_newobj("hi_mid", "*~ 0.5", numinlets=2, numoutlets=1,
 device.add_newobj("hi_side", "*~ 0.5", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[410, 260, 50, 20])
 
-device.add_newobj("hi_wmul", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[410, 280, 40, 20])
 device.add_newobj("hi_wscale", "scale 0. 200. 0. 2.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[410, 300, 110, 20])
+                  outlettype=[""], patching_rect=[410, 280, 110, 20])
+
+# Width smoothing: hi_wscale → hi_wpk → hi_wln → hi_wmul inlet 1
+device.add_newobj("hi_wpk", "pack f 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[410, 298, 60, 20])
+device.add_newobj("hi_wln", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[410, 313, 40, 20])
+
+device.add_newobj("hi_wmul", "*~ 1.", numinlets=2, numoutlets=1,
+                  outlettype=["signal"], patching_rect=[410, 330, 40, 20])
 
 device.add_newobj("hi_dec_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[370, 320, 30, 20])
+                  outlettype=["signal"], patching_rect=[370, 360, 30, 20])
 device.add_newobj("hi_inv", "*~ -1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[450, 300, 50, 20])
+                  outlettype=["signal"], patching_rect=[450, 330, 50, 20])
 device.add_newobj("hi_dec_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[450, 320, 30, 20])
+                  outlettype=["signal"], patching_rect=[450, 360, 30, 20])
 
 # ── Sum all 3 bands ───────────────────────────────────────────────────────
 # L: lo_dec_l + mid_dec_l + hi_dec_l
 device.add_newobj("sum_lm_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[100, 360, 30, 20])
+                  outlettype=["signal"], patching_rect=[100, 400, 30, 20])
 device.add_newobj("sum_all_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[100, 390, 30, 20])
+                  outlettype=["signal"], patching_rect=[100, 430, 30, 20])
 
 # R: lo_dec_r + mid_dec_r + hi_dec_r
 device.add_newobj("sum_lm_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[300, 360, 30, 20])
+                  outlettype=["signal"], patching_rect=[300, 400, 30, 20])
 device.add_newobj("sum_all_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[300, 390, 30, 20])
+                  outlettype=["signal"], patching_rect=[300, 430, 30, 20])
 
 # --- Connections ---
 
@@ -196,11 +250,18 @@ device.add_newobj("sum_all_r", "+~", numinlets=2, numoutlets=1,
 device.add_line("obj-plugin", 0, "xo1_l", 0)   # L → crossover 1 L
 device.add_line("obj-plugin", 1, "xo1_r", 0)   # R → crossover 1 R
 
-# Crossover frequencies
-device.add_line("dial_low_xover", 0, "xo1_l", 1)   # low freq → xo1 L
-device.add_line("dial_low_xover", 0, "xo1_r", 1)   # low freq → xo1 R
-device.add_line("dial_high_xover", 0, "xo2_l", 1)  # high freq → xo2 L
-device.add_line("dial_high_xover", 0, "xo2_r", 1)  # high freq → xo2 R
+# Crossover frequencies with smoothing
+# Low: dial → pack → line~ → xo1_l/r inlet 1 (signal)
+device.add_line("dial_low_xover", 0, "lox_pk", 0)
+device.add_line("lox_pk", 0, "lox_ln", 0)
+device.add_line("lox_ln", 0, "xo1_l", 1)
+device.add_line("lox_ln", 0, "xo1_r", 1)
+
+# High: dial → pack → line~ → xo2_l/r inlet 1 (signal)
+device.add_line("dial_high_xover", 0, "hix_pk", 0)
+device.add_line("hix_pk", 0, "hix_ln", 0)
+device.add_line("hix_ln", 0, "xo2_l", 1)
+device.add_line("hix_ln", 0, "xo2_r", 1)
 
 # Stage 1 HP (MID+HIGH) → Stage 2
 device.add_line("xo1_l", 1, "xo2_l", 0)   # xo1 L HP → xo2 L signal
@@ -215,9 +276,11 @@ device.add_line("xo1_r", 0, "lo_sub", 1)    # LOW R → diff inlet 1
 device.add_line("lo_add", 0, "lo_mid", 0)   # sum → *0.5 = mid
 device.add_line("lo_sub", 0, "lo_side", 0)  # diff → *0.5 = side
 
-# Width control
+# Width control with smoothing: dial → scale → pack → line~ → *~ inlet 1
 device.add_line("dial_low_w", 0, "lo_wscale", 0)    # dial → scale
-device.add_line("lo_wscale", 0, "lo_wmul", 1)       # scaled float → *~ inlet 1
+device.add_line("lo_wscale", 0, "lo_wpk", 0)        # scaled float → pack
+device.add_line("lo_wpk", 0, "lo_wln", 0)           # pack → line~
+device.add_line("lo_wln", 0, "lo_wmul", 1)          # smoothed signal → *~ inlet 1
 device.add_line("lo_side", 0, "lo_wmul", 0)          # side signal → *~ inlet 0
 
 # Decode
@@ -237,7 +300,9 @@ device.add_line("mid_add", 0, "mid_mid", 0)
 device.add_line("mid_sub", 0, "mid_side", 0)
 
 device.add_line("dial_mid_w", 0, "mid_wscale", 0)
-device.add_line("mid_wscale", 0, "mid_wmul", 1)
+device.add_line("mid_wscale", 0, "mid_wpk", 0)
+device.add_line("mid_wpk", 0, "mid_wln", 0)
+device.add_line("mid_wln", 0, "mid_wmul", 1)
 device.add_line("mid_side", 0, "mid_wmul", 0)
 
 device.add_line("mid_mid", 0, "mid_dec_l", 0)
@@ -256,7 +321,9 @@ device.add_line("hi_add", 0, "hi_mid", 0)
 device.add_line("hi_sub", 0, "hi_side", 0)
 
 device.add_line("dial_high_w", 0, "hi_wscale", 0)
-device.add_line("hi_wscale", 0, "hi_wmul", 1)
+device.add_line("hi_wscale", 0, "hi_wpk", 0)
+device.add_line("hi_wpk", 0, "hi_wln", 0)
+device.add_line("hi_wln", 0, "hi_wmul", 1)
 device.add_line("hi_side", 0, "hi_wmul", 0)
 
 device.add_line("hi_mid", 0, "hi_dec_l", 0)

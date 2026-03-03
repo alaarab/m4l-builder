@@ -3,12 +3,12 @@
 import os
 from m4l_builder import AudioEffect, WARM
 
-# --- Device setup ---
-device = AudioEffect("Rhythmic Gate", width=280, height=180, theme=WARM)
+# --- Device setup --- (widened 30px for meters)
+device = AudioEffect("Rhythmic Gate", width=310, height=180, theme=WARM)
 
 # --- UI ---
 # Dark background panel
-device.add_panel("bg", [0, 0, 280, 180], bgcolor=[0.12, 0.12, 0.14, 1.0])
+device.add_panel("bg", [0, 0, 310, 180], bgcolor=[0.12, 0.12, 0.14, 1.0])
 
 # Title
 device.add_comment("title", [8, 6, 60, 16], "GATE",
@@ -38,6 +38,18 @@ device.add_scope("gate_scope", [8, 52, 264, 50],
                  range_vals=[0.0, 1.1],
                  calccount=128, smooth=2, line_width=1.5)
 
+# Output meters — right edge
+device.add_meter("meter_l", [280, 5, 10, 170],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+device.add_meter("meter_r", [294, 5, 10, 170],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+
 # Section labels
 device.add_comment("lbl_rhythm", [15, 98, 55, 12], "RHYTHM",
                    textcolor=[0.85, 0.55, 0.25, 0.6], fontsize=9.0)
@@ -64,128 +76,138 @@ device.add_dial("mix_dial", "Mix", [185, 108, 55, 75],
 
 # --- DSP objects ---
 
-# LFO oscillators — all accept freq float/signal on inlet 0
+# --- Parameter smoothing: rate_dial -> all 4 oscillator freq inlets (smoothed) ---
+# Single pack+line~ for rate; then trigger distributes to all 4 oscillators.
+# Note: line~ outputs a signal, but cycle~/phasor~/rect~ accept signal on inlet 0.
+device.add_newobj("rate_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[60, 178, 60, 20])
+device.add_newobj("rate_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[60, 208, 40, 20])
+
+# --- Parameter smoothing: depth_scale -> depth_mul inlet 1 (smoothed) ---
+device.add_newobj("depth_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[330, 248, 60, 20])
+device.add_newobj("depth_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[330, 278, 40, 20])
+
+# LFO oscillators — all accept freq signal on inlet 0
 # 1. Sine: cycle~ → *~ 0.5 → +~ 0.5 (convert -1..1 to 0..1)
 device.add_newobj("lfo_sine", "cycle~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 230, 50, 20])
+                  outlettype=["signal"], patching_rect=[30, 238, 50, 20])
 device.add_newobj("sine_scale", "*~ 0.5", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 255, 55, 20])
+                  outlettype=["signal"], patching_rect=[30, 263, 55, 20])
 device.add_newobj("sine_offset", "+~ 0.5", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[30, 280, 55, 20])
+                  outlettype=["signal"], patching_rect=[30, 288, 55, 20])
 
 # 2. Sawtooth: phasor~ already outputs 0..1
 device.add_newobj("lfo_saw", "phasor~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[100, 230, 55, 20])
+                  outlettype=["signal"], patching_rect=[100, 238, 55, 20])
 
 # 3. Square: rect~ 0.5 (50% duty) → *~ 0.5 → +~ 0.5 (convert ±1 to 0..1)
 device.add_newobj("lfo_rect", "rect~", numinlets=3, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[170, 230, 50, 20])
+                  outlettype=["signal"], patching_rect=[170, 238, 50, 20])
 device.add_newobj("rect_scale", "*~ 0.5", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[170, 255, 55, 20])
+                  outlettype=["signal"], patching_rect=[170, 263, 55, 20])
 device.add_newobj("rect_offset", "+~ 0.5", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[170, 280, 55, 20])
+                  outlettype=["signal"], patching_rect=[170, 288, 55, 20])
 
 # rect~ duty cycle float input — fixed at 0.5
 device.add_newobj("rect_duty", "loadbang", numinlets=1, numoutlets=1,
-                  outlettype=[""], patching_rect=[170, 205, 55, 20])
+                  outlettype=[""], patching_rect=[170, 213, 55, 20])
 device.add_newobj("rect_duty_val", "float 0.5", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[230, 205, 65, 20])
+                  outlettype=[""], patching_rect=[230, 213, 65, 20])
 
 # 4. Triangle: phasor~ → *~ 2. → +~ -1. → abs~ (gives 0..1 triangle)
 device.add_newobj("lfo_tri_phasor", "phasor~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 230, 55, 20])
+                  outlettype=["signal"], patching_rect=[240, 238, 55, 20])
 device.add_newobj("tri_scale", "*~ 2.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 255, 50, 20])
+                  outlettype=["signal"], patching_rect=[240, 263, 50, 20])
 device.add_newobj("tri_shift", "+~ -1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 280, 55, 20])
+                  outlettype=["signal"], patching_rect=[240, 288, 55, 20])
 device.add_newobj("tri_abs", "abs~", numinlets=1, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 305, 40, 20])
+                  outlettype=["signal"], patching_rect=[240, 313, 40, 20])
 # Invert: 1 - abs result to get peak-up triangle (0=low, 1=peak)
 device.add_newobj("tri_inv", "!-~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 330, 50, 20])
+                  outlettype=["signal"], patching_rect=[240, 338, 50, 20])
 
 # Waveform selector~ 4 1: selects among 4 unipolar LFO signals
 # inlets: 0=int selector, 1=sine, 2=saw, 3=square, 4=tri
 device.add_newobj("lfo_sel", "selector~ 4 1", numinlets=5, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[140, 360, 80, 20])
+                  outlettype=["signal"], patching_rect=[140, 368, 80, 20])
 
 # +1 offset: live.tab 0-indexed → selector~ 1-indexed
 device.add_newobj("wave_offset", "+ 1", numinlets=2, numoutlets=1,
-                  outlettype=["int"], patching_rect=[140, 330, 40, 20])
-
-# Rate routing: dial -> all 4 oscillator freq inlets via trigger
-# t f f f f fires right to left: outlet 3 first, ... outlet 0 last
-device.add_newobj("rate_trig", "t f f f f", numinlets=1, numoutlets=4,
-                  outlettype=["", "", "", ""], patching_rect=[60, 195, 75, 20])
+                  outlettype=["int"], patching_rect=[140, 338, 40, 20])
 
 # Depth control: gain = LFO * depth + (1 - depth)
 # Scale depth dial 0-100 -> 0.0-1.0
 device.add_newobj("depth_scale", "scale 0. 100. 0. 1.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[330, 230, 120, 20])
+                  outlettype=[""], patching_rect=[330, 238, 120, 20])
 
-# Depth multiply: LFO * depth_factor
+# Depth multiply: LFO * depth_factor (smoothed via depth_ln)
 device.add_newobj("depth_mul", "*~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[330, 260, 30, 20])
+                  outlettype=["signal"], patching_rect=[330, 308, 30, 20])
 
 # Compute (1 - depth) for the constant offset: !- 1 on depth float
 device.add_newobj("depth_inv", "!- 1.", numinlets=2, numoutlets=1,
-                  outlettype=[""], patching_rect=[380, 230, 50, 20])
+                  outlettype=[""], patching_rect=[380, 238, 50, 20])
 
 # Add (1 - depth) to the LFO*depth signal: final_gain = LFO*depth + (1-depth)
 device.add_newobj("gain_add", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[330, 290, 30, 20])
+                  outlettype=["signal"], patching_rect=[330, 338, 30, 20])
 
 # Stereo mode ping-pong: invert gain for R channel via !-~ 1.
 # When stereo=PING-PONG: R_gain = 1 - L_gain
 device.add_newobj("gain_inv_r", "!-~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[400, 290, 50, 20])
+                  outlettype=["signal"], patching_rect=[400, 338, 50, 20])
 
 # Stereo selector~ 2 1: normal=final_gain, ping-pong=inverted_gain for R
 # inlets: 0=int selector, 1=normal (final_gain), 2=ping-pong (inverted)
 device.add_newobj("stereo_sel", "selector~ 2 1", numinlets=3, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[400, 320, 80, 20])
+                  outlettype=["signal"], patching_rect=[400, 368, 80, 20])
 device.add_newobj("stereo_offset", "+ 1", numinlets=2, numoutlets=1,
-                  outlettype=["int"], patching_rect=[460, 290, 40, 20])
+                  outlettype=["int"], patching_rect=[460, 338, 40, 20])
 
 # Apply gain to audio: plugin~ L * final_gain_l, plugin~ R * stereo_gain_r
 device.add_newobj("gate_l", "*~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[330, 360, 30, 20])
+                  outlettype=["signal"], patching_rect=[330, 408, 30, 20])
 device.add_newobj("gate_r", "*~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[400, 360, 30, 20])
+                  outlettype=["signal"], patching_rect=[400, 408, 30, 20])
 
 # Dry/wet mix
 device.add_newobj("mix_scale", "scale 0. 100. 0. 1.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[500, 230, 120, 20])
+                  outlettype=[""], patching_rect=[500, 238, 120, 20])
 
 device.add_newobj("mix_trig", "t f f f", numinlets=1, numoutlets=3,
-                  outlettype=["", "", ""], patching_rect=[500, 260, 55, 20])
+                  outlettype=["", "", ""], patching_rect=[500, 268, 55, 20])
 
 device.add_newobj("mix_inv", "!-~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[500, 290, 45, 20])
+                  outlettype=["signal"], patching_rect=[500, 298, 45, 20])
 
 device.add_newobj("wet_l", "*~ 0.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[460, 390, 30, 20])
+                  outlettype=["signal"], patching_rect=[460, 438, 30, 20])
 device.add_newobj("wet_r", "*~ 0.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[500, 390, 30, 20])
+                  outlettype=["signal"], patching_rect=[500, 438, 30, 20])
 
 device.add_newobj("dry_l", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[550, 390, 30, 20])
+                  outlettype=["signal"], patching_rect=[550, 438, 30, 20])
 device.add_newobj("dry_r", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[590, 390, 30, 20])
+                  outlettype=["signal"], patching_rect=[590, 438, 30, 20])
 
 device.add_newobj("out_l", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[500, 430, 30, 20])
+                  outlettype=["signal"], patching_rect=[500, 478, 30, 20])
 device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[540, 430, 30, 20])
+                  outlettype=["signal"], patching_rect=[540, 478, 30, 20])
 
 # --- Connections ---
 
-# Rate dial -> trigger -> all 4 oscillator freq inlets
-device.add_line("rate_dial", 0, "rate_trig", 0)
-device.add_line("rate_trig", 0, "lfo_sine", 0)         # outlet 0 -> sine freq
-device.add_line("rate_trig", 1, "lfo_saw", 0)          # outlet 1 -> saw freq
-device.add_line("rate_trig", 2, "lfo_rect", 0)         # outlet 2 -> rect freq
-device.add_line("rate_trig", 3, "lfo_tri_phasor", 0)   # outlet 3 -> tri phasor freq
+# Rate dial -> pack+line~ (smoothed signal) -> all 4 oscillator freq inlets
+device.add_line("rate_dial", 0, "rate_pk", 0)
+device.add_line("rate_pk", 0, "rate_ln", 0)
+device.add_line("rate_ln", 0, "lfo_sine", 0)         # smoothed signal -> sine freq
+device.add_line("rate_ln", 0, "lfo_saw", 0)           # smoothed signal -> saw freq
+device.add_line("rate_ln", 0, "lfo_rect", 0)          # smoothed signal -> rect freq
+device.add_line("rate_ln", 0, "lfo_tri_phasor", 0)    # smoothed signal -> tri phasor freq
 
 # rect~ duty cycle: loadbang -> float 0.5 -> rect~ inlet 1
 device.add_line("rect_duty", 0, "rect_duty_val", 0)
@@ -215,9 +237,13 @@ device.add_line("tri_inv", 0, "lfo_sel", 4)
 device.add_line("wave_tab", 0, "wave_offset", 0)
 device.add_line("wave_offset", 0, "lfo_sel", 0)
 
-# Depth: dial -> scale -> depth_mul (signal gain) AND depth_inv (float offset)
+# Depth: dial -> scale -> pack+line~ (smoothed) -> depth_mul signal inlet
 device.add_line("depth_dial", 0, "depth_scale", 0)
-device.add_line("depth_scale", 0, "depth_mul", 1)   # depth_mul inlet 1 = gain factor
+device.add_line("depth_scale", 0, "depth_pk", 0)
+device.add_line("depth_pk", 0, "depth_ln", 0)
+device.add_line("depth_ln", 0, "depth_mul", 1)   # smoothed depth_mul inlet 1
+
+# depth_inv still uses float path (it feeds +~ inlet 1 as a float offset, which is fine)
 device.add_line("depth_scale", 0, "depth_inv", 0)   # depth_inv computes 1-depth
 
 # LFO * depth -> selector outlet to depth_mul signal inlet 0
@@ -275,6 +301,10 @@ device.add_line("out_r", 0, "obj-plugout", 1)
 
 # Gate scope display — show the gate gain envelope (0..1)
 device.add_line("gain_add", 0, "gate_scope", 0)
+
+# Output meters: tap final output
+device.add_line("out_l", 0, "meter_l", 0)
+device.add_line("out_r", 0, "meter_r", 0)
 
 # --- Build ---
 output = os.path.expanduser(

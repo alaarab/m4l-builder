@@ -41,14 +41,24 @@ gain_r = device.add_newobj("gain_r", "*~ 1.", numinlets=2, numoutlets=1,
 scale = device.add_newobj("scale", "scale 0. 100. 0. 2.", numinlets=6, numoutlets=1,
                           outlettype=[""], patching_rect=[200, 80, 100, 20])
 
+# Parameter smoothing: scale -> pack -> line~ -> *~ (shared, fans to both channels)
+device.add_newobj("gain_pk", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[200, 110, 60, 20])
+device.add_newobj("gain_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[200, 140, 40, 20])
+
 # Connections
 device.add_line("obj-plugin", 0, "gain_l", 0)
 device.add_line("obj-plugin", 1, "gain_r", 0)
 device.add_line("gain_l", 0, "obj-plugout", 0)
 device.add_line("gain_r", 0, "obj-plugout", 1)
+
+# Gain routing: dial -> scale -> pack -> line~ -> both *~
 device.add_line("gain", 0, "scale", 0)
-device.add_line("scale", 0, "gain_l", 1)
-device.add_line("scale", 0, "gain_r", 1)
+device.add_line("scale", 0, "gain_pk", 0)
+device.add_line("gain_pk", 0, "gain_ln", 0)
+device.add_line("gain_ln", 0, "gain_l", 1)
+device.add_line("gain_ln", 0, "gain_r", 1)
 
 # Meter connections — tap output signal
 device.add_line("gain_l", 0, "meter_l", 0)

@@ -4,12 +4,12 @@ Hero device showcasing the eq_curve jsui engine with interactive draggable
 nodes. 8 fully parametric bands using filtercoeff~ + biquad~ for true
 parametric EQ quality. Supports Peak/LShelf/HShelf/LP/HP/Notch/BP types.
 
-Layout (500×280):
+Layout (530×280):
   Top 60%: Interactive EQ curve display (jsui) — draggable band nodes,
            mouse wheel Q, shift+drag fine-tune, cmd+drag lock gain,
            hover tooltips
   Bottom 40%: 8 band columns (Freq/Gain/Q tiny dials + type menu + enable)
-              + Output section
+              + Output section + L/R output meters on right edge
 
 DSP signal flow (filtercoeff~ + biquad~ per band):
   Each band: filtercoeff~ type -> biquad~ in series
@@ -28,6 +28,12 @@ DSP signal flow (filtercoeff~ + biquad~ per band):
 
   When band is disabled: filtercoeff~ type set to "off" -> passthrough coefficients
 
+Parameter smoothing (click-free):
+  freq/gain(linear)/Q all routed through pack+line~ before reaching filtercoeff~.
+  pack f {default} 20 -> line~ ramps each coefficient change over 20 ms.
+  This is the most important anti-click measure — biquad~ coefficients cause
+  loud clicks when changed instantaneously.
+
 CRITICAL RULES:
   - No sig~ — floats sent directly to signal inlets
   - filtercoeff~ gain is LINEAR not dB — always use dbtoa
@@ -42,9 +48,9 @@ from m4l_builder import AudioEffect, MIDNIGHT
 from m4l_builder.engines.eq_curve import eq_curve_js, EQ_CURVE_INLETS, EQ_CURVE_OUTLETS
 
 # ---------------------------------------------------------------------------
-# Device setup
+# Device setup — widened 30px on right edge for L/R output meters
 # ---------------------------------------------------------------------------
-device = AudioEffect("Parametric EQ", width=500, height=280, theme=MIDNIGHT)
+device = AudioEffect("Parametric EQ", width=530, height=280, theme=MIDNIGHT)
 
 # ---------------------------------------------------------------------------
 # Colors (MIDNIGHT theme)
@@ -91,7 +97,7 @@ TYPE_OPTIONS = ["Peak", "LShelf", "HShelf", "LP", "HP", "Notch", "BP"]
 # ---------------------------------------------------------------------------
 # UI — Background & title
 # ---------------------------------------------------------------------------
-device.add_panel("bg", [0, 0, 500, 280])
+device.add_panel("bg", [0, 0, 530, 280])
 
 device.add_comment("title", [8, 4, 160, 16], "PARAMETRIC EQ",
                    fontname="Ableton Sans Bold", fontsize=13.0,
@@ -120,7 +126,7 @@ device.add_jsui(
 # ---------------------------------------------------------------------------
 # UI — Section panel for bands (bottom ~40%)
 # ---------------------------------------------------------------------------
-device.add_panel("bands_bg", [6, 170, 488, 106],
+device.add_panel("bands_bg", [6, 170, 518, 106],
                  bgcolor=SURFACE, rounded=4)
 
 # ---------------------------------------------------------------------------
@@ -194,6 +200,32 @@ for i, bx in enumerate(BAND_X):
                       [bx + 18, 268, 14, 10],
                       activebgoncolor=bc,
                       shortname=f"On{lbl}")
+
+# ---------------------------------------------------------------------------
+# UI — Output meters (L/R vertical, right edge of device)
+# ---------------------------------------------------------------------------
+METER_X_L = 505
+METER_X_R = 517
+METER_Y   = 8
+METER_H   = 268
+METER_W   = 10
+
+device.add_comment("lbl_meters", [METER_X_L - 1, METER_Y - 1, 24, 8], "LR",
+                   textcolor=TEXT_DIM, fontsize=6.0)
+
+device.add_meter("meter_l", [METER_X_L, METER_Y + 8, METER_W, METER_H - 8],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0],
+                 patching_rect=[1600, 0, METER_W, METER_H - 8])
+
+device.add_meter("meter_r", [METER_X_R, METER_Y + 8, METER_W, METER_H - 8],
+                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 warmcolor=[0.9, 0.8, 0.2, 1.0],
+                 hotcolor=[0.9, 0.4, 0.1, 1.0],
+                 overloadcolor=[0.9, 0.15, 0.15, 1.0],
+                 patching_rect=[1620, 0, METER_W, METER_H - 8])
 
 # ---------------------------------------------------------------------------
 # DSP — Init: loadbang -> "set_num_bands 8" message + resamp 1 messages
@@ -316,7 +348,7 @@ for i in range(NUM_BANDS):
             device.add_line(f"fc_b{i}", c, f"bq_b{i}_{ch}", c + 1)
 
     # Gain conversion: dB -> linear via dbtoa
-    # gain_dial outputs dB -> dbtoa -> filtercoeff~ inlet 1
+    # gain_dial outputs dB -> dbtoa -> [smoothing] -> filtercoeff~ inlet 1
     device.add_newobj(
         f"dbtoa_b{i}",
         "dbtoa",
@@ -324,6 +356,66 @@ for i in range(NUM_BANDS):
         outlettype=[""],
         patching_rect=[600, 350 + i * 30, 50, 20]
     )
+
+    # ------------------------------------------------------------------
+    # Parameter smoothing — pack f {default} 20 -> line~
+    # Prevents clicks when filtercoeff~ coefficients change abruptly.
+    # pack packs [value, 20] so line~ ramps to new value over 20 ms.
+    # ------------------------------------------------------------------
+
+    # Freq smoothing
+    device.add_newobj(
+        f"pk_freq_b{i}",
+        f"pack f {default_freq} 20",
+        numinlets=2, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[1100, 350 + i * 30, 80, 20]
+    )
+    device.add_newobj(
+        f"ln_freq_b{i}",
+        "line~",
+        numinlets=2, numoutlets=2,
+        outlettype=["signal", "bang"],
+        patching_rect=[1190, 350 + i * 30, 40, 20]
+    )
+    device.add_line(f"pk_freq_b{i}", 0, f"ln_freq_b{i}", 0)
+    device.add_line(f"ln_freq_b{i}", 0, f"fc_b{i}", 0)
+
+    # Gain smoothing (after dbtoa — smooth the linear gain value)
+    device.add_newobj(
+        f"pk_gain_b{i}",
+        "pack f 1. 20",
+        numinlets=2, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[1100, 390 + i * 30, 80, 20]
+    )
+    device.add_newobj(
+        f"ln_gain_b{i}",
+        "line~",
+        numinlets=2, numoutlets=2,
+        outlettype=["signal", "bang"],
+        patching_rect=[1190, 390 + i * 30, 40, 20]
+    )
+    device.add_line(f"pk_gain_b{i}", 0, f"ln_gain_b{i}", 0)
+    device.add_line(f"ln_gain_b{i}", 0, f"fc_b{i}", 1)
+
+    # Q smoothing
+    device.add_newobj(
+        f"pk_q_b{i}",
+        "pack f 1. 20",
+        numinlets=2, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[1100, 430 + i * 30, 80, 20]
+    )
+    device.add_newobj(
+        f"ln_q_b{i}",
+        "line~",
+        numinlets=2, numoutlets=2,
+        outlettype=["signal", "bang"],
+        patching_rect=[1190, 430 + i * 30, 40, 20]
+    )
+    device.add_line(f"pk_q_b{i}", 0, f"ln_q_b{i}", 0)
+    device.add_line(f"ln_q_b{i}", 0, f"fc_b{i}", 2)
 
     # Type switching: menu index -> filtercoeff~ type message
     # Route the type menu output to select the right type name
@@ -393,20 +485,24 @@ for i in range(NUM_BANDS):
 # ---------------------------------------------------------------------------
 # DSP — Parameter routing
 # Each parameter goes to BOTH the DSP chain AND the pak for jsui update.
+# Smoothing sits between the dial/dbtoa and the filtercoeff~ inlets.
 # ---------------------------------------------------------------------------
 for i in range(NUM_BANDS):
-    # freq -> pak inlet 1 AND filtercoeff~ inlet 0 (frequency Hz)
+    # freq -> pak inlet 1 AND smoothing chain -> filtercoeff~ inlet 0
     device.add_line(f"freq_b{i}", 0, f"pak_b{i}", 1)
-    device.add_line(f"freq_b{i}", 0, f"fc_b{i}", 0)
+    device.add_line(f"freq_b{i}", 0, f"pk_freq_b{i}", 0)
+    # pk_freq_b{i} -> ln_freq_b{i} -> fc_b{i} 0  (already wired above)
 
-    # gain -> pak inlet 2 AND dbtoa -> filtercoeff~ inlet 1 (linear gain)
+    # gain -> pak inlet 2 AND dbtoa -> gain smoothing -> filtercoeff~ inlet 1
     device.add_line(f"gain_b{i}", 0, f"pak_b{i}", 2)
     device.add_line(f"gain_b{i}", 0, f"dbtoa_b{i}", 0)
-    device.add_line(f"dbtoa_b{i}", 0, f"fc_b{i}", 1)
+    device.add_line(f"dbtoa_b{i}", 0, f"pk_gain_b{i}", 0)
+    # pk_gain_b{i} -> ln_gain_b{i} -> fc_b{i} 1  (already wired above)
 
-    # q -> pak inlet 3 AND filtercoeff~ inlet 2 (Q)
+    # q -> pak inlet 3 AND smoothing chain -> filtercoeff~ inlet 2
     device.add_line(f"q_b{i}", 0, f"pak_b{i}", 3)
-    device.add_line(f"q_b{i}", 0, f"fc_b{i}", 2)
+    device.add_line(f"q_b{i}", 0, f"pk_q_b{i}", 0)
+    # pk_q_b{i} -> ln_q_b{i} -> fc_b{i} 2  (already wired above)
 
     # type -> pak inlet 4 AND type_sel for filtercoeff~ type switching
     device.add_line(f"type_b{i}", 0, f"pak_b{i}", 4)
@@ -430,18 +526,26 @@ for ch in ["l", "r"]:
         device.add_line(f"bq_b{i}_{ch}", 0, f"bq_b{i+1}_{ch}", 0)
 
 # ---------------------------------------------------------------------------
-# DSP — Output gain stage
-# out_gain dial (dB) -> dbtoa -> t f f -> *~ L, *~ R
+# DSP — Output gain stage with parameter smoothing
+# out_gain dial (dB) -> dbtoa -> pack+line~ -> *~ L, *~ R
+#
+# line~ outlet 0 (signal) connects directly to *~ inlet 1 on both channels.
+# This ramps the output gain over 20 ms, eliminating gain-change clicks.
 # ---------------------------------------------------------------------------
 device.add_newobj("out_dbtoa", "dbtoa",
                   numinlets=1, numoutlets=1,
                   outlettype=[""],
                   patching_rect=[600, 600, 50, 20])
 
-device.add_newobj("out_trig", "t f f",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[600, 625, 50, 20])
+# Output gain smoothing
+device.add_newobj("pk_out", "pack f 1. 20",
+                  numinlets=2, numoutlets=1,
+                  outlettype=[""],
+                  patching_rect=[660, 600, 80, 20])
+device.add_newobj("ln_out", "line~",
+                  numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"],
+                  patching_rect=[750, 600, 40, 20])
 
 device.add_newobj("out_mul_l", "*~ 1.",
                   numinlets=2, numoutlets=1,
@@ -454,9 +558,11 @@ device.add_newobj("out_mul_r", "*~ 1.",
                   patching_rect=[200, 620, 40, 20])
 
 device.add_line("out_gain", 0, "out_dbtoa", 0)
-device.add_line("out_dbtoa", 0, "out_trig", 0)
-device.add_line("out_trig", 0, "out_mul_l", 1)
-device.add_line("out_trig", 1, "out_mul_r", 1)
+device.add_line("out_dbtoa", 0, "pk_out", 0)
+device.add_line("pk_out", 0, "ln_out", 0)
+# line~ signal outlet fans out to both multiplier gain inlets
+device.add_line("ln_out", 0, "out_mul_l", 1)
+device.add_line("ln_out", 0, "out_mul_r", 1)
 
 # Last biquad~ -> output gain multiplier
 device.add_line(f"bq_b{NUM_BANDS-1}_l", 0, "out_mul_l", 0)
@@ -504,6 +610,12 @@ device.add_line("obj-plugin", 1, "bypass_sel_r", 2)
 # Selector -> plugout~
 device.add_line("bypass_sel_l", 0, "obj-plugout", 0)
 device.add_line("bypass_sel_r", 0, "obj-plugout", 1)
+
+# ---------------------------------------------------------------------------
+# DSP — Output meters: tap signal after bypass selector (post-output level)
+# ---------------------------------------------------------------------------
+device.add_line("bypass_sel_l", 0, "meter_l", 0)
+device.add_line("bypass_sel_r", 0, "meter_r", 0)
 
 # ---------------------------------------------------------------------------
 # DSP — jsui drag output -> update freq/gain/Q dials (bidirectional)
