@@ -247,8 +247,11 @@ class Device:
             output_dir = os.path.dirname(output_path)
             for filename, code in self._js_files.items():
                 js_path = os.path.join(output_dir, filename)
-                with open(js_path, "w") as f:
-                    f.write(code)
+                try:
+                    with open(js_path, "w") as f:
+                        f.write(code)
+                except IOError as e:
+                    raise IOError(f"Cannot write JS file {js_path}: {e}") from e
         return result
 
 
