@@ -12,14 +12,7 @@ def stereo_io(plugin_id: str = "obj-plugin", plugout_id: str = "obj-plugout",
               plugin_rect: list = None, plugout_rect: list = None) -> tuple:
     """Create plugin~ and plugout~ pair for audio I/O.
 
-    Args:
-        plugin_id: ID for the plugin~ object.
-        plugout_id: ID for the plugout~ object.
-        plugin_rect: Patching rect for plugin~.
-        plugout_rect: Patching rect for plugout~.
-
-    Returns:
-        (boxes, lines) tuple. No lines are created — caller wires the DSP chain.
+    Returns (boxes, lines) with no lines — caller wires the DSP chain.
     """
     boxes = [
         newobj(plugin_id, "plugin~", numinlets=1, numoutlets=2,
@@ -33,18 +26,9 @@ def stereo_io(plugin_id: str = "obj-plugin", plugout_id: str = "obj-plugout",
 
 def gain_stage(id_prefix: str, *, patching_rect_l: list = None,
                patching_rect_r: list = None) -> tuple:
-    """Create a stereo *~ gain stage.
+    """Create a stereo *~ gain stage (left and right channels).
 
-    Creates two *~ objects for left and right channels. The second inlet
-    of each accepts a signal-rate gain value.
-
-    Args:
-        id_prefix: Prefix for object IDs (creates {prefix}_l and {prefix}_r).
-        patching_rect_l: Patching rect for left channel multiplier.
-        patching_rect_r: Patching rect for right channel multiplier.
-
-    Returns:
-        (boxes, lines) tuple. No internal lines — caller connects inputs/outputs.
+    The second inlet of each *~ accepts a signal-rate gain value.
     """
     boxes = [
         newobj(f"{id_prefix}_l", "*~ 1.", numinlets=2, numoutlets=1,
@@ -60,27 +44,15 @@ def gain_stage(id_prefix: str, *, patching_rect_l: list = None,
 def dry_wet_mix(id_prefix: str,
                 wet_source_l: tuple, wet_source_r: tuple,
                 dry_source_l: tuple, dry_source_r: tuple) -> tuple:
-    """Create a dry/wet mix stage.
+    """Create a stereo dry/wet crossfade stage (0.0-1.0 mix control).
 
-    Uses *~ and +~ to crossfade between dry and wet signals based on a
-    0.0-1.0 mix control. Send the mix float to {prefix}_mix_in inlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-        wet_source_l: (object_id, outlet) tuple for wet left signal.
-        wet_source_r: (object_id, outlet) tuple for wet right signal.
-        dry_source_l: (object_id, outlet) tuple for dry left signal.
-        dry_source_r: (object_id, outlet) tuple for dry right signal.
-
-    Returns:
-        (boxes, lines) tuple. Output is from {prefix}_out_l and {prefix}_out_r,
-        outlet 0 each.
+    Send the mix float to {prefix}_mix_in inlet 0.
+    Output from {prefix}_out_l and {prefix}_out_r, outlet 0 each.
     """
     p = id_prefix
     boxes = [
-        # Mix control entry: trigger fans float to 3 destinations.
-        # CRITICAL: Do NOT use sig~ here — it starts at 0.0 on load,
-        # which overrides *~ arguments and causes silence.
+        # Mix control: t f f f fans the float to 3 destinations.
+        # don't use sig~ here — starts at 0.0 on load and overrides *~ args, causing silence.
         newobj(f"{p}_mix_in", "t f f f", numinlets=1, numoutlets=3,
                outlettype=["", "", ""], patching_rect=[400, 80, 55, 20]),
         # Invert mix for dry: !-~ 1. gives (1 - mix)
@@ -133,16 +105,8 @@ def ms_encode_decode(id_prefix: str) -> tuple:
     Encoding: Mid = (L + R) * 0.5, Side = (L - R) * 0.5
     Decoding: L = Mid + Side, R = Mid - Side
 
-    Caller should wire audio into {prefix}_enc_add and {prefix}_enc_sub
-    inlets, process Mid from {prefix}_enc_mid outlet 0 and Side from
-    {prefix}_enc_side outlet 0, then feed results into {prefix}_dec_add
-    and {prefix}_dec_sub for decoded L/R output.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-
-    Returns:
-        (boxes, lines) tuple.
+    Wire audio into {prefix}_enc_add and {prefix}_enc_sub, process Mid/Side,
+    then feed decoded results into {prefix}_dec_add and {prefix}_dec_sub.
     """
     p = id_prefix
     boxes = [
@@ -174,15 +138,8 @@ def ms_encode_decode(id_prefix: str) -> tuple:
 def dc_block(id_prefix: str) -> tuple:
     """Create a stereo DC blocking filter.
 
-    GOTCHA: dcblock~ does NOT exist in Max 8. Uses biquad~ with
-    high-pass coefficients instead: biquad~ 1. -1. 0. -0.9997 0.
-    biquad~ has 6 inlets (signal + 5 coefficients) and 1 outlet.
-
-    Args:
-        id_prefix: Prefix for object IDs (creates {prefix}_l and {prefix}_r).
-
-    Returns:
-        (boxes, lines) tuple. No internal lines — caller connects inputs/outputs.
+    dcblock~ doesn't exist in Max 8, so this uses biquad~ with HP coefficients:
+    biquad~ 1. -1. 0. -0.9997 0. — biquad~ has 6 inlets (signal + 5 coefficients).
     """
     boxes = [
         newobj(f"{id_prefix}_l", "biquad~ 1. -1. 0. -0.9997 0.",
@@ -198,22 +155,13 @@ def dc_block(id_prefix: str) -> tuple:
 def saturation(id_prefix: str, mode: str) -> tuple:
     """Create a stereo saturation stage.
 
-    Supported modes:
-    - "tanh": tanh~ — smooth tape-like saturation (1 inlet, 1 outlet)
-    - "overdrive": overdrive~ — tube-like saturation (1 inlet, 1 outlet)
-    - "clip": clip~ -1. 1. — hard clipping (3 inlets: signal, min, max; 1 outlet)
-    - "degrade": degrade~ — bit/sample rate crush (3 inlets: signal, sr_factor,
-      bit_depth; 1 outlet)
+    Modes:
+    - "tanh": tanh~ — smooth tape-like saturation
+    - "overdrive": overdrive~ — tube-like saturation
+    - "clip": clip~ -1. 1. — hard clipping (3 inlets: signal, min, max)
+    - "degrade": degrade~ — bit/sample rate crush (3 inlets: signal, sr_factor, bit_depth)
 
-    Args:
-        id_prefix: Prefix for object IDs (creates {prefix}_l and {prefix}_r).
-        mode: One of "tanh", "overdrive", "clip", "degrade".
-
-    Returns:
-        (boxes, lines) tuple. No internal lines — caller connects inputs/outputs.
-
-    Raises:
-        ValueError: If mode is not recognized.
+    Raises ValueError for unknown modes.
     """
     specs = {
         "tanh": ("tanh~", 1, 1, ["signal"]),
@@ -237,21 +185,10 @@ def saturation(id_prefix: str, mode: str) -> tuple:
 
 
 def selector(id_prefix: str, num_inputs: int, initial: int = 1) -> tuple:
-    """Create a selector~ object for switching between signal inputs.
+    """Create a selector~ for switching between signal inputs.
 
-    GOTCHA: selector~ N defaults to input 0 which means NO input (silence).
-    Always specify the initial input argument. Default here is 1.
-
-    selector~ N initial has N+1 inlets (int selector + N signal inputs)
-    and 1 outlet.
-
-    Args:
-        id_prefix: Object ID for the selector~.
-        num_inputs: Number of signal inputs (N).
-        initial: Initial input selection (1-indexed, default 1). 0 = silence.
-
-    Returns:
-        (boxes, lines) tuple. No internal lines — caller connects inputs/outputs.
+    selector~ N initial has N+1 inlets (int selector + N signal inputs).
+    selector~ N without an initial arg defaults to input 0 (silence) — always pass initial.
     """
     boxes = [
         newobj(id_prefix, f"selector~ {num_inputs} {initial}",
@@ -264,19 +201,12 @@ def selector(id_prefix: str, num_inputs: int, initial: int = 1) -> tuple:
 def highpass_filter(id_prefix: str) -> tuple:
     """Create a stereo high-pass filter using svf~.
 
-    svf~ has 3 inlets (signal, cutoff_hz, resonance 0-1) and 4 outlets
-    (LP, HP, BP, notch). This wires outlet 1 (HP) to a pass-through *~ 1.
-    so the caller has a clear single-outlet object to connect from.
+    svf~ has 3 inlets (signal, cutoff_hz, resonance 0-1) and 4 outlets (LP, HP, BP, notch).
+    Wires outlet 1 (HP) through a *~ 1. pass-through so the caller has a single clean outlet.
 
     Wire audio into {prefix}_l / {prefix}_r inlet 0.
     Wire cutoff into inlet 1, resonance into inlet 2.
     Output from {prefix}_out_l / {prefix}_out_r outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-
-    Returns:
-        (boxes, lines) tuple.
     """
     p = id_prefix
     boxes = [
@@ -303,19 +233,12 @@ def highpass_filter(id_prefix: str) -> tuple:
 def lowpass_filter(id_prefix: str) -> tuple:
     """Create a stereo low-pass filter using svf~.
 
-    svf~ has 3 inlets (signal, cutoff_hz, resonance 0-1) and 4 outlets
-    (LP, HP, BP, notch). This wires outlet 0 (LP) to a pass-through *~ 1.
-    so the caller has a clear single-outlet object to connect from.
+    svf~ has 3 inlets (signal, cutoff_hz, resonance 0-1) and 4 outlets (LP, HP, BP, notch).
+    Wires outlet 0 (LP) through a *~ 1. pass-through so the caller has a single clean outlet.
 
     Wire audio into {prefix}_l / {prefix}_r inlet 0.
     Wire cutoff into inlet 1, resonance into inlet 2.
     Output from {prefix}_out_l / {prefix}_out_r outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-
-    Returns:
-        (boxes, lines) tuple.
     """
     p = id_prefix
     boxes = [
@@ -340,17 +263,7 @@ def lowpass_filter(id_prefix: str) -> tuple:
 
 
 def onepole_filter(id_prefix: str, freq: float = 1000.) -> tuple:
-    """Create a stereo one-pole low-pass filter.
-
-    onepole~ has 2 inlets (signal, cutoff frequency) and 1 outlet.
-
-    Args:
-        id_prefix: Prefix for object IDs (creates {prefix}_l and {prefix}_r).
-        freq: Initial cutoff frequency in Hz.
-
-    Returns:
-        (boxes, lines) tuple. No internal lines — caller connects inputs/outputs.
-    """
+    """Create a stereo one-pole low-pass filter (onepole~, 2 inlets: signal, cutoff Hz)."""
     boxes = [
         newobj(f"{id_prefix}_l", f"onepole~ {freq}", numinlets=2,
                numoutlets=1, outlettype=["signal"],
@@ -365,22 +278,12 @@ def onepole_filter(id_prefix: str, freq: float = 1000.) -> tuple:
 def signal_divide(id_prefix: str) -> tuple:
     """Create a signal-rate division block.
 
-    GOTCHA: /~ does NOT work for signal / signal in Max. Instead use
-    !/~ 1. to compute the reciprocal (1/denominator), then multiply
-    by the numerator with *~.
-
-    !/~ 1. has 2 inlets (denominator signal on inlet 0, numerator arg
-    on inlet 1) and 1 outlet (reciprocal). *~ has 2 inlets and 1 outlet.
+    /~ doesn't work for signal/signal in Max — uses !/~ 1. to get the reciprocal
+    (1/denominator), then multiplies by the numerator with *~.
 
     Wire denominator into {prefix}_recip inlet 0.
     Wire numerator into {prefix}_mul inlet 0.
     Output from {prefix}_mul outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-
-    Returns:
-        (boxes, lines) tuple.
     """
     p = id_prefix
     boxes = [
@@ -397,29 +300,19 @@ def signal_divide(id_prefix: str) -> tuple:
 
 
 def tilt_eq(id_prefix: str, freq: float = 1000.) -> tuple:
-    """Create a stereo tilt EQ.
+    """Create a stereo tilt EQ using onepole~ as a crossover.
 
-    Uses onepole~ as a crossover filter at the given frequency. The low
-    band (onepole~ output) and high band (original minus low) are each
-    scaled independently, then summed. Adjusting the two gain stages
-    creates a tilt effect: boosting lows while cutting highs, or vice versa.
+    Low band (onepole~ output) and high band (original minus LP) are scaled
+    independently and summed — boost one side to tilt.
 
     Per channel:
         signal -> onepole~ -> *~ (low gain)  -> +~ (output)
-        signal -> -~ (subtract LP to get HP) -> *~ (high gain) -> +~ (output)
+        signal -> -~ (original - LP = HP)    -> *~ (high gain) -> +~ (output)
 
-    Wire audio into {prefix}_lp_l / {prefix}_lp_r inlet 0 AND
-    {prefix}_hp_l / {prefix}_hp_r inlet 0 (same signal to both).
+    Wire audio into {prefix}_lp_l / {prefix}_lp_r AND {prefix}_hp_l / {prefix}_hp_r (same signal).
     Wire low gain to {prefix}_lo_l / {prefix}_lo_r inlet 1.
     Wire high gain to {prefix}_hi_l / {prefix}_hi_r inlet 1.
     Output from {prefix}_out_l / {prefix}_out_r outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-        freq: Initial crossover frequency in Hz.
-
-    Returns:
-        (boxes, lines) tuple.
     """
     p = id_prefix
     boxes = []
@@ -461,26 +354,16 @@ def tilt_eq(id_prefix: str, freq: float = 1000.) -> tuple:
 
 
 def crossover_3band(id_prefix: str) -> tuple:
-    """Create a 3-band crossover splitter using two cross~ objects.
+    """Create a 3-band crossover using two cross~ objects.
 
-    cross~ has 2 inlets (signal, freq_hz) and 2 outlets (LP, HP).
-    First cross~ splits at a low frequency: LP=low band, HP feeds second cross~.
-    Second cross~ splits at a high frequency: LP=mid band, HP=high band.
-    Includes +~ summing objects for recombining the bands.
+    cross~ inlets: (signal, freq_hz); outlets: (LP, HP).
+    First cross~ splits at low freq; its HP feeds the second cross~ at high freq.
 
     Wire audio into {prefix}_xover_lo inlet 0.
     Wire low crossover freq into {prefix}_xover_lo inlet 1.
     Wire high crossover freq into {prefix}_xover_hi inlet 1.
-    Low band from {prefix}_xover_lo outlet 0.
-    Mid band from {prefix}_xover_hi outlet 0.
-    High band from {prefix}_xover_hi outlet 1.
-    Recombined output from {prefix}_sum outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-
-    Returns:
-        (boxes, lines) tuple.
+    Low band: {prefix}_xover_lo outlet 0. Mid: {prefix}_xover_hi outlet 0.
+    High: {prefix}_xover_hi outlet 1. Recombined: {prefix}_sum outlet 0.
     """
     p = id_prefix
     boxes = [
@@ -518,21 +401,10 @@ def crossover_3band(id_prefix: str) -> tuple:
 
 def envelope_follower(id_prefix: str, attack_ms: float = 10,
                       release_ms: float = 100) -> tuple:
-    """Create an envelope follower using abs~ and slide~.
+    """Create an envelope follower: abs~ -> slide~.
 
-    Signal flow: input -> abs~ -> slide~ -> output.
-    slide~ args are in SAMPLES (multiply ms by 44.1 at 44100 sr).
-
-    Wire audio into {prefix}_abs inlet 0.
-    Output from {prefix}_slide outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-        attack_ms: Attack time in milliseconds.
-        release_ms: Release time in milliseconds.
-
-    Returns:
-        (boxes, lines) tuple.
+    slide~ args are in samples (ms * 44.1 at 44100 sr).
+    Wire audio into {prefix}_abs inlet 0; output from {prefix}_slide outlet 0.
     """
     p = id_prefix
     # Convert ms to samples at 44100 sr
@@ -557,18 +429,7 @@ def envelope_follower(id_prefix: str, attack_ms: float = 10,
 def delay_line(id_prefix: str, max_delay_ms: int = 5000) -> tuple:
     """Create a tapin~/tapout~ delay line pair.
 
-    tapin~ has 1 inlet (signal) and 1 outlet (tap connection).
-    tapout~ has 1 inlet (from tapin~) and 1 outlet (delayed signal).
-
-    Wire audio into {prefix}_tapin inlet 0.
-    Output from {prefix}_tapout outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-        max_delay_ms: Maximum delay time in milliseconds.
-
-    Returns:
-        (boxes, lines) tuple.
+    Wire audio into {prefix}_tapin inlet 0; output from {prefix}_tapout outlet 0.
     """
     p = id_prefix
     boxes = [
@@ -588,26 +449,15 @@ def delay_line(id_prefix: str, max_delay_ms: int = 5000) -> tuple:
 
 
 def lfo(id_prefix: str, waveform: str = "sine") -> tuple:
-    """Create an LFO with rate and depth scaling, unipolar output (0-1).
+    """Create a unipolar LFO (0-1 output) with depth scaling.
 
-    Supported waveforms:
-    - "sine": cycle~ with *~ 0.5 then +~ 0.5 for unipolar
-    - "saw": phasor~ (already 0-1 unipolar)
-    - "square": rect~ with *~ 0.5 then +~ 0.5 for unipolar
+    Waveforms: "sine" (cycle~), "saw" (phasor~, already 0-1), "square" (rect~).
+    sine and square are shifted to 0-1 via *~ 0.5 + 0.5.
 
-    Wire rate (Hz) into the oscillator's inlet 0.
-    Wire depth into {prefix}_depth inlet 1.
-    Output from {prefix}_depth outlet 0.
+    Wire rate (Hz) into the oscillator inlet 0.
+    Wire depth into {prefix}_depth inlet 1; output from {prefix}_depth outlet 0.
 
-    Args:
-        id_prefix: Prefix for object IDs.
-        waveform: One of "sine", "saw", "square".
-
-    Returns:
-        (boxes, lines) tuple.
-
-    Raises:
-        ValueError: If waveform is not recognized.
+    Raises ValueError for unknown waveforms.
     """
     p = id_prefix
     boxes = []
@@ -661,21 +511,11 @@ def lfo(id_prefix: str, waveform: str = "sine") -> tuple:
 
 
 def comb_resonator(id_prefix: str, num_voices: int = 4) -> tuple:
-    """Create N parallel comb~ filters with summing.
+    """Create N parallel comb~ filters summed to a single output.
 
-    comb~ has 5 inlets (signal, delay_ms, a_gain, b_ff, c_fb).
-    Feedback must be < 1.0 to prevent instability.
-
+    comb~ inlets: signal, delay_ms, a_gain, b_ff, c_fb. Keep c_fb < 1.0.
     Wire audio into each {prefix}_comb_{n} inlet 0.
-    Wire delay_ms, a_gain, b_ff, c_fb into inlets 1-4 of each comb.
     Output from {prefix}_sum outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-        num_voices: Number of parallel comb filters.
-
-    Returns:
-        (boxes, lines) tuple.
     """
     p = id_prefix
     boxes = []
@@ -731,13 +571,6 @@ def feedback_delay(id_prefix: str, max_delay_ms: int = 5000) -> tuple:
     Wire feedback amount (0-1) into {prefix}_fb inlet 1.
     Wire onepole~ cutoff into {prefix}_lp inlet 1.
     Output from {prefix}_tapout outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-        max_delay_ms: Maximum delay time in milliseconds.
-
-    Returns:
-        (boxes, lines) tuple.
     """
     p = id_prefix
     boxes = [
@@ -778,24 +611,12 @@ def feedback_delay(id_prefix: str, max_delay_ms: int = 5000) -> tuple:
 
 
 def tremolo(id_prefix: str, waveform: str = "sine") -> tuple:
-    """Create a tremolo effect: LFO modulating signal amplitude.
-
-    Uses an internal LFO (unipolar 0-1) multiplied against the input signal.
+    """Create a tremolo effect: LFO amplitude modulation.
 
     Wire audio into {prefix}_mod inlet 0.
     Wire LFO rate (Hz) into the oscillator inlet 0.
     Wire depth into {prefix}_lfo_depth inlet 1.
     Output from {prefix}_mod outlet 0.
-
-    Args:
-        id_prefix: Prefix for object IDs.
-        waveform: LFO waveform — "sine", "saw", or "square".
-
-    Returns:
-        (boxes, lines) tuple.
-
-    Raises:
-        ValueError: If waveform is not recognized.
     """
     p = id_prefix
 

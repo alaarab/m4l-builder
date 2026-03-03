@@ -142,7 +142,7 @@ class TestDryWetMix:
         assert len(boxes) == 8
 
     def test_no_sig_objects(self):
-        """CRITICAL: sig~ causes cold-start silence bug. Must use t f f f instead."""
+        """sig~ starts at 0.0 on load and overrides *~ args — must use t f f f instead."""
         boxes, _ = self._make()
         for b in boxes:
             assert "sig~" not in b["box"]["text"], (
@@ -328,7 +328,7 @@ class TestDCBlock:
         assert len(lines) == 0
 
     def test_uses_biquad_not_dcblock(self):
-        """CRITICAL: dcblock~ does NOT exist in Max 8."""
+        """dcblock~ doesn't exist in Max 8 — must use biquad~ with HP coefficients."""
         boxes, _ = dc_block("dc")
         for b in boxes:
             assert "biquad~" in b["box"]["text"]
@@ -413,7 +413,7 @@ class TestSelector:
         assert len(lines) == 0
 
     def test_text_includes_initial_arg(self):
-        """CRITICAL: selector~ must always include initial arg to avoid silence."""
+        """selector~ defaults to input 0 (silence) without an initial arg."""
         boxes, _ = selector("sel", 4, initial=2)
         assert boxes[0]["box"]["text"] == "selector~ 4 2"
 
@@ -576,7 +576,7 @@ class TestSignalDivide:
         assert len(lines) == 1
 
     def test_uses_inverse_divide_not_divide(self):
-        """CRITICAL: /~ does NOT work for signal/signal in Max."""
+        """/~ doesn't work for signal/signal in Max — uses !/~ 1. for reciprocal then *~."""
         boxes, _ = signal_divide("div")
         texts = _box_texts(boxes)
         assert "!/~ 1." in texts
