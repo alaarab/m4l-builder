@@ -24,34 +24,37 @@ pip install -e .
 ### Minimal Example
 
 ```python
-from m4l_builder import AudioEffect
+from m4l_builder import AudioEffect, device_output_path
 from m4l_builder.theme import WARM
 
-device = AudioEffect("Simple Gain", width=200, height=120, theme=WARM)
+device = AudioEffect("Simple Gain", width=150, height=110, theme=WARM)
 
-device.add_panel("bg", [0, 0, 200, 120])
-device.add_comment("title", [8, 8, 100, 16], "GAIN", fontsize=14.0)
-device.add_dial("gain", "Gain", [70, 30, 60, 75],
-                min_val=0.0, max_val=100.0, initial=50.0,
-                annotation_name="Gain")
+device.add_panel("bg", [0, 0, 150, 110])
+device.add_comment("title", [6, 5, 50, 14], "GAIN", fontsize=12.0)
+device.add_dial("gain", "Gain", [10, 22, 50, 75],
+                min_val=-70.0, max_val=6.0, initial=0.0,
+                unitstyle=4, annotation_name="Output Gain")
 
-# DSP wiring -- AudioEffect auto-adds plugin~ and plugout~
+# DSP: plugin~ -> dbtoa -> line~ -> *~ -> plugout~
 gain_l = device.add_newobj("gain_l", "*~ 1.", numinlets=2, numoutlets=1,
                            outlettype=["signal"])
 gain_r = device.add_newobj("gain_r", "*~ 1.", numinlets=2, numoutlets=1,
                            outlettype=["signal"])
-scale = device.add_newobj("scale", "scale 0. 100. 0. 2.", numinlets=6,
-                          numoutlets=1, outlettype=[""])
+device.add_newobj("db2a", "dbtoa", numinlets=1, numoutlets=1, outlettype=[""])
+device.add_newobj("gain_pk", "pack f 20", numinlets=2, numoutlets=1, outlettype=[""])
+device.add_newobj("gain_ln", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"])
 
 device.add_line("obj-plugin", 0, "gain_l", 0)
 device.add_line("obj-plugin", 1, "gain_r", 0)
 device.add_line("gain_l", 0, "obj-plugout", 0)
 device.add_line("gain_r", 0, "obj-plugout", 1)
-device.add_line("gain", 0, "scale", 0)
-device.add_line("scale", 0, "gain_l", 1)
-device.add_line("scale", 0, "gain_r", 1)
+device.add_line("gain", 0, "db2a", 0)
+device.add_line("db2a", 0, "gain_pk", 0)
+device.add_line("gain_pk", 0, "gain_ln", 0)
+device.add_line("gain_ln", 0, "gain_l", 1)
+device.add_line("gain_ln", 0, "gain_r", 1)
 
-from m4l_builder import device_output_path
 device.build(device_output_path("Simple Gain"))
 ```
 
