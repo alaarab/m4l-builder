@@ -3,7 +3,10 @@
 from m4l_builder.ui import (panel, dial, tab, toggle, comment, scope, meter,
                              menu, number_box, slider, button, live_text, fpic,
                              live_gain, multislider, jsui, adsrui, live_drop,
-                             bpatcher, swatch, textedit)
+                             bpatcher, swatch, textedit, live_step, live_grid,
+                             live_line, live_arrows, rslider, kslider,
+                             textbutton, umenu, radiogroup, nodes, matrixctrl,
+                             ubutton, nslider)
 from m4l_builder.constants import DEFAULT_TEXT_COLOR
 
 
@@ -1681,3 +1684,974 @@ class TestTextedit:
     def test_kwargs_passthrough(self):
         result = textedit("te-1", [0, 0, 150, 25], custom_attr="hello")
         assert result["box"]["custom_attr"] == "hello"
+
+
+class TestLiveStep:
+    """Tests for live_step() step sequencer UI."""
+
+    def test_returns_box_dict(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert "box" in result
+
+    def test_maxclass_is_live_step(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["maxclass"] == "live.step"
+
+    def test_id_set(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["id"] == "ls-1"
+
+    def test_presentation_is_1(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 300, 100]
+        result = live_step("ls-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_5(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["numoutlets"] == 5
+
+    def test_outlettype_has_5_entries(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["outlettype"] == ["", "", "", "", ""]
+
+    def test_nstep_default(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["nstep"] == 16
+
+    def test_nstep_custom(self):
+        result = live_step("ls-1", [0, 0, 300, 100], nstep=32)
+        assert result["box"]["nstep"] == 32
+
+    def test_nseq_default(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert result["box"]["nseq"] == 1
+
+    def test_nseq_custom(self):
+        result = live_step("ls-1", [0, 0, 300, 100], nseq=4)
+        assert result["box"]["nseq"] == 4
+
+    def test_loop_start_not_set_by_default(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert "loop_start" not in result["box"]
+
+    def test_loop_start_set_when_provided(self):
+        result = live_step("ls-1", [0, 0, 300, 100], loop_start=4)
+        assert result["box"]["loop_start"] == 4
+
+    def test_loop_end_not_set_by_default(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert "loop_end" not in result["box"]
+
+    def test_loop_end_set_when_provided(self):
+        result = live_step("ls-1", [0, 0, 300, 100], loop_end=12)
+        assert result["box"]["loop_end"] == 12
+
+    def test_mode_not_set_by_default(self):
+        result = live_step("ls-1", [0, 0, 300, 100])
+        assert "mode" not in result["box"]
+
+    def test_mode_set_when_provided(self):
+        result = live_step("ls-1", [0, 0, 300, 100], mode=1)
+        assert result["box"]["mode"] == 1
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = live_step("ls-1", [10, 20, 300, 100])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 300
+        assert pr[3] == 100
+
+    def test_patching_rect_override(self):
+        result = live_step("ls-1", [0, 0, 300, 100], patching_rect=[50, 50, 300, 100])
+        assert result["box"]["patching_rect"] == [50, 50, 300, 100]
+
+    def test_kwargs_passthrough(self):
+        result = live_step("ls-1", [0, 0, 300, 100], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestLiveGrid:
+    """Tests for live_grid() toggleable cell grid."""
+
+    def test_returns_box_dict(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert "box" in result
+
+    def test_maxclass_is_live_grid(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["maxclass"] == "live.grid"
+
+    def test_id_set(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["id"] == "lg-1"
+
+    def test_presentation_is_1(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 200, 100]
+        result = live_grid("lg-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_4(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["numoutlets"] == 4
+
+    def test_outlettype_has_4_entries(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["outlettype"] == ["", "", "", ""]
+
+    def test_columns_default(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["columns"] == 16
+
+    def test_columns_custom(self):
+        result = live_grid("lg-1", [0, 0, 200, 100], columns=8)
+        assert result["box"]["columns"] == 8
+
+    def test_rows_default(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert result["box"]["rows"] == 8
+
+    def test_rows_custom(self):
+        result = live_grid("lg-1", [0, 0, 200, 100], rows=4)
+        assert result["box"]["rows"] == 4
+
+    def test_direction_not_set_by_default(self):
+        result = live_grid("lg-1", [0, 0, 200, 100])
+        assert "direction" not in result["box"]
+
+    def test_direction_set_when_provided(self):
+        result = live_grid("lg-1", [0, 0, 200, 100], direction=0)
+        assert result["box"]["direction"] == 0
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = live_grid("lg-1", [10, 20, 200, 100])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 200
+        assert pr[3] == 100
+
+    def test_patching_rect_override(self):
+        result = live_grid("lg-1", [0, 0, 200, 100], patching_rect=[50, 50, 200, 100])
+        assert result["box"]["patching_rect"] == [50, 50, 200, 100]
+
+    def test_kwargs_passthrough(self):
+        result = live_grid("lg-1", [0, 0, 200, 100], custom_attr=42)
+        assert result["box"]["custom_attr"] == 42
+
+
+class TestLiveLine:
+    """Tests for live_line() visual divider."""
+
+    def test_returns_box_dict(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert "box" in result
+
+    def test_maxclass_is_live_line(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert result["box"]["maxclass"] == "live.line"
+
+    def test_id_set(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert result["box"]["id"] == "ll-1"
+
+    def test_presentation_is_1(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [5, 80, 200, 2]
+        result = live_line("ll-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_0(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert result["box"]["numoutlets"] == 0
+
+    def test_outlettype_is_empty(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert result["box"]["outlettype"] == []
+
+    def test_justification_default_is_0(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert result["box"]["justification"] == 0
+
+    def test_justification_vertical(self):
+        result = live_line("ll-1", [0, 0, 2, 100], justification=1)
+        assert result["box"]["justification"] == 1
+
+    def test_linecolor_not_set_by_default(self):
+        result = live_line("ll-1", [0, 0, 200, 2])
+        assert "linecolor" not in result["box"]
+
+    def test_linecolor_set_when_provided(self):
+        color = [0.5, 0.5, 0.5, 1.0]
+        result = live_line("ll-1", [0, 0, 200, 2], linecolor=color)
+        assert result["box"]["linecolor"] == color
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = live_line("ll-1", [10, 20, 200, 2])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 200
+        assert pr[3] == 2
+
+    def test_patching_rect_override(self):
+        result = live_line("ll-1", [0, 0, 200, 2], patching_rect=[50, 50, 200, 2])
+        assert result["box"]["patching_rect"] == [50, 50, 200, 2]
+
+    def test_kwargs_passthrough(self):
+        result = live_line("ll-1", [0, 0, 200, 2], custom_attr="test")
+        assert result["box"]["custom_attr"] == "test"
+
+
+class TestLiveArrows:
+    """Tests for live_arrows() direction arrow buttons."""
+
+    def test_returns_box_dict(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert "box" in result
+
+    def test_maxclass_is_live_arrows(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert result["box"]["maxclass"] == "live.arrows"
+
+    def test_id_set(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert result["box"]["id"] == "la-1"
+
+    def test_presentation_is_1(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [5, 10, 40, 20]
+        result = live_arrows("la-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_1(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert result["box"]["numoutlets"] == 1
+
+    def test_outlettype_is_single_string(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert result["box"]["outlettype"] == [""]
+
+    def test_arrowcolor_not_set_by_default(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert "arrowcolor" not in result["box"]
+
+    def test_arrowcolor_set_when_provided(self):
+        color = [1.0, 1.0, 1.0, 1.0]
+        result = live_arrows("la-1", [0, 0, 40, 20], arrowcolor=color)
+        assert result["box"]["arrowcolor"] == color
+
+    def test_arrowbgcolor_not_set_by_default(self):
+        result = live_arrows("la-1", [0, 0, 40, 20])
+        assert "arrowbgcolor" not in result["box"]
+
+    def test_arrowbgcolor_set_when_provided(self):
+        color = [0.2, 0.2, 0.2, 1.0]
+        result = live_arrows("la-1", [0, 0, 40, 20], arrowbgcolor=color)
+        assert result["box"]["arrowbgcolor"] == color
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = live_arrows("la-1", [10, 20, 40, 20])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 40
+        assert pr[3] == 20
+
+    def test_patching_rect_override(self):
+        result = live_arrows("la-1", [0, 0, 40, 20], patching_rect=[50, 50, 40, 20])
+        assert result["box"]["patching_rect"] == [50, 50, 40, 20]
+
+    def test_kwargs_passthrough(self):
+        result = live_arrows("la-1", [0, 0, 40, 20], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestRslider:
+    """Tests for rslider() range slider."""
+
+    def test_returns_box_dict(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert "box" in result
+
+    def test_maxclass_is_rslider(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["maxclass"] == "rslider"
+
+    def test_id_set(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["id"] == "rs-1"
+
+    def test_presentation_is_1(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 20, 140]
+        result = rslider("rs-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_2(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["numinlets"] == 2
+
+    def test_numoutlets_is_2(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["numoutlets"] == 2
+
+    def test_outlettype(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["outlettype"] == ["", ""]
+
+    def test_min_default(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["min"] == 0
+
+    def test_max_default(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["max"] == 127
+
+    def test_min_custom(self):
+        result = rslider("rs-1", [0, 0, 20, 140], min_val=10)
+        assert result["box"]["min"] == 10
+
+    def test_max_custom(self):
+        result = rslider("rs-1", [0, 0, 20, 140], max_val=200)
+        assert result["box"]["max"] == 200
+
+    def test_bgcolor_not_set_by_default(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert "bgcolor" not in result["box"]
+
+    def test_bgcolor_set_when_provided(self):
+        color = [0.2, 0.2, 0.2, 1.0]
+        result = rslider("rs-1", [0, 0, 20, 140], bgcolor=color)
+        assert result["box"]["bgcolor"] == color
+
+    def test_fgcolor_not_set_by_default(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert "fgcolor" not in result["box"]
+
+    def test_fgcolor_set_when_provided(self):
+        color = [0.8, 0.4, 0.1, 1.0]
+        result = rslider("rs-1", [0, 0, 20, 140], fgcolor=color)
+        assert result["box"]["fgcolor"] == color
+
+    def test_patching_rect_default(self):
+        result = rslider("rs-1", [0, 0, 20, 140])
+        assert result["box"]["patching_rect"] == [0, 0, 20, 140]
+
+    def test_patching_rect_override(self):
+        result = rslider("rs-1", [0, 0, 20, 140], patching_rect=[50, 50, 20, 140])
+        assert result["box"]["patching_rect"] == [50, 50, 20, 140]
+
+    def test_kwargs_passthrough(self):
+        result = rslider("rs-1", [0, 0, 20, 140], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestKslider:
+    """Tests for kslider() piano keyboard display."""
+
+    def test_returns_box_dict(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert "box" in result
+
+    def test_maxclass_is_kslider(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["maxclass"] == "kslider"
+
+    def test_id_set(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["id"] == "ks-1"
+
+    def test_presentation_is_1(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 300, 50]
+        result = kslider("ks-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_2(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["numinlets"] == 2
+
+    def test_numoutlets_is_2(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["numoutlets"] == 2
+
+    def test_outlettype(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["outlettype"] == ["", ""]
+
+    def test_range_default(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["range"] == 61
+
+    def test_range_custom(self):
+        result = kslider("ks-1", [0, 0, 300, 50], range=25)
+        assert result["box"]["range"] == 25
+
+    def test_offset_default(self):
+        result = kslider("ks-1", [0, 0, 300, 50])
+        assert result["box"]["offset"] == 36
+
+    def test_offset_custom(self):
+        result = kslider("ks-1", [0, 0, 300, 50], offset=48)
+        assert result["box"]["offset"] == 48
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = kslider("ks-1", [10, 20, 300, 50])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 300
+        assert pr[3] == 50
+
+    def test_patching_rect_override(self):
+        result = kslider("ks-1", [0, 0, 300, 50], patching_rect=[50, 50, 300, 50])
+        assert result["box"]["patching_rect"] == [50, 50, 300, 50]
+
+    def test_kwargs_passthrough(self):
+        result = kslider("ks-1", [0, 0, 300, 50], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestTextbutton:
+    """Tests for textbutton() text button."""
+
+    def test_returns_box_dict(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert "box" in result
+
+    def test_maxclass_is_textbutton(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["maxclass"] == "textbutton"
+
+    def test_id_set(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["id"] == "tb-1"
+
+    def test_presentation_is_1(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 80, 24]
+        result = textbutton("tb-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_3(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["numoutlets"] == 3
+
+    def test_outlettype(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["outlettype"] == ["", "", "int"]
+
+    def test_text_default(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["text"] == "Button"
+
+    def test_text_custom(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], "Play")
+        assert result["box"]["text"] == "Play"
+
+    def test_mode_default_is_0(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert result["box"]["mode"] == 0
+
+    def test_mode_toggle(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], mode=1)
+        assert result["box"]["mode"] == 1
+
+    def test_texton_not_set_by_default(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert "texton" not in result["box"]
+
+    def test_texton_set_when_provided(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], texton="ON")
+        assert result["box"]["texton"] == "ON"
+
+    def test_textoff_not_set_by_default(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert "textoff" not in result["box"]
+
+    def test_textoff_set_when_provided(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], textoff="OFF")
+        assert result["box"]["textoff"] == "OFF"
+
+    def test_fontsize_not_set_by_default(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert "fontsize" not in result["box"]
+
+    def test_fontsize_set_when_provided(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], fontsize=12.0)
+        assert result["box"]["fontsize"] == 12.0
+
+    def test_bgcolor_not_set_by_default(self):
+        result = textbutton("tb-1", [0, 0, 80, 24])
+        assert "bgcolor" not in result["box"]
+
+    def test_bgcolor_set_when_provided(self):
+        color = [0.3, 0.3, 0.3, 1.0]
+        result = textbutton("tb-1", [0, 0, 80, 24], bgcolor=color)
+        assert result["box"]["bgcolor"] == color
+
+    def test_bgoncolor_set_when_provided(self):
+        color = [0.8, 0.2, 0.1, 1.0]
+        result = textbutton("tb-1", [0, 0, 80, 24], bgoncolor=color)
+        assert result["box"]["bgoncolor"] == color
+
+    def test_textcolor_set_when_provided(self):
+        color = [1.0, 1.0, 1.0, 1.0]
+        result = textbutton("tb-1", [0, 0, 80, 24], textcolor=color)
+        assert result["box"]["textcolor"] == color
+
+    def test_textoncolor_set_when_provided(self):
+        color = [0.0, 1.0, 0.0, 1.0]
+        result = textbutton("tb-1", [0, 0, 80, 24], textoncolor=color)
+        assert result["box"]["textoncolor"] == color
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = textbutton("tb-1", [10, 20, 80, 24])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 80
+        assert pr[3] == 24
+
+    def test_patching_rect_override(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], patching_rect=[50, 50, 80, 24])
+        assert result["box"]["patching_rect"] == [50, 50, 80, 24]
+
+    def test_kwargs_passthrough(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestUmenu:
+    """Tests for umenu() dropdown menu."""
+
+    def test_returns_box_dict(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert "box" in result
+
+    def test_maxclass_is_umenu(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert result["box"]["maxclass"] == "umenu"
+
+    def test_id_set(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert result["box"]["id"] == "um-1"
+
+    def test_presentation_is_1(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 120, 22]
+        result = umenu("um-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_3(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert result["box"]["numoutlets"] == 3
+
+    def test_outlettype(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert result["box"]["outlettype"] == ["int", "", ""]
+
+    def test_items_not_set_by_default(self):
+        result = umenu("um-1", [0, 0, 120, 22])
+        assert "items" not in result["box"]
+
+    def test_items_set_when_provided(self):
+        result = umenu("um-1", [0, 0, 120, 22], items=["sine", "saw", "square"])
+        assert result["box"]["items"] == ["sine", "saw", "square"]
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = umenu("um-1", [10, 20, 120, 22])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 120
+        assert pr[3] == 22
+
+    def test_patching_rect_override(self):
+        result = umenu("um-1", [0, 0, 120, 22], patching_rect=[50, 50, 120, 22])
+        assert result["box"]["patching_rect"] == [50, 50, 120, 22]
+
+    def test_kwargs_passthrough(self):
+        result = umenu("um-1", [0, 0, 120, 22], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestRadiogroup:
+    """Tests for radiogroup() vertical radio buttons."""
+
+    def test_returns_box_dict(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert "box" in result
+
+    def test_maxclass_is_radiogroup(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert result["box"]["maxclass"] == "radiogroup"
+
+    def test_id_set(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert result["box"]["id"] == "rg-1"
+
+    def test_presentation_is_1(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 80, 80]
+        result = radiogroup("rg-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_1(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert result["box"]["numoutlets"] == 1
+
+    def test_outlettype(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert result["box"]["outlettype"] == [""]
+
+    def test_itemcount_default(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert result["box"]["itemcount"] == 4
+
+    def test_itemcount_custom(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80], itemcount=6)
+        assert result["box"]["itemcount"] == 6
+
+    def test_value_not_set_by_default(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80])
+        assert "value" not in result["box"]
+
+    def test_value_set_when_provided(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80], value=2)
+        assert result["box"]["value"] == 2
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = radiogroup("rg-1", [10, 20, 80, 80])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 80
+        assert pr[3] == 80
+
+    def test_patching_rect_override(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80], patching_rect=[50, 50, 80, 80])
+        assert result["box"]["patching_rect"] == [50, 50, 80, 80]
+
+    def test_kwargs_passthrough(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestNodes:
+    """Tests for nodes() XY node editor."""
+
+    def test_returns_box_dict(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert "box" in result
+
+    def test_maxclass_is_nodes(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert result["box"]["maxclass"] == "nodes"
+
+    def test_id_set(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert result["box"]["id"] == "nd-1"
+
+    def test_presentation_is_1(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 200, 100]
+        result = nodes("nd-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_3(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert result["box"]["numoutlets"] == 3
+
+    def test_outlettype(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert result["box"]["outlettype"] == ["", "", ""]
+
+    def test_numnodes_default(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert result["box"]["numnodes"] == 4
+
+    def test_numnodes_custom(self):
+        result = nodes("nd-1", [0, 0, 200, 100], numnodes=8)
+        assert result["box"]["numnodes"] == 8
+
+    def test_xmin_not_set_by_default(self):
+        result = nodes("nd-1", [0, 0, 200, 100])
+        assert "xmin" not in result["box"]
+
+    def test_xmin_set_when_provided(self):
+        result = nodes("nd-1", [0, 0, 200, 100], xmin=0.0)
+        assert result["box"]["xmin"] == 0.0
+
+    def test_xmax_set_when_provided(self):
+        result = nodes("nd-1", [0, 0, 200, 100], xmax=1.0)
+        assert result["box"]["xmax"] == 1.0
+
+    def test_ymin_set_when_provided(self):
+        result = nodes("nd-1", [0, 0, 200, 100], ymin=-1.0)
+        assert result["box"]["ymin"] == -1.0
+
+    def test_ymax_set_when_provided(self):
+        result = nodes("nd-1", [0, 0, 200, 100], ymax=1.0)
+        assert result["box"]["ymax"] == 1.0
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = nodes("nd-1", [10, 20, 200, 100])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 200
+        assert pr[3] == 100
+
+    def test_patching_rect_override(self):
+        result = nodes("nd-1", [0, 0, 200, 100], patching_rect=[50, 50, 200, 100])
+        assert result["box"]["patching_rect"] == [50, 50, 200, 100]
+
+    def test_kwargs_passthrough(self):
+        result = nodes("nd-1", [0, 0, 200, 100], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestMatrixctrl:
+    """Tests for matrixctrl() grid matrix control."""
+
+    def test_returns_box_dict(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert "box" in result
+
+    def test_maxclass_is_matrixctrl(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["maxclass"] == "matrixctrl"
+
+    def test_id_set(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["id"] == "mc-1"
+
+    def test_presentation_is_1(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 120, 120]
+        result = matrixctrl("mc-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_2(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["numoutlets"] == 2
+
+    def test_outlettype(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["outlettype"] == ["", ""]
+
+    def test_rows_default(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["rows"] == 8
+
+    def test_rows_custom(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120], rows=4)
+        assert result["box"]["rows"] == 4
+
+    def test_columns_default(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["columns"] == 8
+
+    def test_columns_custom(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120], columns=16)
+        assert result["box"]["columns"] == 16
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = matrixctrl("mc-1", [10, 20, 120, 120])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 120
+        assert pr[3] == 120
+
+    def test_patching_rect_override(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120], patching_rect=[50, 50, 120, 120])
+        assert result["box"]["patching_rect"] == [50, 50, 120, 120]
+
+    def test_kwargs_passthrough(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestUbutton:
+    """Tests for ubutton() invisible click zone."""
+
+    def test_returns_box_dict(self):
+        result = ubutton("ub-1", [0, 0, 60, 60])
+        assert "box" in result
+
+    def test_maxclass_is_ubutton(self):
+        result = ubutton("ub-1", [0, 0, 60, 60])
+        assert result["box"]["maxclass"] == "ubutton"
+
+    def test_id_set(self):
+        result = ubutton("ub-1", [0, 0, 60, 60])
+        assert result["box"]["id"] == "ub-1"
+
+    def test_presentation_is_1(self):
+        result = ubutton("ub-1", [0, 0, 60, 60])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 60, 60]
+        result = ubutton("ub-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = ubutton("ub-1", [0, 0, 60, 60])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_4(self):
+        result = ubutton("ub-1", [0, 0, 60, 60])
+        assert result["box"]["numoutlets"] == 4
+
+    def test_outlettype(self):
+        result = ubutton("ub-1", [0, 0, 60, 60])
+        assert result["box"]["outlettype"] == ["bang", "", "", "int"]
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = ubutton("ub-1", [10, 20, 60, 60])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 60
+        assert pr[3] == 60
+
+    def test_patching_rect_override(self):
+        result = ubutton("ub-1", [0, 0, 60, 60], patching_rect=[50, 50, 60, 60])
+        assert result["box"]["patching_rect"] == [50, 50, 60, 60]
+
+    def test_kwargs_passthrough(self):
+        result = ubutton("ub-1", [0, 0, 60, 60], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestNslider:
+    """Tests for nslider() staff notation display."""
+
+    def test_returns_box_dict(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert "box" in result
+
+    def test_maxclass_is_nslider(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert result["box"]["maxclass"] == "nslider"
+
+    def test_id_set(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert result["box"]["id"] == "ns-1"
+
+    def test_presentation_is_1(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 100, 120]
+        result = nslider("ns-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_2(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert result["box"]["numinlets"] == 2
+
+    def test_numoutlets_is_2(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert result["box"]["numoutlets"] == 2
+
+    def test_outlettype(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert result["box"]["outlettype"] == ["", ""]
+
+    def test_staffs_not_set_by_default(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert "staffs" not in result["box"]
+
+    def test_staffs_set_when_provided(self):
+        result = nslider("ns-1", [0, 0, 100, 120], staffs=2)
+        assert result["box"]["staffs"] == 2
+
+    def test_bgcolor_not_set_by_default(self):
+        result = nslider("ns-1", [0, 0, 100, 120])
+        assert "bgcolor" not in result["box"]
+
+    def test_bgcolor_set_when_provided(self):
+        color = [1.0, 1.0, 1.0, 1.0]
+        result = nslider("ns-1", [0, 0, 100, 120], bgcolor=color)
+        assert result["box"]["bgcolor"] == color
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = nslider("ns-1", [10, 20, 100, 120])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 100
+        assert pr[3] == 120
+
+    def test_patching_rect_override(self):
+        result = nslider("ns-1", [0, 0, 100, 120], patching_rect=[50, 50, 100, 120])
+        assert result["box"]["patching_rect"] == [50, 50, 100, 120]
+
+    def test_kwargs_passthrough(self):
+        result = nslider("ns-1", [0, 0, 100, 120], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"

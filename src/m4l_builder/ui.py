@@ -679,3 +679,304 @@ def textedit(id: str, rect: list, *, fontname: str = "Ableton Sans Medium",
         box["bgcolor"] = bgcolor
     box.update(kwargs)
     return {"box": box}
+
+
+# --- Phase 5: Additional UI Objects ---
+
+
+def live_step(id: str, rect: list, *, nstep: int = 16, nseq: int = 1,
+              loop_start: int = None, loop_end: int = None, mode: int = None,
+              patching_rect: list = None, **kwargs) -> dict:
+    """Create a live.step step sequencer UI."""
+    box = {
+        "id": id,
+        "maxclass": "live.step",
+        "numinlets": 1,
+        "numoutlets": 5,
+        "outlettype": ["", "", "", "", ""],
+        "nstep": nstep,
+        "nseq": nseq,
+        "patching_rect": patching_rect or [700, 2100, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if loop_start is not None:
+        box["loop_start"] = loop_start
+    if loop_end is not None:
+        box["loop_end"] = loop_end
+    if mode is not None:
+        box["mode"] = mode
+    box.update(kwargs)
+    return {"box": box}
+
+
+def live_grid(id: str, rect: list, *, columns: int = 16, rows: int = 8,
+              direction: int = None, patching_rect: list = None,
+              **kwargs) -> dict:
+    """Create a live.grid toggleable cell grid."""
+    box = {
+        "id": id,
+        "maxclass": "live.grid",
+        "numinlets": 1,
+        "numoutlets": 4,
+        "outlettype": ["", "", "", ""],
+        "columns": columns,
+        "rows": rows,
+        "patching_rect": patching_rect or [700, 2200, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if direction is not None:
+        box["direction"] = direction
+    box.update(kwargs)
+    return {"box": box}
+
+
+def live_line(id: str, rect: list, *, linecolor: list = None,
+              justification: int = 0, patching_rect: list = None,
+              **kwargs) -> dict:
+    """Create a live.line visual divider."""
+    box = {
+        "id": id,
+        "maxclass": "live.line",
+        "numinlets": 1,
+        "numoutlets": 0,
+        "outlettype": [],
+        "justification": justification,
+        "patching_rect": patching_rect or [700, 2300, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if linecolor:
+        box["linecolor"] = linecolor
+    box.update(kwargs)
+    return {"box": box}
+
+
+def live_arrows(id: str, rect: list, *, arrowcolor: list = None,
+                arrowbgcolor: list = None, patching_rect: list = None,
+                **kwargs) -> dict:
+    """Create a live.arrows direction arrow buttons."""
+    box = {
+        "id": id,
+        "maxclass": "live.arrows",
+        "numinlets": 1,
+        "numoutlets": 1,
+        "outlettype": [""],
+        "patching_rect": patching_rect or [700, 2400, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if arrowcolor:
+        box["arrowcolor"] = arrowcolor
+    if arrowbgcolor:
+        box["arrowbgcolor"] = arrowbgcolor
+    box.update(kwargs)
+    return {"box": box}
+
+
+def rslider(id: str, rect: list, *, min_val: int = 0, max_val: int = 127,
+            bgcolor: list = None, fgcolor: list = None,
+            patching_rect: list = None, **kwargs) -> dict:
+    """Create an rslider range slider with two handles."""
+    box = {
+        "id": id,
+        "maxclass": "rslider",
+        "numinlets": 2,
+        "numoutlets": 2,
+        "outlettype": ["", ""],
+        "min": min_val,
+        "max": max_val,
+        "patching_rect": patching_rect or [0, 0, 20, 140],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if bgcolor:
+        box["bgcolor"] = bgcolor
+    if fgcolor:
+        box["fgcolor"] = fgcolor
+    box.update(kwargs)
+    return {"box": box}
+
+
+def kslider(id: str, rect: list, *, range: int = 61, offset: int = 36,
+            patching_rect: list = None, **kwargs) -> dict:
+    """Create a kslider piano keyboard display."""
+    box = {
+        "id": id,
+        "maxclass": "kslider",
+        "numinlets": 2,
+        "numoutlets": 2,
+        "outlettype": ["", ""],
+        "range": range,
+        "offset": offset,
+        "patching_rect": patching_rect or [700, 2500, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    box.update(kwargs)
+    return {"box": box}
+
+
+def textbutton(id: str, rect: list, text: str = "Button", *,
+               texton: str = None, textoff: str = None, mode: int = 0,
+               fontsize: float = None, fontname: str = None,
+               bgcolor: list = None, bgoncolor: list = None,
+               textcolor: list = None, textoncolor: list = None,
+               patching_rect: list = None, **kwargs) -> dict:
+    """Create a textbutton text button (no parameter storage)."""
+    box = {
+        "id": id,
+        "maxclass": "textbutton",
+        "numinlets": 1,
+        "numoutlets": 3,
+        "outlettype": ["", "", "int"],
+        "text": text,
+        "mode": mode,
+        "patching_rect": patching_rect or [700, 2600, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if texton is not None:
+        box["texton"] = texton
+    if textoff is not None:
+        box["textoff"] = textoff
+    if fontsize is not None:
+        box["fontsize"] = fontsize
+    if fontname is not None:
+        box["fontname"] = fontname
+    if bgcolor:
+        box["bgcolor"] = bgcolor
+    if bgoncolor:
+        box["bgoncolor"] = bgoncolor
+    if textcolor:
+        box["textcolor"] = textcolor
+    if textoncolor:
+        box["textoncolor"] = textoncolor
+    box.update(kwargs)
+    return {"box": box}
+
+
+def umenu(id: str, rect: list, *, items: list = None,
+          patching_rect: list = None, **kwargs) -> dict:
+    """Create a umenu dropdown menu (no parameter storage)."""
+    box = {
+        "id": id,
+        "maxclass": "umenu",
+        "numinlets": 1,
+        "numoutlets": 3,
+        "outlettype": ["int", "", ""],
+        "patching_rect": patching_rect or [700, 2700, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if items is not None:
+        box["items"] = items
+    box.update(kwargs)
+    return {"box": box}
+
+
+def radiogroup(id: str, rect: list, *, itemcount: int = 4,
+               value: int = None, patching_rect: list = None,
+               **kwargs) -> dict:
+    """Create a radiogroup vertical radio buttons."""
+    box = {
+        "id": id,
+        "maxclass": "radiogroup",
+        "numinlets": 1,
+        "numoutlets": 1,
+        "outlettype": [""],
+        "itemcount": itemcount,
+        "patching_rect": patching_rect or [700, 2800, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if value is not None:
+        box["value"] = value
+    box.update(kwargs)
+    return {"box": box}
+
+
+def nodes(id: str, rect: list, *, numnodes: int = 4, xmin: float = None,
+          xmax: float = None, ymin: float = None, ymax: float = None,
+          patching_rect: list = None, **kwargs) -> dict:
+    """Create a nodes XY node editor with draggable points."""
+    box = {
+        "id": id,
+        "maxclass": "nodes",
+        "numinlets": 1,
+        "numoutlets": 3,
+        "outlettype": ["", "", ""],
+        "numnodes": numnodes,
+        "patching_rect": patching_rect or [700, 2900, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if xmin is not None:
+        box["xmin"] = xmin
+    if xmax is not None:
+        box["xmax"] = xmax
+    if ymin is not None:
+        box["ymin"] = ymin
+    if ymax is not None:
+        box["ymax"] = ymax
+    box.update(kwargs)
+    return {"box": box}
+
+
+def matrixctrl(id: str, rect: list, *, rows: int = 8, columns: int = 8,
+               patching_rect: list = None, **kwargs) -> dict:
+    """Create a matrixctrl grid matrix control."""
+    box = {
+        "id": id,
+        "maxclass": "matrixctrl",
+        "numinlets": 1,
+        "numoutlets": 2,
+        "outlettype": ["", ""],
+        "rows": rows,
+        "columns": columns,
+        "patching_rect": patching_rect or [700, 3000, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    box.update(kwargs)
+    return {"box": box}
+
+
+def ubutton(id: str, rect: list, *, patching_rect: list = None,
+            **kwargs) -> dict:
+    """Create a ubutton invisible click zone."""
+    box = {
+        "id": id,
+        "maxclass": "ubutton",
+        "numinlets": 1,
+        "numoutlets": 4,
+        "outlettype": ["bang", "", "", "int"],
+        "patching_rect": patching_rect or [700, 3100, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    box.update(kwargs)
+    return {"box": box}
+
+
+def nslider(id: str, rect: list, *, staffs: int = None,
+            bgcolor: list = None, patching_rect: list = None,
+            **kwargs) -> dict:
+    """Create an nslider staff notation display."""
+    box = {
+        "id": id,
+        "maxclass": "nslider",
+        "numinlets": 2,
+        "numoutlets": 2,
+        "outlettype": ["", ""],
+        "patching_rect": patching_rect or [700, 3200, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if staffs is not None:
+        box["staffs"] = staffs
+    if bgcolor:
+        box["bgcolor"] = bgcolor
+    box.update(kwargs)
+    return {"box": box}

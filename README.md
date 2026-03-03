@@ -8,8 +8,8 @@ m4l-builder generates fully functional Max for Live (.amxd) devices without the 
 
 - **Max patching in code** -- version-controllable, reproducible, scriptable
 - **No Max license required** to generate devices -- only Ableton Live + Max for Live to run them
-- **28 composable DSP blocks** -- filters, delays, saturators, compressor, limiter, LFOs, and more
-- **21 UI components** -- dials, sliders, menus, scopes, meters, ADSR, JSUI, and more
+- **33 composable DSP blocks** -- filters, delays, saturators, compressor, limiter, LFOs, envelopes, and more
+- **34 UI components** -- dials, sliders, menus, scopes, meters, step sequencer, grid, keyboard, and more
 - **Theme system** -- 4 built-in themes with automatic color injection into all UI components
 - **kwargs passthrough** -- any Max attribute can be set on any UI component
 
@@ -68,7 +68,7 @@ device = Instrument("My Synth", width=400, height=200)     # no auto I/O
 device = MidiEffect("My MIDI Tool", width=200, height=100) # MIDI only, no audio
 ```
 
-## UI Components (21)
+## UI Components (34)
 
 All UI functions place objects in presentation mode at the specified `rect`. kwargs passthrough lets you set any Max attribute directly.
 
@@ -95,8 +95,21 @@ All UI functions place objects in presentation mode at the specified `rect`. kwa
 | `add_bpatcher` | bpatcher | Embeddable sub-patcher |
 | `add_swatch` | swatch | Color picker/display |
 | `add_textedit` | textedit | Editable text field |
+| `add_live_step` | live.step | Step sequencer (pitch/velocity/duration per step) |
+| `add_live_grid` | live.grid | Toggleable cell grid for patterns/beats |
+| `add_live_line` | live.line | Visual divider line |
+| `add_live_arrows` | live.arrows | Direction arrow buttons |
+| `add_rslider` | rslider | Range slider (two handles, min/max) |
+| `add_kslider` | kslider | Piano keyboard display |
+| `add_textbutton` | textbutton | Text button (no parameter storage) |
+| `add_umenu` | umenu | Dropdown menu (no parameter storage) |
+| `add_radiogroup` | radiogroup | Vertical radio buttons |
+| `add_nodes` | nodes | XY node editor with draggable points |
+| `add_matrixctrl` | matrixctrl | Grid matrix control |
+| `add_ubutton` | ubutton | Invisible click zone overlay |
+| `add_nslider` | nslider | Staff notation display |
 
-## DSP Building Blocks (28)
+## DSP Building Blocks (33)
 
 Every DSP function returns `(boxes, lines)`. Add to a device with:
 
@@ -110,7 +123,7 @@ for l in lines: device.lines.append(l)
 |----------|-----------|
 | **I/O** | `stereo_io` |
 | **Gain/Mixing** | `gain_stage`, `dry_wet_mix`, `signal_divide` |
-| **Filters** | `highpass_filter`, `lowpass_filter`, `bandpass_filter`, `notch_filter`, `onepole_filter`, `highshelf_filter`, `lowshelf_filter`, `tilt_eq`, `crossover_3band` |
+| **Filters** | `highpass_filter`, `lowpass_filter`, `bandpass_filter`, `notch_filter`, `onepole_filter`, `highshelf_filter`, `lowshelf_filter`, `tilt_eq`, `crossover_3band`, `peaking_eq`, `allpass_filter` |
 | **Saturation** | `saturation` (tanh/overdrive/clip/degrade modes) |
 | **Dynamics** | `envelope_follower`, `compressor`, `limiter` |
 | **Delay** | `delay_line`, `feedback_delay` |
@@ -118,6 +131,8 @@ for l in lines: device.lines.append(l)
 | **Stereo** | `ms_encode_decode`, `dc_block` |
 | **Routing** | `selector` |
 | **Resonance** | `comb_resonator` |
+| **Envelope** | `adsr_envelope` |
+| **Live API** | `live_remote`, `live_param_signal` |
 | **Utility** | `param_smooth`, `noise_source`, `tempo_sync` |
 
 ## Theme System
@@ -184,7 +199,7 @@ export M4L_USER_LIBRARY="/path/to/your/User Library"
 
 ## Testing
 
-1050+ tests across 9 test files:
+1330+ tests across 9 test files:
 
 ```bash
 uv run pytest tests/ -v
