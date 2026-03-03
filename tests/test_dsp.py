@@ -31,6 +31,11 @@ from m4l_builder.dsp import (
     limiter,
     noise_source,
     tempo_sync,
+    live_remote,
+    live_param_signal,
+    adsr_envelope,
+    peaking_eq,
+    allpass_filter,
 )
 
 
@@ -1835,3 +1840,173 @@ class TestEnvelopeFollowerSampleratefix:
             and l["patchline"]["destination"] == ["env_slide", 2]
             for l in lines
         )
+
+
+class TestLiveRemote:
+    """Test live_remote() creates a live.remote~ object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = live_remote("lr")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_object_text(self):
+        boxes, _ = live_remote("lr")
+        box = _find_box(boxes, "lr_remote")
+        assert box["text"] == "live.remote~"
+
+    def test_inlets_outlets(self):
+        boxes, _ = live_remote("lr")
+        box = _find_box(boxes, "lr_remote")
+        assert box["numinlets"] == 3
+        assert box["numoutlets"] == 1
+        assert box["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = live_remote("ctrl")
+        ids = _box_ids(boxes)
+        assert "ctrl_remote" in ids
+
+
+class TestLiveParamSignal:
+    """Test live_param_signal() creates a live.param~ object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = live_param_signal("lp")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_object_text(self):
+        boxes, _ = live_param_signal("lp")
+        box = _find_box(boxes, "lp_param")
+        assert box["text"] == "live.param~"
+
+    def test_inlets_outlets(self):
+        boxes, _ = live_param_signal("lp")
+        box = _find_box(boxes, "lp_param")
+        assert box["numinlets"] == 1
+        assert box["numoutlets"] == 2
+        assert box["outlettype"] == ["signal", ""]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = live_param_signal("myp")
+        ids = _box_ids(boxes)
+        assert "myp_param" in ids
+
+
+class TestAdsrEnvelope:
+    """Test adsr_envelope() creates a live.adsr~ object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = adsr_envelope("env")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_args(self):
+        boxes, _ = adsr_envelope("env")
+        box = _find_box(boxes, "env_adsr")
+        assert box["text"] == "live.adsr~ 10 100 0.7 200"
+
+    def test_custom_args(self):
+        boxes, _ = adsr_envelope("env", attack_ms=5, decay_ms=50,
+                                 sustain=0.5, release_ms=500)
+        box = _find_box(boxes, "env_adsr")
+        assert box["text"] == "live.adsr~ 5 50 0.5 500"
+
+    def test_inlets_outlets(self):
+        boxes, _ = adsr_envelope("env")
+        box = _find_box(boxes, "env_adsr")
+        assert box["numinlets"] == 5
+        assert box["numoutlets"] == 4
+        assert box["outlettype"] == ["signal", "signal", "", ""]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = adsr_envelope("amp")
+        ids = _box_ids(boxes)
+        assert "amp_adsr" in ids
+
+
+class TestPeakingEq:
+    """Test peaking_eq() creates filtercoeff~ + biquad~ pair."""
+
+    def test_returns_2_boxes_1_line(self):
+        boxes, lines = peaking_eq("eq")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_has_filtercoeff(self):
+        boxes, _ = peaking_eq("eq")
+        coeff = _find_box(boxes, "eq_coeff")
+        assert coeff["text"] == "filtercoeff~ peaknotch 1000 0 1.0"
+        assert coeff["numinlets"] == 6
+        assert coeff["numoutlets"] == 1
+
+    def test_has_biquad(self):
+        boxes, _ = peaking_eq("eq")
+        bq = _find_box(boxes, "eq_biquad")
+        assert bq["text"] == "biquad~"
+        assert bq["numinlets"] == 6
+        assert bq["numoutlets"] == 1
+        assert bq["outlettype"] == ["signal"]
+
+    def test_coeff_feeds_biquad(self):
+        _, lines = peaking_eq("eq")
+        assert any(
+            l["patchline"]["source"] == ["eq_coeff", 0]
+            and l["patchline"]["destination"] == ["eq_biquad", 1]
+            for l in lines
+        )
+
+    def test_custom_params(self):
+        boxes, _ = peaking_eq("eq", freq=2000, gain=6, q=2.0)
+        coeff = _find_box(boxes, "eq_coeff")
+        assert coeff["text"] == "filtercoeff~ peaknotch 2000 6 2.0"
+
+    def test_ids_use_prefix(self):
+        boxes, _ = peaking_eq("band1")
+        ids = _box_ids(boxes)
+        assert "band1_coeff" in ids
+        assert "band1_biquad" in ids
+
+
+class TestAllpassFilter:
+    """Test allpass_filter() creates filtercoeff~ allpass + biquad~ pair."""
+
+    def test_returns_2_boxes_1_line(self):
+        boxes, lines = allpass_filter("ap")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_has_filtercoeff(self):
+        boxes, _ = allpass_filter("ap")
+        coeff = _find_box(boxes, "ap_coeff")
+        assert coeff["text"] == "filtercoeff~ allpass 1000 1. 0.7"
+        assert coeff["numinlets"] == 6
+        assert coeff["numoutlets"] == 1
+
+    def test_has_biquad(self):
+        boxes, _ = allpass_filter("ap")
+        bq = _find_box(boxes, "ap_biquad")
+        assert bq["text"] == "biquad~"
+        assert bq["numinlets"] == 6
+        assert bq["numoutlets"] == 1
+        assert bq["outlettype"] == ["signal"]
+
+    def test_coeff_feeds_biquad(self):
+        _, lines = allpass_filter("ap")
+        assert any(
+            l["patchline"]["source"] == ["ap_coeff", 0]
+            and l["patchline"]["destination"] == ["ap_biquad", 1]
+            for l in lines
+        )
+
+    def test_custom_params(self):
+        boxes, _ = allpass_filter("ap", freq=500, q=1.5)
+        coeff = _find_box(boxes, "ap_coeff")
+        assert coeff["text"] == "filtercoeff~ allpass 500 1. 1.5"
+
+    def test_ids_use_prefix(self):
+        boxes, _ = allpass_filter("phase")
+        ids = _box_ids(boxes)
+        assert "phase_coeff" in ids
+        assert "phase_biquad" in ids

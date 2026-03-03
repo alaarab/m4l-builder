@@ -1020,3 +1020,100 @@ def tempo_sync(id_prefix: str, division: float = 1.0) -> tuple:
         patchline(f"{p}_bpm", 0, f"{p}_rate", 0),
     ]
     return (boxes, lines)
+
+
+def live_remote(id_prefix: str) -> tuple:
+    """Create a live.remote~ object for sample-accurate parameter control.
+
+    Wire parameter value into inlet 0, parameter ID into inlet 1,
+    ramp time into inlet 2.
+    Output from {prefix}_remote outlet 0 (signal).
+    """
+    boxes = [
+        newobj(f"{id_prefix}_remote", "live.remote~", numinlets=3,
+               numoutlets=1, outlettype=["signal"],
+               patching_rect=[30, 120, 90, 20]),
+    ]
+    return (boxes, [])
+
+
+def live_param_signal(id_prefix: str) -> tuple:
+    """Create a live.param~ object that outputs a parameter value as signal.
+
+    Inlet 0 accepts parameter messages.
+    Outlet 0 is the signal output, outlet 1 is the raw value.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_param", "live.param~", numinlets=1,
+               numoutlets=2, outlettype=["signal", ""],
+               patching_rect=[30, 120, 80, 20]),
+    ]
+    return (boxes, [])
+
+
+def adsr_envelope(id_prefix: str, *, attack_ms: float = 10,
+                  decay_ms: float = 100, sustain: float = 0.7,
+                  release_ms: float = 200) -> tuple:
+    """Create a live.adsr~ envelope generator.
+
+    Wire note-on/off into inlet 0. Inlets 1-4 set attack, decay, sustain,
+    release in real time.
+    Outlet 0 is the envelope signal, outlet 1 is the retrigger signal.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_adsr",
+               f"live.adsr~ {attack_ms} {decay_ms} {sustain} {release_ms}",
+               numinlets=5, numoutlets=4,
+               outlettype=["signal", "signal", "", ""],
+               patching_rect=[30, 120, 180, 20]),
+    ]
+    return (boxes, [])
+
+
+def peaking_eq(id_prefix: str, *, freq: float = 1000,
+               gain: float = 0, q: float = 1.0) -> tuple:
+    """Create a parametric peaking EQ band using filtercoeff~ and biquad~.
+
+    filtercoeff~ computes biquad coefficients for the given freq/gain/Q.
+    biquad~ applies them to the audio signal.
+
+    Wire audio into {prefix}_biquad inlet 0.
+    Output from {prefix}_biquad outlet 0.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_coeff", f"filtercoeff~ peaknotch {freq} {gain} {q}",
+               numinlets=6, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 120, 200, 20]),
+        newobj(f"{p}_biquad", "biquad~", numinlets=6, numoutlets=1,
+               outlettype=["signal"],
+               patching_rect=[30, 160, 50, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_coeff", 0, f"{p}_biquad", 1),
+    ]
+    return (boxes, lines)
+
+
+def allpass_filter(id_prefix: str, *, freq: float = 1000,
+                   q: float = 0.7) -> tuple:
+    """Create an allpass filter using filtercoeff~ and biquad~.
+
+    Same pattern as peaking_eq but with allpass coefficients.
+
+    Wire audio into {prefix}_biquad inlet 0.
+    Output from {prefix}_biquad outlet 0.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_coeff", f"filtercoeff~ allpass {freq} 1. {q}",
+               numinlets=6, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 120, 200, 20]),
+        newobj(f"{p}_biquad", "biquad~", numinlets=6, numoutlets=1,
+               outlettype=["signal"],
+               patching_rect=[30, 160, 50, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_coeff", 0, f"{p}_biquad", 1),
+    ]
+    return (boxes, lines)

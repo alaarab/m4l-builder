@@ -10,7 +10,9 @@ from .patcher import build_patcher
 from .ui import (panel, dial, tab, toggle, comment, scope, meter, menu,
                  number_box, slider, button, live_text, fpic, live_gain,
                  multislider, jsui, adsrui, live_drop, bpatcher, swatch,
-                 textedit)
+                 textedit, live_step, live_grid, live_line, live_arrows,
+                 rslider, kslider, textbutton, umenu, radiogroup, nodes,
+                 matrixctrl, ubutton, nslider)
 
 
 class Device:
@@ -166,6 +168,45 @@ class Device:
 
     def add_textedit(self, id: str, rect: list, **kwargs) -> str:
         return self.add_box(textedit(id, rect, **kwargs))
+
+    def add_live_step(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(live_step(id, rect, **kwargs))
+
+    def add_live_grid(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(live_grid(id, rect, **kwargs))
+
+    def add_live_line(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(live_line(id, rect, **kwargs))
+
+    def add_live_arrows(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(live_arrows(id, rect, **kwargs))
+
+    def add_rslider(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(rslider(id, rect, **kwargs))
+
+    def add_kslider(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(kslider(id, rect, **kwargs))
+
+    def add_textbutton(self, id: str, rect: list, text: str = "Button", **kwargs) -> str:
+        return self.add_box(textbutton(id, rect, text, **kwargs))
+
+    def add_umenu(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(umenu(id, rect, **kwargs))
+
+    def add_radiogroup(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(radiogroup(id, rect, **kwargs))
+
+    def add_nodes(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(nodes(id, rect, **kwargs))
+
+    def add_matrixctrl(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(matrixctrl(id, rect, **kwargs))
+
+    def add_ubutton(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(ubutton(id, rect, **kwargs))
+
+    def add_nslider(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(nslider(id, rect, **kwargs))
 
     def add_newobj(self, id: str, text: str, *, numinlets: int, numoutlets: int,
                    **kwargs) -> str:
