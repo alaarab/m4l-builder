@@ -1,30 +1,32 @@
 """Lo-Fi Processor — bitcrusher + sample rate reducer + hiss + tone filter.
 
 Parameter smoothing:
-  All float→signal paths go through pack→line~ to eliminate zipper noise.
+  All float->signal paths go through pack->line~ to eliminate zipper noise.
   line~ ramps over 20ms giving click-free dial sweeps.
 
 Note: degrade~ inlets 1 (sr_factor) and 2 (bit_depth) are message-rate
   integer controls for digital artifacts — left unsmoothed intentionally
   as their stepped character is part of the lo-fi effect.
+
+Signal chain:
+  plugin~ -> drive *~ (pre-crush gain boost) -> degrade~ (bit+rate crush)
+  -> tanh~ (soft clip to prevent harsh digital clipping after crush)
+  -> onepole~ tone filter -> dry/wet mix -> plugout~
+  The tanh~ is intentional: heavy crushing at high Drive settings can produce
+  samples outside [-1,1]. tanh~ folds these back in a musically pleasing way
+  rather than hard clipping. Bypass Drive entirely (0%) to skip the effect.
 """
 
 import os
 from m4l_builder import AudioEffect, WARM, device_output_path
 
-# Widen by 30px for L/R output meters on right edge
 device = AudioEffect("LoFi Processor", width=310, height=175, theme=WARM)
 
 # --- UI ---
-# Dark background panel (background:1 so it renders behind controls)
 device.add_panel("bg", [0, 0, 310, 175], bgcolor=[0.12, 0.12, 0.14, 1.0])
 
-# Title
-device.add_comment("title", [8, 6, 80, 16], "LO-FI",
-                   textcolor=[0.95, 0.92, 0.85, 1.0], fontsize=13.0)
-
 # Crushed waveform scope — shows the bitcrushed/degraded signal
-device.add_scope("crush_scope", [8, 26, 264, 42],
+device.add_scope("crush_scope", [8, 8, 264, 42],
                  bgcolor=[0.06, 0.06, 0.06, 1.0],
                  activelinecolor=[0.85, 0.55, 0.25, 1.0],
                  gridcolor=[0.15, 0.13, 0.10, 0.4],
@@ -32,49 +34,55 @@ device.add_scope("crush_scope", [8, 26, 264, 42],
                  calccount=64, smooth=0, line_width=1.5)
 
 # Section labels above dials
-device.add_comment("lbl_crush", [8, 62, 84, 12], "CRUSH",
+device.add_comment("lbl_crush", [8, 54, 84, 12], "CRUSH",
                    fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
-device.add_comment("lbl_color", [96, 62, 84, 12], "COLOR",
+device.add_comment("lbl_drive", [96, 54, 84, 12], "DRIVE",
                    fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
-device.add_comment("lbl_output", [184, 62, 84, 12], "OUTPUT",
+device.add_comment("lbl_color", [140, 54, 84, 12], "COLOR",
+                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
+device.add_comment("lbl_output", [228, 54, 55, 12], "OUTPUT",
                    fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
 
 # Dials row: Bits, Rate, Drive, Tone, Hiss, Mix
-# 6 dials at ~40px wide, spaced across 280px, meters on far right
-device.add_dial("bits_dial", "Bits", [8, 72, 40, 75],
+device.add_dial("bits_dial", "Bits", [8, 64, 40, 75],
                 min_val=1.0, max_val=16.0, initial=12.0,
                 annotation_name="Bit depth reduction — lower values = crunchier")
 
-device.add_dial("rate_dial", "Rate", [52, 72, 40, 75],
+device.add_dial("rate_dial", "Rate", [52, 64, 40, 75],
                 min_val=0.0, max_val=100.0, initial=0.0,
+                unitstyle=5,  # PERCENT
                 annotation_name="Sample rate reduction — higher values = more aliasing")
 
-device.add_dial("drive_dial", "Drive", [96, 72, 40, 75],
+# Drive is a pre-crush input gain — its own section to clarify purpose
+device.add_dial("drive_dial", "Drive", [96, 64, 40, 75],
                 min_val=0.0, max_val=100.0, initial=0.0,
                 annotation_name="Input drive before bitcrushing")
 
-device.add_dial("tone_dial", "Tone", [140, 72, 40, 75],
+device.add_dial("tone_dial", "Tone", [140, 64, 40, 75],
                 min_val=500.0, max_val=20000.0, initial=20000.0,
                 unitstyle=3,  # HZ
                 annotation_name="Post-crush lowpass filter cutoff")
 
-device.add_dial("hiss_dial", "Hiss", [184, 72, 40, 75],
+device.add_dial("hiss_dial", "Hiss", [184, 64, 40, 75],
                 min_val=0.0, max_val=100.0, initial=0.0,
                 annotation_name="Analog tape hiss noise level")
 
-device.add_dial("mix_dial", "Mix", [228, 72, 40, 75],
+device.add_dial("mix_dial", "Mix", [228, 64, 40, 75],
                 min_val=0.0, max_val=100.0, initial=100.0,
+                unitstyle=5,  # PERCENT
                 annotation_name="Dry/wet balance — 0% clean, 100% crushed")
 
-# Output meters — L and R on right edge, vertical
-METER_COLORS = dict(
-    coldcolor=[0.3, 0.7, 0.35, 1.0],
-    warmcolor=[0.9, 0.8, 0.2, 1.0],
-    hotcolor=[0.9, 0.4, 0.1, 1.0],
-    overloadcolor=[0.9, 0.15, 0.15, 1.0],
-)
-device.add_meter("meter_l", [280, 26, 14, 141], orientation=0, **METER_COLORS)
-device.add_meter("meter_r", [296, 26, 14, 141], orientation=0, **METER_COLORS)
+# Output meters using theme accent colors
+device.add_meter("meter_l", [280, 8, 14, 159], orientation=0,
+                 coldcolor=[0.85, 0.55, 0.25, 1.0],
+                 warmcolor=[0.90, 0.75, 0.20, 1.0],
+                 hotcolor=[0.90, 0.40, 0.10, 1.0],
+                 overloadcolor=[0.90, 0.15, 0.15, 1.0])
+device.add_meter("meter_r", [295, 8, 14, 159], orientation=0,
+                 coldcolor=[0.85, 0.55, 0.25, 1.0],
+                 warmcolor=[0.90, 0.75, 0.20, 1.0],
+                 hotcolor=[0.90, 0.40, 0.10, 1.0],
+                 overloadcolor=[0.90, 0.15, 0.15, 1.0])
 
 # --- DSP objects ---
 
@@ -112,7 +120,9 @@ device.add_newobj("rate_scale", "scale 0. 100. 1. 32.", numinlets=6, numoutlets=
 # degrade~ message inlets are intentionally left unsmoothed — the stepped
 # character of bit-depth changes is central to the lo-fi aesthetic.
 
-# tanh~ for post-crush warmth (L and R)
+# tanh~ for post-crush soft saturation (L and R).
+# Heavy crush at high drive can push samples outside [-1,1]. tanh~ folds them
+# back musically rather than hard clipping. Set Drive=0 to bypass the effect.
 device.add_newobj("tanh_l", "tanh~", numinlets=1, numoutlets=1,
                   outlettype=["signal"], patching_rect=[20, 320, 35, 20])
 

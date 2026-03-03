@@ -9,7 +9,8 @@ from .objects import newobj, patchline
 from .patcher import build_patcher
 from .ui import (panel, dial, tab, toggle, comment, scope, meter, menu,
                  number_box, slider, button, live_text, fpic, live_gain,
-                 multislider, jsui)
+                 multislider, jsui, adsrui, live_drop, bpatcher, swatch,
+                 textedit)
 
 
 class Device:
@@ -89,12 +90,18 @@ class Device:
 
     def add_scope(self, id: str, rect: list, **kwargs) -> str:
         self._inject_theme(kwargs, {
-            "bgcolor": "bg",
-            "activelinecolor": "accent",
+            "bgcolor": "scope_bgcolor",
+            "activelinecolor": "scope_color",
         })
         return self.add_box(scope(id, rect, **kwargs))
 
     def add_meter(self, id: str, rect: list, **kwargs) -> str:
+        self._inject_theme(kwargs, {
+            "coldcolor": "meter_cold",
+            "warmcolor": "meter_warm",
+            "hotcolor": "meter_hot",
+            "overloadcolor": "meter_over",
+        })
         return self.add_box(meter(id, rect, **kwargs))
 
     def add_menu(self, id: str, varname: str, rect: list, options: list, **kwargs) -> str:
@@ -144,6 +151,21 @@ class Device:
         return self.add_box(jsui(id, rect, js_filename=js_filename,
                                  numinlets=numinlets, numoutlets=numoutlets,
                                  **kwargs))
+
+    def add_adsrui(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(adsrui(id, rect, **kwargs))
+
+    def add_live_drop(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(live_drop(id, rect, **kwargs))
+
+    def add_bpatcher(self, id: str, rect: list, patcher_name: str, **kwargs) -> str:
+        return self.add_box(bpatcher(id, rect, patcher_name, **kwargs))
+
+    def add_swatch(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(swatch(id, rect, **kwargs))
+
+    def add_textedit(self, id: str, rect: list, **kwargs) -> str:
+        return self.add_box(textedit(id, rect, **kwargs))
 
     def add_newobj(self, id: str, text: str, *, numinlets: int, numoutlets: int,
                    **kwargs) -> str:

@@ -556,3 +556,126 @@ def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
     }
     box.update(kwargs)
     return {"box": box}
+
+
+def adsrui(id: str, rect: list, *, bgcolor: list = None,
+           bordercolor: list = None, focusbordercolor: list = None,
+           patching_rect: list = None, **kwargs) -> dict:
+    """Create a live.adsrui ADSR envelope editor.
+
+    Has 4 outlets for attack, decay, sustain, and release values.
+    Users drag handles to shape the envelope.
+    """
+    box = {
+        "id": id,
+        "maxclass": "live.adsrui",
+        "numinlets": 1,
+        "numoutlets": 4,
+        "outlettype": ["float", "float", "float", "float"],
+        "patching_rect": patching_rect or [700, 1600, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if bgcolor:
+        box["bgcolor"] = bgcolor
+    if bordercolor:
+        box["bordercolor"] = bordercolor
+    if focusbordercolor:
+        box["focusbordercolor"] = focusbordercolor
+    box.update(kwargs)
+    return {"box": box}
+
+
+def live_drop(id: str, rect: list, *, textcolor: list = None,
+              bgcolor: list = None, bordercolor: list = None,
+              patching_rect: list = None, **kwargs) -> dict:
+    """Create a live.drop drag-and-drop file target.
+
+    Users drop audio files onto it; outputs the file path.
+    """
+    box = {
+        "id": id,
+        "maxclass": "live.drop",
+        "numinlets": 1,
+        "numoutlets": 1,
+        "outlettype": [""],
+        "patching_rect": patching_rect or [700, 1700, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if textcolor:
+        box["textcolor"] = textcolor
+    if bgcolor:
+        box["bgcolor"] = bgcolor
+    if bordercolor:
+        box["bordercolor"] = bordercolor
+    box.update(kwargs)
+    return {"box": box}
+
+
+def bpatcher(id: str, rect: list, patcher_name: str, *, args: str = None,
+             embed: int = 1, patching_rect: list = None, **kwargs) -> dict:
+    """Create a bpatcher embeddable sub-patcher.
+
+    embed: 1 stores the sub-patch inside the device file.
+    """
+    box = {
+        "id": id,
+        "maxclass": "bpatcher",
+        "numinlets": 0,
+        "numoutlets": 0,
+        "name": patcher_name,
+        "embed": embed,
+        "patching_rect": patching_rect or [700, 1800, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if args is not None:
+        box["args"] = args
+    box.update(kwargs)
+    return {"box": box}
+
+
+def swatch(id: str, rect: list, *, patching_rect: list = None,
+           **kwargs) -> dict:
+    """Create a swatch color picker/display.
+
+    Shows a color swatch that can be clicked to open a color chooser.
+    """
+    box = {
+        "id": id,
+        "maxclass": "swatch",
+        "numinlets": 1,
+        "numoutlets": 4,
+        "outlettype": ["", "", "", ""],
+        "patching_rect": patching_rect or [700, 1900, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    box.update(kwargs)
+    return {"box": box}
+
+
+def textedit(id: str, rect: list, *, fontname: str = "Ableton Sans Medium",
+             fontsize: float = 10.0, textcolor: list = None,
+             bgcolor: list = None, patching_rect: list = None,
+             **kwargs) -> dict:
+    """Create a textedit editable text field for user text input."""
+    box = {
+        "id": id,
+        "maxclass": "textedit",
+        "numinlets": 1,
+        "numoutlets": 4,
+        "outlettype": ["", "", "", "int"],
+        "fontname": fontname,
+        "fontsize": fontsize,
+        "patching_rect": patching_rect or [700, 2000, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if textcolor:
+        box["textcolor"] = textcolor
+    if bgcolor:
+        box["bgcolor"] = bgcolor
+    box.update(kwargs)
+    return {"box": box}

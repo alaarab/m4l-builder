@@ -3,19 +3,14 @@
 import os
 from m4l_builder import AudioEffect, COOL, device_output_path
 
-# Device dimensions: ~250 wide, 140 tall
-W, H = 250, 140
-W, H = 350, 170
+# Device dimensions
+W, H = 350, 150
 device = AudioEffect("Stereo Utility", width=W, height=H, theme=COOL)
 
 # ── UI ──────────────────────────────────────────────────────────────────────
 
 # Background panel (dark)
-device.add_panel("bg", [0, 0, W, H], bgcolor=[0.12, 0.12, 0.14, 1.0])
-
-# Title
-device.add_comment("title", [8, 6, 60, 16], "UTIL",
-                    textcolor=[0.9, 0.85, 0.75, 1.0], fontsize=13.0)
+device.add_panel("bg", [0, 0, W, H], bgcolor=COOL.bg)
 
 # Hero display: Lissajous vectorscope (live.scope~ in XY mode)
 # L signal on X axis, R on Y — shows stereo field
@@ -30,17 +25,17 @@ device.add_comment("lbl_scope", [252, 116, 80, 10], "STEREO FIELD",
                     textcolor=[0.45, 0.45, 0.50, 1.0], fontsize=7.0,
                     justification=1)
 
-# Stereo output meters — updated colors per spec
+# Stereo output meters — COOL theme blue tones
 device.add_meter("meter_l", [220, 10, 6, 100],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+                 coldcolor=[0.20, 0.40, 0.65, 1.0],
+                 warmcolor=[0.35, 0.60, 0.90, 1.0],
+                 hotcolor=[0.75, 0.65, 0.25, 1.0],
+                 overloadcolor=[0.90, 0.20, 0.15, 1.0])
 device.add_meter("meter_r", [228, 10, 6, 100],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+                 coldcolor=[0.20, 0.40, 0.65, 1.0],
+                 warmcolor=[0.35, 0.60, 0.90, 1.0],
+                 hotcolor=[0.75, 0.65, 0.25, 1.0],
+                 overloadcolor=[0.90, 0.20, 0.15, 1.0])
 
 # Section labels above dial groups
 device.add_comment("lbl_level", [15, 12, 60, 12], "LEVEL",
@@ -50,9 +45,9 @@ device.add_comment("lbl_stereo", [80, 12, 125, 12], "STEREO",
 
 # Dials row: Gain | Pan | Width
 device.add_dial("dial_gain", "Gain", [15, 22, 60, 60],
-                min_val=0.0, max_val=200.0, initial=100.0, shortname="Gain",
-                unitstyle=5,
-                annotation_name="Output gain — 100% = unity, 200% = +6dB")
+                min_val=-70.0, max_val=6.0, initial=0.0, shortname="Gain",
+                unitstyle=4,
+                annotation_name="Output gain in dB — 0 dB = unity")
 device.add_dial("dial_pan", "Pan", [80, 22, 60, 60],
                 min_val=-100.0, max_val=100.0, initial=0.0, shortname="Pan",
                 unitstyle=5,
@@ -202,12 +197,12 @@ device.add_newobj("gain_l", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[30, 490, 40, 20])
 device.add_newobj("gain_r", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[240, 490, 40, 20])
-# Scale: Gain dial 0–200 → 0.0–2.0
-device.add_newobj("gain_scale", "scale 0. 200. 0. 2.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[140, 460, 110, 20])
+# dbtoa: Gain dial -70..6 dB → linear amplitude
+device.add_newobj("gain_dbtoa", "dbtoa", numinlets=1, numoutlets=1,
+                  outlettype=[""], patching_rect=[140, 460, 50, 20])
 
 # ── Parameter smoothing: output gain ─────────────────────────────────────
-# gain_scale -> gain_pk -> gain_ln -> gain_l/gain_r inlet 1
+# gain_dbtoa -> gain_pk -> gain_ln -> gain_l/gain_r inlet 1
 device.add_newobj("gain_pk", "pack f 20", numinlets=2, numoutlets=1,
                   outlettype=[""], patching_rect=[140, 490, 60, 20])
 device.add_newobj("gain_ln", "line~", numinlets=2, numoutlets=2,
@@ -285,9 +280,9 @@ device.add_line("pan_r_ln", 0, "pan_sig_r", 1)
 device.add_line("dec_add", 0, "pan_sig_l", 0)        # decoded L → *~ inlet 0
 device.add_line("dec_sub", 0, "pan_sig_r", 0)        # decoded R → *~ inlet 0
 
-# Gain smoothing: dial → scale → pack → line~ → gain_l/gain_r inlet 1
-device.add_line("dial_gain", 0, "gain_scale", 0)
-device.add_line("gain_scale", 0, "gain_pk", 0)
+# Gain smoothing: dial → dbtoa → pack → line~ → gain_l/gain_r inlet 1
+device.add_line("dial_gain", 0, "gain_dbtoa", 0)
+device.add_line("gain_dbtoa", 0, "gain_pk", 0)
 device.add_line("gain_pk", 0, "gain_ln", 0)
 device.add_line("gain_ln", 0, "gain_l", 1)           # smoothed signal → *~ inlet 1
 device.add_line("gain_ln", 0, "gain_r", 1)

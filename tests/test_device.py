@@ -8,6 +8,7 @@ import pytest
 
 from m4l_builder.device import Device, AudioEffect, Instrument, MidiEffect
 from m4l_builder.constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
+from m4l_builder.theme import MIDNIGHT, WARM
 
 
 def _parse_amxd_json(data: bytes) -> dict:
@@ -168,6 +169,43 @@ class TestDevice:
         d.add_scope("scope-1", [0, 0, 120, 60])
         assert len(d.boxes) == 1
         assert d.boxes[0]["box"]["maxclass"] == "live.scope~"
+
+    def test_add_meter_returns_id(self):
+        d = self._make()
+        returned_id = d.add_meter("meter-1", [0, 0, 20, 100])
+        assert returned_id == "meter-1"
+
+    def test_add_meter_appends_box(self):
+        d = self._make()
+        d.add_meter("meter-1", [0, 0, 20, 100])
+        assert len(d.boxes) == 1
+        assert d.boxes[0]["box"]["maxclass"] == "live.meter~"
+
+    def test_add_meter_with_theme_injects_colors(self):
+        d = Device("Test", 200, 100, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_meter("m1", [0, 0, 20, 100])
+        box = d.boxes[0]["box"]
+        assert box["coldcolor"] == MIDNIGHT.meter_cold
+        assert box["warmcolor"] == MIDNIGHT.meter_warm
+        assert box["hotcolor"] == MIDNIGHT.meter_hot
+        assert box["overloadcolor"] == MIDNIGHT.meter_over
+
+    def test_add_meter_without_theme_no_color_injection(self):
+        d = self._make()
+        d.add_meter("m1", [0, 0, 20, 100])
+        box = d.boxes[0]["box"]
+        assert "coldcolor" not in box
+        assert "warmcolor" not in box
+        assert "hotcolor" not in box
+        assert "overloadcolor" not in box
+
+    def test_add_meter_explicit_color_overrides_theme(self):
+        custom = [0.0, 1.0, 0.0, 1.0]
+        d = Device("Test", 200, 100, device_type="audio_effect", theme=WARM)
+        d.add_meter("m1", [0, 0, 20, 100], coldcolor=custom)
+        box = d.boxes[0]["box"]
+        assert box["coldcolor"] == custom
+        assert box["warmcolor"] == WARM.meter_warm
 
     def test_add_newobj_returns_id(self):
         d = self._make()

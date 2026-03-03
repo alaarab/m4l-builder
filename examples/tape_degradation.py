@@ -31,9 +31,9 @@ device.add_panel("bg", [0, 0, 330, 185])
 device.add_panel("section_bg", [4, 24, 322, 157],
                  bgcolor=WARM.section, rounded=4)
 
-device.add_comment("title", [8, 5, 60, 16], "TAPE",
-                   fontname="Ableton Sans Bold", fontsize=13.0,
-                   textcolor=[0.95, 0.88, 0.72, 1.0])
+device.add_comment("title", [8, 5, 60, 12], "TAPE",
+                   fontname="Ableton Sans Bold", fontsize=10.0,
+                   textcolor=WARM.text_dim)
 
 # Wow/Flutter LFO modulation scope
 device.add_scope("lfo_scope", [8, 26, 284, 40],
@@ -75,7 +75,7 @@ device.add_dial("mix_dial", "Mix", [245, DIAL_Y, DIAL_W, DIAL_H],
 
 # Output meters — L and R on right edge, vertical
 METER_COLORS = dict(
-    coldcolor=[0.3, 0.7, 0.35, 1.0],
+    coldcolor=WARM.accent,
     warmcolor=[0.9, 0.8, 0.2, 1.0],
     hotcolor=[0.9, 0.4, 0.1, 1.0],
     overloadcolor=[0.9, 0.15, 0.15, 1.0],
@@ -86,18 +86,17 @@ device.add_meter("meter_r", [312, 26, 14, 155], orientation=0, **METER_COLORS)
 # --- DSP objects ---
 
 # === Input drive ===
-device.add_newobj("drive_scale_l", "scale 0. 100. 1. 5.", numinlets=6, numoutlets=1,
+# One shared scale feeds both channels — 0-100% maps to 1x-3x into tanh~
+device.add_newobj("drive_scale", "scale 0. 100. 1. 3.", numinlets=6, numoutlets=1,
                   outlettype=[""], patching_rect=[20, 200, 120, 20])
-device.add_newobj("drive_scale_r", "scale 0. 100. 1. 5.", numinlets=6, numoutlets=1,
-                  outlettype=[""], patching_rect=[20, 225, 120, 20])
 
-# Smoothing for drive L (scale -> pack -> line~)
+# Smoothing for drive (scale -> pack -> line~ -> both channels)
 device.add_newobj("drive_l_pk", "pack f 20", numinlets=2, numoutlets=1,
                   outlettype=[""], patching_rect=[160, 200, 60, 20])
 device.add_newobj("drive_l_ln", "line~", numinlets=2, numoutlets=2,
                   outlettype=["signal", "bang"], patching_rect=[160, 230, 40, 20])
 
-# Smoothing for drive R (scale -> pack -> line~)
+# drive_r_pk/ln are aliases that reuse the same smoothed signal via fan from drive_l_ln
 device.add_newobj("drive_r_pk", "pack f 20", numinlets=2, numoutlets=1,
                   outlettype=[""], patching_rect=[230, 200, 60, 20])
 device.add_newobj("drive_r_ln", "line~", numinlets=2, numoutlets=2,
@@ -227,13 +226,12 @@ device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
 
 # --- Connections ---
 
-# Drive: dial -> scale -> pack -> line~ -> *~ inlet 1
-device.add_line("drive_dial", 0, "drive_scale_l", 0)
-device.add_line("drive_dial", 0, "drive_scale_r", 0)
-device.add_line("drive_scale_l", 0, "drive_l_pk", 0)
+# Drive: dial -> single scale -> fan to both L and R pack+line~ chains
+device.add_line("drive_dial", 0, "drive_scale", 0)
+device.add_line("drive_scale", 0, "drive_l_pk", 0)
 device.add_line("drive_l_pk", 0, "drive_l_ln", 0)
 device.add_line("drive_l_ln", 0, "gain_l", 1)   # smoothed drive -> gain_l
-device.add_line("drive_scale_r", 0, "drive_r_pk", 0)
+device.add_line("drive_scale", 0, "drive_r_pk", 0)
 device.add_line("drive_r_pk", 0, "drive_r_ln", 0)
 device.add_line("drive_r_ln", 0, "gain_r", 1)   # smoothed drive -> gain_r
 

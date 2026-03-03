@@ -22,6 +22,15 @@ from m4l_builder.dsp import (
     comb_resonator,
     feedback_delay,
     tremolo,
+    param_smooth,
+    bandpass_filter,
+    notch_filter,
+    highshelf_filter,
+    lowshelf_filter,
+    compressor,
+    limiter,
+    noise_source,
+    tempo_sync,
 )
 
 
@@ -812,12 +821,12 @@ class TestCrossover3Band:
 
 
 class TestEnvelopeFollower:
-    """Test envelope_follower() creates abs~ -> slide~ chain."""
+    """Test envelope_follower() creates abs~ -> slide~ chain with runtime samplerate~."""
 
-    def test_returns_2_boxes_1_line(self):
+    def test_returns_6_boxes_6_lines(self):
         boxes, lines = envelope_follower("env")
-        assert len(boxes) == 2
-        assert len(lines) == 1
+        assert len(boxes) == 6
+        assert len(lines) == 6
 
     def test_has_abs_object(self):
         boxes, _ = envelope_follower("env")
@@ -1016,10 +1025,10 @@ class TestLFO:
     def test_unknown_waveform_raises(self):
         import pytest
         with pytest.raises(ValueError, match="Unknown waveform"):
-            lfo("lfo", waveform="triangle")
+            lfo("lfo", waveform="noise")
 
     def test_no_sig_in_output(self):
-        for wf in ("sine", "saw", "square"):
+        for wf in ("sine", "saw", "square", "triangle"):
             boxes, _ = lfo("lfo", waveform=wf)
             for b in boxes:
                 assert "sig~" not in b["box"]["text"]
@@ -1273,3 +1282,556 @@ class TestTremolo:
         boxes, _ = tremolo("tr")
         for b in boxes:
             assert "dcblock~" not in b["box"]["text"]
+
+
+class TestParamSmooth:
+    """Test param_smooth() creates pack -> line~ smoother."""
+
+    def test_returns_2_boxes_1_line(self):
+        boxes, lines = param_smooth("sm")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_has_pack_with_default_ms(self):
+        boxes, _ = param_smooth("sm")
+        pack = _find_box(boxes, "sm_pack")
+        assert pack["text"] == "pack f 20"
+
+    def test_has_pack_with_custom_ms(self):
+        boxes, _ = param_smooth("sm", smooth_ms=50)
+        pack = _find_box(boxes, "sm_pack")
+        assert pack["text"] == "pack f 50"
+
+    def test_has_line_tilde(self):
+        boxes, _ = param_smooth("sm")
+        line = _find_box(boxes, "sm_line")
+        assert line["text"] == "line~"
+        assert line["outlettype"] == ["signal"]
+
+    def test_pack_feeds_line(self):
+        _, lines = param_smooth("sm")
+        assert any(
+            l["patchline"]["source"] == ["sm_pack", 0]
+            and l["patchline"]["destination"] == ["sm_line", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = param_smooth("ctrl")
+        ids = _box_ids(boxes)
+        assert "ctrl_pack" in ids
+        assert "ctrl_line" in ids
+
+
+class TestBandpassFilter:
+    """Test bandpass_filter() wires svf~ outlet 2 (BP)."""
+
+    def test_returns_4_boxes_2_lines(self):
+        boxes, lines = bandpass_filter("bp")
+        assert len(boxes) == 4
+        assert len(lines) == 2
+
+    def test_has_svf_objects(self):
+        boxes, _ = bandpass_filter("bp")
+        for obj_id in ("bp_l", "bp_r"):
+            box = _find_box(boxes, obj_id)
+            assert box["text"] == "svf~"
+            assert box["numinlets"] == 3
+            assert box["numoutlets"] == 4
+
+    def test_has_passthrough_objects(self):
+        boxes, _ = bandpass_filter("bp")
+        for obj_id in ("bp_out_l", "bp_out_r"):
+            box = _find_box(boxes, obj_id)
+            assert box["text"] == "*~ 1."
+
+    def test_wires_outlet_2_bp(self):
+        """svf~ outlet 2 is band-pass."""
+        _, lines = bandpass_filter("bp")
+        assert any(
+            l["patchline"]["source"] == ["bp_l", 2]
+            and l["patchline"]["destination"] == ["bp_out_l", 0]
+            for l in lines
+        )
+        assert any(
+            l["patchline"]["source"] == ["bp_r", 2]
+            and l["patchline"]["destination"] == ["bp_out_r", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = bandpass_filter("myfilter")
+        ids = _box_ids(boxes)
+        assert "myfilter_l" in ids
+        assert "myfilter_r" in ids
+
+
+class TestNotchFilter:
+    """Test notch_filter() wires svf~ outlet 3 (notch)."""
+
+    def test_returns_4_boxes_2_lines(self):
+        boxes, lines = notch_filter("nf")
+        assert len(boxes) == 4
+        assert len(lines) == 2
+
+    def test_has_svf_objects(self):
+        boxes, _ = notch_filter("nf")
+        for obj_id in ("nf_l", "nf_r"):
+            box = _find_box(boxes, obj_id)
+            assert box["text"] == "svf~"
+            assert box["numinlets"] == 3
+            assert box["numoutlets"] == 4
+
+    def test_has_passthrough_objects(self):
+        boxes, _ = notch_filter("nf")
+        for obj_id in ("nf_out_l", "nf_out_r"):
+            box = _find_box(boxes, obj_id)
+            assert box["text"] == "*~ 1."
+
+    def test_wires_outlet_3_notch(self):
+        """svf~ outlet 3 is notch."""
+        _, lines = notch_filter("nf")
+        assert any(
+            l["patchline"]["source"] == ["nf_l", 3]
+            and l["patchline"]["destination"] == ["nf_out_l", 0]
+            for l in lines
+        )
+        assert any(
+            l["patchline"]["source"] == ["nf_r", 3]
+            and l["patchline"]["destination"] == ["nf_out_r", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = notch_filter("notch")
+        ids = _box_ids(boxes)
+        assert "notch_l" in ids
+        assert "notch_r" in ids
+
+
+class TestHighshelfFilter:
+    """Test highshelf_filter() creates biquad~ shelf filter."""
+
+    def test_returns_2_boxes_0_lines(self):
+        boxes, lines = highshelf_filter("hs")
+        assert len(boxes) == 2
+        assert len(lines) == 0
+
+    def test_uses_biquad(self):
+        boxes, _ = highshelf_filter("hs")
+        for b in boxes:
+            assert b["box"]["text"].startswith("biquad~")
+
+    def test_6_inlets_1_outlet(self):
+        boxes, _ = highshelf_filter("hs")
+        for b in boxes:
+            assert b["box"]["numinlets"] == 6
+            assert b["box"]["numoutlets"] == 1
+            assert b["box"]["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = highshelf_filter("shelf")
+        ids = _box_ids(boxes)
+        assert "shelf_l" in ids
+        assert "shelf_r" in ids
+
+    def test_custom_freq_changes_coefficients(self):
+        boxes1, _ = highshelf_filter("hs", freq=1000.)
+        boxes2, _ = highshelf_filter("hs", freq=5000.)
+        assert boxes1[0]["box"]["text"] != boxes2[0]["box"]["text"]
+
+    def test_custom_gain_changes_coefficients(self):
+        boxes1, _ = highshelf_filter("hs", gain_db=0.)
+        boxes2, _ = highshelf_filter("hs", gain_db=6.)
+        assert boxes1[0]["box"]["text"] != boxes2[0]["box"]["text"]
+
+
+class TestLowshelfFilter:
+    """Test lowshelf_filter() creates biquad~ shelf filter."""
+
+    def test_returns_2_boxes_0_lines(self):
+        boxes, lines = lowshelf_filter("ls")
+        assert len(boxes) == 2
+        assert len(lines) == 0
+
+    def test_uses_biquad(self):
+        boxes, _ = lowshelf_filter("ls")
+        for b in boxes:
+            assert b["box"]["text"].startswith("biquad~")
+
+    def test_6_inlets_1_outlet(self):
+        boxes, _ = lowshelf_filter("ls")
+        for b in boxes:
+            assert b["box"]["numinlets"] == 6
+            assert b["box"]["numoutlets"] == 1
+            assert b["box"]["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = lowshelf_filter("shelf")
+        ids = _box_ids(boxes)
+        assert "shelf_l" in ids
+        assert "shelf_r" in ids
+
+    def test_custom_freq_changes_coefficients(self):
+        boxes1, _ = lowshelf_filter("ls", freq=200.)
+        boxes2, _ = lowshelf_filter("ls", freq=800.)
+        assert boxes1[0]["box"]["text"] != boxes2[0]["box"]["text"]
+
+    def test_no_dcblock_in_output(self):
+        boxes, _ = lowshelf_filter("ls")
+        for b in boxes:
+            assert "dcblock~" not in b["box"]["text"]
+
+
+class TestTriangleLFO:
+    """Test lfo() with waveform='triangle'."""
+
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = lfo("lfo", waveform="triangle")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_uses_tri_tilde(self):
+        boxes, _ = lfo("lfo", waveform="triangle")
+        osc = _find_box(boxes, "lfo_osc")
+        assert osc["text"] == "tri~"
+        assert osc["numinlets"] == 2
+        assert osc["numoutlets"] == 1
+
+    def test_scale_and_offset_for_unipolar(self):
+        boxes, _ = lfo("lfo", waveform="triangle")
+        scale = _find_box(boxes, "lfo_scale")
+        offset = _find_box(boxes, "lfo_offset")
+        assert scale["text"] == "*~ 0.5"
+        assert offset["text"] == "+~ 0.5"
+
+    def test_has_depth_stage(self):
+        boxes, _ = lfo("lfo", waveform="triangle")
+        depth = _find_box(boxes, "lfo_depth")
+        assert depth["text"] == "*~ 1."
+
+    def test_wiring_osc_to_scale_to_offset_to_depth(self):
+        _, lines = lfo("lfo", waveform="triangle")
+        assert any(
+            l["patchline"]["source"] == ["lfo_osc", 0]
+            and l["patchline"]["destination"] == ["lfo_scale", 0]
+            for l in lines
+        )
+        assert any(
+            l["patchline"]["source"] == ["lfo_scale", 0]
+            and l["patchline"]["destination"] == ["lfo_offset", 0]
+            for l in lines
+        )
+        assert any(
+            l["patchline"]["source"] == ["lfo_offset", 0]
+            and l["patchline"]["destination"] == ["lfo_depth", 0]
+            for l in lines
+        )
+
+    def test_same_box_count_as_sine(self):
+        sine_boxes, _ = lfo("lfo", waveform="sine")
+        tri_boxes, _ = lfo("lfo", waveform="triangle")
+        assert len(sine_boxes) == len(tri_boxes)
+
+    def test_no_sig_in_output(self):
+        boxes, _ = lfo("lfo", waveform="triangle")
+        for b in boxes:
+            assert "sig~" not in b["box"]["text"]
+
+
+class TestCompressor:
+    """Test compressor() creates a log-domain stereo compressor."""
+
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = compressor("comp")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_stereo_abs_objects(self):
+        boxes, _ = compressor("comp")
+        for ch in ("l", "r"):
+            box = _find_box(boxes, f"comp_abs_{ch}")
+            assert box["text"] == "abs~"
+
+    def test_stereo_slide_objects(self):
+        boxes, _ = compressor("comp")
+        for ch in ("l", "r"):
+            box = _find_box(boxes, f"comp_atk_{ch}")
+            assert box["text"].startswith("slide~")
+
+    def test_has_ampdb_objects(self):
+        boxes, _ = compressor("comp")
+        for ch in ("l", "r"):
+            box = _find_box(boxes, f"comp_adb_{ch}")
+            assert box["text"] == "ampdb~"
+
+    def test_has_dbtoa_objects(self):
+        boxes, _ = compressor("comp")
+        for ch in ("l", "r"):
+            box = _find_box(boxes, f"comp_lin_{ch}")
+            assert box["text"] == "dbtoa~"
+
+    def test_has_output_multipliers(self):
+        boxes, _ = compressor("comp")
+        for ch in ("l", "r"):
+            box = _find_box(boxes, f"comp_out_{ch}")
+            assert box["text"] == "*~"
+
+    def test_ids_use_prefix(self):
+        boxes, _ = compressor("mycomp")
+        ids = _box_ids(boxes)
+        assert "mycomp_abs_l" in ids
+        assert "mycomp_abs_r" in ids
+        assert "mycomp_out_l" in ids
+        assert "mycomp_out_r" in ids
+
+    def test_abs_feeds_slide(self):
+        _, lines = compressor("comp")
+        for ch in ("l", "r"):
+            assert any(
+                l["patchline"]["source"] == [f"comp_abs_{ch}", 0]
+                and l["patchline"]["destination"] == [f"comp_atk_{ch}", 0]
+                for l in lines
+            )
+
+    def test_dbtoa_feeds_output(self):
+        _, lines = compressor("comp")
+        for ch in ("l", "r"):
+            assert any(
+                l["patchline"]["source"] == [f"comp_lin_{ch}", 0]
+                and l["patchline"]["destination"] == [f"comp_out_{ch}", 1]
+                for l in lines
+            )
+
+    def test_no_sig_in_output(self):
+        boxes, _ = compressor("comp")
+        for b in boxes:
+            assert "sig~" not in b["box"]["text"]
+
+
+class TestLimiter:
+    """Test limiter() creates a stereo brickwall limiter."""
+
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = limiter("lim")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_stereo_structure(self):
+        boxes, _ = limiter("lim")
+        for ch in ("l", "r"):
+            _find_box(boxes, f"lim_abs_{ch}")
+            _find_box(boxes, f"lim_peak_{ch}")
+            _find_box(boxes, f"lim_out_{ch}")
+
+    def test_instant_attack_in_slide(self):
+        """Brickwall limiter uses slide~ 1 for instant attack."""
+        boxes, _ = limiter("lim")
+        for ch in ("l", "r"):
+            peak = _find_box(boxes, f"lim_peak_{ch}")
+            assert peak["text"].startswith("slide~ 1 ")
+
+    def test_has_gain_clip(self):
+        """Gain must be clipped to max 1.0 — no expansion."""
+        boxes, _ = limiter("lim")
+        for ch in ("l", "r"):
+            gclip = _find_box(boxes, f"lim_gclip_{ch}")
+            assert "clip~" in gclip["text"]
+            assert "1." in gclip["text"]
+
+    def test_output_is_multiply(self):
+        boxes, _ = limiter("lim")
+        for ch in ("l", "r"):
+            out = _find_box(boxes, f"lim_out_{ch}")
+            assert out["text"] == "*~"
+
+    def test_ids_use_prefix(self):
+        boxes, _ = limiter("brick")
+        ids = _box_ids(boxes)
+        assert "brick_abs_l" in ids
+        assert "brick_abs_r" in ids
+
+    def test_no_sig_in_output(self):
+        boxes, _ = limiter("lim")
+        for b in boxes:
+            assert "sig~" not in b["box"]["text"]
+
+
+class TestNoiseSource:
+    """Test noise_source() creates noise generators."""
+
+    def test_white_noise_returns_1_box_0_lines(self):
+        boxes, lines = noise_source("ns", color="white")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_white_noise_object(self):
+        boxes, _ = noise_source("ns", color="white")
+        noise = _find_box(boxes, "ns_noise")
+        assert noise["text"] == "noise~"
+        assert noise["numoutlets"] == 1
+        assert noise["outlettype"] == ["signal"]
+
+    def test_pink_noise_returns_2_boxes_1_line(self):
+        boxes, lines = noise_source("ns", color="pink")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_pink_noise_has_noise_and_filter(self):
+        boxes, _ = noise_source("ns", color="pink")
+        noise = _find_box(boxes, "ns_noise")
+        lp = _find_box(boxes, "ns_lp")
+        assert noise["text"] == "noise~"
+        assert lp["text"].startswith("onepole~")
+
+    def test_pink_noise_wiring(self):
+        _, lines = noise_source("ns", color="pink")
+        assert any(
+            l["patchline"]["source"] == ["ns_noise", 0]
+            and l["patchline"]["destination"] == ["ns_lp", 0]
+            for l in lines
+        )
+
+    def test_default_is_white(self):
+        boxes, lines = noise_source("ns")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_unknown_color_raises(self):
+        with pytest.raises(ValueError, match="Unknown noise color"):
+            noise_source("ns", color="brown")
+
+    def test_ids_use_prefix(self):
+        boxes, _ = noise_source("gen", color="white")
+        ids = _box_ids(boxes)
+        assert "gen_noise" in ids
+
+
+class TestTempoSync:
+    """Test tempo_sync() reads Live transport and computes time values."""
+
+    def test_returns_4_boxes_3_lines(self):
+        boxes, lines = tempo_sync("ts")
+        assert len(boxes) == 4
+        assert len(lines) == 3
+
+    def test_has_transport_object(self):
+        boxes, _ = tempo_sync("ts")
+        transport = _find_box(boxes, "ts_transport")
+        assert transport["text"] == "transport"
+
+    def test_has_bpm_float(self):
+        boxes, _ = tempo_sync("ts")
+        bpm = _find_box(boxes, "ts_bpm")
+        assert bpm["text"] == "f"
+
+    def test_has_delay_expr(self):
+        boxes, _ = tempo_sync("ts")
+        delay = _find_box(boxes, "ts_delay")
+        assert "expr" in delay["text"]
+        assert "60000" in delay["text"]
+
+    def test_has_rate_expr(self):
+        boxes, _ = tempo_sync("ts")
+        rate = _find_box(boxes, "ts_rate")
+        assert "expr" in rate["text"]
+        assert "60" in rate["text"]
+
+    def test_division_in_expr(self):
+        boxes, _ = tempo_sync("ts", division=0.5)
+        delay = _find_box(boxes, "ts_delay")
+        rate = _find_box(boxes, "ts_rate")
+        assert "0.5" in delay["text"]
+        assert "0.5" in rate["text"]
+
+    def test_transport_feeds_bpm(self):
+        _, lines = tempo_sync("ts")
+        assert any(
+            l["patchline"]["source"] == ["ts_transport", 0]
+            and l["patchline"]["destination"] == ["ts_bpm", 0]
+            for l in lines
+        )
+
+    def test_bpm_feeds_delay_and_rate(self):
+        _, lines = tempo_sync("ts")
+        assert any(
+            l["patchline"]["source"] == ["ts_bpm", 0]
+            and l["patchline"]["destination"] == ["ts_delay", 0]
+            for l in lines
+        )
+        assert any(
+            l["patchline"]["source"] == ["ts_bpm", 0]
+            and l["patchline"]["destination"] == ["ts_rate", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = tempo_sync("beat")
+        ids = _box_ids(boxes)
+        assert "beat_transport" in ids
+        assert "beat_bpm" in ids
+        assert "beat_delay" in ids
+        assert "beat_rate" in ids
+
+
+class TestEnvelopeFollowerSampleratefix:
+    """Test that envelope_follower uses samplerate~ instead of hardcoded 44100."""
+
+    def test_has_samplerate_object(self):
+        boxes, _ = envelope_follower("env")
+        sr = _find_box(boxes, "env_sr")
+        assert sr["text"] == "samplerate~"
+
+    def test_has_snapshot_object(self):
+        boxes, _ = envelope_follower("env")
+        snap = _find_box(boxes, "env_sr_snap")
+        assert snap["text"] == "snapshot~"
+
+    def test_has_attack_expr(self):
+        boxes, _ = envelope_follower("env")
+        atk = _find_box(boxes, "env_atk_expr")
+        assert "expr" in atk["text"]
+        assert "$f1" in atk["text"]
+        assert "$f2" in atk["text"]
+
+    def test_has_release_expr(self):
+        boxes, _ = envelope_follower("env")
+        rel = _find_box(boxes, "env_rel_expr")
+        assert "expr" in rel["text"]
+
+    def test_samplerate_feeds_snapshot(self):
+        _, lines = envelope_follower("env")
+        assert any(
+            l["patchline"]["source"] == ["env_sr", 0]
+            and l["patchline"]["destination"] == ["env_sr_snap", 0]
+            for l in lines
+        )
+
+    def test_snapshot_feeds_both_exprs(self):
+        _, lines = envelope_follower("env")
+        assert any(
+            l["patchline"]["source"] == ["env_sr_snap", 0]
+            and l["patchline"]["destination"] == ["env_atk_expr", 1]
+            for l in lines
+        )
+        assert any(
+            l["patchline"]["source"] == ["env_sr_snap", 0]
+            and l["patchline"]["destination"] == ["env_rel_expr", 1]
+            for l in lines
+        )
+
+    def test_expr_feeds_slide_attack_inlet(self):
+        _, lines = envelope_follower("env")
+        assert any(
+            l["patchline"]["source"] == ["env_atk_expr", 0]
+            and l["patchline"]["destination"] == ["env_slide", 1]
+            for l in lines
+        )
+
+    def test_expr_feeds_slide_release_inlet(self):
+        _, lines = envelope_follower("env")
+        assert any(
+            l["patchline"]["source"] == ["env_rel_expr", 0]
+            and l["patchline"]["destination"] == ["env_slide", 2]
+            for l in lines
+        )

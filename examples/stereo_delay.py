@@ -35,9 +35,8 @@ device = AudioEffect("Stereo Delay", width=WIDTH, height=HEIGHT, theme=MIDNIGHT)
 # --- UI ---
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], bgcolor=[0.12, 0.12, 0.14, 1.0])
 
-# Title
-device.add_comment("title", [8, 6, 60, 16], "DELAY",
-                   textcolor=[0.95, 0.92, 0.85, 1.0], fontsize=13.0)
+device.add_comment("title", [8, 6, 60, 12], "DELAY",
+                   textcolor=MIDNIGHT.text_dim, fontsize=10.0)
 
 # Mode tab: Stereo / PingPong / Mono (3 options)
 device.add_tab("mode_tab", "Mode", [8, 26, 200, 20],
@@ -50,6 +49,11 @@ device.add_tab("mode_tab", "Mode", [8, 26, 200, 20],
 # Section labels
 device.add_comment("lbl_time", [8, 38, 80, 12], "TIME",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+# Channel indicators under the time dials
+device.add_comment("lbl_l_ch", [8, 122, 45, 10], "L",
+                   fontsize=8.0, textcolor=MIDNIGHT.text_dim, justification=1)
+device.add_comment("lbl_r_ch", [58, 122, 45, 10], "R",
+                   fontsize=8.0, textcolor=MIDNIGHT.text_dim, justification=1)
 device.add_comment("lbl_char", [108, 38, 100, 12], "CHARACTER",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
 device.add_comment("lbl_mix", [263, 38, 40, 12], "MIX",
@@ -86,20 +90,20 @@ device.add_dial("mix_dial", "Mix", [263, 48, 45, 75],
                 unitstyle=5,
                 annotation_name="Dry/wet balance — 0% is fully dry, 100% fully wet")
 
-# --- UI: Tempo sync menu ---
-device.add_comment("lbl_sync", [215, 26, 40, 12], "SYNC",
+# --- UI: Tempo sync menu (placed right of mode tab, no overlap) ---
+device.add_comment("lbl_sync", [213, 26, 30, 12], "SYNC",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
-device.add_menu("sync_menu", "Sync", [248, 24, 60, 20],
+device.add_menu("sync_menu", "Sync", [213, 38, 60, 16],
                 options=["Free", "1/1", "1/2", "1/4", "1/8", "1/16"])
 
 # --- UI: Output meters ---
 device.add_meter("meter_l", [WIDTH - 30, 8, 10, HEIGHT - 20],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 device.add_meter("meter_r", [WIDTH - 16, 8, 10, HEIGHT - 20],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])

@@ -10,29 +10,25 @@ from m4l_builder import AudioEffect, WARM, device_output_path
 device = AudioEffect("Simple Gain", width=150, height=110, theme=WARM)
 
 # Background
-device.add_panel("bg", [0, 0, 150, 110])
-
-# Title
-device.add_comment("title", [6, 5, 50, 14], "GAIN",
-                    fontname="Ableton Sans Bold", fontsize=12.0)
+device.add_panel("bg", [0, 0, 150, 110], bgcolor=WARM.bg)
 
 # Gain dial in dB: -70 to +6, default 0 dB (unity)
-device.add_dial("gain", "Gain", [10, 22, 50, 75],
+device.add_dial("gain", "Gain", [10, 6, 50, 90],
                 min_val=-70.0, max_val=6.0, initial=0.0,
                 unitstyle=4, appearance=0,
                 annotation_name="Output Gain")
 
-# Stereo output meters
-device.add_meter("meter_l", [110, 8, 10, 90],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
-device.add_meter("meter_r", [124, 8, 10, 90],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+# Stereo output meters — warm orange tones matching WARM theme accent
+device.add_meter("meter_l", [80, 8, 10, 90],
+                 coldcolor=[0.55, 0.40, 0.20, 1.0],
+                 warmcolor=[0.85, 0.55, 0.25, 1.0],
+                 hotcolor=[0.90, 0.35, 0.10, 1.0],
+                 overloadcolor=[0.90, 0.15, 0.15, 1.0])
+device.add_meter("meter_r", [94, 8, 10, 90],
+                 coldcolor=[0.55, 0.40, 0.20, 1.0],
+                 warmcolor=[0.85, 0.55, 0.25, 1.0],
+                 hotcolor=[0.90, 0.35, 0.10, 1.0],
+                 overloadcolor=[0.90, 0.15, 0.15, 1.0])
 
 # DSP: plugin~ -> *~ gain -> plugout~
 gain_l = device.add_newobj("gain_l", "*~ 1.", numinlets=2, numoutlets=1,

@@ -37,83 +37,95 @@ Parameter smoothing:
 import os
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
-# --- Device setup --- widened 30px for L/R output meters
 device = AudioEffect("Comb Resonator", width=330, height=195, theme=MIDNIGHT)
 
 # --- UI ---
 device.add_panel("bg", [0, 0, 330, 195], bgcolor=[0.10, 0.10, 0.12, 1.0])
 
-# Title
-device.add_comment("title", [8, 5, 100, 16], "RESONATOR",
-                   textcolor=[0.95, 0.88, 0.70, 1.0], fontsize=13.0)
-
 # Resonance output scope — shows the resonating waveform
-device.add_scope("res_scope", [8, 24, 284, 42],
+device.add_scope("res_scope", [8, 8, 314, 42],
                  bgcolor=[0.06, 0.06, 0.08, 1.0],
-                 activelinecolor=[0.55, 0.35, 0.75, 1.0],
+                 activelinecolor=[0.45, 0.75, 0.65, 1.0],
                  gridcolor=[0.15, 0.15, 0.17, 0.4],
                  range_vals=[-1.0, 1.0],
                  calccount=64, smooth=2, line_width=1.5)
 
 # Chord tab: UNI / OCT / 5TH / MAJ / MIN
-device.add_tab("chord_tab", "Chord", [8, 70, 284, 20],
+device.add_tab("chord_tab", "Chord", [8, 54, 314, 20],
                options=["UNI", "OCT", "5TH", "MAJ", "MIN"],
                bgcolor=[0.18, 0.18, 0.20, 1.0],
-               bgoncolor=[0.45, 0.30, 0.65, 1.0],
+               bgoncolor=[0.45, 0.75, 0.65, 1.0],
                textcolor=[0.75, 0.75, 0.75, 1.0],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
 # Section labels
-device.add_comment("lbl_tuning", [8, 90, 100, 12], "TUNING",
+device.add_comment("lbl_tuning", [8, 77, 60, 12], "TUNING",
                    textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
-device.add_comment("lbl_color", [112, 90, 100, 12], "COLOR",
+device.add_comment("lbl_color", [112, 77, 60, 12], "COLOR",
                    textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
-device.add_comment("lbl_output", [240, 90, 48, 12], "OUTPUT",
+device.add_comment("lbl_output", [240, 77, 48, 12], "OUTPUT",
                    textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
 
 # Dials row: Root / Resonance / Damping / HP Freq / Mix
-device.add_dial("root_dial", "Root", [8, 100, 48, 82],
+device.add_dial("root_dial", "Root", [8, 87, 48, 82],
                 min_val=24.0, max_val=96.0, initial=60.0,
                 unitstyle=8,
                 annotation_name="Root Note")  # MIDI note
 
-device.add_dial("res_dial", "Resonance", [60, 100, 48, 82],
+device.add_dial("res_dial", "Resonance", [60, 87, 48, 82],
                 min_val=0.0, max_val=99.0, initial=60.0,
                 unitstyle=5,
                 annotation_name="Comb Resonance")  # PERCENT
 
-device.add_dial("damp_dial", "Damping", [112, 100, 48, 82],
+device.add_dial("damp_dial", "Damping", [112, 87, 48, 82],
                 min_val=500.0, max_val=20000.0, initial=8000.0,
                 unitstyle=3,
                 annotation_name="Damping Frequency")  # HZ
 
-device.add_dial("hp_dial", "HP Freq", [164, 100, 48, 82],
+device.add_dial("hp_dial", "HP Freq", [164, 87, 48, 82],
                 min_val=20.0, max_val=500.0, initial=80.0,
                 unitstyle=3,
                 annotation_name="Input Highpass")  # HZ
 
-device.add_dial("mix_dial", "Mix", [240, 100, 48, 82],
+device.add_dial("mix_dial", "Mix", [240, 87, 48, 82],
                 min_val=0.0, max_val=100.0, initial=30.0,
                 unitstyle=5,
                 annotation_name="Dry/Wet Mix")  # PERCENT
 
-# --- Output L/R meters (right edge) ---
-device.add_comment("lbl_meters", [301, 90, 24, 12], "OUT",
+# Voice note displays — show the 4 active MIDI notes below the root dial
+device.add_comment("lbl_voices", [8, 170, 180, 10], "VOICES",
+                   textcolor=[0.45, 0.75, 0.65, 0.5], fontsize=8.0)
+
+device.add_number_box("note_v0", "V1 Note", [8, 180, 28, 12],
+                      min_val=0.0, max_val=127.0, initial=60.0,
+                      unitstyle=8, patching_rect=[1300, 0, 28, 12])
+device.add_number_box("note_v1", "V2 Note", [40, 180, 28, 12],
+                      min_val=0.0, max_val=127.0, initial=60.0,
+                      unitstyle=8, patching_rect=[1330, 0, 28, 12])
+device.add_number_box("note_v2", "V3 Note", [72, 180, 28, 12],
+                      min_val=0.0, max_val=127.0, initial=60.0,
+                      unitstyle=8, patching_rect=[1360, 0, 28, 12])
+device.add_number_box("note_v3", "V4 Note", [104, 180, 28, 12],
+                      min_val=0.0, max_val=127.0, initial=60.0,
+                      unitstyle=8, patching_rect=[1390, 0, 28, 12])
+
+# --- Output L/R meters (right edge) using theme colors ---
+device.add_comment("lbl_meters", [301, 77, 24, 12], "OUT",
                    textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
-device.add_comment("lbl_meter_l", [301, 178, 12, 12], "L",
+device.add_comment("lbl_meter_l", [301, 165, 12, 12], "L",
                    textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
-device.add_meter("meter_out_l", [301, 100, 12, 76],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
-device.add_comment("lbl_meter_r", [315, 178, 12, 12], "R",
+device.add_meter("meter_out_l", [301, 87, 12, 76],
+                 coldcolor=[0.45, 0.75, 0.65, 1.0],
+                 warmcolor=[0.85, 0.75, 0.25, 1.0],
+                 hotcolor=[0.85, 0.45, 0.15, 1.0],
+                 overloadcolor=[0.85, 0.20, 0.20, 1.0])
+device.add_comment("lbl_meter_r", [315, 165, 12, 12], "R",
                    textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
-device.add_meter("meter_out_r", [315, 100, 12, 76],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+device.add_meter("meter_out_r", [315, 87, 12, 76],
+                 coldcolor=[0.45, 0.75, 0.65, 1.0],
+                 warmcolor=[0.85, 0.75, 0.25, 1.0],
+                 hotcolor=[0.85, 0.45, 0.15, 1.0],
+                 overloadcolor=[0.85, 0.20, 0.20, 1.0])
 
 # ============================================================
 # DSP OBJECTS
@@ -196,24 +208,6 @@ device.add_newobj("v3_maj", "i 12", numinlets=1, numoutlets=1,
 device.add_newobj("v3_min", "i 12", numinlets=1, numoutlets=1,
                   outlettype=[""], patching_rect=[360, 390, 30, 20])
 
-# Chord selectors for voice 1, 2, 3 — select 1 of 5 int values
-# Route message selectors: route 0 1 2 3 4 for chord mode, pick offset int
-# Use "sel" (message selector) instead of selector~: route object
-# Actually use: route 0 1 2 3 4 -> each outlet goes to one voice's offset int holder
-# Then the selected offset + root -> note -> freq
-
-# Better approach: use "selector" (non-signal) for int routing via "route"
-# chord_tab -> route 0 1 2 3 4 -> each output triggers the correct i-object for each voice
-# But route only works on symbols. Use "sel" for int matching.
-
-# Simpler: use "expr" to compute offsets based on chord mode via "table" or arithmetic.
-# Simplest: just use a "prepend" + "zl.reg" or "coll" -- but these require more complexity.
-#
-# Cleanest approach in Max: use separate trigger paths with "sel" matching chord mode,
-# each chord mode bang triggers the voice offset integers being set.
-# chord_tab -> sel 0 1 2 3 4, each outlet triggers a specific t for voice offsets
-# voice offset -> + root -> mtof -> expr -> comb~ delay
-
 # chord_tab -> sel 0 1 2 3 4 (5 outlets, one per chord mode)
 device.add_newobj("chord_sel", "sel 0 1 2 3 4", numinlets=1, numoutlets=5,
                   outlettype=["", "", "", "", ""],
@@ -273,22 +267,22 @@ device.add_newobj("mtof3", "mtof", numinlets=1, numoutlets=1,
 device.add_newobj("f2ms0", "expr 1000. / $f1", numinlets=1, numoutlets=1,
                   outlettype=[""], patching_rect=[210, 530, 90, 20])
 device.add_newobj("f2ms1", "expr 1000. / $f1", numinlets=1, numoutlets=1,
-                  outlettype=[""], patching_rect=[250, 530, 90, 20])
+                  outlettype=[""], patching_rect=[310, 530, 90, 20])
 device.add_newobj("f2ms2", "expr 1000. / $f1", numinlets=1, numoutlets=1,
-                  outlettype=[""], patching_rect=[290, 530, 90, 20])
+                  outlettype=[""], patching_rect=[410, 530, 90, 20])
 device.add_newobj("f2ms3", "expr 1000. / $f1", numinlets=1, numoutlets=1,
-                  outlettype=[""], patching_rect=[330, 530, 90, 20])
+                  outlettype=[""], patching_rect=[510, 530, 90, 20])
 
 # fan delay_ms to L and R comb pairs
 # t f f: outlet 0 -> L comb delay, outlet 1 -> R comb delay
 device.add_newobj("dm0_fan", "t f f", numinlets=1, numoutlets=2,
                   outlettype=["", ""], patching_rect=[210, 560, 40, 20])
 device.add_newobj("dm1_fan", "t f f", numinlets=1, numoutlets=2,
-                  outlettype=["", ""], patching_rect=[250, 560, 40, 20])
+                  outlettype=["", ""], patching_rect=[310, 560, 40, 20])
 device.add_newobj("dm2_fan", "t f f", numinlets=1, numoutlets=2,
-                  outlettype=["", ""], patching_rect=[290, 560, 40, 20])
+                  outlettype=["", ""], patching_rect=[410, 560, 40, 20])
 device.add_newobj("dm3_fan", "t f f", numinlets=1, numoutlets=2,
-                  outlettype=["", ""], patching_rect=[330, 560, 40, 20])
+                  outlettype=["", ""], patching_rect=[510, 560, 40, 20])
 
 # --- Feedback (resonance) ---
 # res_dial 0-99 -> clip 0. 99. -> scale 0. 99. 0. 0.99 -> fb_trig -> all 8 comb~ fb inlets
@@ -335,17 +329,17 @@ device.add_newobj("sum_l0123", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[170, 740, 30, 20])
 
 device.add_newobj("sum_r01", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[110, 700, 30, 20])
+                  outlettype=["signal"], patching_rect=[320, 700, 30, 20])
 device.add_newobj("sum_r012", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[140, 720, 30, 20])
+                  outlettype=["signal"], patching_rect=[350, 720, 30, 20])
 device.add_newobj("sum_r0123", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[170, 740, 30, 20])
+                  outlettype=["signal"], patching_rect=[380, 740, 30, 20])
 
 # Damping: onepole~ per channel after summing
 device.add_newobj("damp_l", "onepole~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[170, 780, 50, 20])
 device.add_newobj("damp_r", "onepole~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 780, 50, 20])
+                  outlettype=["signal"], patching_rect=[380, 780, 50, 20])
 
 # Smoothing for damping cutoff: damp_dial -> pack -> line~ -> onepole~ (L and R)
 device.add_newobj("damp_pk", "pack f 20", numinlets=2, numoutlets=1,
@@ -367,16 +361,16 @@ device.add_newobj("mix_inv", "!-~ 1.", numinlets=2, numoutlets=1,
 device.add_newobj("wet_l", "*~ 0.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[170, 820, 30, 20])
 device.add_newobj("wet_r", "*~ 0.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[240, 820, 30, 20])
+                  outlettype=["signal"], patching_rect=[380, 820, 30, 20])
 device.add_newobj("dry_l", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[320, 820, 30, 20])
 device.add_newobj("dry_r", "*~ 1.", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[360, 820, 30, 20])
+                  outlettype=["signal"], patching_rect=[440, 820, 30, 20])
 
 device.add_newobj("out_l", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[240, 860, 30, 20])
 device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
-                  outlettype=["signal"], patching_rect=[280, 860, 30, 20])
+                  outlettype=["signal"], patching_rect=[420, 860, 30, 20])
 
 # ============================================================
 # CONNECTIONS
@@ -412,13 +406,10 @@ device.add_line("root_trig", 1, "v1_add", 0)
 device.add_line("root_trig", 2, "v2_add", 0)
 # outlet 3 -> v3_add left (hot)
 device.add_line("root_trig", 3, "v3_add", 0)
-# outlets 4-8 spare (needed to trigger recalculation when root changes)
-# Actually we only need 4 outlets (one per voice), 5 total with the trig
-# But we declared 9 -- use 4 (0-3 for voices 0,1,2,3) and also
-# outlets 4,5,6 to re-bang v1/v2/v3 offset objects when root changes
-device.add_line("root_trig", 4, "v1_off", 0)   # re-bang v1 offset to refresh
-device.add_line("root_trig", 5, "v2_off", 0)   # re-bang v2 offset to refresh
-device.add_line("root_trig", 6, "v3_off", 0)   # re-bang v3 offset to refresh
+# outlets 4-6 re-bang the offset registers when root changes
+device.add_line("root_trig", 4, "v1_off", 0)
+device.add_line("root_trig", 5, "v2_off", 0)
+device.add_line("root_trig", 6, "v3_off", 0)
 
 # voice add result -> mtof
 device.add_line("v1_add", 0, "mtof1", 0)
@@ -429,6 +420,12 @@ device.add_line("v3_add", 0, "mtof3", 0)
 device.add_line("v1_off", 0, "v1_add", 1)
 device.add_line("v2_off", 0, "v2_add", 1)
 device.add_line("v3_off", 0, "v3_add", 1)
+
+# Feed voice MIDI note values to the display number boxes
+device.add_line("root_trig", 7, "note_v0", 0)
+device.add_line("v1_add", 0, "note_v1", 0)
+device.add_line("v2_add", 0, "note_v2", 0)
+device.add_line("v3_add", 0, "note_v3", 0)
 
 # --- Chord tab -> offset routing ---
 device.add_line("chord_tab", 0, "chord_sel", 0)

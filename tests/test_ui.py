@@ -2,7 +2,8 @@
 
 from m4l_builder.ui import (panel, dial, tab, toggle, comment, scope, meter,
                              menu, number_box, slider, button, live_text, fpic,
-                             live_gain, multislider, jsui)
+                             live_gain, multislider, jsui, adsrui, live_drop,
+                             bpatcher, swatch, textedit)
 from m4l_builder.constants import DEFAULT_TEXT_COLOR
 
 
@@ -1315,3 +1316,368 @@ class TestJsui:
         result = jsui("test", [0, 0, 200, 80], js_filename="test.js",
                       patching_rect=[50, 50, 100, 40])
         assert result["box"]["patching_rect"] == [50, 50, 100, 40]
+
+
+class TestAdsrui:
+    """Tests for adsrui() ADSR envelope editor."""
+
+    def test_returns_box_dict(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert "box" in result
+
+    def test_maxclass_is_live_adsrui(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert result["box"]["maxclass"] == "live.adsrui"
+
+    def test_id_set(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert result["box"]["id"] == "adsr-1"
+
+    def test_presentation_is_1(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 200, 80]
+        result = adsrui("adsr-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_4(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert result["box"]["numoutlets"] == 4
+
+    def test_outlettype_has_4_floats(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert result["box"]["outlettype"] == ["float", "float", "float", "float"]
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = adsrui("adsr-1", [10, 20, 200, 80])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 200
+        assert pr[3] == 80
+
+    def test_patching_rect_override(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80], patching_rect=[50, 50, 200, 80])
+        assert result["box"]["patching_rect"] == [50, 50, 200, 80]
+
+    def test_bgcolor_not_set_by_default(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert "bgcolor" not in result["box"]
+
+    def test_bgcolor_set_when_provided(self):
+        color = [0.1, 0.1, 0.1, 1.0]
+        result = adsrui("adsr-1", [0, 0, 200, 80], bgcolor=color)
+        assert result["box"]["bgcolor"] == color
+
+    def test_bordercolor_not_set_by_default(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert "bordercolor" not in result["box"]
+
+    def test_bordercolor_set_when_provided(self):
+        color = [0.5, 0.5, 0.5, 1.0]
+        result = adsrui("adsr-1", [0, 0, 200, 80], bordercolor=color)
+        assert result["box"]["bordercolor"] == color
+
+    def test_focusbordercolor_not_set_by_default(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80])
+        assert "focusbordercolor" not in result["box"]
+
+    def test_focusbordercolor_set_when_provided(self):
+        color = [0.8, 0.2, 0.8, 1.0]
+        result = adsrui("adsr-1", [0, 0, 200, 80], focusbordercolor=color)
+        assert result["box"]["focusbordercolor"] == color
+
+    def test_kwargs_passthrough(self):
+        result = adsrui("adsr-1", [0, 0, 200, 80], custom_attr="test")
+        assert result["box"]["custom_attr"] == "test"
+
+
+class TestLiveDrop:
+    """Tests for live_drop() drag-and-drop file target."""
+
+    def test_returns_box_dict(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert "box" in result
+
+    def test_maxclass_is_live_drop(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert result["box"]["maxclass"] == "live.drop"
+
+    def test_id_set(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert result["box"]["id"] == "drop-1"
+
+    def test_presentation_is_1(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [5, 10, 100, 30]
+        result = live_drop("drop-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_1(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert result["box"]["numoutlets"] == 1
+
+    def test_outlettype_is_single_string(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert result["box"]["outlettype"] == [""]
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = live_drop("drop-1", [10, 20, 100, 30])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 100
+        assert pr[3] == 30
+
+    def test_patching_rect_override(self):
+        result = live_drop("drop-1", [0, 0, 100, 30], patching_rect=[50, 50, 100, 30])
+        assert result["box"]["patching_rect"] == [50, 50, 100, 30]
+
+    def test_textcolor_not_set_by_default(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert "textcolor" not in result["box"]
+
+    def test_textcolor_set_when_provided(self):
+        color = [1.0, 1.0, 1.0, 1.0]
+        result = live_drop("drop-1", [0, 0, 100, 30], textcolor=color)
+        assert result["box"]["textcolor"] == color
+
+    def test_bgcolor_not_set_by_default(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert "bgcolor" not in result["box"]
+
+    def test_bgcolor_set_when_provided(self):
+        color = [0.2, 0.2, 0.2, 1.0]
+        result = live_drop("drop-1", [0, 0, 100, 30], bgcolor=color)
+        assert result["box"]["bgcolor"] == color
+
+    def test_bordercolor_not_set_by_default(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert "bordercolor" not in result["box"]
+
+    def test_bordercolor_set_when_provided(self):
+        color = [0.4, 0.4, 0.4, 1.0]
+        result = live_drop("drop-1", [0, 0, 100, 30], bordercolor=color)
+        assert result["box"]["bordercolor"] == color
+
+    def test_kwargs_passthrough(self):
+        result = live_drop("drop-1", [0, 0, 100, 30], custom_attr="val")
+        assert result["box"]["custom_attr"] == "val"
+
+
+class TestBpatcher:
+    """Tests for bpatcher() embeddable sub-patcher."""
+
+    def test_returns_box_dict(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert "box" in result
+
+    def test_maxclass_is_bpatcher(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert result["box"]["maxclass"] == "bpatcher"
+
+    def test_id_set(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert result["box"]["id"] == "bp-1"
+
+    def test_name_is_patcher_name(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert result["box"]["name"] == "my_patch.maxpat"
+
+    def test_presentation_is_1(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 200, 100]
+        result = bpatcher("bp-1", rect, "my_patch.maxpat")
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_embed_default_is_1(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert result["box"]["embed"] == 1
+
+    def test_embed_custom(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat", embed=0)
+        assert result["box"]["embed"] == 0
+
+    def test_numinlets_is_0(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert result["box"]["numinlets"] == 0
+
+    def test_numoutlets_is_0(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert result["box"]["numoutlets"] == 0
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = bpatcher("bp-1", [10, 20, 200, 100], "my_patch.maxpat")
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 200
+        assert pr[3] == 100
+
+    def test_patching_rect_override(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat",
+                          patching_rect=[50, 50, 200, 100])
+        assert result["box"]["patching_rect"] == [50, 50, 200, 100]
+
+    def test_args_not_set_by_default(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat")
+        assert "args" not in result["box"]
+
+    def test_args_set_when_provided(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat", args="1 2 3")
+        assert result["box"]["args"] == "1 2 3"
+
+    def test_kwargs_passthrough(self):
+        result = bpatcher("bp-1", [0, 0, 200, 100], "my_patch.maxpat", custom_attr=42)
+        assert result["box"]["custom_attr"] == 42
+
+
+class TestSwatch:
+    """Tests for swatch() color picker/display."""
+
+    def test_returns_box_dict(self):
+        result = swatch("sw-1", [0, 0, 40, 20])
+        assert "box" in result
+
+    def test_maxclass_is_swatch(self):
+        result = swatch("sw-1", [0, 0, 40, 20])
+        assert result["box"]["maxclass"] == "swatch"
+
+    def test_id_set(self):
+        result = swatch("sw-1", [0, 0, 40, 20])
+        assert result["box"]["id"] == "sw-1"
+
+    def test_presentation_is_1(self):
+        result = swatch("sw-1", [0, 0, 40, 20])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [5, 10, 40, 20]
+        result = swatch("sw-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = swatch("sw-1", [0, 0, 40, 20])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_4(self):
+        result = swatch("sw-1", [0, 0, 40, 20])
+        assert result["box"]["numoutlets"] == 4
+
+    def test_outlettype_has_4_entries(self):
+        result = swatch("sw-1", [0, 0, 40, 20])
+        assert result["box"]["outlettype"] == ["", "", "", ""]
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = swatch("sw-1", [10, 20, 40, 20])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 40
+        assert pr[3] == 20
+
+    def test_patching_rect_override(self):
+        result = swatch("sw-1", [0, 0, 40, 20], patching_rect=[50, 50, 40, 20])
+        assert result["box"]["patching_rect"] == [50, 50, 40, 20]
+
+    def test_kwargs_passthrough(self):
+        result = swatch("sw-1", [0, 0, 40, 20], color=[1.0, 0.0, 0.0, 1.0])
+        assert result["box"]["color"] == [1.0, 0.0, 0.0, 1.0]
+
+
+class TestTextedit:
+    """Tests for textedit() editable text field."""
+
+    def test_returns_box_dict(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert "box" in result
+
+    def test_maxclass_is_textedit(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["maxclass"] == "textedit"
+
+    def test_id_set(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["id"] == "te-1"
+
+    def test_presentation_is_1(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["presentation"] == 1
+
+    def test_presentation_rect_matches_input(self):
+        rect = [10, 20, 150, 25]
+        result = textedit("te-1", rect)
+        assert result["box"]["presentation_rect"] == rect
+
+    def test_numinlets_is_1(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["numinlets"] == 1
+
+    def test_numoutlets_is_4(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["numoutlets"] == 4
+
+    def test_outlettype_correct(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["outlettype"] == ["", "", "", "int"]
+
+    def test_fontname_default(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["fontname"] == "Ableton Sans Medium"
+
+    def test_fontname_custom(self):
+        result = textedit("te-1", [0, 0, 150, 25], fontname="Arial")
+        assert result["box"]["fontname"] == "Arial"
+
+    def test_fontsize_default(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert result["box"]["fontsize"] == 10.0
+
+    def test_fontsize_custom(self):
+        result = textedit("te-1", [0, 0, 150, 25], fontsize=14.0)
+        assert result["box"]["fontsize"] == 14.0
+
+    def test_patching_rect_defaults_offscreen(self):
+        result = textedit("te-1", [10, 20, 150, 25])
+        pr = result["box"]["patching_rect"]
+        assert pr[0] == 700
+        assert pr[2] == 150
+        assert pr[3] == 25
+
+    def test_patching_rect_override(self):
+        result = textedit("te-1", [0, 0, 150, 25], patching_rect=[50, 50, 150, 25])
+        assert result["box"]["patching_rect"] == [50, 50, 150, 25]
+
+    def test_textcolor_not_set_by_default(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert "textcolor" not in result["box"]
+
+    def test_textcolor_set_when_provided(self):
+        color = [1.0, 1.0, 1.0, 1.0]
+        result = textedit("te-1", [0, 0, 150, 25], textcolor=color)
+        assert result["box"]["textcolor"] == color
+
+    def test_bgcolor_not_set_by_default(self):
+        result = textedit("te-1", [0, 0, 150, 25])
+        assert "bgcolor" not in result["box"]
+
+    def test_bgcolor_set_when_provided(self):
+        color = [0.1, 0.1, 0.1, 1.0]
+        result = textedit("te-1", [0, 0, 150, 25], bgcolor=color)
+        assert result["box"]["bgcolor"] == color
+
+    def test_kwargs_passthrough(self):
+        result = textedit("te-1", [0, 0, 150, 25], custom_attr="hello")
+        assert result["box"]["custom_attr"] == "hello"

@@ -48,12 +48,8 @@ device = AudioEffect("Stereo Filter", width=330, height=200, theme=COOL)
 # Background panel
 device.add_panel("bg", [0, 0, 330, 200])
 
-# Title
-device.add_comment("title", [8, 5, 80, 16], "FILTER",
-                   fontname="Ableton Sans Bold", fontsize=13.0)
-
 # Hero filter curve display — slightly narrower to leave room for meters
-device.add_jsui("filter_display", [8, 24, 284, 80],
+device.add_jsui("filter_display", [8, 6, 284, 80],
                 js_code=filter_curve_js(
                     line_color="0.35, 0.60, 0.90, 1.0",
                     fill_color="0.35, 0.60, 0.90, 0.15",
@@ -61,38 +57,43 @@ device.add_jsui("filter_display", [8, 24, 284, 80],
                 ),
                 numinlets=3)
 
+# Label above filter mode tab
+device.add_comment("lbl_mode", [8, 89, 284, 11], "MODE",
+                   fontsize=9.0, textcolor=COOL.text_dim)
+
 # Filter type tab with rounded pill style
-device.add_tab("filter_type", "Type", [8, 108, 284, 22],
+device.add_tab("filter_type", "Type", [8, 101, 284, 22],
                options=["LP", "HP", "BP", "NOTCH"],
                rounded=4.0, spacing_x=2.0)
 
 # Dials row: Freq, Res, Mix
-device.add_dial("freq_dial", "Freq", [20, 134, 70, 60],
+device.add_dial("freq_dial", "Freq", [20, 127, 70, 60],
                 min_val=20.0, max_val=20000.0, initial=1000.0,
                 unitstyle=3, parameter_exponent=3.0, appearance=1,
                 annotation_name="Filter Cutoff")
 
-device.add_dial("res_dial", "Res", [115, 134, 70, 60],
+device.add_dial("res_dial", "Res", [115, 127, 70, 60],
                 min_val=0.0, max_val=100.0, initial=25.0,
                 unitstyle=5, appearance=1,
                 annotation_name="Resonance")
 
-device.add_dial("mix_dial", "Mix", [210, 134, 70, 60],
+device.add_dial("mix_dial", "Mix", [210, 127, 70, 60],
                 min_val=0.0, max_val=100.0, initial=100.0,
                 unitstyle=5, appearance=1,
                 annotation_name="Dry/Wet Mix")
 
 # Output meters — right edge, vertical, 10px wide each with 2px gap
-device.add_meter("meter_l", [298, 24, 12, 80],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
-device.add_meter("meter_r", [313, 24, 12, 80],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+# Colors match COOL theme: blue-tinted cold, brighter blue-white warm, amber hot
+device.add_meter("meter_l", [298, 6, 12, 80],
+                 coldcolor=[0.20, 0.40, 0.65, 1.0],
+                 warmcolor=[0.35, 0.60, 0.90, 1.0],
+                 hotcolor=[0.75, 0.65, 0.25, 1.0],
+                 overloadcolor=[0.90, 0.20, 0.15, 1.0])
+device.add_meter("meter_r", [313, 6, 12, 80],
+                 coldcolor=[0.20, 0.40, 0.65, 1.0],
+                 warmcolor=[0.35, 0.60, 0.90, 1.0],
+                 hotcolor=[0.75, 0.65, 0.25, 1.0],
+                 overloadcolor=[0.90, 0.20, 0.15, 1.0])
 
 # =========================================================================
 # DSP objects

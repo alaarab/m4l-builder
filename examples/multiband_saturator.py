@@ -39,22 +39,19 @@ for band, bx in band_x.items():
     device.add_panel(f"panel_{band}", [bx, 18, 78, 148],
                      bgcolor=band_colors[band])
 
-# -------------------------------------------------------------------
-# Title label
-# -------------------------------------------------------------------
-device.add_comment("title", [6, 4, 90, 14], "MULTISAT",
-                   textcolor=[0.95, 0.92, 0.85, 1.0], fontsize=13.0)
+device.add_comment("title", [6, 4, 90, 10], "MULTISAT",
+                   textcolor=WARM.text_dim, fontsize=9.0)
 
 # Stereo output meters
 device.add_comment("lbl_out", [342, 4, 36, 14], "OUT",
                    textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0)
 device.add_meter("meter_l", [342, 20, 12, 110],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=WARM.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 device.add_meter("meter_r", [358, 20, 12, 110],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=WARM.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
@@ -106,16 +103,18 @@ for band, bx in band_x.items():
                        band_labels[band],
                        textcolor=[0.80, 0.80, 0.80, 1.0], fontsize=10.0)
 
-    # Drive dial
+    # Drive dial: 0-100% displayed, internally mapped to 0.5-8.0 via scale
     device.add_dial(f"drive_{band}", f"Drive {band_labels[band]}",
                     [bx + 2, 32, 36, 50],
-                    min_val=0.5, max_val=8.0, initial=1.0,
+                    min_val=0.0, max_val=100.0, initial=15.0,
+                    unitstyle=5,
                     annotation_name=f"{band_labels[band]} band saturation drive")
 
-    # Gain dial
+    # Gain dial: -12 to +6 dB
     device.add_dial(f"gain_{band}", f"Gain {band_labels[band]}",
                     [bx + 40, 32, 36, 50],
-                    min_val=0.0, max_val=2.0, initial=1.0,
+                    min_val=-12.0, max_val=6.0, initial=0.0,
+                    unitstyle=4,
                     annotation_name=f"{band_labels[band]} band post-saturation gain")
 
     # Mode tab
@@ -246,13 +245,19 @@ for band in ["low", "mid", "high"]:
 
 # -------------------------------------------------------------------
 # Parameter smoothing: per-band drive and gain dials
-# drive_{band} → drv_{band}_pk → drv_{band}_ln → drv_{band}_l/r inlet 1
-# gain_{band}  → bndg_{band}_pk → bndg_{band}_ln → bndg_{band}_l/r inlet 1
+# drive_{band} → drv_{band}_sc (0-100 -> 0.5-8) → drv_{band}_pk → drv_{band}_ln
+# gain_{band}  → bndg_{band}_dbtoa → bndg_{band}_pk → bndg_{band}_ln
 # -------------------------------------------------------------------
 smooth_y_base = 490
 for i, band in enumerate(["low", "mid", "high"]):
     bx = band_dsp_x[band]
     sy = smooth_y_base + i * 60   # stagger vertically to avoid overlap
+
+    # Drive: map 0-100% display value to 0.5-8.0 internal multiplier
+    device.add_newobj(f"drv_{band}_sc", "scale 0. 100. 0.5 8.",
+                      numinlets=6, numoutlets=1,
+                      outlettype=[""],
+                      patching_rect=[bx, sy - 25, 120, 20])
 
     # Drive smoothing
     device.add_newobj(f"drv_{band}_pk", "pack f 20",
@@ -263,6 +268,12 @@ for i, band in enumerate(["low", "mid", "high"]):
                       numinlets=2, numoutlets=2,
                       outlettype=["signal", "bang"],
                       patching_rect=[bx, sy + 25, 40, 20])
+
+    # Gain: convert dB to linear amplitude before smoothing
+    device.add_newobj(f"bndg_{band}_dbtoa", "dbtoa",
+                      numinlets=1, numoutlets=1,
+                      outlettype=[""],
+                      patching_rect=[bx + 70, sy - 25, 45, 20])
 
     # Gain smoothing
     device.add_newobj(f"bndg_{band}_pk", "pack f 20",
@@ -413,9 +424,10 @@ device.add_line("cross_high_r", 0, "drv_mid_r", 0)
 device.add_line("cross_high_l", 1, "drv_high_l", 0)
 device.add_line("cross_high_r", 1, "drv_high_r", 0)
 
-# 3. Drive dials → smoothing → drive *~ inlet 1 (signal from line~)
+# 3. Drive dials → scale (0-100->0.5-8) → smoothing → drive *~ inlet 1 (signal from line~)
 for band in ["low", "mid", "high"]:
-    device.add_line(f"drive_{band}", 0, f"drv_{band}_pk", 0)
+    device.add_line(f"drive_{band}", 0, f"drv_{band}_sc", 0)
+    device.add_line(f"drv_{band}_sc", 0, f"drv_{band}_pk", 0)
     device.add_line(f"drv_{band}_pk", 0, f"drv_{band}_ln", 0)
     device.add_line(f"drv_{band}_ln", 0, f"drv_{band}_l", 1)
     device.add_line(f"drv_{band}_ln", 0, f"drv_{band}_r", 1)
@@ -448,9 +460,10 @@ for band in ["low", "mid", "high"]:
     for ch in ["l", "r"]:
         device.add_line(f"sel_{band}_{ch}", 0, f"bndg_{band}_{ch}", 0)
 
-# 8. Gain dials → smoothing → band gain *~ inlet 1 (signal from line~)
+# 8. Gain dials → dbtoa → smoothing → band gain *~ inlet 1 (signal from line~)
 for band in ["low", "mid", "high"]:
-    device.add_line(f"gain_{band}", 0, f"bndg_{band}_pk", 0)
+    device.add_line(f"gain_{band}", 0, f"bndg_{band}_dbtoa", 0)
+    device.add_line(f"bndg_{band}_dbtoa", 0, f"bndg_{band}_pk", 0)
     device.add_line(f"bndg_{band}_pk", 0, f"bndg_{band}_ln", 0)
     device.add_line(f"bndg_{band}_ln", 0, f"bndg_{band}_l", 1)
     device.add_line(f"bndg_{band}_ln", 0, f"bndg_{band}_r", 1)
