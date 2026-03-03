@@ -403,24 +403,47 @@ def envelope_follower(id_prefix: str, attack_ms: float = 10,
                       release_ms: float = 100) -> tuple:
     """Create an envelope follower: abs~ -> slide~.
 
-    slide~ args are in samples (ms * 44.1 at 44100 sr).
+    Uses samplerate~ to get the actual sample rate at runtime, then expr~ converts
+    ms values to samples. slide~ inlets 1/2 accept the sample counts.
+
     Wire audio into {prefix}_abs inlet 0; output from {prefix}_slide outlet 0.
+    Wire attack ms into {prefix}_atk_expr inlet 0.
+    Wire release ms into {prefix}_rel_expr inlet 0.
     """
     p = id_prefix
-    # Convert ms to samples at 44100 sr
-    attack_samps = attack_ms * 44.1
-    release_samps = release_ms * 44.1
 
     boxes = [
         newobj(f"{p}_abs", "abs~", numinlets=1, numoutlets=1,
                outlettype=["signal"], patching_rect=[30, 120, 40, 20]),
-        newobj(f"{p}_slide", f"slide~ {attack_samps} {release_samps}",
+        # samplerate~ outputs the current sample rate as a signal
+        newobj(f"{p}_sr", "samplerate~", numinlets=0, numoutlets=1,
+               outlettype=["signal"], patching_rect=[130, 90, 75, 20]),
+        # expr~ converts sr signal to a float for downstream use
+        newobj(f"{p}_sr_snap", "snapshot~", numinlets=1, numoutlets=1,
+               outlettype=[""], patching_rect=[130, 115, 70, 20]),
+        # expr converts attack ms to samples: ms/1000 * sr
+        newobj(f"{p}_atk_expr", f"expr ($f1 / 1000.0) * $f2",
+               numinlets=2, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 145, 150, 20]),
+        # expr converts release ms to samples
+        newobj(f"{p}_rel_expr", f"expr ($f1 / 1000.0) * $f2",
+               numinlets=2, numoutlets=1, outlettype=[""],
+               patching_rect=[190, 145, 150, 20]),
+        newobj(f"{p}_slide", f"slide~ {attack_ms * 44.1} {release_ms * 44.1}",
                numinlets=3, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 150, 120, 20]),
+               outlettype=["signal"], patching_rect=[30, 175, 120, 20]),
     ]
 
     lines = [
         patchline(f"{p}_abs", 0, f"{p}_slide", 0),
+        # samplerate~ -> snapshot~ to get float sr value
+        patchline(f"{p}_sr", 0, f"{p}_sr_snap", 0),
+        # snapshot sr -> both expr inlets 1
+        patchline(f"{p}_sr_snap", 0, f"{p}_atk_expr", 1),
+        patchline(f"{p}_sr_snap", 0, f"{p}_rel_expr", 1),
+        # expr outputs -> slide~ inlets 1 (attack) and 2 (release)
+        patchline(f"{p}_atk_expr", 0, f"{p}_slide", 1),
+        patchline(f"{p}_rel_expr", 0, f"{p}_slide", 2),
     ]
 
     return (boxes, lines)
@@ -497,9 +520,23 @@ def lfo(id_prefix: str, waveform: str = "sine") -> tuple:
         lines.append(patchline(f"{p}_osc", 0, f"{p}_scale", 0))
         lines.append(patchline(f"{p}_scale", 0, f"{p}_offset", 0))
         uni_out = (f"{p}_offset", 0)
+    elif waveform == "triangle":
+        # tri~ outputs -1 to 1, convert to 0 to 1
+        boxes.append(newobj(f"{p}_osc", "tri~", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[30, 120, 50, 20]))
+        boxes.append(newobj(f"{p}_scale", "*~ 0.5", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[30, 150, 50, 20]))
+        boxes.append(newobj(f"{p}_offset", "+~ 0.5", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[30, 180, 50, 20]))
+        lines.append(patchline(f"{p}_osc", 0, f"{p}_scale", 0))
+        lines.append(patchline(f"{p}_scale", 0, f"{p}_offset", 0))
+        uni_out = (f"{p}_offset", 0)
     else:
         raise ValueError(f"Unknown waveform {waveform!r}. "
-                         f"Choose from: sine, saw, square")
+                         f"Choose from: sine, saw, square, triangle")
 
     # Depth scaling: unipolar LFO * depth amount
     boxes.append(newobj(f"{p}_depth", "*~ 1.", numinlets=2, numoutlets=1,
@@ -633,4 +670,353 @@ def tremolo(id_prefix: str, waveform: str = "sine") -> tuple:
         patchline(f"{p}_lfo_depth", 0, f"{p}_mod", 1),
     ]
 
+    return (boxes, lines)
+
+
+def param_smooth(id_prefix: str, smooth_ms: float = 20) -> tuple:
+    """Smooth a control signal using pack + line~.
+
+    The pack f {ms} -> line~ pattern for smoothing parameter changes. Useful for
+    eliminating zipper noise on any float-rate control value.
+
+    Wire control float into {prefix}_pack inlet 0.
+    Output from {prefix}_line outlet 0.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_pack", f"pack f {smooth_ms}", numinlets=2, numoutlets=1,
+               outlettype=[""], patching_rect=[30, 120, 80, 20]),
+        newobj(f"{p}_line", "line~", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_pack", 0, f"{p}_line", 0),
+    ]
+    return (boxes, lines)
+
+
+def bandpass_filter(id_prefix: str) -> tuple:
+    """Create a stereo band-pass filter using svf~.
+
+    svf~ outlets: 0=LP, 1=HP, 2=BP, 3=notch. Wires outlet 2 (BP) through a
+    *~ 1. pass-through for a clean single outlet.
+
+    Wire audio into {prefix}_l / {prefix}_r inlet 0.
+    Wire cutoff Hz into inlet 1, resonance (0-1) into inlet 2.
+    Output from {prefix}_out_l / {prefix}_out_r outlet 0.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_l", "svf~", numinlets=3, numoutlets=4,
+               outlettype=["signal", "signal", "signal", "signal"],
+               patching_rect=[30, 120, 40, 20]),
+        newobj(f"{p}_r", "svf~", numinlets=3, numoutlets=4,
+               outlettype=["signal", "signal", "signal", "signal"],
+               patching_rect=[150, 120, 40, 20]),
+        newobj(f"{p}_out_l", "*~ 1.", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
+        newobj(f"{p}_out_r", "*~ 1.", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[150, 150, 40, 20]),
+    ]
+    lines = [
+        # svf~ outlet 2 = BP
+        patchline(f"{p}_l", 2, f"{p}_out_l", 0),
+        patchline(f"{p}_r", 2, f"{p}_out_r", 0),
+    ]
+    return (boxes, lines)
+
+
+def notch_filter(id_prefix: str) -> tuple:
+    """Create a stereo notch filter using svf~.
+
+    svf~ outlets: 0=LP, 1=HP, 2=BP, 3=notch. Wires outlet 3 (notch) through a
+    *~ 1. pass-through for a clean single outlet.
+
+    Wire audio into {prefix}_l / {prefix}_r inlet 0.
+    Wire cutoff Hz into inlet 1, resonance (0-1) into inlet 2.
+    Output from {prefix}_out_l / {prefix}_out_r outlet 0.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_l", "svf~", numinlets=3, numoutlets=4,
+               outlettype=["signal", "signal", "signal", "signal"],
+               patching_rect=[30, 120, 40, 20]),
+        newobj(f"{p}_r", "svf~", numinlets=3, numoutlets=4,
+               outlettype=["signal", "signal", "signal", "signal"],
+               patching_rect=[150, 120, 40, 20]),
+        newobj(f"{p}_out_l", "*~ 1.", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
+        newobj(f"{p}_out_r", "*~ 1.", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[150, 150, 40, 20]),
+    ]
+    lines = [
+        # svf~ outlet 3 = notch
+        patchline(f"{p}_l", 3, f"{p}_out_l", 0),
+        patchline(f"{p}_r", 3, f"{p}_out_r", 0),
+    ]
+    return (boxes, lines)
+
+
+def highshelf_filter(id_prefix: str, freq: float = 3000., gain_db: float = 0.) -> tuple:
+    """Create a stereo high-shelf EQ filter using biquad~.
+
+    Uses fixed high-shelf biquad coefficients. Wire cutoff and gain updates
+    externally via direct biquad~ coefficient messages if needed.
+
+    Wire audio into {prefix}_l / {prefix}_r inlet 0.
+    Output from {prefix}_l / {prefix}_r outlet 0.
+    """
+    p = id_prefix
+    import math
+    # Compute high-shelf biquad coefficients
+    A = 10 ** (gain_db / 40.0)
+    w0 = 2 * math.pi * freq / 44100.0
+    cos_w0 = math.cos(w0)
+    alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1 / A) * (1 / 0.7071 - 1) + 2)
+    b0 = A * ((A + 1) + (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha)
+    b1 = -2 * A * ((A - 1) + (A + 1) * cos_w0)
+    b2 = A * ((A + 1) + (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha)
+    a0 = (A + 1) - (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha
+    a1 = 2 * ((A - 1) - (A + 1) * cos_w0)
+    a2 = (A + 1) - (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha
+    # Normalize
+    b0n = round(b0 / a0, 6)
+    b1n = round(b1 / a0, 6)
+    b2n = round(b2 / a0, 6)
+    a1n = round(-a1 / a0, 6)
+    a2n = round(-a2 / a0, 6)
+    coeff_str = f"biquad~ {b0n} {b1n} {b2n} {a1n} {a2n}"
+    boxes = [
+        newobj(f"{p}_l", coeff_str, numinlets=6, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 120, 200, 20]),
+        newobj(f"{p}_r", coeff_str, numinlets=6, numoutlets=1,
+               outlettype=["signal"], patching_rect=[240, 120, 200, 20]),
+    ]
+    return (boxes, [])
+
+
+def lowshelf_filter(id_prefix: str, freq: float = 300., gain_db: float = 0.) -> tuple:
+    """Create a stereo low-shelf EQ filter using biquad~.
+
+    Uses fixed low-shelf biquad coefficients. Wire cutoff and gain updates
+    externally via direct biquad~ coefficient messages if needed.
+
+    Wire audio into {prefix}_l / {prefix}_r inlet 0.
+    Output from {prefix}_l / {prefix}_r outlet 0.
+    """
+    p = id_prefix
+    import math
+    A = 10 ** (gain_db / 40.0)
+    w0 = 2 * math.pi * freq / 44100.0
+    cos_w0 = math.cos(w0)
+    alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1 / A) * (1 / 0.7071 - 1) + 2)
+    b0 = A * ((A + 1) - (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha)
+    b1 = 2 * A * ((A - 1) - (A + 1) * cos_w0)
+    b2 = A * ((A + 1) - (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha)
+    a0 = (A + 1) + (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha
+    a1 = -2 * ((A - 1) + (A + 1) * cos_w0)
+    a2 = (A + 1) + (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha
+    b0n = round(b0 / a0, 6)
+    b1n = round(b1 / a0, 6)
+    b2n = round(b2 / a0, 6)
+    a1n = round(-a1 / a0, 6)
+    a2n = round(-a2 / a0, 6)
+    coeff_str = f"biquad~ {b0n} {b1n} {b2n} {a1n} {a2n}"
+    boxes = [
+        newobj(f"{p}_l", coeff_str, numinlets=6, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 120, 200, 20]),
+        newobj(f"{p}_r", coeff_str, numinlets=6, numoutlets=1,
+               outlettype=["signal"], patching_rect=[240, 120, 200, 20]),
+    ]
+    return (boxes, [])
+
+
+def compressor(id_prefix: str) -> tuple:
+    """Create a log-domain stereo compressor.
+
+    Signal flow per channel:
+      input -> abs~ -> slide~ (attack/release) -> ampdb~ (linear to dB) ->
+      - threshold -> * (1 - 1/ratio) -> clip~ 0 inf -> -~ 0 (negate gain reduction) ->
+      dbtoa~ -> *~ input
+
+    Wire audio L/R into {prefix}_abs_l / {prefix}_abs_r inlet 0.
+    Wire threshold (dB, negative) float into {prefix}_thresh_l inlet 1 and {prefix}_thresh_r inlet 1.
+    Wire ratio float (> 1) into {prefix}_ratio_l inlet 1 and {prefix}_ratio_r inlet 1.
+    Wire attack ms into {prefix}_atk_l inlet 1 and {prefix}_atk_r inlet 1.
+    Wire release ms into {prefix}_rel_l inlet 1 and {prefix}_rel_r inlet 1.
+    Output from {prefix}_out_l / {prefix}_out_r outlet 0.
+    """
+    p = id_prefix
+    boxes = []
+    lines = []
+    for ch in ("l", "r"):
+        x = 30 if ch == "l" else 300
+
+        # Level detection: abs~ -> slide~ for attack/release envelope
+        boxes.append(newobj(f"{p}_abs_{ch}", "abs~", numinlets=1, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 120, 40, 20]))
+        boxes.append(newobj(f"{p}_atk_{ch}", "slide~ 441 4410", numinlets=3, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 150, 120, 20]))
+        # Convert to dB domain
+        boxes.append(newobj(f"{p}_adb_{ch}", "ampdb~", numinlets=1, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 180, 55, 20]))
+        # Subtract threshold (threshold is negative dB, e.g. -20)
+        boxes.append(newobj(f"{p}_thresh_{ch}", "-~ 20.", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 210, 60, 20]))
+        # Compute gain reduction: excess * (1 - 1/ratio), clipped to positive
+        boxes.append(newobj(f"{p}_ratio_{ch}", "*~ 0.5", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 240, 50, 20]))
+        boxes.append(newobj(f"{p}_clip_{ch}", "clip~ 0. 1000.", numinlets=3, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 270, 90, 20]))
+        # Negate: subtract gain reduction from 0 to get negative dB gain
+        boxes.append(newobj(f"{p}_neg_{ch}", "!-~ 0.", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 300, 55, 20]))
+        # Convert back to linear
+        boxes.append(newobj(f"{p}_lin_{ch}", "dbtoa~", numinlets=1, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 330, 50, 20]))
+        # Apply gain to input
+        boxes.append(newobj(f"{p}_out_{ch}", "*~", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 360, 30, 20]))
+
+        lines.append(patchline(f"{p}_abs_{ch}", 0, f"{p}_atk_{ch}", 0))
+        lines.append(patchline(f"{p}_atk_{ch}", 0, f"{p}_adb_{ch}", 0))
+        lines.append(patchline(f"{p}_adb_{ch}", 0, f"{p}_thresh_{ch}", 0))
+        lines.append(patchline(f"{p}_thresh_{ch}", 0, f"{p}_ratio_{ch}", 0))
+        lines.append(patchline(f"{p}_ratio_{ch}", 0, f"{p}_clip_{ch}", 0))
+        lines.append(patchline(f"{p}_clip_{ch}", 0, f"{p}_neg_{ch}", 0))
+        lines.append(patchline(f"{p}_neg_{ch}", 0, f"{p}_lin_{ch}", 0))
+        lines.append(patchline(f"{p}_lin_{ch}", 0, f"{p}_out_{ch}", 1))
+
+    return (boxes, lines)
+
+
+def limiter(id_prefix: str) -> tuple:
+    """Create a stereo brickwall limiter.
+
+    Like compressor but with instant attack (1 sample) and infinite ratio (clip~).
+    Detects peak level per channel, computes how much to attenuate, applies.
+
+    Wire audio L/R into {prefix}_abs_l / {prefix}_abs_r inlet 0 AND {prefix}_out_l / {prefix}_out_r inlet 0.
+    Wire threshold (linear, 0-1) into {prefix}_thresh_l inlet 1 and {prefix}_thresh_r inlet 1.
+    Output from {prefix}_out_l / {prefix}_out_r outlet 0.
+    """
+    p = id_prefix
+    boxes = []
+    lines = []
+    for ch in ("l", "r"):
+        x = 30 if ch == "l" else 250
+
+        # Peak detection: abs~ -> slide~ with instant attack, slow release
+        boxes.append(newobj(f"{p}_abs_{ch}", "abs~", numinlets=1, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 120, 40, 20]))
+        boxes.append(newobj(f"{p}_peak_{ch}", "slide~ 1 4410", numinlets=3, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 150, 100, 20]))
+        # Compute gain: threshold / peak (clip to max 1.0 so no expansion)
+        # Use !/~ to get reciprocal of peak, then *~ threshold
+        boxes.append(newobj(f"{p}_recip_{ch}", "!/~ 1.", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 180, 55, 20]))
+        boxes.append(newobj(f"{p}_thresh_{ch}", "*~ 1.", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 210, 50, 20]))
+        # Clip gain to max 1.0 so we only reduce, never expand
+        boxes.append(newobj(f"{p}_gclip_{ch}", "clip~ 0. 1.", numinlets=3, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 240, 80, 20]))
+        # Apply gain to input signal
+        boxes.append(newobj(f"{p}_out_{ch}", "*~", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[x, 270, 30, 20]))
+
+        lines.append(patchline(f"{p}_abs_{ch}", 0, f"{p}_peak_{ch}", 0))
+        lines.append(patchline(f"{p}_peak_{ch}", 0, f"{p}_recip_{ch}", 0))
+        lines.append(patchline(f"{p}_recip_{ch}", 0, f"{p}_thresh_{ch}", 0))
+        lines.append(patchline(f"{p}_thresh_{ch}", 0, f"{p}_gclip_{ch}", 0))
+        lines.append(patchline(f"{p}_gclip_{ch}", 0, f"{p}_out_{ch}", 1))
+
+    return (boxes, lines)
+
+
+def noise_source(id_prefix: str, color: str = "white") -> tuple:
+    """Create a noise generator.
+
+    Colors:
+    - "white": noise~ — flat spectrum
+    - "pink": noise~ filtered through onepole~ 0.95 — approximates -3dB/oct rolloff
+
+    Raises ValueError for unknown colors.
+    Output from {prefix}_noise outlet 0 (white) or {prefix}_lp outlet 0 (pink).
+    """
+    p = id_prefix
+    if color == "white":
+        boxes = [
+            newobj(f"{p}_noise", "noise~", numinlets=0, numoutlets=1,
+                   outlettype=["signal"], patching_rect=[30, 120, 50, 20]),
+        ]
+        return (boxes, [])
+    elif color == "pink":
+        boxes = [
+            newobj(f"{p}_noise", "noise~", numinlets=0, numoutlets=1,
+                   outlettype=["signal"], patching_rect=[30, 120, 50, 20]),
+            newobj(f"{p}_lp", "onepole~ 0.95", numinlets=2, numoutlets=1,
+                   outlettype=["signal"], patching_rect=[30, 150, 90, 20]),
+        ]
+        lines = [
+            patchline(f"{p}_noise", 0, f"{p}_lp", 0),
+        ]
+        return (boxes, lines)
+    else:
+        raise ValueError(f"Unknown noise color {color!r}. Choose from: white, pink")
+
+
+def tempo_sync(id_prefix: str, division: float = 1.0) -> tuple:
+    """Read Live transport tempo and compute a time value for a given beat division.
+
+    Uses the transport object to get BPM as a float, then computes:
+      delay_ms = (60000 / bpm) * division
+      rate_hz  = bpm / (60.0 * division)
+
+    division=1.0 means one beat, 0.5=eighth note, 2.0=half note, etc.
+
+    Wire {prefix}_bpm outlet 0 to downstream objects that need BPM.
+    {prefix}_delay outlet 0 gives delay time in ms.
+    {prefix}_rate outlet 0 gives LFO rate in Hz.
+    """
+    p = id_prefix
+    boxes = [
+        # transport outputs tempo, time signature, etc. as a list
+        newobj(f"{p}_transport", "transport", numinlets=1, numoutlets=4,
+               outlettype=["", "", "", ""],
+               patching_rect=[30, 90, 70, 20]),
+        # unpack the transport output: tempo is outlet 0 (float)
+        newobj(f"{p}_bpm", "f", numinlets=2, numoutlets=1,
+               outlettype=[""],
+               patching_rect=[30, 120, 30, 20]),
+        # Compute delay ms: expr 60000.0 / $f1 * division
+        newobj(f"{p}_delay", f"expr 60000.0 / $f1 * {division}",
+               numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 150, 160, 20]),
+        # Compute LFO rate Hz: expr $f1 / (60.0 * division)
+        newobj(f"{p}_rate", f"expr $f1 / (60.0 * {division})",
+               numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 180, 160, 20]),
+    ]
+    lines = [
+        # transport outlet 0 (tempo) -> bpm float box
+        patchline(f"{p}_transport", 0, f"{p}_bpm", 0),
+        # bpm -> delay expr and rate expr
+        patchline(f"{p}_bpm", 0, f"{p}_delay", 0),
+        patchline(f"{p}_bpm", 0, f"{p}_rate", 0),
+    ]
     return (boxes, lines)

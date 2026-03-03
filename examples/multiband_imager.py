@@ -4,17 +4,13 @@ import os
 from m4l_builder import AudioEffect, COOL, device_output_path
 
 # --- Device setup ---
-W, H = 340, 160
+W, H = 340, 170
 device = AudioEffect("Multiband Imager", width=W, height=H, theme=COOL)
 
 # --- UI ---
 
-# Dark background panel
-device.add_panel("bg", [0, 0, W, H], bgcolor=[0.12, 0.12, 0.14, 1.0])
-
-# Title
-device.add_comment("title", [8, 6, 80, 16], "IMAGER",
-                   textcolor=[0.95, 0.92, 0.85, 1.0], fontsize=13.0)
+# Background panel
+device.add_panel("bg", [0, 0, W, H], bgcolor=COOL.bg)
 
 # Row 1: Crossover frequency dials
 device.add_comment("lbl_xover", [15, 18, 120, 12], "CROSSOVER",
@@ -38,19 +34,19 @@ device.add_comment("lbl_hix", [80, 90, 55, 12], "HI X",
                    textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0,
                    justification=1)
 
-# Stereo output meters (L/R)
+# Stereo output meters (L/R) — COOL theme blue tones
 device.add_comment("lbl_out", [210, 6, 40, 16], "OUT",
                    textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0)
 device.add_meter("meter_l", [210, 22, 10, 66],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+                 coldcolor=[0.20, 0.40, 0.65, 1.0],
+                 warmcolor=[0.35, 0.60, 0.90, 1.0],
+                 hotcolor=[0.75, 0.65, 0.25, 1.0],
+                 overloadcolor=[0.90, 0.20, 0.15, 1.0])
 device.add_meter("meter_r", [224, 22, 10, 66],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0])
+                 coldcolor=[0.20, 0.40, 0.65, 1.0],
+                 warmcolor=[0.35, 0.60, 0.90, 1.0],
+                 hotcolor=[0.75, 0.65, 0.25, 1.0],
+                 overloadcolor=[0.90, 0.20, 0.15, 1.0])
 
 # Vectorscope (Lissajous XY scope)
 device.add_scope("vectorscope", [244, 6, 90, 82],
@@ -66,7 +62,7 @@ device.add_comment("lbl_width", [15, 90, 185, 12], "WIDTH",
                    fontsize=9.0, textcolor=[0.35, 0.60, 0.90, 0.6])
 
 device.add_dial("dial_low_w", "Low Width", [15, 100, 55, 55],
-                min_val=0.0, max_val=200.0, initial=50.0,
+                min_val=0.0, max_val=200.0, initial=100.0,
                 shortname="Lo W", unitstyle=5,  # Percent
                 annotation_name="Low band stereo width")
 
@@ -76,9 +72,20 @@ device.add_dial("dial_mid_w", "Mid Width", [80, 100, 55, 55],
                 annotation_name="Mid band stereo width")
 
 device.add_dial("dial_high_w", "High Width", [145, 100, 55, 55],
-                min_val=0.0, max_val=200.0, initial=120.0,
+                min_val=0.0, max_val=200.0, initial=100.0,
                 shortname="Hi W", unitstyle=5,
                 annotation_name="High band stereo width")
+
+# Per-band labels under width dials
+device.add_comment("lbl_lo_band", [15, 157, 55, 11], "LO",
+                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0,
+                   justification=1)
+device.add_comment("lbl_mid_band", [80, 157, 55, 11], "MID",
+                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0,
+                   justification=1)
+device.add_comment("lbl_hi_band", [145, 157, 55, 11], "HI",
+                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0,
+                   justification=1)
 
 # --- DSP ---
 # plugin~ (obj-plugin) and plugout~ (obj-plugout) are auto-added.

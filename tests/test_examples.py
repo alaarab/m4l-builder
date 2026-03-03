@@ -26,7 +26,17 @@ EXAMPLE_SCRIPTS = [
     "auto_filter.py",
     "comb_bank.py",
     "lofi_processor.py",
+    "parametric_eq.py",
+    "expression_control.py",
+    "macro_randomizer.py",
+    "step_sequencer.py",
+    "drone_synth.py",
+    "reverb.py",
 ]
+
+# Non-AudioEffect scripts (skip plugin~/plugout~ and type_code checks)
+MIDI_EFFECT_SCRIPTS = {"expression_control.py", "step_sequencer.py"}
+INSTRUMENT_SCRIPTS = {"drone_synth.py"}
 
 
 def _run_example(script_name, output_dir):
@@ -136,11 +146,16 @@ class TestExampleBuilds:
         assert header["version"] == 4
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
-    def test_audio_effect_type_code(self, script):
+    def test_device_type_code(self, script):
         if script not in self.outputs:
             pytest.skip(f"{script} did not produce output")
         header, _ = _parse_amxd(self.outputs[script])
-        assert header["type_code"] == b"aaaa"
+        if script in MIDI_EFFECT_SCRIPTS:
+            assert header["type_code"] == b"mmmm"
+        elif script in INSTRUMENT_SCRIPTS:
+            assert header["type_code"] == b"iiii"
+        else:
+            assert header["type_code"] == b"aaaa"
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_valid_json_payload(self, script):
@@ -153,13 +168,18 @@ class TestExampleBuilds:
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_has_plugin_and_plugout(self, script):
-        """All audio effects must have plugin~ and plugout~."""
+        """Audio effects must have plugin~ and plugout~."""
         if script not in self.outputs:
             pytest.skip(f"{script} did not produce output")
+        if script in MIDI_EFFECT_SCRIPTS:
+            pytest.skip("MIDI effects don't use plugin~/plugout~")
         _, patcher = _parse_amxd(self.outputs[script])
         texts = _get_box_texts(patcher)
-        assert "plugin~" in texts, "Missing plugin~ object"
-        assert "plugout~" in texts, "Missing plugout~ object"
+        if script in INSTRUMENT_SCRIPTS:
+            assert "plugout~" in texts, "Missing plugout~ object"
+        else:
+            assert "plugin~" in texts, "Missing plugin~ object"
+            assert "plugout~" in texts, "Missing plugout~ object"
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_has_presentation_objects(self, script):

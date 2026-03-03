@@ -36,8 +36,8 @@ CRITICAL RULES:
 import os
 from m4l_builder import AudioEffect, COOL, device_output_path
 
-# Device dimensions: ~380 wide, 170 tall — widened 30px for L/R output meters
-W, H = 410, 170
+# Device dimensions: widened 30px for L/R output meters, tallened for mix dial
+W, H = 410, 200
 device = AudioEffect("MidSide Suite", width=W, height=H, theme=COOL)
 
 # =========================================================================
@@ -47,9 +47,8 @@ device = AudioEffect("MidSide Suite", width=W, height=H, theme=COOL)
 # Background panel (dark)
 device.add_panel("bg", [0, 0, W, H], bgcolor=[0.12, 0.12, 0.14, 1.0])
 
-# Title
-device.add_comment("title", [8, 5, 90, 16], "M/S SUITE",
-                   textcolor=[0.95, 0.92, 0.85, 1.0], fontsize=13.0)
+device.add_comment("title", [8, 5, 90, 12], "M/S",
+                   textcolor=COOL.text_dim, fontsize=10.0)
 
 # Section labels
 device.add_comment("lbl_mid_sec", [8, 24, 40, 12], "MID",
@@ -126,33 +125,33 @@ device.add_tab("side_sat_tab", "Side Sat", [168, 110, 152, 20],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
 # --- Output L/R Meters (right edge) ---
-device.add_comment("lbl_meters", [332, 24, 70, 12], "OUTPUT",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0)
+device.add_comment("lbl_meters", [332, 24, 70, 12], "OUT",
+                   textcolor=COOL.text_dim, fontsize=8.0)
 
 device.add_comment("lbl_out_l", [333, 130, 12, 12], "L",
-                   textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
+                   textcolor=COOL.text_dim, fontsize=8.0)
 device.add_meter("meter_out_l", [333, 38, 12, 90],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=COOL.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 device.add_comment("lbl_out_r", [356, 130, 12, 12], "R",
-                   textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
+                   textcolor=COOL.text_dim, fontsize=8.0)
 device.add_meter("meter_out_r", [356, 38, 12, 90],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=COOL.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # --- Output mix dial ---
-device.add_comment("lbl_output_sec", [8, 128, 50, 12], "OUTPUT",
+device.add_comment("lbl_output_sec", [8, 132, 50, 12], "OUTPUT",
                    textcolor=[0.35, 0.60, 0.90, 0.6], fontsize=9.0)
-device.add_dial("mix_dial", "Mix", [8, 138, 50, 28],
+device.add_dial("mix_dial", "Mix", [8, 144, 50, 50],
                 min_val=0.0, max_val=100.0, initial=100.0,
                 shortname="Mix", unitstyle=5,
                 annotation_name="Dry/Wet Mix")  # PERCENT
-device.add_comment("lbl_mix", [8, 148, 50, 12], "MIX",
+device.add_comment("lbl_mix", [8, 193, 50, 8], "MIX",
                    textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
                    justification=1)
 
@@ -226,8 +225,9 @@ device.add_newobj("mid_tilt_sum", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[80, 520, 30, 20])
 
 # ── MID saturation ───────────────────────────────────────────────────────
-# Drive dial 0..100 -> scale 0..2.0 -> pack/line~ -> pre-sat gain *~
-device.add_newobj("mid_drive_scale", "scale 0. 100. 0. 2.", numinlets=6, numoutlets=1,
+# Drive dial 0..100 -> scale 0.5..4.0 -> pack/line~ -> pre-sat gain *~
+# 0.5 at drive=0 means light saturation, not silence
+device.add_newobj("mid_drive_scale", "scale 0. 100. 0.5 4.", numinlets=6, numoutlets=1,
                   outlettype=[""], patching_rect=[30, 550, 120, 20])
 # Smoothing for mid drive
 device.add_newobj("mid_drive_pk", "pack f 20", numinlets=2, numoutlets=1,
@@ -300,7 +300,7 @@ device.add_newobj("side_tilt_sum", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[450, 520, 30, 20])
 
 # ── SIDE saturation ──────────────────────────────────────────────────────
-device.add_newobj("side_drive_scale", "scale 0. 100. 0. 2.", numinlets=6, numoutlets=1,
+device.add_newobj("side_drive_scale", "scale 0. 100. 0.5 4.", numinlets=6, numoutlets=1,
                   outlettype=[""], patching_rect=[400, 550, 120, 20])
 # Smoothing for side drive
 device.add_newobj("side_drive_pk", "pack f 20", numinlets=2, numoutlets=1,

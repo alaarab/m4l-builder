@@ -10,9 +10,8 @@ device = AudioEffect("Rhythmic Gate", width=310, height=180, theme=WARM)
 # Dark background panel
 device.add_panel("bg", [0, 0, 310, 180], bgcolor=[0.12, 0.12, 0.14, 1.0])
 
-# Title
-device.add_comment("title", [8, 6, 60, 16], "GATE",
-                   textcolor=[0.95, 0.92, 0.85, 1.0], fontsize=13.0)
+device.add_comment("title", [8, 6, 60, 12], "GATE",
+                   textcolor=WARM.text_dim, fontsize=10.0)
 
 # Waveform tab: SINE / SAW / SQUARE / TRI
 device.add_tab("wave_tab", "Wave", [8, 26, 160, 22],
@@ -22,9 +21,9 @@ device.add_tab("wave_tab", "Wave", [8, 26, 160, 22],
                textcolor=[0.75, 0.75, 0.75, 1.0],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
-# Stereo mode tab: NORMAL / PING-PONG
+# Stereo mode tab: NORMAL / ALT
 device.add_tab("stereo_tab", "Stereo", [172, 26, 100, 22],
-               options=["NORMAL", "PING"],
+               options=["NORMAL", "ALT"],
                bgcolor=[0.2, 0.2, 0.22, 1.0],
                bgoncolor=[0.55, 0.35, 0.75, 1.0],
                textcolor=[0.75, 0.75, 0.75, 1.0],
@@ -35,17 +34,17 @@ device.add_scope("gate_scope", [8, 52, 264, 50],
                  bgcolor=[0.06, 0.06, 0.08, 1.0],
                  activelinecolor=[0.85, 0.55, 0.25, 1.0],
                  gridcolor=[0.15, 0.15, 0.17, 0.4],
-                 range_vals=[0.0, 1.1],
+                 range_vals=[0.0, 1.0],
                  calccount=128, smooth=2, line_width=1.5)
 
 # Output meters — right edge
 device.add_meter("meter_l", [280, 5, 10, 170],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=WARM.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 device.add_meter("meter_r", [294, 5, 10, 170],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+                 coldcolor=WARM.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
@@ -60,7 +59,7 @@ device.add_comment("lbl_output", [185, 98, 55, 12], "OUTPUT",
 
 # Dials row: Rate, Depth, Mix
 device.add_dial("rate_dial", "Rate", [15, 108, 55, 75],
-                min_val=0.1, max_val=50.0, initial=4.0,
+                min_val=0.25, max_val=20.0, initial=4.0,
                 unitstyle=3,
                 annotation_name="Gate Rate")   # HZ
 

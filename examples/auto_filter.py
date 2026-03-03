@@ -55,28 +55,21 @@ import os
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 from m4l_builder.engines.filter_curve import filter_curve_js
 
-# --- Device setup --- (widened 30px for meters)
-device = AudioEffect("Auto Filter", width=410, height=200, theme=MIDNIGHT)
+# --- Device setup --- (widened for meters + mix dial)
+device = AudioEffect("Auto Filter", width=440, height=200, theme=MIDNIGHT)
 
 # =========================================================================
 # UI
 # =========================================================================
 
 # Background panel
-device.add_panel("bg", [0, 0, 410, 200])
+device.add_panel("bg", [0, 0, 440, 200])
 
-# Title
-device.add_comment("title", [8, 5, 130, 16], "AUTO FILTER",
-                   fontname="Ableton Sans Bold", fontsize=13.0)
-
-# Mix dial — top right
-device.add_dial("mix_dial", "Mix", [322, 2, 52, 22],
-                min_val=0.0, max_val=100.0, initial=100.0,
-                unitstyle=5, appearance=1,
-                annotation_name="Dry/Wet Mix")
+device.add_comment("title", [8, 5, 80, 12], "AUTO FILTER",
+                   fontsize=10.0, textcolor=MIDNIGHT.text_dim)
 
 # ---- HERO: Filter curve display ----
-device.add_jsui("filter_display", [10, 22, 360, 80],
+device.add_jsui("filter_display", [10, 18, 360, 84],
                 js_code=filter_curve_js(
                     line_color="0.45, 0.75, 0.65, 1.0",
                     fill_color="0.45, 0.75, 0.65, 0.15",
@@ -87,17 +80,25 @@ device.add_jsui("filter_display", [10, 22, 360, 80],
                 ),
                 numinlets=3)
 
-# Output meters — right edge (x=382 L, x=396 R), full height
-device.add_meter("meter_l", [382, 5, 10, 190],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+# Output meters — right edge
+device.add_meter("meter_l", [414, 5, 10, 190],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
-device.add_meter("meter_r", [396, 5, 10, 190],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
+device.add_meter("meter_r", [428, 5, 10, 190],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
+
+# Mix dial — bottom right, tall enough to interact easily
+device.add_comment("lbl_mix", [376, 108, 34, 11], "MIX",
+                   textcolor=MIDNIGHT.accent, fontsize=8.5)
+device.add_dial("mix_dial", "Mix", [376, 118, 34, 52],
+                min_val=0.0, max_val=100.0, initial=100.0,
+                unitstyle=5, appearance=1,
+                annotation_name="Dry/Wet Mix")
 
 # Section labels row (y=108)
 device.add_comment("lbl_filter", [8, 108, 60, 11], "FILTER",

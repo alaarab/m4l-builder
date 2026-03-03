@@ -99,7 +99,7 @@ TYPE_OPTIONS = ["Peak", "LShelf", "HShelf", "LP", "HP", "Notch", "BP"]
 # ---------------------------------------------------------------------------
 device.add_panel("bg", [0, 0, 530, 280])
 
-device.add_comment("title", [8, 4, 160, 16], "PARAMETRIC EQ",
+device.add_comment("title", [8, 4, 80, 16], "EQ",
                    fontname="Ableton Sans Bold", fontsize=13.0,
                    textcolor=TEXT)
 

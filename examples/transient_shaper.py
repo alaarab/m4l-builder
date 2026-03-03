@@ -41,73 +41,61 @@ device = AudioEffect("Transient Shaper", width=310, height=170, theme=WARM)
 # =========================================================================
 
 # Dark background
-device.add_panel("bg", [0, 0, 310, 170], bgcolor=[0.10, 0.10, 0.12, 1.0])
-
-# Title
-device.add_comment("title", [8, 5, 180, 16], "TRANSIENT",
-                   textcolor=[0.95, 0.92, 0.85, 1.0], fontsize=13.0)
+device.add_panel("bg", [0, 0, 310, 170], bgcolor=WARM.bg)
 
 # Hero display: gain envelope scope — shows the transient shaping gain (1.0 = unity)
-device.add_scope("gain_scope", [8, 24, 264, 50],
+device.add_scope("gain_scope", [8, 6, 264, 62],
                  bgcolor=[0.06, 0.06, 0.08, 1.0],
                  activelinecolor=[0.85, 0.55, 0.25, 1.0],
                  gridcolor=[0.15, 0.15, 0.17, 0.4],
                  range_vals=[0.0, 2.5],
                  calccount=128, smooth=2, line_width=1.5)
 
-# Section labels above dial groups
-device.add_comment("lbl_shape", [8, 76, 130, 12], "SHAPE",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
-device.add_comment("lbl_detect", [148, 76, 60, 12], "DETECT",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
-device.add_comment("lbl_output", [218, 76, 60, 12], "OUTPUT",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
+# Dial section labels
+device.add_comment("lbl_shape", [8, 71, 130, 11], "SHAPE",
+                   fontsize=9.0, textcolor=WARM.text_dim)
+device.add_comment("lbl_detect", [148, 71, 60, 11], "DETECT",
+                   fontsize=9.0, textcolor=WARM.text_dim)
+device.add_comment("lbl_output", [218, 71, 60, 11], "OUTPUT",
+                   fontsize=9.0, textcolor=WARM.text_dim)
 
 # Attack dial
-device.add_comment("attack_lbl", [10, 77, 45, 12], "ATTACK",
-                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=8.5)
-device.add_dial("attack_dial", "Attack", [8, 87, 60, 58],
+device.add_dial("attack_dial", "Attack", [8, 82, 60, 72],
                 min_val=-100.0, max_val=100.0, initial=0.0,
-                unitstyle=5,  # PERCENT
+                unitstyle=5,
                 annotation_name="Boost or cut the transient attack")
 
 # Sustain dial
-device.add_comment("sustain_lbl", [80, 77, 48, 12], "SUSTAIN",
-                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=8.5)
-device.add_dial("sustain_dial", "Sustain", [78, 87, 60, 58],
+device.add_dial("sustain_dial", "Sustain", [78, 82, 60, 72],
                 min_val=-100.0, max_val=100.0, initial=0.0,
-                unitstyle=5,  # PERCENT
+                unitstyle=5,
                 annotation_name="Boost or cut the sustain/body")
 
-# Speed dial
-device.add_comment("speed_lbl", [150, 77, 40, 12], "SPEED",
-                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=8.5)
-device.add_dial("speed_dial", "Speed", [148, 87, 60, 58],
+# Detection speed dial — affects how fast the envelope responds
+device.add_dial("speed_dial", "Detection Speed", [148, 82, 60, 72],
                 min_val=1.0, max_val=10.0, initial=1.0,
-                unitstyle=1,  # FLOAT
-                annotation_name="Detection sensitivity — adjusts envelope response")
+                unitstyle=0,
+                annotation_name="Detection speed — 1=slow, 10=fast")
 
 # Mix dial
-device.add_comment("mix_lbl", [220, 77, 30, 12], "MIX",
-                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=8.5)
-device.add_dial("mix_dial", "Mix", [218, 87, 60, 58],
+device.add_dial("mix_dial", "Mix", [218, 82, 60, 72],
                 min_val=0.0, max_val=100.0, initial=100.0,
-                unitstyle=5,  # PERCENT
+                unitstyle=5,
                 annotation_name="Dry/wet balance — 0% bypassed, 100% fully shaped")
 
-# Output meters — L/R vertical on right edge
-device.add_meter("meter_l", [280, 24, 12, 140],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0],
-                 patching_rect=[800, 0, 12, 140])
-device.add_meter("meter_r", [294, 24, 12, 140],
-                 coldcolor=[0.3, 0.7, 0.35, 1.0],
-                 warmcolor=[0.9, 0.8, 0.2, 1.0],
-                 hotcolor=[0.9, 0.4, 0.1, 1.0],
-                 overloadcolor=[0.9, 0.15, 0.15, 1.0],
-                 patching_rect=[820, 0, 12, 140])
+# Output meters — L/R vertical on right edge, WARM theme orange tones
+device.add_meter("meter_l", [280, 6, 12, 158],
+                 coldcolor=[0.55, 0.40, 0.20, 1.0],
+                 warmcolor=[0.85, 0.55, 0.25, 1.0],
+                 hotcolor=[0.90, 0.35, 0.10, 1.0],
+                 overloadcolor=[0.90, 0.15, 0.15, 1.0],
+                 patching_rect=[800, 0, 12, 158])
+device.add_meter("meter_r", [294, 6, 12, 158],
+                 coldcolor=[0.55, 0.40, 0.20, 1.0],
+                 warmcolor=[0.85, 0.55, 0.25, 1.0],
+                 hotcolor=[0.90, 0.35, 0.10, 1.0],
+                 overloadcolor=[0.90, 0.15, 0.15, 1.0],
+                 patching_rect=[820, 0, 12, 158])
 
 # =========================================================================
 # DSP objects
@@ -221,6 +209,12 @@ device.add_newobj("sum_l", "+~", numinlets=2, numoutlets=1,
 device.add_newobj("sum_r", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[420, 580, 30, 20])
 
+# Output protection: clip to prevent loud transients from clipping
+device.add_newobj("clip_l", "clip~ -1. 1.", numinlets=3, numoutlets=1,
+                  outlettype=["signal"], patching_rect=[380, 610, 65, 20])
+device.add_newobj("clip_r", "clip~ -1. 1.", numinlets=3, numoutlets=1,
+                  outlettype=["signal"], patching_rect=[460, 610, 65, 20])
+
 # =========================================================================
 # Connections
 # =========================================================================
@@ -303,16 +297,18 @@ device.add_line("dry_l", 0, "sum_l", 1)
 device.add_line("wet_r", 0, "sum_r", 0)
 device.add_line("dry_r", 0, "sum_r", 1)
 
-# Output: sum -> plugout~
-device.add_line("sum_l", 0, "obj-plugout", 0)
-device.add_line("sum_r", 0, "obj-plugout", 1)
+# Output: sum -> clip~ -> plugout~
+device.add_line("sum_l", 0, "clip_l", 0)
+device.add_line("sum_r", 0, "clip_r", 0)
+device.add_line("clip_l", 0, "obj-plugout", 0)
+device.add_line("clip_r", 0, "obj-plugout", 1)
 
 # Scope display — show gain_plus1 signal (transient shaping in action)
 device.add_line("gain_plus1", 0, "gain_scope", 0)
 
-# Output meters — tap off final sum (post dry/wet)
-device.add_line("sum_l", 0, "meter_l", 0)
-device.add_line("sum_r", 0, "meter_r", 0)
+# Output meters — tap off final clipped output
+device.add_line("clip_l", 0, "meter_l", 0)
+device.add_line("clip_r", 0, "meter_r", 0)
 
 # =========================================================================
 # Build

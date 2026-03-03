@@ -123,6 +123,61 @@ class TestThemeDataclass:
         t.dial_color[0] = 0.99
         assert t.accent[0] == 0.5  # original unchanged
 
+    def test_default_meter_colors_exist(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.meter_cold is not None and len(t.meter_cold) == 4
+        assert t.meter_warm is not None and len(t.meter_warm) == 4
+        assert t.meter_hot is not None and len(t.meter_hot) == 4
+        assert t.meter_over is not None and len(t.meter_over) == 4
+
+    def test_scope_color_derived_from_accent(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.scope_color == [0.5, 0.8, 0.6, 1.0]
+
+    def test_scope_bgcolor_derived_from_bg(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.scope_bgcolor == [0.1, 0.1, 0.1, 1.0]
+
+    def test_meter_kwargs_structure(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        kwargs = t.meter_kwargs()
+        assert 'coldcolor' in kwargs
+        assert 'warmcolor' in kwargs
+        assert 'hotcolor' in kwargs
+        assert 'overloadcolor' in kwargs
+        assert kwargs['coldcolor'] == t.meter_cold
+        assert kwargs['warmcolor'] == t.meter_warm
+        assert kwargs['hotcolor'] == t.meter_hot
+        assert kwargs['overloadcolor'] == t.meter_over
+
 
 class TestPrebuiltThemes:
     """Test the 4 pre-built themes are valid."""
@@ -131,26 +186,74 @@ class TestPrebuiltThemes:
         assert MIDNIGHT.bg is not None
         assert MIDNIGHT.accent is not None
         assert MIDNIGHT.dial_color is not None
+        assert MIDNIGHT.meter_cold is not None
+        assert MIDNIGHT.meter_warm is not None
+        assert MIDNIGHT.meter_hot is not None
+        assert MIDNIGHT.meter_over is not None
+        assert MIDNIGHT.scope_color is not None
+        assert MIDNIGHT.scope_bgcolor is not None
 
     def test_warm_has_all_fields(self):
         assert WARM.bg is not None
         assert WARM.accent is not None
         assert WARM.dial_color is not None
+        assert WARM.meter_cold is not None
+        assert WARM.meter_warm is not None
+        assert WARM.meter_hot is not None
+        assert WARM.meter_over is not None
+        assert WARM.scope_color is not None
+        assert WARM.scope_bgcolor is not None
 
     def test_cool_has_all_fields(self):
         assert COOL.bg is not None
         assert COOL.accent is not None
         assert COOL.dial_color is not None
+        assert COOL.meter_cold is not None
+        assert COOL.meter_warm is not None
+        assert COOL.meter_hot is not None
+        assert COOL.meter_over is not None
+        assert COOL.scope_color is not None
+        assert COOL.scope_bgcolor is not None
 
     def test_light_has_all_fields(self):
         assert LIGHT.bg is not None
         assert LIGHT.accent is not None
         assert LIGHT.dial_color is not None
+        assert LIGHT.meter_cold is not None
+        assert LIGHT.meter_warm is not None
+        assert LIGHT.meter_hot is not None
+        assert LIGHT.meter_over is not None
+        assert LIGHT.scope_color is not None
+        assert LIGHT.scope_bgcolor is not None
 
     def test_themes_are_distinct(self):
         assert MIDNIGHT.bg != WARM.bg
         assert COOL.bg != LIGHT.bg
         assert WARM.accent != COOL.accent
+
+    def test_meter_colors_are_four_element_lists(self):
+        for theme in (MIDNIGHT, WARM, COOL, LIGHT):
+            assert len(theme.meter_cold) == 4
+            assert len(theme.meter_warm) == 4
+            assert len(theme.meter_hot) == 4
+            assert len(theme.meter_over) == 4
+
+    def test_scope_colors_are_four_element_lists(self):
+        for theme in (MIDNIGHT, WARM, COOL, LIGHT):
+            assert len(theme.scope_color) == 4
+            assert len(theme.scope_bgcolor) == 4
+
+    def test_meter_kwargs_returns_correct_keys(self):
+        kwargs = MIDNIGHT.meter_kwargs()
+        assert set(kwargs.keys()) == {'coldcolor', 'warmcolor', 'hotcolor', 'overloadcolor'}
+
+    def test_meter_kwargs_values_match_fields(self):
+        for theme in (MIDNIGHT, WARM, COOL, LIGHT):
+            kwargs = theme.meter_kwargs()
+            assert kwargs['coldcolor'] == theme.meter_cold
+            assert kwargs['warmcolor'] == theme.meter_warm
+            assert kwargs['hotcolor'] == theme.meter_hot
+            assert kwargs['overloadcolor'] == theme.meter_over
 
 
 class TestDeviceThemeIntegration:
@@ -225,8 +328,33 @@ class TestDeviceThemeIntegration:
         d = Device("Test", 200, 100, theme=COOL)
         d.add_scope("s1", [0, 0, 200, 100])
         box = d.boxes[0]["box"]
-        assert box["bgcolor"] == COOL.bg
-        assert box["activelinecolor"] == COOL.accent
+        assert box["bgcolor"] == COOL.scope_bgcolor
+        assert box["activelinecolor"] == COOL.scope_color
+
+    def test_meter_gets_theme_colors(self):
+        d = Device("Test", 200, 100, theme=MIDNIGHT)
+        d.add_meter("m1", [0, 0, 20, 100])
+        box = d.boxes[0]["box"]
+        assert box["coldcolor"] == MIDNIGHT.meter_cold
+        assert box["warmcolor"] == MIDNIGHT.meter_warm
+        assert box["hotcolor"] == MIDNIGHT.meter_hot
+        assert box["overloadcolor"] == MIDNIGHT.meter_over
+
+    def test_meter_user_colors_override_theme(self):
+        custom_cold = [0.0, 1.0, 0.0, 1.0]
+        d = Device("Test", 200, 100, theme=MIDNIGHT)
+        d.add_meter("m1", [0, 0, 20, 100], coldcolor=custom_cold)
+        box = d.boxes[0]["box"]
+        assert box["coldcolor"] == custom_cold
+        # other colors still from theme
+        assert box["warmcolor"] == MIDNIGHT.meter_warm
+
+    def test_meter_without_theme_has_no_colors_injected(self):
+        d = Device("Test", 200, 100)
+        d.add_meter("m1", [0, 0, 20, 100])
+        box = d.boxes[0]["box"]
+        assert "coldcolor" not in box
+        assert "warmcolor" not in box
 
     def test_audio_effect_with_theme(self):
         d = AudioEffect("Test", 200, 100, theme=WARM)
