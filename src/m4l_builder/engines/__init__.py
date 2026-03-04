@@ -28,6 +28,9 @@ from .grain_display import grain_display_js
 from .grid_sequencer_display import grid_sequencer_display_js
 from .wavetable_editor import wavetable_editor_js
 from .spectral_vocoder_display import spectral_vocoder_display_js
+from .lfo_display import lfo_display_js
+from .compressor_display import compressor_display_js
+from .xy_trail_display import xy_trail_display_js
 
 __all__ = [
     "filter_curve_js",
@@ -48,4 +51,7 @@ __all__ = [
     "grid_sequencer_display_js",
     "wavetable_editor_js",
     "spectral_vocoder_display_js",
+    "lfo_display_js",
+    "compressor_display_js",
+    "xy_trail_display_js",
 ]

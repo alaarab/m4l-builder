@@ -21,9 +21,6 @@ device = AudioEffect("a stock reverb", width=WIDTH, height=HEIGHT, theme=MIDNIGH
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 130, 16], "a stock reverb",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 # IR file drop target
 device.add_comment("lbl_ir", [8, 26, 60, 12], "IMPULSE RESPONSE",

@@ -27,19 +27,20 @@ Output meters: L/R live.meter~ on the right edge for visual feedback.
 import os
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
-# --- Device setup (widened 30px for output meters) ---
 WIDTH = 350
-HEIGHT = 150
+HEIGHT = 180
 device = AudioEffect("Stereo Delay", width=WIDTH, height=HEIGHT, theme=MIDNIGHT)
 
-# --- UI ---
-device.add_panel("bg", [0, 0, WIDTH, HEIGHT], bgcolor=[0.12, 0.12, 0.14, 1.0])
+device.add_panel("bg", [0, 0, WIDTH, HEIGHT])
 
-device.add_comment("title", [8, 6, 60, 12], "DELAY",
-                   textcolor=MIDNIGHT.text_dim, fontsize=10.0)
+# Scope at top showing delayed signal
+device.add_scope("delay_scope", [8, 6, 260, 50],
+                 bgcolor=[0.05, 0.05, 0.06, 1.0],
+                 gridcolor=[0.15, 0.15, 0.17, 0.3],
+                 fgcolor=[0.35, 0.55, 0.75, 1.0])
 
-# Mode tab: Stereo / PingPong / Mono (3 options)
-device.add_tab("mode_tab", "Mode", [8, 26, 200, 20],
+# Mode tab
+device.add_tab("mode_tab", "Mode", [8, 60, 200, 20],
                options=["Stereo", "PingPong", "Mono"],
                bgcolor=[0.2, 0.2, 0.22, 1.0],
                bgoncolor=[0.35, 0.55, 0.75, 1.0],
@@ -47,56 +48,56 @@ device.add_tab("mode_tab", "Mode", [8, 26, 200, 20],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
 # Section labels
-device.add_comment("lbl_time", [8, 38, 80, 12], "TIME",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
-# Channel indicators under the time dials
-device.add_comment("lbl_l_ch", [8, 122, 45, 10], "L",
+device.add_comment("lbl_time", [8, 82, 80, 12], "TIME",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_comment("lbl_l_ch", [8, 162, 55, 10], "L",
                    fontsize=8.0, textcolor=MIDNIGHT.text_dim, justification=1)
-device.add_comment("lbl_r_ch", [58, 122, 45, 10], "R",
+device.add_comment("lbl_r_ch", [68, 162, 55, 10], "R",
                    fontsize=8.0, textcolor=MIDNIGHT.text_dim, justification=1)
-device.add_comment("lbl_char", [108, 38, 100, 12], "CHARACTER",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
-device.add_comment("lbl_mix", [263, 38, 40, 12], "MIX",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_comment("lbl_char", [190, 82, 100, 12], "CHARACTER",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_comment("lbl_mix", [290, 82, 40, 12], "MIX",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
 
-# Dials row
-device.add_dial("ltime_dial", "L Time", [8, 48, 45, 75],
+# Main controls (larger)
+device.add_dial("ltime_dial", "L Time", [8, 92, 55, 72],
                 min_val=1.0, max_val=5000.0, initial=375.0,
                 unitstyle=2,
                 annotation_name="Left channel delay time in milliseconds")
 
-device.add_dial("rtime_dial", "R Time", [58, 48, 45, 75],
+device.add_dial("rtime_dial", "R Time", [68, 92, 55, 72],
                 min_val=1.0, max_val=5000.0, initial=500.0,
                 unitstyle=2,
                 annotation_name="Right channel delay time in milliseconds")
 
-device.add_dial("fb_dial", "Feedback", [108, 48, 45, 75],
+device.add_dial("fb_dial", "Feedback", [128, 92, 55, 72],
                 min_val=0.0, max_val=95.0, initial=40.0,
                 unitstyle=5,
-                annotation_name="Feedback amount — higher values create more repeats")
+                annotation_name="Feedback amount")
 
-device.add_dial("sat_dial", "Saturation", [158, 48, 45, 75],
+# Secondary controls (smaller)
+device.add_dial("sat_dial", "Saturation", [190, 92, 45, 72],
                 min_val=0.0, max_val=100.0, initial=30.0,
                 unitstyle=5,
-                annotation_name="Saturation drive into feedback — warmer with more repeats")
+                annotation_name="Saturation drive into feedback")
 
-device.add_dial("tone_dial", "Tone", [208, 48, 45, 75],
+device.add_dial("tone_dial", "Tone", [240, 92, 45, 72],
                 min_val=500.0, max_val=20000.0, initial=8000.0,
                 unitstyle=3,
-                annotation_name="Feedback damping — lower values darken each repeat")
+                annotation_name="Feedback damping")
 
-device.add_dial("mix_dial", "Mix", [263, 48, 45, 75],
+device.add_dial("mix_dial", "Mix", [290, 92, 45, 72],
                 min_val=0.0, max_val=100.0, initial=30.0,
                 unitstyle=5,
-                annotation_name="Dry/wet balance — 0% is fully dry, 100% fully wet")
+                annotation_name="Dry/wet balance")
 
-# --- UI: Tempo sync menu (placed right of mode tab, no overlap) ---
-device.add_comment("lbl_sync", [213, 26, 30, 12], "SYNC",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
-device.add_menu("sync_menu", "Sync", [213, 38, 60, 16],
+# Sync
+device.add_comment("lbl_sync", [213, 60, 30, 12], "SYNC",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_menu("sync_menu", "Sync", [240, 60, 60, 16],
                 options=["Free", "1/1", "1/2", "1/4", "1/8", "1/16"])
 
-# --- UI: Output meters ---
+# Output meters
 device.add_meter("meter_l", [WIDTH - 30, 8, 10, HEIGHT - 20],
                  coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
@@ -500,7 +501,10 @@ device.add_line("sync_trig", 1, "sync_r_pk", 0)
 device.add_line("sync_r_pk", 0, "sync_r_ln", 0)
 device.add_line("sync_r_ln", 0, "time_sel_r", 2)  # inlet 2 = synced time
 
-# --- Build ---
+# === Scope: show delayed signal ===
+device.add_line("tapout_l", 0, "delay_scope", 0)
+device.add_line("tapout_r", 0, "delay_scope", 1)
+
 output = device_output_path("Stereo Delay")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

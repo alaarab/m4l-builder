@@ -23,9 +23,6 @@ device = AudioEffect("Hardware Sync", width=WIDTH, height=HEIGHT, theme=MIDNIGHT
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 120, 16], "HARDWARE SYNC",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 # Sync mode toggle: 0 = internal (send), 1 = external (receive)
 device.add_comment("lbl_mode", [8, 26, 80, 12], "SYNC MODE",

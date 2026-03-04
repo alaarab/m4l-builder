@@ -3,13 +3,9 @@
 import os
 from m4l_builder import AudioEffect, COOL, device_output_path
 
-# --- Device setup ---
 W, H = 340, 170
 device = AudioEffect("Multiband Imager", width=W, height=H, theme=COOL)
 
-# --- UI ---
-
-# Background panel
 device.add_panel("bg", [0, 0, W, H], bgcolor=COOL.bg)
 
 # Row 1: Crossover frequency dials
@@ -87,7 +83,6 @@ device.add_comment("lbl_hi_band", [145, 157, 55, 11], "HI",
                    textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0,
                    justification=1)
 
-# --- DSP ---
 # plugin~ (obj-plugin) and plugout~ (obj-plugout) are auto-added.
 #
 # Signal flow:
@@ -251,8 +246,6 @@ device.add_newobj("sum_lm_r", "+~", numinlets=2, numoutlets=1,
 device.add_newobj("sum_all_r", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[300, 430, 30, 20])
 
-# --- Connections ---
-
 # ── Audio input → crossovers ──────────────────────────────────────────────
 device.add_line("obj-plugin", 0, "xo1_l", 0)   # L → crossover 1 L
 device.add_line("obj-plugin", 1, "xo1_r", 0)   # R → crossover 1 R
@@ -362,7 +355,6 @@ device.add_line("sum_all_r", 0, "meter_r", 0)
 device.add_line("sum_all_l", 0, "vectorscope", 0)   # L → X axis
 device.add_line("sum_all_r", 0, "vectorscope", 1)   # R → Y axis
 
-# --- Build ---
 output = device_output_path("Multiband Imager")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

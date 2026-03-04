@@ -37,18 +37,16 @@ import os
 from m4l_builder import AudioEffect, COOL, device_output_path
 from m4l_builder.engines.filter_curve import filter_curve_js
 
-# --- Device setup ---
-# Widened by 30px (300 -> 330) to accommodate L/R output meters on the right
+# widened 300 -> 330 for L/R output meters on the right
 device = AudioEffect("Stereo Filter", width=330, height=200, theme=COOL)
 
 # =========================================================================
 # UI
 # =========================================================================
 
-# Background panel
 device.add_panel("bg", [0, 0, 330, 200])
 
-# Hero filter curve display — slightly narrower to leave room for meters
+# Hero filter curve display
 device.add_jsui("filter_display", [8, 6, 284, 80],
                 js_code=filter_curve_js(
                     line_color="0.35, 0.60, 0.90, 1.0",

@@ -54,6 +54,10 @@ EXAMPLE_SCRIPTS = [
     "morphing_lfo_demo.py",
     "modulation_matrix_demo.py",
     "analog_supersaw.py",
+    "probability_gate.py",
+    "morphing_filter.py",
+    "glue_compressor.py",
+    "parallel_compressor.py",
 ]
 
 # Non-AudioEffect scripts
@@ -61,6 +65,7 @@ MIDI_EFFECT_SCRIPTS = {
     "expression_control.py", "step_sequencer.py",
     "midi_transpose.py", "midi_velocity.py",
     "midi_arpeggiator.py", "midi_chord.py", "midi_pitch_quantize.py",
+    "probability_gate.py",
 }
 INSTRUMENT_SCRIPTS = {
     "drone_synth.py", "wavetable_synth.py", "granular_looper.py",

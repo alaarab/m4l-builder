@@ -5,6 +5,8 @@ and lines is a list of patchline dicts. This makes it easy to compose DSP chains
 by extending a device's boxes and lines lists.
 """
 
+import math
+
 from .objects import newobj, patchline
 
 
@@ -82,7 +84,6 @@ def _biquad_shelf(id_prefix: str, shelf_type: str,
 
     shelf_type: 'high' or 'low'.
     """
-    import math
     p = id_prefix
     A = 10 ** (gain_db / 40.0)
     w0 = 2 * math.pi * freq / 44100.0

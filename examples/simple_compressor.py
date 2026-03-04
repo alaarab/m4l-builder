@@ -6,8 +6,8 @@ makeup gain, and dry/wet mix.
 Layout (width=410, height=220):
   +--------------------------------------------------+
   | +--------------------------------------------+   |
-  | |   GR SCOPE (live.scope~)                   |   |
-  | |   Shows gain reduction envelope            | [GR] [L][R]
+  | |   COMPRESSOR DISPLAY (jsui)                |   |
+  | |   Transfer curve + live GR dot             | [GR] [L][R]
   | +--------------------------------------------+   |
   | [Thresh] [Ratio] [Atk] [Rel] [Makeup] [Mix]      |
   +--------------------------------------------------+
@@ -30,6 +30,7 @@ Parameter smoothing:
 
 import os
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
+from m4l_builder.engines.compressor_display import compressor_display_js
 
 device = AudioEffect("Simple Compressor", width=410, height=220, theme=MIDNIGHT)
 
@@ -39,13 +40,15 @@ device = AudioEffect("Simple Compressor", width=410, height=220, theme=MIDNIGHT)
 
 device.add_panel("bg", [0, 0, 410, 220])
 
-# GR scope — full-width hero display, shows compression gain envelope
-device.add_scope("gr_scope", [8, 8, 310, 105],
-                 bgcolor=[0.05, 0.05, 0.06, 1.0],
-                 activelinecolor=[0.85, 0.35, 0.25, 1.0],
-                 gridcolor=[0.15, 0.15, 0.17, 0.4],
-                 range_vals=[0.0, 1.2],
-                 calccount=128, smooth=2, line_width=1.5)
+# Compressor transfer curve display — shows threshold knee and live GR dot
+device.add_jsui("comp_display", [8, 8, 310, 105],
+                js_code=compressor_display_js(
+                    bg_color="0.05, 0.05, 0.06, 1.0",
+                    curve_color="0.85, 0.35, 0.25, 1.0",
+                    dot_color="0.9, 0.7, 0.15, 1.0",
+                    grid_color="0.15, 0.15, 0.17, 0.4",
+                ),
+                numinlets=3)
 
 # GR meter label
 device.add_comment("gr_meter_label", [324, 6, 20, 16], "GR",
@@ -234,6 +237,10 @@ device.add_newobj("sum_r", "+~", numinlets=2, numoutlets=1,
 device.add_newobj("gr_inv", "!-~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[200, 480, 50, 20])
 
+# Snapshot for compressor display: gr_linear (0=full reduction, 1=unity) -> float
+device.add_newobj("gr_snap", "snapshot~ 1", numinlets=1, numoutlets=1,
+                  outlettype=[""], patching_rect=[200, 510, 70, 20])
+
 # =========================================================================
 # Connections
 # =========================================================================
@@ -319,8 +326,11 @@ device.add_line("dry_r", 0, "sum_r", 1)
 device.add_line("sum_l", 0, "obj-plugout", 0)
 device.add_line("sum_r", 0, "obj-plugout", 1)
 
-# GR scope: show gr_linear (0=full reduction, 1=unity)
-device.add_line("gr_linear", 0, "gr_scope", 0)
+# Compressor display: threshold -> inlet 0, ratio -> inlet 1, gr_pos -> inlet 2
+device.add_line("thresh_dial", 0, "comp_display", 0)
+device.add_line("ratio_dial", 0, "comp_display", 1)
+device.add_line("gr_linear", 0, "gr_snap", 0)
+device.add_line("gr_snap", 0, "comp_display", 2)
 
 # GR meter: invert so meter shows amount of reduction
 device.add_line("gr_linear", 0, "gr_inv", 0)

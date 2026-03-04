@@ -2,16 +2,11 @@
 
 import os
 from m4l_builder import AudioEffect, WARM, device_output_path
+from m4l_builder.engines.lfo_display import lfo_display_js
 
-# --- Device setup --- (widened 30px for meters)
 device = AudioEffect("Rhythmic Gate", width=310, height=180, theme=WARM)
 
-# --- UI ---
-# Dark background panel
-device.add_panel("bg", [0, 0, 310, 180], bgcolor=[0.12, 0.12, 0.14, 1.0])
-
-device.add_comment("title", [8, 6, 60, 12], "GATE",
-                   textcolor=WARM.text_dim, fontsize=10.0)
+device.add_panel("bg", [0, 0, 310, 180])
 
 # Waveform tab: SINE / SAW / SQUARE / TRI
 device.add_tab("wave_tab", "Wave", [8, 26, 160, 22],
@@ -29,13 +24,15 @@ device.add_tab("stereo_tab", "Stereo", [172, 26, 100, 22],
                textcolor=[0.75, 0.75, 0.75, 1.0],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
-# Hero display: gate shape scope — shows the LFO envelope in real-time
-device.add_scope("gate_scope", [8, 52, 264, 50],
-                 bgcolor=[0.06, 0.06, 0.08, 1.0],
-                 activelinecolor=[0.85, 0.55, 0.25, 1.0],
-                 gridcolor=[0.15, 0.15, 0.17, 0.4],
-                 range_vals=[0.0, 1.0],
-                 calccount=128, smooth=2, line_width=1.5)
+# Hero display: LFO waveform preview — shows shape, phase, and depth
+device.add_jsui("lfo_preview", [8, 52, 264, 50],
+                js_code=lfo_display_js(
+                    bg_color="0.06, 0.06, 0.08, 1.0",
+                    wave_color="0.85, 0.55, 0.25, 1.0",
+                    playhead_color="1.0, 1.0, 1.0, 0.6",
+                    grid_color="0.15, 0.15, 0.17, 0.4",
+                ),
+                numinlets=3)
 
 # Output meters — right edge
 device.add_meter("meter_l", [280, 5, 10, 170],
@@ -73,11 +70,9 @@ device.add_dial("mix_dial", "Mix", [185, 108, 55, 75],
                 unitstyle=5,
                 annotation_name="Dry/Wet Mix")   # PERCENT
 
-# --- DSP objects ---
-
 # --- Parameter smoothing: rate_dial -> all 4 oscillator freq inlets (smoothed) ---
 # Single pack+line~ for rate; then trigger distributes to all 4 oscillators.
-# Note: line~ outputs a signal, but cycle~/phasor~/rect~ accept signal on inlet 0.
+# line~ outputs signal; cycle~/phasor~/rect~ accept signal on inlet 0.
 device.add_newobj("rate_pk", "pack f 20", numinlets=2, numoutlets=1,
                   outlettype=[""], patching_rect=[60, 178, 60, 20])
 device.add_newobj("rate_ln", "line~", numinlets=2, numoutlets=2,
@@ -198,7 +193,15 @@ device.add_newobj("out_l", "+~", numinlets=2, numoutlets=1,
 device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[540, 478, 30, 20])
 
-# --- Connections ---
+# LFO preview: phasor~ for phase tracking -> snapshot~ -> jsui inlet 1
+device.add_newobj("lfo_phase_phasor", "phasor~", numinlets=2, numoutlets=1,
+                  outlettype=["signal"], patching_rect=[500, 238, 55, 20])
+device.add_newobj("lfo_phase_snap", "snapshot~ 4", numinlets=1, numoutlets=1,
+                  outlettype=[""], patching_rect=[500, 268, 70, 20])
+
+# Depth 0-100 -> 0-1 for jsui inlet 2
+device.add_newobj("depth_disp_scale", "scale 0. 100. 0. 1.", numinlets=6, numoutlets=1,
+                  outlettype=[""], patching_rect=[580, 238, 120, 20])
 
 # Rate dial -> pack+line~ (smoothed signal) -> all 4 oscillator freq inlets
 device.add_line("rate_dial", 0, "rate_pk", 0)
@@ -298,14 +301,18 @@ device.add_line("dry_r", 0, "out_r", 1)
 device.add_line("out_l", 0, "obj-plugout", 0)
 device.add_line("out_r", 0, "obj-plugout", 1)
 
-# Gate scope display — show the gate gain envelope (0..1)
-device.add_line("gain_add", 0, "gate_scope", 0)
+# LFO preview display: wave_tab -> inlet 0 (shape), phase -> inlet 1, depth -> inlet 2
+device.add_line("wave_tab", 0, "lfo_preview", 0)
+device.add_line("rate_ln", 0, "lfo_phase_phasor", 0)
+device.add_line("lfo_phase_phasor", 0, "lfo_phase_snap", 0)
+device.add_line("lfo_phase_snap", 0, "lfo_preview", 1)
+device.add_line("depth_dial", 0, "depth_disp_scale", 0)
+device.add_line("depth_disp_scale", 0, "lfo_preview", 2)
 
 # Output meters: tap final output
 device.add_line("out_l", 0, "meter_l", 0)
 device.add_line("out_r", 0, "meter_r", 0)
 
-# --- Build ---
 output = device_output_path("Rhythmic Gate")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

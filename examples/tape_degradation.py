@@ -20,20 +20,14 @@ Parameter smoothing:
 import os
 from m4l_builder import AudioEffect, WARM, device_output_path
 
-# --- Device setup ---
-# Widen by 30px for L/R output meters on right edge
+# widen by 30px for L/R output meters on right edge
 device = AudioEffect("Tape Degradation", width=330, height=185, theme=WARM)
 
-# --- UI ---
 device.add_panel("bg", [0, 0, 330, 185])
 
 # Section panel
 device.add_panel("section_bg", [4, 24, 322, 157],
                  bgcolor=WARM.section, rounded=4)
-
-device.add_comment("title", [8, 5, 60, 12], "TAPE",
-                   fontname="Ableton Sans Bold", fontsize=10.0,
-                   textcolor=WARM.text_dim)
 
 # Wow/Flutter LFO modulation scope
 device.add_scope("lfo_scope", [8, 26, 284, 40],
@@ -82,8 +76,6 @@ METER_COLORS = dict(
 )
 device.add_meter("meter_l", [296, 26, 14, 155], orientation=0, **METER_COLORS)
 device.add_meter("meter_r", [312, 26, 14, 155], orientation=0, **METER_COLORS)
-
-# --- DSP objects ---
 
 # === Input drive ===
 # One shared scale feeds both channels — 0-100% maps to 1x-3x into tanh~
@@ -224,8 +216,6 @@ device.add_newobj("out_l", "+~", numinlets=2, numoutlets=1,
 device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[500, 370, 30, 20])
 
-# --- Connections ---
-
 # Drive: dial -> single scale -> fan to both L and R pack+line~ chains
 device.add_line("drive_dial", 0, "drive_scale", 0)
 device.add_line("drive_scale", 0, "drive_l_pk", 0)
@@ -324,7 +314,6 @@ device.add_line("lfo_sum", 0, "lfo_scope", 0)
 device.add_line("out_l", 0, "meter_l", 0)
 device.add_line("out_r", 0, "meter_r", 0)
 
-# --- Build ---
 output = device_output_path("Tape Degradation")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

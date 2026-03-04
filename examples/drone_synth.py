@@ -37,9 +37,6 @@ device = Instrument("Drone Synth", width=WIDTH, height=HEIGHT, theme=MIDNIGHT)
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT])
 
-device.add_comment("title", [8, 5, 80, 16], "DRONE",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 # Section labels
 device.add_comment("lbl_osc", [8, 22, 60, 12], "OSCILLATOR",
@@ -49,13 +46,11 @@ device.add_comment("lbl_filter", [8, 92, 50, 12], "FILTER",
 device.add_comment("lbl_output", [220, 22, 60, 12], "OUTPUT",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
 
-# Detune dial — spreads oscillators apart in cents
 device.add_dial("detune_dial", "Detune", [8, 32, 50, 55],
                 min_val=0.0, max_val=50.0, initial=8.0,
                 unitstyle=0, appearance=1,
                 annotation_name="Oscillator detune spread in cents")
 
-# Voice mix slider — left=octaves, right=fifths
 device.add_slider("mix_slider", "Voice Mix", [70, 32, 130, 20],
                   min_val=0.0, max_val=1.0, initial=0.5,
                   unitstyle=1, orientation=0,
@@ -82,11 +77,10 @@ device.add_dial("res_dial", "Res", [70, 104, 50, 60],
                 unitstyle=5, appearance=1,
                 annotation_name="Filter resonance")
 
-# Scope — waveform display
 device.add_scope("scope", [140, 104, 70, 60],
                  smooth=2, line_width=1.5, calccount=128)
 
-# Master gain with built-in meter — this is the only example using add_live_gain
+# only example using add_live_gain (has meter built in)
 device.add_live_gain("gain", "Volume", [220, 32, 120, 155],
                      min_val=-70.0, max_val=6.0, initial=0.0,
                      orientation=1,   # vertical
@@ -115,7 +109,7 @@ device.add_newobj("freq_store", "f 220.", numinlets=2, numoutlets=1,
 
 # Detune: spread in cents → convert to ratio per voice
 # Each oscillator gets a slightly different frequency via mtof + small offset
-# We use "+" before mtof-equiv: f(note + detune_fraction) via ftom/mtof or direct Hz math
+# Direct Hz approach: freq = base_freq * pow(2, cents/1200) per voice
 # Simpler: use cycle~ with frequency inlet, compute freq = base_freq * pow(2, cents/1200)
 # For 4 voices: offsets are -detune, +detune, -detune*0.7, +detune*0.7 (cents)
 # Use expr to compute Hz from base freq and cent offset:
@@ -196,7 +190,7 @@ device.add_newobj("scale_23", "*~ 0.25", numinlets=2, numoutlets=1,
 device.add_newobj("osc_mix", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[460, 340, 30, 20])
 
-# Lowpass filter: svf~ — outlet 0 = LP
+# svf~ outlet 0 = LP
 device.add_newobj("svf", "svf~", numinlets=3, numoutlets=4,
                   outlettype=["signal", "signal", "signal", "signal"],
                   patching_rect=[460, 380, 40, 20])
@@ -222,7 +216,7 @@ device.add_newobj("mix_pk", "pack f 20", numinlets=2, numoutlets=1,
 device.add_newobj("mix_ln", "line~", numinlets=2, numoutlets=2,
                   outlettype=["signal", "bang"], patching_rect=[550, 280, 40, 20])
 
-# plugout~ — Instrument has no auto I/O
+# Instrument has no auto I/O; add manually
 device.add_newobj("plugout", "plugout~", numinlets=2, numoutlets=0,
                   patching_rect=[460, 500, 60, 20])
 
@@ -310,7 +304,7 @@ device.add_line("lp_pass", 0, "scope", 1)
 device.add_line("lp_pass", 0, "gain", 0)
 device.add_line("lp_pass", 0, "gain", 1)
 
-# plugout~ — stereo out from live.gain~
+# stereo out from live.gain~
 device.add_line("gain", 0, "plugout", 0)
 device.add_line("gain", 1, "plugout", 1)
 

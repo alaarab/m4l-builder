@@ -17,9 +17,6 @@ device = MidiEffect("Midi Pitch Quantize", width=280, height=130, theme=MIDNIGHT
 # Background
 device.add_panel("bg", [0, 0, 280, 130])
 
-device.add_comment("title", [8, 5, 120, 16], "PITCH QUANTIZE",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 # Scale selector menu
 device.add_menu("scale_sel", "Scale", [8, 24, 90, 20], SCALES)

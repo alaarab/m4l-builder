@@ -23,9 +23,6 @@ device = AudioEffect("FDN Reverb", width=WIDTH, height=HEIGHT, theme=MIDNIGHT)
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT])
 
-device.add_comment("title", [8, 5, 80, 16], "FDN REVERB",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 device.add_comment("lbl_params", [8, 22, 100, 12], "PARAMETERS",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])

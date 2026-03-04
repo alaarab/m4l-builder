@@ -29,9 +29,6 @@ device = Instrument("Granular Looper", width=WIDTH, height=HEIGHT, theme=MIDNIGH
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT])
 
-device.add_comment("title", [8, 5, 120, 16], "GRANULAR LOOPER",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 device.add_comment("lbl_rec", [8, 22, 60, 12], "RECORD",
                    fontsize=9.0, textcolor=[0.85, 0.35, 0.35, 0.7])

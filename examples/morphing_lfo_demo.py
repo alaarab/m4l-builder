@@ -21,9 +21,6 @@ device = AudioEffect("Morphing LFO Demo", width=WIDTH, height=HEIGHT, theme=COOL
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 140, 16], "MORPHING LFO",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.12, 0.12, 0.14, 1.0])
 
 # Section labels
 device.add_comment("lbl_lfo", [8, 26, 60, 12], "LFO",

@@ -20,71 +20,67 @@ Signal chain:
 import os
 from m4l_builder import AudioEffect, WARM, device_output_path
 
-device = AudioEffect("LoFi Processor", width=310, height=175, theme=WARM)
+device = AudioEffect("LoFi Processor", width=310, height=200, theme=WARM)
 
-# --- UI ---
-device.add_panel("bg", [0, 0, 310, 175], bgcolor=[0.12, 0.12, 0.14, 1.0])
+device.add_panel("bg", [0, 0, 310, 200])
 
-# Crushed waveform scope — shows the bitcrushed/degraded signal
-device.add_scope("crush_scope", [8, 8, 264, 42],
-                 bgcolor=[0.06, 0.06, 0.06, 1.0],
+# Bitcrushed waveform scope — the visual heart, takes ~40% of height
+device.add_scope("crush_scope", [8, 8, 264, 70],
+                 bgcolor=[0.05, 0.04, 0.03, 1.0],
                  activelinecolor=[0.85, 0.55, 0.25, 1.0],
-                 gridcolor=[0.15, 0.13, 0.10, 0.4],
+                 gridcolor=[0.14, 0.11, 0.08, 0.4],
                  range_vals=[-1.2, 1.2],
-                 calccount=64, smooth=0, line_width=1.5)
+                 calccount=64, smooth=0, line_width=2.0)
 
 # Section labels above dials
-device.add_comment("lbl_crush", [8, 54, 84, 12], "CRUSH",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
-device.add_comment("lbl_drive", [96, 54, 84, 12], "DRIVE",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
-device.add_comment("lbl_color", [140, 54, 84, 12], "COLOR",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
-device.add_comment("lbl_output", [228, 54, 55, 12], "OUTPUT",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
+device.add_comment("lbl_crush", [8, 84, 84, 12], "CRUSH",
+                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.7])
+device.add_comment("lbl_drive", [100, 84, 40, 12], "DRIVE",
+                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.7])
+device.add_comment("lbl_color", [144, 84, 40, 12], "COLOR",
+                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.7])
+device.add_comment("lbl_output", [228, 84, 55, 12], "OUTPUT",
+                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.7])
 
-# Dials row: Bits, Rate, Drive, Tone, Hiss, Mix
-device.add_dial("bits_dial", "Bits", [8, 64, 40, 75],
+# Bits and Rate are the primary controls — bigger dials
+device.add_dial("bits_dial", "Bits", [8, 94, 48, 88],
                 min_val=1.0, max_val=16.0, initial=12.0,
                 annotation_name="Bit depth reduction — lower values = crunchier")
 
-device.add_dial("rate_dial", "Rate", [52, 64, 40, 75],
+device.add_dial("rate_dial", "Rate", [60, 94, 48, 88],
                 min_val=0.0, max_val=100.0, initial=0.0,
                 unitstyle=5,  # PERCENT
                 annotation_name="Sample rate reduction — higher values = more aliasing")
 
-# Drive is a pre-crush input gain — its own section to clarify purpose
-device.add_dial("drive_dial", "Drive", [96, 64, 40, 75],
+device.add_dial("drive_dial", "Drive", [112, 94, 40, 88],
                 min_val=0.0, max_val=100.0, initial=0.0,
                 annotation_name="Input drive before bitcrushing")
 
-device.add_dial("tone_dial", "Tone", [140, 64, 40, 75],
+device.add_dial("tone_dial", "Tone", [152, 94, 40, 88],
                 min_val=500.0, max_val=20000.0, initial=20000.0,
                 unitstyle=3,  # HZ
                 annotation_name="Post-crush lowpass filter cutoff")
 
-device.add_dial("hiss_dial", "Hiss", [184, 64, 40, 75],
+device.add_dial("hiss_dial", "Hiss", [192, 94, 40, 88],
                 min_val=0.0, max_val=100.0, initial=0.0,
                 annotation_name="Analog tape hiss noise level")
 
-device.add_dial("mix_dial", "Mix", [228, 64, 40, 75],
+device.add_dial("mix_dial", "Mix", [232, 94, 44, 88],
                 min_val=0.0, max_val=100.0, initial=100.0,
                 unitstyle=5,  # PERCENT
                 annotation_name="Dry/wet balance — 0% clean, 100% crushed")
 
-# Output meters using theme accent colors
-device.add_meter("meter_l", [280, 8, 14, 159], orientation=0,
+# Output meters — full height
+device.add_meter("meter_l", [280, 8, 14, 184], orientation=0,
                  coldcolor=[0.85, 0.55, 0.25, 1.0],
                  warmcolor=[0.90, 0.75, 0.20, 1.0],
                  hotcolor=[0.90, 0.40, 0.10, 1.0],
                  overloadcolor=[0.90, 0.15, 0.15, 1.0])
-device.add_meter("meter_r", [295, 8, 14, 159], orientation=0,
+device.add_meter("meter_r", [295, 8, 14, 184], orientation=0,
                  coldcolor=[0.85, 0.55, 0.25, 1.0],
                  warmcolor=[0.90, 0.75, 0.20, 1.0],
                  hotcolor=[0.90, 0.40, 0.10, 1.0],
                  overloadcolor=[0.90, 0.15, 0.15, 1.0])
-
-# --- DSP objects ---
 
 # Input drive: scale dial 0-100 -> 1.0-3.0, then *~ for L and R
 device.add_newobj("drive_scale", "scale 0. 100. 1. 3.", numinlets=6, numoutlets=1,
@@ -237,8 +233,6 @@ device.add_newobj("out_l", "+~", numinlets=2, numoutlets=1,
 device.add_newobj("out_r", "+~", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[130, 490, 30, 20])
 
-# --- Connections ---
-
 # Input drive chain: plugin~ -> drive_l/r -> degrade_l/r
 device.add_line("obj-plugin", 0, "drive_l", 0)   # plugin~ L -> drive_l signal
 device.add_line("obj-plugin", 1, "drive_r", 0)   # plugin~ R -> drive_r signal
@@ -337,7 +331,6 @@ device.add_line("degrade_l", 0, "crush_scope", 0)
 device.add_line("out_l", 0, "meter_l", 0)
 device.add_line("out_r", 0, "meter_r", 0)
 
-# --- Build ---
 output = device_output_path("LoFi Processor")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -21,9 +21,6 @@ device = AudioEffect("Transport LFO Demo", width=WIDTH, height=HEIGHT, theme=MID
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 120, 16], "TRANSPORT LFO",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 # Beat division selector
 device.add_comment("lbl_div", [8, 26, 70, 12], "DIVISION",
