@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.6.0] — 2026-03-04
+
+### Added
+
+**Recipes (#91-#100)**
+- `convolver_controlled_stage` — convolver + wet/dry dial
+- `sidechain_compressor_recipe` — sidechain_routing + compressor + display + 2 dials
+- `lfo_matrix_distribute` — one LFO fanned to N depth targets
+- `spectral_gate_stage` — pfft~ gate + threshold dial + spectral display
+- `arpeggio_quantized_stage` — arpeggiator + pitch_quantize chain
+- `grain_playback_controlled` — grain_cloud + buffer + position/size/density dials
+- `poly_midi_gate` — notein + velocity_curve + poly_voices
+- `transport_sync_lfo_recipe` — transport LFO + depth dial + division umenu
+- `midi_learn_macro_assignment` — midi_learn_chain + N macromap instances
+
+**Documentation (#101-#103)**
+- `README.md` — install, quick start, key concepts, examples table
+- `docs/api.md` — full API reference across all 13 modules
+- `examples/from_amxd_demo.py` — round-trip: build → write → read back → modify → write
+
+**gen~ codebox (#104-#105)**
+- `gen_codebox(id_prefix, gen_code, numinlets, numoutlets)` — embed gen~ DSP code directly
+- `examples/gen_codebox_demo.py` — soft clipper + one-pole lowpass via gen~
+
+**Themes (#106)**
+- `LOFI` — muted warm amber, brown-grey bg
+- `SYNTHWAVE` — neon cyan on near-black purple
+- `INDUSTRIAL` — vivid orange on neutral dark grey
+
+**MC multichannel (#107-#110)**
+- `mc_gain_stage` — mc.gain~ per-channel gain
+- `mc_mixer` — mc.mix~ for summing MC streams
+- `mc_selector` — mc.selector~ for switching MC paths
+- `examples/mc_demo.py` — stereo → 4ch expand → gain → collapse
+
+**Examples**
+- `examples/recipe_cookbook.py` — "Production Chain" device using 4 recipes: gain stage, sidechain comp, LFO matrix, dry/wet
+
 ## [0.5.1] — 2026-03-04
 
 ### Changed

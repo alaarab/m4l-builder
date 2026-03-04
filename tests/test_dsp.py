@@ -104,6 +104,10 @@ from m4l_builder.dsp import (
     dict_store,
     pattr_system,
     midi_channel_filter,
+    gen_codebox,
+    mc_gain_stage,
+    mc_mixer,
+    mc_selector,
 )
 
 
@@ -4354,3 +4358,168 @@ class TestMidiChannelFilter:
         assert "midi_midiin" in ids
         assert "midi_midiparse" in ids
         assert "midi_sel" in ids
+
+
+class TestGenCodebox:
+    """Test gen_codebox() creates a gen~ object with embedded code."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = gen_codebox("clip", "out1 = clamp(in1, -1, 1)")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_box_text_is_gen_tilde(self):
+        boxes, _ = gen_codebox("clip", "out1 = clamp(in1, -1, 1)")
+        assert boxes[0]["box"]["text"] == "gen~"
+
+    def test_code_key_present(self):
+        code = "out1 = tanh(in1 * 2.0)"
+        boxes, _ = gen_codebox("sat", code)
+        assert boxes[0]["box"]["code"] == code
+
+    def test_default_outlettype_is_signal(self):
+        boxes, _ = gen_codebox("g", "out1 = in1")
+        assert boxes[0]["box"]["outlettype"] == ["signal"]
+
+    def test_multi_outlet_default(self):
+        boxes, _ = gen_codebox("g", "out1 = in1; out2 = in1",
+                               numoutlets=2)
+        assert boxes[0]["box"]["outlettype"] == ["signal", "signal"]
+
+    def test_custom_outlettype(self):
+        boxes, _ = gen_codebox("g", "out1 = in1",
+                               outlettype=["signal", ""])
+        assert boxes[0]["box"]["outlettype"] == ["signal", ""]
+
+    def test_numinlets(self):
+        boxes, _ = gen_codebox("g", "out1 = in1 + in2", numinlets=2)
+        assert boxes[0]["box"]["numinlets"] == 2
+
+    def test_numoutlets_matches(self):
+        boxes, _ = gen_codebox("g", "out1=in1; out2=in1; out3=in1",
+                               numoutlets=3)
+        assert boxes[0]["box"]["numoutlets"] == 3
+
+    def test_id_uses_prefix(self):
+        boxes, _ = gen_codebox("myprefix", "out1 = in1")
+        assert boxes[0]["box"]["id"] == "myprefix_gen"
+
+
+class TestMcGainStage:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = mc_gain_stage("mc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_mc_gain(self):
+        boxes, _ = mc_gain_stage("mc")
+        box = _find_box(boxes, "mc_mcgain")
+        assert "mc.gain~" in box["text"]
+
+    def test_default_2_channels(self):
+        boxes, _ = mc_gain_stage("mc")
+        box = _find_box(boxes, "mc_mcgain")
+        assert "2" in box["text"]
+
+    def test_custom_channels(self):
+        boxes, _ = mc_gain_stage("mc", channels=4)
+        box = _find_box(boxes, "mc_mcgain")
+        assert "4" in box["text"]
+
+    def test_numinlets_is_2(self):
+        boxes, _ = mc_gain_stage("mc")
+        box = _find_box(boxes, "mc_mcgain")
+        assert box["numinlets"] == 2
+
+    def test_outlettype_multichannelsignal(self):
+        boxes, _ = mc_gain_stage("mc")
+        box = _find_box(boxes, "mc_mcgain")
+        assert box["outlettype"] == ["multichannelsignal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = mc_gain_stage("mymc")
+        assert "mymc_mcgain" in _box_ids(boxes)
+
+    def test_invalid_channels_raises(self):
+        with pytest.raises(ValueError):
+            mc_gain_stage("mc", channels=0)
+
+
+class TestMcMixer:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = mc_mixer("mc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_mc_mix(self):
+        boxes, _ = mc_mixer("mc")
+        box = _find_box(boxes, "mc_mcmix")
+        assert "mc.mix~" in box["text"]
+
+    def test_default_2_inputs_2_channels(self):
+        boxes, _ = mc_mixer("mc")
+        box = _find_box(boxes, "mc_mcmix")
+        assert box["text"] == "mc.mix~ 2 2"
+
+    def test_custom_inputs_and_channels(self):
+        boxes, _ = mc_mixer("mc", inputs=4, channels=8)
+        box = _find_box(boxes, "mc_mcmix")
+        assert box["text"] == "mc.mix~ 4 8"
+
+    def test_numinlets_equals_inputs(self):
+        boxes, _ = mc_mixer("mc", inputs=3)
+        box = _find_box(boxes, "mc_mcmix")
+        assert box["numinlets"] == 3
+
+    def test_outlettype_multichannelsignal(self):
+        boxes, _ = mc_mixer("mc")
+        box = _find_box(boxes, "mc_mcmix")
+        assert box["outlettype"] == ["multichannelsignal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = mc_mixer("mymc")
+        assert "mymc_mcmix" in _box_ids(boxes)
+
+    def test_invalid_channels_raises(self):
+        with pytest.raises(ValueError):
+            mc_mixer("mc", channels=0)
+
+
+class TestMcSelector:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = mc_selector("mc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_mc_selector(self):
+        boxes, _ = mc_selector("mc")
+        box = _find_box(boxes, "mc_mcsel")
+        assert "mc.selector~" in box["text"]
+
+    def test_default_2_channels_2_count(self):
+        boxes, _ = mc_selector("mc")
+        box = _find_box(boxes, "mc_mcsel")
+        assert box["text"] == "mc.selector~ 2 2"
+
+    def test_custom_channels_and_count(self):
+        boxes, _ = mc_selector("mc", channels=4, count=3)
+        box = _find_box(boxes, "mc_mcsel")
+        assert box["text"] == "mc.selector~ 3 4"
+
+    def test_numinlets_equals_count_plus_1(self):
+        boxes, _ = mc_selector("mc", count=3)
+        box = _find_box(boxes, "mc_mcsel")
+        assert box["numinlets"] == 4
+
+    def test_outlettype_multichannelsignal(self):
+        boxes, _ = mc_selector("mc")
+        box = _find_box(boxes, "mc_mcsel")
+        assert box["outlettype"] == ["multichannelsignal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = mc_selector("mymc")
+        assert "mymc_mcsel" in _box_ids(boxes)
+
+    def test_invalid_channels_raises(self):
+        with pytest.raises(ValueError):
+            mc_selector("mc", channels=0)

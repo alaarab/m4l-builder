@@ -1,6 +1,6 @@
 """Tests for Theme dataclass and Device theme integration."""
 
-from m4l_builder.theme import Theme, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR
+from m4l_builder.theme import Theme, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR, LOFI, SYNTHWAVE, INDUSTRIAL
 from m4l_builder.device import Device, AudioEffect
 
 
@@ -483,3 +483,59 @@ class TestNewPresets:
     def test_solar_has_dark_bg(self):
         bg_luma = 0.299 * SOLAR.bg[0] + 0.587 * SOLAR.bg[1] + 0.114 * SOLAR.bg[2]
         assert bg_luma < 0.3
+
+
+class TestThemePresetsWave2:
+    """Test LOFI, SYNTHWAVE, INDUSTRIAL presets."""
+
+    def test_lofi_is_theme_with_accent(self):
+        assert isinstance(LOFI, Theme)
+        assert LOFI.accent is not None
+
+    def test_synthwave_is_theme_with_accent(self):
+        assert isinstance(SYNTHWAVE, Theme)
+        assert SYNTHWAVE.accent is not None
+
+    def test_industrial_is_theme_with_accent(self):
+        assert isinstance(INDUSTRIAL, Theme)
+        assert INDUSTRIAL.accent is not None
+
+    def test_lofi_has_warm_muted_accent(self):
+        # amber/gold: red > green > blue
+        assert LOFI.accent[0] > 0.5
+        assert LOFI.accent[1] > 0.4
+        assert LOFI.accent[2] < 0.4
+
+    def test_synthwave_has_cyan_accent(self):
+        # cyan: low red, high green and blue
+        assert SYNTHWAVE.accent[1] > 0.7
+        assert SYNTHWAVE.accent[2] > 0.7
+
+    def test_industrial_has_orange_accent(self):
+        # vivid orange: high red, mid green, low blue
+        assert INDUSTRIAL.accent[0] > 0.8
+        assert INDUSTRIAL.accent[1] > 0.3
+        assert INDUSTRIAL.accent[2] < 0.2
+
+    def test_all_wave2_have_valid_rgba_fields(self):
+        for preset in (LOFI, SYNTHWAVE, INDUSTRIAL):
+            for field in (preset.bg, preset.surface, preset.section,
+                          preset.text, preset.text_dim, preset.accent):
+                assert len(field) == 4
+
+    def test_all_wave2_have_dark_bg(self):
+        for preset in (LOFI, SYNTHWAVE, INDUSTRIAL):
+            bg_luma = 0.299 * preset.bg[0] + 0.587 * preset.bg[1] + 0.114 * preset.bg[2]
+            assert bg_luma < 0.3
+
+    def test_all_wave2_have_meter_colors(self):
+        for preset in (LOFI, SYNTHWAVE, INDUSTRIAL):
+            assert len(preset.meter_cold) == 4
+            assert len(preset.meter_warm) == 4
+            assert len(preset.meter_hot) == 4
+            assert len(preset.meter_over) == 4
+
+    def test_wave2_are_distinct(self):
+        assert LOFI.accent != SYNTHWAVE.accent
+        assert SYNTHWAVE.accent != INDUSTRIAL.accent
+        assert LOFI.accent != INDUSTRIAL.accent
