@@ -5,6 +5,7 @@ import os
 from .constants import DEVICE_TYPE_CODES
 from .container import write_amxd, build_amxd
 from .dsp import stereo_io
+from .layout import Row, Column, Grid
 from .objects import newobj, patchline
 from .patcher import build_patcher
 from .ui import (panel, dial, tab, toggle, comment, scope, meter, menu,
@@ -41,6 +42,13 @@ class Device:
     def add_line(self, source_id: str, source_outlet: int,
                  dest_id: str, dest_inlet: int):
         self.lines.append(patchline(source_id, source_outlet, dest_id, dest_inlet))
+
+    def add_dsp(self, boxes: list, lines: list):
+        """Add all boxes and lines from a DSP block tuple to this device."""
+        for box in boxes:
+            self.add_box(box)
+        for line in lines:
+            self.lines.append(line)
 
     def _inject_theme(self, kwargs, mapping):
         """Inject theme defaults for keys not already in kwargs.
@@ -212,6 +220,17 @@ class Device:
                    **kwargs) -> str:
         return self.add_box(newobj(id, text, numinlets=numinlets,
                                    numoutlets=numoutlets, **kwargs))
+
+    def row(self, x, y, *, spacing=8, height=None, width=None):
+        return Row(self, x, y, spacing=spacing, height=height, width=width)
+
+    def column(self, x, y, *, spacing=4, width=None, height=None):
+        return Column(self, x, y, spacing=spacing, width=width, height=height)
+
+    def grid(self, x, y, *, cols, col_width, row_height, spacing_x=4, spacing_y=4):
+        return Grid(self, x, y, cols=cols, col_width=col_width,
+                    row_height=row_height, spacing_x=spacing_x,
+                    spacing_y=spacing_y)
 
     def to_patcher(self) -> dict:
         patcher = build_patcher(

@@ -1,6 +1,6 @@
 """Tests for Theme dataclass and Device theme integration."""
 
-from m4l_builder.theme import Theme, MIDNIGHT, WARM, COOL, LIGHT
+from m4l_builder.theme import Theme, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR
 from m4l_builder.device import Device, AudioEffect
 
 
@@ -370,3 +370,116 @@ class TestDeviceThemeIntegration:
         d.add_comment("title", [8, 8, 100, 16], "TEST")
         data = d.to_bytes()
         assert len(data) > 0
+
+
+class TestFromAccent:
+    def test_returns_theme_instance(self):
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0])
+        assert isinstance(t, Theme)
+
+    def test_accent_is_preserved(self):
+        accent = [0.4, 0.7, 0.5, 1.0]
+        t = Theme.from_accent(accent)
+        assert t.accent == accent
+
+    def test_bg_is_darker_than_accent(self):
+        accent = [0.4, 0.7, 0.5, 1.0]
+        t = Theme.from_accent(accent)
+        accent_luma = 0.299 * accent[0] + 0.587 * accent[1] + 0.114 * accent[2]
+        bg_luma = 0.299 * t.bg[0] + 0.587 * t.bg[1] + 0.114 * t.bg[2]
+        assert bg_luma < accent_luma
+
+    def test_surface_is_between_bg_and_accent(self):
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0])
+        bg_luma = 0.299 * t.bg[0] + 0.587 * t.bg[1] + 0.114 * t.bg[2]
+        surf_luma = 0.299 * t.surface[0] + 0.587 * t.surface[1] + 0.114 * t.surface[2]
+        assert surf_luma >= bg_luma
+
+    def test_all_rgba_fields_are_length_4(self):
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0])
+        for field in (t.bg, t.surface, t.section, t.text, t.text_dim, t.accent):
+            assert len(field) == 4
+
+    def test_custom_bg_is_respected(self):
+        custom_bg = [0.02, 0.02, 0.02, 1.0]
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0], bg=custom_bg)
+        assert t.bg == custom_bg
+
+    def test_custom_surface_is_respected(self):
+        custom_surface = [0.15, 0.15, 0.15, 1.0]
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0], surface=custom_surface)
+        assert t.surface == custom_surface
+
+
+class TestCustomTheme:
+    def test_no_args_matches_midnight_core_fields(self):
+        t = Theme.custom()
+        assert t.bg == MIDNIGHT.bg
+        assert t.surface == MIDNIGHT.surface
+        assert t.section == MIDNIGHT.section
+        assert t.text == MIDNIGHT.text
+        assert t.text_dim == MIDNIGHT.text_dim
+        assert t.accent == MIDNIGHT.accent
+
+    def test_accent_override(self):
+        new_accent = [0.8, 0.3, 0.1, 1.0]
+        t = Theme.custom(accent=new_accent)
+        assert t.accent == new_accent
+
+    def test_bg_override(self):
+        new_bg = [0.05, 0.05, 0.05, 1.0]
+        t = Theme.custom(bg=new_bg)
+        assert t.bg == new_bg
+
+    def test_unspecified_fields_stay_midnight(self):
+        t = Theme.custom(accent=[0.9, 0.2, 0.2, 1.0])
+        assert t.bg == MIDNIGHT.bg
+        assert t.text == MIDNIGHT.text
+
+    def test_returns_theme_instance(self):
+        assert isinstance(Theme.custom(), Theme)
+
+
+class TestNewPresets:
+    def test_forest_has_green_accent(self):
+        # green channel should dominate
+        assert FOREST.accent[1] > FOREST.accent[0]
+        assert FOREST.accent[1] > FOREST.accent[2]
+
+    def test_violet_has_purple_accent(self):
+        # red and blue channels prominent relative to green
+        assert VIOLET.accent[0] > 0.4
+        assert VIOLET.accent[2] > 0.6
+
+    def test_solar_has_yellow_accent(self):
+        # red and green high, blue low
+        assert SOLAR.accent[0] > 0.7
+        assert SOLAR.accent[1] > 0.6
+        assert SOLAR.accent[2] < 0.4
+
+    def test_all_presets_are_theme_instances(self):
+        for preset in (FOREST, VIOLET, SOLAR):
+            assert isinstance(preset, Theme)
+
+    def test_all_presets_have_valid_rgba_fields(self):
+        for preset in (FOREST, VIOLET, SOLAR):
+            for field in (preset.bg, preset.surface, preset.section,
+                          preset.text, preset.text_dim, preset.accent):
+                assert len(field) == 4
+
+    def test_presets_are_distinct_from_each_other(self):
+        assert FOREST.accent != VIOLET.accent
+        assert VIOLET.accent != SOLAR.accent
+        assert FOREST.accent != SOLAR.accent
+
+    def test_forest_has_dark_bg(self):
+        bg_luma = 0.299 * FOREST.bg[0] + 0.587 * FOREST.bg[1] + 0.114 * FOREST.bg[2]
+        assert bg_luma < 0.3
+
+    def test_violet_has_dark_bg(self):
+        bg_luma = 0.299 * VIOLET.bg[0] + 0.587 * VIOLET.bg[1] + 0.114 * VIOLET.bg[2]
+        assert bg_luma < 0.3
+
+    def test_solar_has_dark_bg(self):
+        bg_luma = 0.299 * SOLAR.bg[0] + 0.587 * SOLAR.bg[1] + 0.114 * SOLAR.bg[2]
+        assert bg_luma < 0.3
