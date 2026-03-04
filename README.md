@@ -1,241 +1,204 @@
 # m4l-builder
 
-Programmatically build Max for Live devices in Python.
+[![PyPI version](https://img.shields.io/pypi/v/m4l-builder.svg)](https://pypi.org/project/m4l-builder/)
+[![Tests](https://img.shields.io/github/actions/workflow/status/alaarab/m4l-builder/tests.yml?label=tests)](https://github.com/alaarab/m4l-builder)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://pypi.org/project/m4l-builder/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+Build Max for Live devices in Python. Write scripts, emit `.amxd` files straight to your Ableton User Library. No Max GUI required. Everything is version-controllable, scriptable, and reproducible. Zero runtime dependencies -- pure stdlib.
 
-m4l-builder generates fully functional Max for Live (.amxd) devices without the Max GUI. Define UI, wire DSP, and export a binary .amxd that loads directly into Ableton Live.
-
-- **Max patching in code** -- version-controllable, reproducible, scriptable
-- **No Max license required** to generate devices -- only Ableton Live + Max for Live to run them
-- **33 composable DSP blocks** -- filters, delays, saturators, compressor, limiter, LFOs, envelopes, and more
-- **34 UI components** -- dials, sliders, menus, scopes, meters, step sequencer, grid, keyboard, and more
-- **Theme system** -- 4 built-in themes with automatic color injection into all UI components
-- **kwargs passthrough** -- any Max attribute can be set on any UI component
-
-## Quick Start
+## Install
 
 ```bash
-git clone https://github.com/alaarab/m4l-builder.git
-cd m4l-builder
-pip install -e .
+pip install m4l-builder
 ```
 
-### Minimal Example
+## Quick start
 
 ```python
-from m4l_builder import AudioEffect, device_output_path
-from m4l_builder.theme import WARM
+from m4l_builder import AudioEffect, WARM, device_output_path
 
-device = AudioEffect("Simple Gain", width=150, height=110, theme=WARM)
+device = AudioEffect("My Gain", width=150, height=110, theme=WARM)
 
 device.add_panel("bg", [0, 0, 150, 110])
-device.add_comment("title", [6, 5, 50, 14], "GAIN", fontsize=12.0)
-device.add_dial("gain", "Gain", [10, 22, 50, 75],
+device.add_dial("gain", "Gain", [10, 6, 50, 90],
                 min_val=-70.0, max_val=6.0, initial=0.0,
-                unitstyle=4, annotation_name="Output Gain")
+                unitstyle=4, annotation_name="Gain")
 
-# DSP: plugin~ -> dbtoa -> line~ -> *~ -> plugout~
-gain_l = device.add_newobj("gain_l", "*~ 1.", numinlets=2, numoutlets=1,
-                           outlettype=["signal"])
-gain_r = device.add_newobj("gain_r", "*~ 1.", numinlets=2, numoutlets=1,
-                           outlettype=["signal"])
+device.add_newobj("mul_l", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
+device.add_newobj("mul_r", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
 device.add_newobj("db2a", "dbtoa", numinlets=1, numoutlets=1, outlettype=[""])
-device.add_newobj("gain_pk", "pack f 20", numinlets=2, numoutlets=1, outlettype=[""])
-device.add_newobj("gain_ln", "line~", numinlets=2, numoutlets=2,
-                  outlettype=["signal", "bang"])
+device.add_newobj("pk", "pack f 20", numinlets=2, numoutlets=1, outlettype=[""])
+device.add_newobj("ln", "line~", numinlets=2, numoutlets=2, outlettype=["signal", "bang"])
 
-device.add_line("obj-plugin", 0, "gain_l", 0)
-device.add_line("obj-plugin", 1, "gain_r", 0)
-device.add_line("gain_l", 0, "obj-plugout", 0)
-device.add_line("gain_r", 0, "obj-plugout", 1)
-device.add_line("gain", 0, "db2a", 0)
-device.add_line("db2a", 0, "gain_pk", 0)
-device.add_line("gain_pk", 0, "gain_ln", 0)
-device.add_line("gain_ln", 0, "gain_l", 1)
-device.add_line("gain_ln", 0, "gain_r", 1)
+device.add_line("obj-plugin", 0, "mul_l", 0)   # stereo in
+device.add_line("obj-plugin", 1, "mul_r", 0)
+device.add_line("mul_l", 0, "obj-plugout", 0)   # stereo out
+device.add_line("mul_r", 0, "obj-plugout", 1)
+device.add_line("gain", 0, "db2a", 0)           # dial -> dbtoa -> smooth -> gain
+device.add_line("db2a", 0, "pk", 0)
+device.add_line("pk", 0, "ln", 0)
+device.add_line("ln", 0, "mul_l", 1)
+device.add_line("ln", 0, "mul_r", 1)
 
-device.build(device_output_path("Simple Gain"))
+device.build(device_output_path("My Gain"))
 ```
 
-## Device Types
+Restart Ableton (or refresh the browser) and your device shows up in the User Library.
+
+## Key concepts
+
+### Device types
+
+Three device types, matching what Ableton expects:
 
 ```python
 from m4l_builder import AudioEffect, Instrument, MidiEffect
 
-device = AudioEffect("My Effect", width=300, height=170)   # auto plugin~/plugout~
-device = Instrument("My Synth", width=400, height=200)     # no auto I/O
-device = MidiEffect("My MIDI Tool", width=200, height=100) # MIDI only, no audio
+fx    = AudioEffect("FX", 300, 170)      # auto-adds plugin~/plugout~
+synth = Instrument("Synth", 400, 200)    # no auto I/O
+midi  = MidiEffect("MIDI FX", 200, 100)  # MIDI only
 ```
 
-## UI Components (34)
+`AudioEffect` auto-wires stereo `plugin~` / `plugout~` objects (IDs `obj-plugin`, `obj-plugout`). Instruments and MIDI effects leave I/O to you.
 
-All UI functions place objects in presentation mode at the specified `rect`. kwargs passthrough lets you set any Max attribute directly.
+### DSP blocks
 
-| Function | Component | Description |
-|----------|-----------|-------------|
-| `add_panel` | panel | Background panel (auto `background:1`) |
-| `add_dial` | live.dial | Rotary dial with Live parameter storage |
-| `add_slider` | live.slider | Linear slider (vertical/horizontal) |
-| `add_toggle` | live.toggle | On/off toggle |
-| `add_button` | live.button | Momentary bang button |
-| `add_tab` | live.tab | Tab bar selector |
-| `add_menu` | live.menu | Dropdown menu |
-| `add_number_box` | live.numbox | Numeric entry/display |
-| `add_comment` | comment | Static text label |
-| `add_scope` | live.scope~ | Signal oscilloscope |
-| `add_meter` | live.meter~ | Level meter (auto theme colors) |
-| `add_live_text` | live.text | Clickable text button/toggle |
-| `add_fpic` | fpic | Image display |
-| `add_live_gain` | live.gain~ | Gain fader with built-in metering |
-| `add_multislider` | multislider | Multi-value slider array |
-| `add_jsui` | jsui | JavaScript UI for custom drawing |
-| `add_adsrui` | live.adsrui | ADSR envelope editor with drag handles |
-| `add_live_drop` | live.drop | Drag-and-drop file target |
-| `add_bpatcher` | bpatcher | Embeddable sub-patcher |
-| `add_swatch` | swatch | Color picker/display |
-| `add_textedit` | textedit | Editable text field |
-| `add_live_step` | live.step | Step sequencer (pitch/velocity/duration per step) |
-| `add_live_grid` | live.grid | Toggleable cell grid for patterns/beats |
-| `add_live_line` | live.line | Visual divider line |
-| `add_live_arrows` | live.arrows | Direction arrow buttons |
-| `add_rslider` | rslider | Range slider (two handles, min/max) |
-| `add_kslider` | kslider | Piano keyboard display |
-| `add_textbutton` | textbutton | Text button (no parameter storage) |
-| `add_umenu` | umenu | Dropdown menu (no parameter storage) |
-| `add_radiogroup` | radiogroup | Vertical radio buttons |
-| `add_nodes` | nodes | XY node editor with draggable points |
-| `add_matrixctrl` | matrixctrl | Grid matrix control |
-| `add_ubutton` | ubutton | Invisible click zone overlay |
-| `add_nslider` | nslider | Staff notation display |
-
-## DSP Building Blocks (33)
-
-Every DSP function returns `(boxes, lines)`. Add to a device with:
+All DSP functions return `(boxes, lines)` tuples. Compose them with `add_dsp`:
 
 ```python
-boxes, lines = gain_stage("my_gain")
-for b in boxes: device.add_box(b)
-for l in lines: device.lines.append(l)
+from m4l_builder import gain_stage, highpass_filter
+
+boxes, lines = gain_stage("gain")
+device.add_dsp(boxes, lines)
 ```
 
-| Category | Functions |
-|----------|-----------|
-| **I/O** | `stereo_io` |
-| **Gain/Mixing** | `gain_stage`, `dry_wet_mix`, `signal_divide` |
-| **Filters** | `highpass_filter`, `lowpass_filter`, `bandpass_filter`, `notch_filter`, `onepole_filter`, `highshelf_filter`, `lowshelf_filter`, `tilt_eq`, `crossover_3band`, `peaking_eq`, `allpass_filter` |
-| **Saturation** | `saturation` (tanh/overdrive/clip/degrade modes) |
-| **Dynamics** | `envelope_follower`, `compressor`, `limiter` |
-| **Delay** | `delay_line`, `feedback_delay` |
-| **Modulation** | `lfo` (sine/saw/square/triangle), `tremolo` |
-| **Stereo** | `ms_encode_decode`, `dc_block` |
-| **Routing** | `selector` |
-| **Resonance** | `comb_resonator` |
-| **Envelope** | `adsr_envelope` |
-| **Live API** | `live_remote`, `live_param_signal` |
-| **Utility** | `param_smooth`, `noise_source`, `tempo_sync` |
+**Filters**: highpass, lowpass, bandpass, notch, onepole, shelves, tilt EQ, 3-band crossover, peaking EQ, allpass
+**Dynamics**: compressor, limiter, envelope follower, gate/expander, sidechain detect, multiband compressor
+**Delay/Reverb**: delay line, feedback delay, reverb network, FDN reverb, convolver
+**Modulation**: LFO (4 waveforms), tremolo, transport LFO, morphing LFO
+**MIDI**: notein/out, ctlin/out, velocity curve, transpose, arpeggiator, chord, pitch quantize, midi learn
+**Synthesis**: wavetable osc, noise, oscillator bank, ADSR, poly voices, grain cloud
+**Spectral**: spectral gate, crossover, vocoder, phase vocoder
+**Routing**: selector, send/receive (signal + message), matrix mixer, sidechain routing
+**Utility**: param smooth, tempo sync, sample and hold, bitcrusher, coll/dict/pattr storage
 
-## Theme System
+90+ blocks total. See [docs/api.md](docs/api.md) for the full list with signatures.
 
-Four built-in themes provide coordinated colors for backgrounds, text, and accents. Pass a theme to the device constructor and all UI components inherit its colors automatically.
+### Engines (jsui visualizations)
+
+JavaScript generators for Max's jsui object. Each returns an ES5 string for mgraphics/Cairo rendering:
 
 ```python
-from m4l_builder.theme import MIDNIGHT, WARM, COOL, LIGHT
+from m4l_builder.engines import filter_curve_js
 
-device = AudioEffect("My Effect", width=400, height=200, theme=MIDNIGHT)
+device.add_jsui("display", [10, 30, 200, 80],
+                js_code=filter_curve_js(), numinlets=3)
 ```
 
-| Theme | Accent | Character |
-|-------|--------|-----------|
-| `MIDNIGHT` | Teal | Dark, cool, modern |
-| `WARM` | Orange | Dark, warm, analog feel |
-| `COOL` | Blue | Dark, clean, precise |
-| `LIGHT` | Blue | Light background, high contrast |
+18 generators available: filter curves, EQ, envelopes, spectrum, waveforms, XY pad, piano roll, step grids, grain clouds, vocoder bands, and more.
 
-Each `Theme` dataclass provides: `bg`, `surface`, `section` (background layers), `text`, `text_dim` (typography), `accent` (active/selected color), plus derived `dial_color`, `needle_color`, `tab_*`, `meter_*`, and `scope_*` colors. Meters and scopes auto-inherit theme colors. Uses Ableton Sans fonts by default.
+### Themes
 
-## Example Devices (20)
+Seven built-in color themes. Pass to the device constructor and all UI elements inherit colors automatically:
 
-The `examples/` directory contains complete, buildable devices:
+```python
+from m4l_builder import AudioEffect, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR
 
-| # | File | Device | Type | Theme | Description |
-|---|------|--------|------|-------|-------------|
-| 1 | `simple_gain.py` | Simple Gain | Audio | WARM | Minimal starter -- single gain dial |
-| 2 | `stereo_filter.py` | Stereo Filter | Audio | COOL | HP/LP/BP/Notch SVF filter |
-| 3 | `stereo_utility.py` | Stereo Utility | Audio | COOL | Gain (dB), pan, width (M/S), phase |
-| 4 | `simple_compressor.py` | Simple Compressor | Audio | MIDNIGHT | Log-domain compressor with GR meter |
-| 5 | `multiband_imager.py` | Multiband Imager | Audio | COOL | 3-band crossover with per-band width |
-| 6 | `transient_shaper.py` | Transient Shaper | Audio | WARM | Attack/sustain shaping with output protection |
-| 7 | `tape_degradation.py` | Tape Degradation | Audio | WARM | Saturation, wow/flutter, noise, rolloff |
-| 8 | `stereo_delay.py` | Stereo Delay | Audio | MIDNIGHT | L/R delay with tanh feedback saturation |
-| 9 | `midside_suite.py` | Mid/Side Suite | Audio | COOL | M/S processing with tilt EQ and saturation |
-| 10 | `multiband_saturator.py` | Multiband Saturator | Audio | WARM | 3-band with tanh/overdrive/clip modes |
-| 11 | `rhythmic_gate.py` | Rhythmic Gate | Audio | WARM | LFO-driven gate with 4 waveforms |
-| 12 | `auto_filter.py` | Auto Filter | Audio | MIDNIGHT | Envelope follower + LFO modulated filter |
-| 13 | `comb_bank.py` | Comb Resonator | Audio | MIDNIGHT | Tuned comb bank with note display |
-| 14 | `lofi_processor.py` | LoFi Processor | Audio | WARM | Bitcrusher + sample rate reduction |
-| 15 | `parametric_eq.py` | Parametric EQ | Audio | -- | JSUI custom EQ curve display |
-| 16 | `expression_control.py` | Expression Control | MIDI | MIDNIGHT | 8 macro knobs outputting MIDI CC |
-| 17 | `macro_randomizer.py` | Macro Randomizer | Audio | COOL | 7 randomizable outputs with auto/trigger |
-| 18 | `step_sequencer.py` | Step Sequencer | MIDI | COOL | 8-step MIDI sequencer with sliders |
-| 19 | `drone_synth.py` | Drone Synth | Instrument | MIDNIGHT | 4-voice drone with live.gain~ |
-| 20 | `reverb.py` | Algorithmic Reverb | Audio | LIGHT | Schroeder reverb with room types |
-
-Build any example:
-
-```bash
-uv run python examples/stereo_delay.py
+device = AudioEffect("FX", 300, 170, theme=MIDNIGHT)
 ```
 
-## Output Path
+Build a theme from just an accent color:
 
-`device_output_path()` auto-detects your Ableton User Library on macOS, Windows, and WSL. It scans common drive locations (D:, C:, /mnt/d, /mnt/c) and creates the correct subdirectory for the device type.
-
-Override with the `M4L_USER_LIBRARY` environment variable:
-
-```bash
-export M4L_USER_LIBRARY="/path/to/your/User Library"
+```python
+from m4l_builder import Theme
+my_theme = Theme.from_accent([0.8, 0.3, 0.1, 1.0])
 ```
 
-## Testing
+### Recipes
 
-1330+ tests across 9 test files:
+Pre-wired DSP combos for common patterns. They add objects to a device and return IDs for further wiring:
+
+```python
+from m4l_builder import gain_controlled_stage, dry_wet_stage
+
+ids = gain_controlled_stage(device, "out", [10, 10, 50, 70])
+# ids["gain"] is the *~ you wire into your signal chain
+```
+
+Available: `gain_controlled_stage`, `dry_wet_stage`, `tempo_synced_delay`, `midi_note_gate`.
+
+### Layout helpers
+
+Automatic positioning with `Row`, `Column`, and `Grid` context managers:
+
+```python
+with device.row(10, 10, spacing=8, height=70) as r:
+    r.add_dial("d1", "Param1", width=50)
+    r.add_dial("d2", "Param2", width=50)
+    r.add_dial("d3", "Param3", width=50)
+```
+
+### Subpatchers
+
+Nested patchers for organizing signal chains:
+
+```python
+from m4l_builder import Subpatcher
+
+sub = Subpatcher("processor")
+sub.add_newobj("in", "inlet~", numinlets=1, numoutlets=1)
+sub.add_newobj("out", "outlet~", numinlets=1, numoutlets=1)
+sub.add_line("in", 0, "out", 0)
+device.add_subpatcher(sub, "proc_box", [30, 100, 80, 20])
+```
+
+### Round-trip editing with from_amxd
+
+Read an existing `.amxd` back into a Device, modify it, write it out:
+
+```python
+device = AudioEffect.from_amxd("path/to/effect.amxd")
+device.add_dial("new_knob", "NewParam", [10, 10, 50, 70])
+device.build("path/to/modified.amxd")
+```
+
+## Examples
+
+40+ examples in `examples/`. A few highlights:
+
+| File | What it builds |
+|------|---------------|
+| `simple_gain.py` | Minimal starter, single gain dial |
+| `stereo_delay.py` | L/R delay with feedback saturation |
+| `simple_compressor.py` | Threshold, ratio, attack/release |
+| `parametric_eq.py` | JSUI custom EQ curve display |
+| `poly_synth.py` | Polyphonic synth with wavetable |
+| `midi_arpeggiator.py` | MIDI arpeggiator |
+| `from_amxd_demo.py` | Round-trip: build, read back, modify |
 
 ```bash
+uv run python examples/simple_gain.py           # run one
+for f in examples/*.py; do uv run python "$f"; done  # build all
+```
+
+## Development
+
+```bash
+git clone https://github.com/alaarab/m4l-builder.git
+cd m4l-builder
+uv pip install -e .
+
+# Tests
 uv run pytest tests/ -v
+
+# With coverage
+uv run pytest tests/ --cov=m4l_builder --cov-report=term-missing
 ```
 
-| Test File | Coverage |
-|-----------|----------|
-| `test_objects.py` | `newobj` and `patchline` dict structure |
-| `test_ui.py` | All 21 UI element creators and properties |
-| `test_dsp.py` | All 28 DSP building blocks return correct boxes/lines |
-| `test_patcher.py` | Patcher dict generation and device type mapping |
-| `test_container.py` | .amxd binary format: ampf header, type codes, JSON payload |
-| `test_device.py` | Device class hierarchy, builder methods, theme injection |
-| `test_theme.py` | Theme dataclass, color derivation, meter/scope colors, preset themes |
-| `test_engines.py` | Engine/processing modules |
-| `test_examples.py` | Integration: builds all 20 examples, verifies valid .amxd output |
+## API reference
 
-## .amxd Binary Format
-
-```
-Offset  Size  Content
-------  ----  -------
-0       4     Magic: "ampf"
-4       4     Version: uint32 LE = 4
-8       4     Type: "aaaa" (audio), "iiii" (instrument), "mmmm" (MIDI)
-12      4     Section: "meta"
-16      4     Metadata length (uint32 LE)
-20      4     Metadata payload
-24      4     Section: "ptch"
-28      4     JSON length (uint32 LE, includes null terminator)
-32+     N     JSON patcher data, null-terminated
-```
-
-## Recommended Tools
-
-**[LiveMCP](https://github.com/alaarab/livemcp)** -- Control Ableton Live via the Model Context Protocol. Load devices, trigger clips, adjust mixer settings. Pairs with m4l-builder for a fully code-driven production workflow.
+Full API docs at [docs/api.md](docs/api.md).
 
 ## License
 

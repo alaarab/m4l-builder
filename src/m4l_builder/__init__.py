@@ -11,7 +11,7 @@ from .ui import (panel, dial, tab, toggle, comment, scope, meter, menu,
                  textedit, live_step, live_grid, live_line, live_arrows,
                  rslider, kslider, textbutton, umenu, radiogroup, nodes,
                  matrixctrl, ubutton, nslider)
-from .theme import Theme, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR
+from .theme import Theme, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR, LOFI, SYNTHWAVE, INDUSTRIAL
 from .dsp import (stereo_io, gain_stage, dry_wet_mix, ms_encode_decode,
                    dc_block, saturation, selector, highpass_filter,
                    lowpass_filter, onepole_filter, signal_divide, tilt_eq,
@@ -46,7 +46,8 @@ from .dsp import (stereo_io, gain_stage, dry_wet_mix, ms_encode_decode,
                    send_signal, receive_signal, send_msg, receive_msg,
                    loadbang, scale_range, groove_player,
                    coll_store, dict_store, pattr_system,
-                   midi_channel_filter)
+                   midi_channel_filter, gen_codebox,
+                   mc_gain_stage, mc_mixer, mc_selector)
 from .engines.xy_pad import xy_pad_js, XY_PAD_INLETS, XY_PAD_OUTLETS
 from .engines.piano_roll import piano_roll_js, PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS
 from .engines.velocity_curve_display import (velocity_curve_display_js,
@@ -87,7 +88,12 @@ from .paths import user_library, device_output_path
 from .live_api import live_object_path, live_observer, live_set_control
 from .presets import preset_manager, add_preset_buttons
 from .recipes import (gain_controlled_stage, dry_wet_stage,
-                      tempo_synced_delay, midi_note_gate)
+                      tempo_synced_delay, midi_note_gate,
+                      convolver_controlled_stage, sidechain_compressor_recipe,
+                      lfo_matrix_distribute, spectral_gate_stage,
+                      arpeggio_quantized_stage, grain_playback_controlled,
+                      poly_midi_gate, transport_sync_lfo_recipe,
+                      midi_learn_macro_assignment)
 
 __all__ = [
     "Device", "AudioEffect", "Instrument", "MidiEffect", "Subpatcher",
@@ -102,6 +108,7 @@ __all__ = [
     "rslider", "kslider", "textbutton", "umenu", "radiogroup",
     "nodes", "matrixctrl", "ubutton", "nslider",
     "Theme", "MIDNIGHT", "WARM", "COOL", "LIGHT", "FOREST", "VIOLET", "SOLAR",
+    "LOFI", "SYNTHWAVE", "INDUSTRIAL",
     "stereo_io", "gain_stage", "dry_wet_mix", "ms_encode_decode",
     "dc_block", "saturation", "selector", "highpass_filter",
     "lowpass_filter", "onepole_filter", "signal_divide", "tilt_eq",
@@ -136,7 +143,8 @@ __all__ = [
     "send_signal", "receive_signal", "send_msg", "receive_msg",
     "loadbang", "scale_range", "groove_player",
     "coll_store", "dict_store", "pattr_system",
-    "midi_channel_filter",
+    "midi_channel_filter", "gen_codebox",
+    "mc_gain_stage", "mc_mixer", "mc_selector",
     "xy_pad_js", "XY_PAD_INLETS", "XY_PAD_OUTLETS",
     "piano_roll_js", "PIANO_ROLL_INLETS", "PIANO_ROLL_OUTLETS",
     "velocity_curve_display_js", "VELOCITY_CURVE_INLETS", "VELOCITY_CURVE_OUTLETS",
@@ -156,4 +164,9 @@ __all__ = [
     "preset_manager", "add_preset_buttons",
     "gain_controlled_stage", "dry_wet_stage",
     "tempo_synced_delay", "midi_note_gate",
+    "convolver_controlled_stage", "sidechain_compressor_recipe",
+    "lfo_matrix_distribute", "spectral_gate_stage",
+    "arpeggio_quantized_stage", "grain_playback_controlled",
+    "poly_midi_gate", "transport_sync_lfo_recipe",
+    "midi_learn_macro_assignment",
 ]

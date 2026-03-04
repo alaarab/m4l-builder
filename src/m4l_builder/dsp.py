@@ -2926,6 +2926,81 @@ def pattr_system(id_prefix: str) -> tuple:
     return (boxes, lines)
 
 
+def gen_codebox(id_prefix: str, gen_code: str, numinlets: int = 1,
+                numoutlets: int = 1, outlettype: list = None) -> tuple:
+    """Create a gen~ object with embedded codebox code.
+
+    gen~ is Max's DSP codegen environment. The gen_code string is stored
+    as a "code" attribute on the box, letting you write inline DSP
+    without a separate .gendsp file.
+
+    Wire audio into {prefix}_gen inlet 0.
+    Output from {prefix}_gen outlets 0..N.
+    """
+    if outlettype is None:
+        outlettype = ["signal"] * numoutlets
+    box = newobj(f"{id_prefix}_gen", "gen~",
+                 numinlets=numinlets, numoutlets=numoutlets,
+                 outlettype=outlettype,
+                 patching_rect=[30, 30, 120, 20])
+    box["box"]["code"] = gen_code
+    return ([box], [])
+
+
+def mc_gain_stage(id_prefix: str, channels: int = 2) -> tuple:
+    """Multichannel gain control using mc.gain~.
+
+    Wire MC signal into {prefix}_mcgain inlet 0.
+    Gain level into {prefix}_mcgain inlet 1.
+    Output MC signal from {prefix}_mcgain outlet 0.
+    """
+    if channels < 1:
+        raise ValueError(f"mc_gain_stage channels must be >= 1, got {channels}")
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_mcgain", f"mc.gain~ {channels}", numinlets=2,
+               numoutlets=1, outlettype=["multichannelsignal"],
+               patching_rect=[30, 120, 100, 20]),
+    ]
+    return (boxes, [])
+
+
+def mc_mixer(id_prefix: str, inputs: int = 2, channels: int = 2) -> tuple:
+    """Sum multiple MC streams using mc.mix~.
+
+    Wire MC signals into {prefix}_mcmix inlets 0..inputs-1.
+    Output summed MC signal from {prefix}_mcmix outlet 0.
+    """
+    if channels < 1:
+        raise ValueError(f"mc_mixer channels must be >= 1, got {channels}")
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_mcmix", f"mc.mix~ {inputs} {channels}", numinlets=inputs,
+               numoutlets=1, outlettype=["multichannelsignal"],
+               patching_rect=[30, 120, 100, 20]),
+    ]
+    return (boxes, [])
+
+
+def mc_selector(id_prefix: str, channels: int = 2, count: int = 2) -> tuple:
+    """Switch between MC signal paths using mc.selector~.
+
+    Wire selection index into {prefix}_mcsel inlet 0.
+    Wire MC signals into {prefix}_mcsel inlets 1..count.
+    Output selected MC signal from {prefix}_mcsel outlet 0.
+    """
+    if channels < 1:
+        raise ValueError(f"mc_selector channels must be >= 1, got {channels}")
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_mcsel", f"mc.selector~ {count} {channels}",
+               numinlets=count + 1, numoutlets=1,
+               outlettype=["multichannelsignal"],
+               patching_rect=[30, 120, 120, 20]),
+    ]
+    return (boxes, [])
+
+
 def midi_channel_filter(id_prefix: str, channel: int = 1) -> tuple:
     """Route MIDI input to a specific channel.
 
