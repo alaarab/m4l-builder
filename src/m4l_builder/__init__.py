@@ -1,6 +1,7 @@
 """m4l_builder: Programmatically build Max for Live (.amxd) devices."""
 
 from .device import Device, AudioEffect, Instrument, MidiEffect
+from .subpatcher import Subpatcher
 from .container import build_amxd, write_amxd
 from .layout import Row, Column, Grid
 from .objects import newobj, patchline
@@ -41,7 +42,11 @@ from .dsp import (stereo_io, gain_stage, dry_wet_mix, ms_encode_decode,
                    midi_clock_in, sidechain_routing, random_walk,
                    matrix_mixer, cv_recorder, quantize_time,
                    macro_modulation_matrix, analog_oscillator_bank,
-                   lfsr_generator, cv_smooth_lag)
+                   lfsr_generator, cv_smooth_lag,
+                   send_signal, receive_signal, send_msg, receive_msg,
+                   loadbang, scale_range, groove_player,
+                   coll_store, dict_store, pattr_system,
+                   midi_channel_filter)
 from .engines.xy_pad import xy_pad_js, XY_PAD_INLETS, XY_PAD_OUTLETS
 from .engines.piano_roll import piano_roll_js, PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS
 from .engines.velocity_curve_display import (velocity_curve_display_js,
@@ -81,9 +86,11 @@ from .constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
 from .paths import user_library, device_output_path
 from .live_api import live_object_path, live_observer, live_set_control
 from .presets import preset_manager, add_preset_buttons
+from .recipes import (gain_controlled_stage, dry_wet_stage,
+                      tempo_synced_delay, midi_note_gate)
 
 __all__ = [
-    "Device", "AudioEffect", "Instrument", "MidiEffect",
+    "Device", "AudioEffect", "Instrument", "MidiEffect", "Subpatcher",
     "Row", "Column", "Grid",
     "build_amxd", "write_amxd",
     "newobj", "patchline",
@@ -126,6 +133,10 @@ __all__ = [
     "matrix_mixer", "cv_recorder", "quantize_time",
     "macro_modulation_matrix", "analog_oscillator_bank",
     "lfsr_generator", "cv_smooth_lag",
+    "send_signal", "receive_signal", "send_msg", "receive_msg",
+    "loadbang", "scale_range", "groove_player",
+    "coll_store", "dict_store", "pattr_system",
+    "midi_channel_filter",
     "xy_pad_js", "XY_PAD_INLETS", "XY_PAD_OUTLETS",
     "piano_roll_js", "PIANO_ROLL_INLETS", "PIANO_ROLL_OUTLETS",
     "velocity_curve_display_js", "VELOCITY_CURVE_INLETS", "VELOCITY_CURVE_OUTLETS",
@@ -143,4 +154,6 @@ __all__ = [
     "user_library", "device_output_path",
     "live_object_path", "live_observer", "live_set_control",
     "preset_manager", "add_preset_buttons",
+    "gain_controlled_stage", "dry_wet_stage",
+    "tempo_synced_delay", "midi_note_gate",
 ]

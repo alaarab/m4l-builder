@@ -2857,3 +2857,193 @@ def cv_smooth_lag(id_prefix: str, lag_ms: float = 50,
     else:
         raise ValueError(f"cv_smooth_lag: unknown mode '{mode}', expected 'exponential' or 'linear'")
     return (boxes, [])
+
+
+def send_signal(id_prefix: str, name: str) -> tuple:
+    """Create a send~ object for signal-domain routing without patch cords.
+
+    The signal fed into {prefix}_send inlet 0 is available to any
+    matching receive~ with the same name.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_send", f"send~ {name}",
+               numinlets=1, numoutlets=0,
+               patching_rect=[30, 30, 100, 20]),
+    ]
+    return (boxes, [])
+
+
+def receive_signal(id_prefix: str, name: str) -> tuple:
+    """Create a receive~ object for signal-domain routing without patch cords.
+
+    Output the named signal from {prefix}_receive outlet 0.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_receive", f"receive~ {name}",
+               numinlets=0, numoutlets=1, outlettype=["signal"],
+               patching_rect=[30, 30, 100, 20]),
+    ]
+    return (boxes, [])
+
+
+def send_msg(id_prefix: str, name: str) -> tuple:
+    """Create a send object for message-domain routing without patch cords.
+
+    Messages sent to {prefix}_send inlet 0 are available to any
+    matching receive with the same name.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_send", f"send {name}",
+               numinlets=1, numoutlets=0,
+               patching_rect=[30, 30, 80, 20]),
+    ]
+    return (boxes, [])
+
+
+def receive_msg(id_prefix: str, name: str) -> tuple:
+    """Create a receive object for message-domain routing without patch cords.
+
+    Output the named message from {prefix}_receive outlet 0.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_receive", f"receive {name}",
+               numinlets=0, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 30, 80, 20]),
+    ]
+    return (boxes, [])
+
+
+def loadbang(id_prefix: str) -> tuple:
+    """Create a loadbang object that fires a bang on device load.
+
+    Output from {prefix}_loadbang outlet 0.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_loadbang", "loadbang",
+               numinlets=0, numoutlets=1, outlettype=["bang"],
+               patching_rect=[30, 30, 60, 20]),
+    ]
+    return (boxes, [])
+
+
+def scale_range(id_prefix: str, in_lo: float = 0., in_hi: float = 1.,
+                out_lo: float = 0., out_hi: float = 1.,
+                curve: float = 1.) -> tuple:
+    """Create a scale object to map an input range to an output range.
+
+    Optional exponential curve parameter (1.0 = linear).
+    Wire input into {prefix}_scale inlet 0.
+    Output from {prefix}_scale outlet 0.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_scale",
+               f"scale {in_lo} {in_hi} {out_lo} {out_hi} {curve}",
+               numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 30, 180, 20]),
+    ]
+    return (boxes, [])
+
+
+def groove_player(id_prefix: str, buf_name: str) -> tuple:
+    """Create a buffer~ + groove~ pair for sample playback.
+
+    groove~ reads from the named buffer~. A patchline connects the
+    buffer~ second outlet (size update) to groove~ first inlet.
+
+    Trigger playback via {prefix}_groove inlet 0 (1 = play, 0 = stop).
+    Audio output from {prefix}_groove outlets 0 and 1.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_buffer", f"buffer~ {buf_name}",
+               numinlets=1, numoutlets=2, outlettype=["", ""],
+               patching_rect=[30, 30, 120, 20]),
+        newobj(f"{p}_groove", f"groove~ {buf_name}",
+               numinlets=2, numoutlets=2, outlettype=["signal", "signal"],
+               patching_rect=[30, 70, 120, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_buffer", 1, f"{p}_groove", 0),
+    ]
+    return (boxes, lines)
+
+
+def coll_store(id_prefix: str, name: str) -> tuple:
+    """Create a coll object for indexed data storage.
+
+    Wire messages into {prefix}_coll inlet 0.
+    Output from {prefix}_coll outlets 0 and 1.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_coll", f"coll {name}",
+               numinlets=2, numoutlets=2, outlettype=["", ""],
+               patching_rect=[30, 30, 80, 20]),
+    ]
+    return (boxes, [])
+
+
+def dict_store(id_prefix: str, name: str) -> tuple:
+    """Create a dict object for key-value data storage.
+
+    Wire messages into {prefix}_dict inlet 0.
+    Output from {prefix}_dict outlet 0.
+    """
+    boxes = [
+        newobj(f"{id_prefix}_dict", f"dict {name}",
+               numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 30, 80, 20]),
+    ]
+    return (boxes, [])
+
+
+def pattr_system(id_prefix: str) -> tuple:
+    """Create an autopattr + pattrstorage pair for parameter save/recall.
+
+    autopattr collects all named UI objects automatically.
+    pattrstorage saves and recalls their states as presets.
+
+    Wire preset index into {prefix}_pattrstorage inlet 0.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_autopattr", "autopattr",
+               numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 30, 60, 20]),
+        newobj(f"{p}_pattrstorage", f"pattrstorage {p}_storage",
+               numinlets=2, numoutlets=2, outlettype=["", ""],
+               patching_rect=[30, 70, 160, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_autopattr", 0, f"{p}_pattrstorage", 0),
+    ]
+    return (boxes, lines)
+
+
+def midi_channel_filter(id_prefix: str, channel: int = 1) -> tuple:
+    """Route MIDI input to a specific channel.
+
+    Uses midiin to capture raw MIDI, midiparse to split it into
+    components, and sel to filter by channel number.
+
+    Raw MIDI from {prefix}_midiin outlet 0 goes through midiparse.
+    Channel number from midiparse outlet 6 is matched by sel.
+    Matched output from {prefix}_sel outlet 0.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_midiin", "midiin",
+               numinlets=0, numoutlets=2, outlettype=["int", "int"],
+               patching_rect=[30, 30, 50, 20]),
+        newobj(f"{p}_midiparse", "midiparse",
+               numinlets=1, numoutlets=7,
+               outlettype=["", "", "", "", "", "", ""],
+               patching_rect=[30, 70, 70, 20]),
+        newobj(f"{p}_sel", f"sel {channel}",
+               numinlets=1, numoutlets=2, outlettype=["bang", ""],
+               patching_rect=[30, 110, 60, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_midiin", 0, f"{p}_midiparse", 0),
+        patchline(f"{p}_midiparse", 6, f"{p}_sel", 0),
+    ]
+    return (boxes, lines)

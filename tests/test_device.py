@@ -3,6 +3,7 @@
 import json
 import struct
 import os
+from unittest.mock import patch, call
 
 import pytest
 
@@ -543,3 +544,222 @@ class TestDeviceIntegration:
         written = fx.build(output)
         in_memory = fx.to_bytes()
         assert written == len(in_memory)
+
+
+class TestToJson:
+    """Tests for Device.to_json()."""
+
+    def test_returns_valid_json(self):
+        d = Device("Test", 400, 170)
+        result = json.loads(d.to_json())
+        assert isinstance(result, dict)
+
+    def test_contains_patcher_key(self):
+        d = Device("Test", 400, 170)
+        result = json.loads(d.to_json())
+        assert "patcher" in result
+
+    def test_contains_boxes_key(self):
+        d = Device("Test", 400, 170)
+        result = json.loads(d.to_json())
+        assert "boxes" in result["patcher"]
+
+    def test_custom_indent(self):
+        d = Device("Test", 400, 170)
+        output = d.to_json(indent=4)
+        # 4-space indent should produce lines starting with 4 spaces
+        assert "\n    " in output
+
+    def test_default_indent(self):
+        d = Device("Test", 400, 170)
+        output = d.to_json()
+        # Default indent=2 should produce lines starting with 2 spaces
+        assert "\n  " in output
+
+
+class TestWireChain:
+    """Tests for Device.wire_chain()."""
+
+    def test_wires_three_ids(self):
+        d = Device("Test", 400, 170)
+        d.wire_chain(["obj-1", "obj-2", "obj-3"])
+        assert len(d.lines) == 2
+
+    def test_first_connection(self):
+        d = Device("Test", 400, 170)
+        d.wire_chain(["obj-1", "obj-2", "obj-3"])
+        line = d.lines[0]["patchline"]
+        assert line["source"] == ["obj-1", 0]
+        assert line["destination"] == ["obj-2", 0]
+
+    def test_second_connection(self):
+        d = Device("Test", 400, 170)
+        d.wire_chain(["obj-1", "obj-2", "obj-3"])
+        line = d.lines[1]["patchline"]
+        assert line["source"] == ["obj-2", 0]
+        assert line["destination"] == ["obj-3", 0]
+
+    def test_custom_outlet_inlet(self):
+        d = Device("Test", 400, 170)
+        d.wire_chain(["obj-a", "obj-b"], outlet=1, inlet=2)
+        line = d.lines[0]["patchline"]
+        assert line["source"] == ["obj-a", 1]
+        assert line["destination"] == ["obj-b", 2]
+
+    def test_single_id_no_lines(self):
+        d = Device("Test", 400, 170)
+        d.wire_chain(["obj-1"])
+        assert len(d.lines) == 0
+
+    def test_empty_list_no_lines(self):
+        d = Device("Test", 400, 170)
+        d.wire_chain([])
+        assert len(d.lines) == 0
+
+
+class TestValidate:
+    """Tests for Device.validate()."""
+
+    def test_clean_device_returns_empty(self):
+        fx = AudioEffect("FX", 400, 170)
+        # Wire plugin to plugout so nothing is orphaned
+        fx.add_line("obj-plugin", 0, "obj-plugout", 0)
+        fx.add_line("obj-plugin", 1, "obj-plugout", 1)
+        assert fx.validate() == []
+
+    def test_duplicate_id_warning(self):
+        d = Device("Test", 400, 170)
+        d.boxes.append({"box": {"id": "obj-1", "maxclass": "newobj"}})
+        d.boxes.append({"box": {"id": "obj-1", "maxclass": "newobj"}})
+        # Wire them so they aren't flagged as orphans too
+        d.add_line("obj-1", 0, "obj-1", 0)
+        warnings = d.validate()
+        assert any("Duplicate box ID: obj-1" in w for w in warnings)
+
+    def test_bad_patchline_source(self):
+        d = Device("Test", 400, 170)
+        d.boxes.append({"box": {"id": "obj-1", "maxclass": "newobj"}})
+        d.add_line("obj-missing", 0, "obj-1", 0)
+        warnings = d.validate()
+        assert any("unknown source: obj-missing" in w for w in warnings)
+
+    def test_bad_patchline_destination(self):
+        d = Device("Test", 400, 170)
+        d.boxes.append({"box": {"id": "obj-1", "maxclass": "newobj"}})
+        d.add_line("obj-1", 0, "obj-missing", 0)
+        warnings = d.validate()
+        assert any("unknown destination: obj-missing" in w for w in warnings)
+
+    def test_audio_effect_missing_plugin(self):
+        d = Device("Test", 400, 170, device_type="audio_effect")
+        warnings = d.validate()
+        assert any("missing obj-plugin" in w for w in warnings)
+
+    def test_orphan_box_warning(self):
+        d = Device("Test", 400, 170)
+        d.boxes.append({"box": {"id": "obj-lonely", "maxclass": "newobj"}})
+        warnings = d.validate()
+        assert any("Orphan" in w and "obj-lonely" in w for w in warnings)
+
+    def test_instrument_no_plugin_warning(self):
+        inst = Instrument("Synth", 400, 170)
+        warnings = inst.validate()
+        # Instrument should NOT warn about missing obj-plugin
+        assert not any("obj-plugin" in w for w in warnings)
+
+
+class TestParameterBanks:
+    """Tests for Device.assign_parameter_bank()."""
+
+    def test_bank_shows_in_patcher(self):
+        d = Device("Test", 400, 170)
+        d.assign_parameter_bank("Gain", bank=0, position=0)
+        patcher = d.to_patcher()
+        banks = patcher["patcher"]["parameters"]["parameterbanks"]
+        assert "0" in banks
+        params = banks["0"]["parameters"]
+        assert any(p["name"] == "Gain" for p in params)
+
+    def test_multiple_params_same_bank(self):
+        d = Device("Test", 400, 170)
+        d.assign_parameter_bank("Gain", bank=0, position=0)
+        d.assign_parameter_bank("Pan", bank=0, position=1)
+        patcher = d.to_patcher()
+        params = patcher["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
+        names = [p["name"] for p in params]
+        assert "Gain" in names
+        assert "Pan" in names
+
+    def test_different_banks(self):
+        d = Device("Test", 400, 170)
+        d.assign_parameter_bank("Gain", bank=0, position=0)
+        d.assign_parameter_bank("Filter", bank=1, position=0)
+        patcher = d.to_patcher()
+        banks = patcher["patcher"]["parameters"]["parameterbanks"]
+        assert "0" in banks
+        assert "1" in banks
+
+    def test_no_banks_uses_default(self):
+        d = Device("Test", 400, 170)
+        patcher = d.to_patcher()
+        banks = patcher["patcher"]["parameters"]["parameterbanks"]
+        # Default bank from build_patcher
+        assert "0" in banks
+        assert banks["0"]["parameters"] == []
+
+    def test_bank_in_json_output(self):
+        d = Device("Test", 400, 170)
+        d.assign_parameter_bank("Mix", bank=0, position=0)
+        output = json.loads(d.to_json())
+        params = output["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
+        assert any(p["name"] == "Mix" for p in params)
+
+
+class TestFromAmxd:
+    """Tests for Device.from_amxd() classmethod."""
+
+    def test_round_trip_audio_effect(self, tmp_path):
+        fx = AudioEffect("MyFX", 400, 170)
+        fx.add_panel("bg", [0, 0, 400, 170], bgcolor=[0.1, 0.1, 0.1, 1.0])
+        path = str(tmp_path / "fx.amxd")
+        fx.build(path)
+
+        loaded = Device.from_amxd(path)
+        assert isinstance(loaded, AudioEffect)
+        assert len(loaded.boxes) == 3  # plugin~ + plugout~ + panel
+
+    def test_round_trip_instrument(self, tmp_path):
+        inst = Instrument("Synth", 500, 200)
+        inst.add_dial("d1", "Freq", [10, 10, 40, 40])
+        path = str(tmp_path / "synth.amxd")
+        inst.build(path)
+
+        loaded = Device.from_amxd(path)
+        assert isinstance(loaded, Instrument)
+        assert len(loaded.boxes) == 1
+
+    def test_round_trip_midi_effect(self, tmp_path):
+        midi = MidiEffect("Arp", 300, 120)
+        path = str(tmp_path / "arp.amxd")
+        midi.build(path)
+
+        loaded = Device.from_amxd(path)
+        assert isinstance(loaded, MidiEffect)
+
+    def test_boxes_match(self, tmp_path):
+        fx = AudioEffect("RoundTrip", 400, 170)
+        path = str(tmp_path / "rt.amxd")
+        fx.build(path)
+
+        loaded = Device.from_amxd(path)
+        original_ids = {b["box"]["id"] for b in fx.boxes}
+        loaded_ids = {b["box"]["id"] for b in loaded.boxes}
+        assert original_ids == loaded_ids
+
+    def test_device_type_preserved(self, tmp_path):
+        inst = Instrument("Synth", 400, 170)
+        path = str(tmp_path / "synth.amxd")
+        inst.build(path)
+
+        loaded = Device.from_amxd(path)
+        assert loaded.device_type == "instrument"

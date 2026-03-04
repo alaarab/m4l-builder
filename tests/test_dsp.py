@@ -93,6 +93,17 @@ from m4l_builder.dsp import (
     analog_oscillator_bank,
     lfsr_generator,
     cv_smooth_lag,
+    send_signal,
+    receive_signal,
+    send_msg,
+    receive_msg,
+    loadbang,
+    scale_range,
+    groove_player,
+    coll_store,
+    dict_store,
+    pattr_system,
+    midi_channel_filter,
 )
 
 
@@ -4022,3 +4033,324 @@ class TestCvSmoothLag:
     def test_ids_use_prefix(self):
         boxes, _ = cv_smooth_lag("mylag")
         assert "mylag_smoother" in _box_ids(boxes)
+
+
+class TestSendSignal:
+    """Test send_signal() creates a send~ object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = send_signal("s", "my_bus")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_text_contains_name(self):
+        boxes, _ = send_signal("s", "my_bus")
+        assert boxes[0]["box"]["text"] == "send~ my_bus"
+
+    def test_inlets_outlets(self):
+        boxes, _ = send_signal("s", "my_bus")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 1
+        assert b["numoutlets"] == 0
+
+    def test_ids_use_prefix(self):
+        boxes, _ = send_signal("sig", "bus1")
+        assert "sig_send" in _box_ids(boxes)
+
+
+class TestReceiveSignal:
+    """Test receive_signal() creates a receive~ object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = receive_signal("r", "my_bus")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_text_contains_name(self):
+        boxes, _ = receive_signal("r", "my_bus")
+        assert boxes[0]["box"]["text"] == "receive~ my_bus"
+
+    def test_inlets_outlets(self):
+        boxes, _ = receive_signal("r", "my_bus")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 0
+        assert b["numoutlets"] == 1
+        assert b["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = receive_signal("sig", "bus1")
+        assert "sig_receive" in _box_ids(boxes)
+
+
+class TestSendMsg:
+    """Test send_msg() creates a send object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = send_msg("s", "my_msg")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_text_contains_name(self):
+        boxes, _ = send_msg("s", "my_msg")
+        assert boxes[0]["box"]["text"] == "send my_msg"
+
+    def test_inlets_outlets(self):
+        boxes, _ = send_msg("s", "my_msg")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 1
+        assert b["numoutlets"] == 0
+
+    def test_ids_use_prefix(self):
+        boxes, _ = send_msg("msg", "data")
+        assert "msg_send" in _box_ids(boxes)
+
+
+class TestReceiveMsg:
+    """Test receive_msg() creates a receive object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = receive_msg("r", "my_msg")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_text_contains_name(self):
+        boxes, _ = receive_msg("r", "my_msg")
+        assert boxes[0]["box"]["text"] == "receive my_msg"
+
+    def test_inlets_outlets(self):
+        boxes, _ = receive_msg("r", "my_msg")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 0
+        assert b["numoutlets"] == 1
+        assert b["outlettype"] == [""]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = receive_msg("msg", "data")
+        assert "msg_receive" in _box_ids(boxes)
+
+
+class TestLoadbang:
+    """Test loadbang() creates a loadbang object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = loadbang("lb")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_text(self):
+        boxes, _ = loadbang("lb")
+        assert boxes[0]["box"]["text"] == "loadbang"
+
+    def test_inlets_outlets(self):
+        boxes, _ = loadbang("lb")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 0
+        assert b["numoutlets"] == 1
+        assert b["outlettype"] == ["bang"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = loadbang("init")
+        assert "init_loadbang" in _box_ids(boxes)
+
+
+class TestScaleRange:
+    """Test scale_range() creates a scale object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = scale_range("sc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_text(self):
+        boxes, _ = scale_range("sc")
+        assert "scale" in boxes[0]["box"]["text"]
+
+    def test_custom_range(self):
+        boxes, _ = scale_range("sc", in_lo=0, in_hi=127, out_lo=20, out_hi=20000)
+        text = boxes[0]["box"]["text"]
+        assert "0" in text
+        assert "127" in text
+        assert "20000" in text
+
+    def test_curve_parameter(self):
+        boxes, _ = scale_range("sc", curve=2.0)
+        assert "2.0" in boxes[0]["box"]["text"]
+
+    def test_inlets_outlets(self):
+        boxes, _ = scale_range("sc")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 1
+        assert b["numoutlets"] == 1
+
+    def test_ids_use_prefix(self):
+        boxes, _ = scale_range("mapper")
+        assert "mapper_scale" in _box_ids(boxes)
+
+
+class TestGroovePlayer:
+    """Test groove_player() creates buffer~ + groove~ with wiring."""
+
+    def test_returns_2_boxes_1_line(self):
+        boxes, lines = groove_player("gp", "my_sample")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_buffer_object(self):
+        boxes, _ = groove_player("gp", "my_sample")
+        buf = _find_box(boxes, "gp_buffer")
+        assert buf["text"] == "buffer~ my_sample"
+        assert buf["numinlets"] == 1
+        assert buf["numoutlets"] == 2
+
+    def test_groove_object(self):
+        boxes, _ = groove_player("gp", "my_sample")
+        gr = _find_box(boxes, "gp_groove")
+        assert gr["text"] == "groove~ my_sample"
+        assert gr["numinlets"] == 2
+        assert gr["numoutlets"] == 2
+        assert gr["outlettype"] == ["signal", "signal"]
+
+    def test_wiring(self):
+        _, lines = groove_player("gp", "my_sample")
+        line = lines[0]["patchline"]
+        assert line["source"] == ["gp_buffer", 1]
+        assert line["destination"] == ["gp_groove", 0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = groove_player("player", "buf")
+        ids = _box_ids(boxes)
+        assert "player_buffer" in ids
+        assert "player_groove" in ids
+
+
+class TestCollStore:
+    """Test coll_store() creates a coll object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = coll_store("cs", "my_data")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_text(self):
+        boxes, _ = coll_store("cs", "my_data")
+        assert boxes[0]["box"]["text"] == "coll my_data"
+
+    def test_inlets_outlets(self):
+        boxes, _ = coll_store("cs", "my_data")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 2
+        assert b["numoutlets"] == 2
+
+    def test_ids_use_prefix(self):
+        boxes, _ = coll_store("store", "data")
+        assert "store_coll" in _box_ids(boxes)
+
+
+class TestDictStore:
+    """Test dict_store() creates a dict object."""
+
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = dict_store("ds", "my_dict")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_text(self):
+        boxes, _ = dict_store("ds", "my_dict")
+        assert boxes[0]["box"]["text"] == "dict my_dict"
+
+    def test_inlets_outlets(self):
+        boxes, _ = dict_store("ds", "my_dict")
+        b = boxes[0]["box"]
+        assert b["numinlets"] == 1
+        assert b["numoutlets"] == 1
+
+    def test_ids_use_prefix(self):
+        boxes, _ = dict_store("storage", "settings")
+        assert "storage_dict" in _box_ids(boxes)
+
+
+class TestPattrSystem:
+    """Test pattr_system() creates autopattr + pattrstorage with wiring."""
+
+    def test_returns_2_boxes_1_line(self):
+        boxes, lines = pattr_system("ps")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_autopattr_object(self):
+        boxes, _ = pattr_system("ps")
+        ap = _find_box(boxes, "ps_autopattr")
+        assert ap["text"] == "autopattr"
+        assert ap["numinlets"] == 1
+        assert ap["numoutlets"] == 1
+
+    def test_pattrstorage_object(self):
+        boxes, _ = pattr_system("ps")
+        ps = _find_box(boxes, "ps_pattrstorage")
+        assert ps["text"] == "pattrstorage ps_storage"
+        assert ps["numinlets"] == 2
+        assert ps["numoutlets"] == 2
+
+    def test_wiring(self):
+        _, lines = pattr_system("ps")
+        line = lines[0]["patchline"]
+        assert line["source"] == ["ps_autopattr", 0]
+        assert line["destination"] == ["ps_pattrstorage", 0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = pattr_system("preset")
+        ids = _box_ids(boxes)
+        assert "preset_autopattr" in ids
+        assert "preset_pattrstorage" in ids
+
+
+class TestMidiChannelFilter:
+    """Test midi_channel_filter() creates midiin + midiparse + sel chain."""
+
+    def test_returns_3_boxes_2_lines(self):
+        boxes, lines = midi_channel_filter("mcf")
+        assert len(boxes) == 3
+        assert len(lines) == 2
+
+    def test_midiin_object(self):
+        boxes, _ = midi_channel_filter("mcf")
+        mi = _find_box(boxes, "mcf_midiin")
+        assert mi["text"] == "midiin"
+        assert mi["numinlets"] == 0
+        assert mi["numoutlets"] == 2
+
+    def test_midiparse_object(self):
+        boxes, _ = midi_channel_filter("mcf")
+        mp = _find_box(boxes, "mcf_midiparse")
+        assert mp["text"] == "midiparse"
+        assert mp["numinlets"] == 1
+        assert mp["numoutlets"] == 7
+
+    def test_sel_uses_channel(self):
+        boxes, _ = midi_channel_filter("mcf", channel=5)
+        sel = _find_box(boxes, "mcf_sel")
+        assert sel["text"] == "sel 5"
+
+    def test_default_channel_is_1(self):
+        boxes, _ = midi_channel_filter("mcf")
+        sel = _find_box(boxes, "mcf_sel")
+        assert sel["text"] == "sel 1"
+
+    def test_wiring_midiin_to_midiparse(self):
+        _, lines = midi_channel_filter("mcf")
+        line = lines[0]["patchline"]
+        assert line["source"] == ["mcf_midiin", 0]
+        assert line["destination"] == ["mcf_midiparse", 0]
+
+    def test_wiring_midiparse_to_sel(self):
+        _, lines = midi_channel_filter("mcf")
+        line = lines[1]["patchline"]
+        assert line["source"] == ["mcf_midiparse", 6]
+        assert line["destination"] == ["mcf_sel", 0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = midi_channel_filter("midi")
+        ids = _box_ids(boxes)
+        assert "midi_midiin" in ids
+        assert "midi_midiparse" in ids
+        assert "midi_sel" in ids
