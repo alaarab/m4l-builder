@@ -1,11 +1,13 @@
-"""Integration tests — build all examples and validate the .amxd output."""
+"""Integration tests — build all examples and validate the .amxd output.
+
+Each example script is run exactly ONCE per pytest session (via the
+session-scoped `built_examples` fixture in conftest.py). Individual tests
+read from that cached result dict rather than re-running scripts.
+"""
 
 import json
 import os
 import struct
-import subprocess
-import sys
-import tempfile
 
 import pytest
 
@@ -32,28 +34,38 @@ EXAMPLE_SCRIPTS = [
     "step_sequencer.py",
     "drone_synth.py",
     "reverb.py",
+    "midi_transpose.py",
+    "midi_velocity.py",
+    "xy_filter.py",
+    "sidechain_compressor.py",
+    "wavetable_synth.py",
+    "midi_arpeggiator.py",
+    "midi_chord.py",
+    "midi_pitch_quantize.py",
+    "granular_looper.py",
+    "fdn_reverb.py",
+    "transport_lfo_demo.py",
+    "expressive_synth.py",
+    "convolution_reverb.py",
+    "live_api_demo.py",
+    "poly_synth.py",
+    "preset_demo.py",
+    "hardware_sync.py",
+    "morphing_lfo_demo.py",
+    "modulation_matrix_demo.py",
+    "analog_supersaw.py",
 ]
 
-# Non-AudioEffect scripts (skip plugin~/plugout~ and type_code checks)
-MIDI_EFFECT_SCRIPTS = {"expression_control.py", "step_sequencer.py"}
-INSTRUMENT_SCRIPTS = {"drone_synth.py"}
-
-
-def _run_example(script_name, output_dir):
-    """Run an example script with OUTPUT_DIR env override, return the .amxd path."""
-    script_path = os.path.join(EXAMPLES_DIR, script_name)
-    env = os.environ.copy()
-    # Examples write to ~/Music/..., but we override in each test
-    result = subprocess.run(
-        [sys.executable, script_path],
-        capture_output=True, text=True, timeout=30,
-    )
-    assert result.returncode == 0, f"{script_name} failed: {result.stderr}"
-    # Parse output for the path
-    for line in result.stdout.strip().split("\n"):
-        if "->" in line:
-            return line.split("->")[-1].strip()
-    pytest.fail(f"Could not find output path in: {result.stdout}")
+# Non-AudioEffect scripts
+MIDI_EFFECT_SCRIPTS = {
+    "expression_control.py", "step_sequencer.py",
+    "midi_transpose.py", "midi_velocity.py",
+    "midi_arpeggiator.py", "midi_chord.py", "midi_pitch_quantize.py",
+}
+INSTRUMENT_SCRIPTS = {
+    "drone_synth.py", "wavetable_synth.py", "granular_looper.py",
+    "expressive_synth.py", "poly_synth.py", "analog_supersaw.py",
+}
 
 
 def _parse_amxd(path):
@@ -84,12 +96,10 @@ def _parse_amxd(path):
 
 
 def _get_box_ids(patcher):
-    """Get all box IDs from a patcher dict."""
     return {b["box"]["id"] for b in patcher["patcher"]["boxes"]}
 
 
 def _get_box_texts(patcher):
-    """Get all box text values from a patcher dict."""
     return {b["box"].get("text", "") for b in patcher["patcher"]["boxes"]}
 
 
@@ -97,33 +107,16 @@ class TestExampleBuilds:
     """Every example script should produce a valid .amxd file."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
-        """Run all example scripts once (they write to user library)."""
-        self.outputs = {}
-        for script in EXAMPLE_SCRIPTS:
-            script_path = os.path.join(EXAMPLES_DIR, script)
-            if os.path.exists(script_path):
-                result = subprocess.run(
-                    [sys.executable, script_path],
-                    capture_output=True, text=True, timeout=30,
-                )
-                if result.returncode == 0:
-                    for line in result.stdout.strip().split("\n"):
-                        if "->" in line:
-                            path = line.split("->")[-1].strip()
-                            self.outputs[script] = path
-                            break
+    def _load(self, built_examples):
+        self.outputs = {s: r["path"] for s, r in built_examples.items() if r["ok"]}
+        self.results = built_examples
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_example_runs_successfully(self, script):
-        script_path = os.path.join(EXAMPLES_DIR, script)
-        if not os.path.exists(script_path):
+        r = self.results.get(script)
+        if r is None:
             pytest.skip(f"{script} not found")
-        result = subprocess.run(
-            [sys.executable, script_path],
-            capture_output=True, text=True, timeout=30,
-        )
-        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert r["ok"], f"stderr: {r['stderr']}"
 
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_output_file_exists(self, script):
@@ -250,25 +243,10 @@ class TestExampleBuilds:
                 assert len(parts) >= 3, \
                     f"selector~ missing initial arg: '{text}' (default 0 = silence)"
 
-
-class TestExampleFileSize:
-    """Basic sanity checks on output file sizes."""
-
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_minimum_file_size(self, script):
-        """Every .amxd should be at least 1KB (header + minimal JSON)."""
-        script_path = os.path.join(EXAMPLES_DIR, script)
-        if not os.path.exists(script_path):
-            pytest.skip(f"{script} not found")
-        result = subprocess.run(
-            [sys.executable, script_path],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode != 0:
-            pytest.skip(f"{script} failed to build")
-        for line in result.stdout.strip().split("\n"):
-            if "bytes" in line:
-                size = int(line.split()[1])
-                assert size >= 1000, f"File too small: {size} bytes"
-                return
-        pytest.fail("Could not find byte count in output")
+        """Every .amxd should be at least 1KB."""
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        size = os.path.getsize(self.outputs[script])
+        assert size >= 1000, f"File too small: {size} bytes"

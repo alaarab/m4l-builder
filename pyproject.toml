@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "m4l-builder"
-version = "0.3.0"
+version = "0.4.0"
 description = "Programmatically build Max for Live (.amxd) devices"
 readme = "README.md"
 license = "MIT"
@@ -23,3 +23,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/alaarab/m4l-builder"
 Repository = "https://github.com/alaarab/m4l-builder"
+
+[tool.hatch.build]
+exclude = ["CLAUDE.md", ".claude/", "tests/", "examples/"]

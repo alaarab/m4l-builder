@@ -36,6 +36,63 @@ from m4l_builder.dsp import (
     adsr_envelope,
     peaking_eq,
     allpass_filter,
+    gate_expander,
+    sidechain_detect,
+    sample_and_hold,
+    multiband_compressor,
+    reverb_network,
+    notein,
+    noteout,
+    ctlin,
+    ctlout,
+    velocity_curve,
+    transpose,
+    midi_thru,
+    wavetable_osc,
+    buffer_load,
+    arpeggiator,
+    chord,
+    pitch_quantize,
+    lookahead_envelope_follower,
+    fdn_reverb,
+    spectral_gate,
+    spectral_gate_subpatcher,
+    vocoder,
+    mc_expand,
+    mc_collapse,
+    note_expression_decode,
+    transport_lfo,
+    pitchbend_in,
+    modwheel_in,
+    aftertouch_in,
+    xfade_matrix,
+    midi_learn_chain,
+    convolver,
+    program_change_in,
+    bank_select_in,
+    sample_and_hold_triggered,
+    bitcrusher,
+    poly_voices,
+    spectral_crossover,
+    spectral_crossover_subpatcher,
+    grain_cloud,
+    auto_gain,
+    midi_clock_out,
+    macromap,
+    stft_phase_vocoder,
+    phase_vocoder_subpatcher,
+    spectrum_band_extract,
+    morphing_lfo,
+    midi_clock_in,
+    sidechain_routing,
+    random_walk,
+    matrix_mixer,
+    cv_recorder,
+    quantize_time,
+    macro_modulation_matrix,
+    analog_oscillator_bank,
+    lfsr_generator,
+    cv_smooth_lag,
 )
 
 
@@ -2010,3 +2067,1958 @@ class TestAllpassFilter:
         ids = _box_ids(boxes)
         assert "phase_coeff" in ids
         assert "phase_biquad" in ids
+
+
+class TestNotein:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = notein("ni")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_all_channels(self):
+        boxes, _ = notein("ni")
+        assert _box_texts(boxes) == ["notein"]
+
+    def test_specific_channel(self):
+        boxes, _ = notein("ni", channel=3)
+        assert _box_texts(boxes) == ["notein 3"]
+
+    def test_box_id(self):
+        boxes, _ = notein("ni")
+        assert _box_ids(boxes) == ["ni_notein"]
+
+    def test_three_outlets(self):
+        boxes, _ = notein("ni")
+        assert boxes[0]["box"]["numoutlets"] == 3
+
+
+class TestNoteout:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = noteout("no")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_all_channels(self):
+        boxes, _ = noteout("no")
+        assert _box_texts(boxes) == ["noteout"]
+
+    def test_specific_channel(self):
+        boxes, _ = noteout("no", channel=5)
+        assert _box_texts(boxes) == ["noteout 5"]
+
+    def test_box_id(self):
+        boxes, _ = noteout("no")
+        assert _box_ids(boxes) == ["no_noteout"]
+
+    def test_three_inlets(self):
+        boxes, _ = noteout("no")
+        assert boxes[0]["box"]["numinlets"] == 3
+
+    def test_zero_outlets(self):
+        boxes, _ = noteout("no")
+        assert boxes[0]["box"]["numoutlets"] == 0
+
+
+class TestCtlin:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = ctlin("cc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_all_cc_all_channels(self):
+        boxes, _ = ctlin("cc")
+        assert _box_texts(boxes) == ["ctlin"]
+
+    def test_specific_cc(self):
+        boxes, _ = ctlin("cc", cc=74)
+        assert _box_texts(boxes) == ["ctlin 74"]
+
+    def test_specific_cc_and_channel(self):
+        boxes, _ = ctlin("cc", cc=1, channel=2)
+        assert _box_texts(boxes) == ["ctlin 1 2"]
+
+    def test_channel_without_cc(self):
+        boxes, _ = ctlin("cc", channel=3)
+        assert _box_texts(boxes) == ["ctlin 0 3"]
+
+    def test_three_outlets(self):
+        boxes, _ = ctlin("cc")
+        assert boxes[0]["box"]["numoutlets"] == 3
+
+
+class TestCtlout:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = ctlout("co")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_cc_and_channel(self):
+        boxes, _ = ctlout("co")
+        assert _box_texts(boxes) == ["ctlout 1 1"]
+
+    def test_custom_cc_and_channel(self):
+        boxes, _ = ctlout("co", cc=74, channel=3)
+        assert _box_texts(boxes) == ["ctlout 74 3"]
+
+    def test_three_inlets(self):
+        boxes, _ = ctlout("co")
+        assert boxes[0]["box"]["numinlets"] == 3
+
+    def test_zero_outlets(self):
+        boxes, _ = ctlout("co")
+        assert boxes[0]["box"]["numoutlets"] == 0
+
+
+class TestVelocityCurve:
+    def test_linear_returns_clip_only(self):
+        boxes, lines = velocity_curve("vc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+        assert "clip 0 127" in _box_texts(boxes)
+
+    def test_compress_returns_expr_and_clip(self):
+        boxes, lines = velocity_curve("vc", curve="compress")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_compress_expr_text(self):
+        boxes, _ = velocity_curve("vc", curve="compress")
+        texts = _box_texts(boxes)
+        assert any("pow" in t and "0.5" in t for t in texts)
+
+    def test_expand_uses_power_2(self):
+        boxes, _ = velocity_curve("vc", curve="expand")
+        texts = _box_texts(boxes)
+        assert any("2.0" in t for t in texts)
+
+    def test_soft_uses_power_03(self):
+        boxes, _ = velocity_curve("vc", curve="soft")
+        texts = _box_texts(boxes)
+        assert any("0.3" in t for t in texts)
+
+    def test_hard_uses_power_3(self):
+        boxes, _ = velocity_curve("vc", curve="hard")
+        texts = _box_texts(boxes)
+        assert any("3.0" in t for t in texts)
+
+    def test_invalid_curve_raises(self):
+        with pytest.raises(ValueError, match="Unknown curve"):
+            velocity_curve("vc", curve="bogus")
+
+    def test_clip_follows_expr(self):
+        boxes, lines = velocity_curve("vc", curve="compress")
+        # Line goes from expr to clip
+        assert lines[0]["patchline"]["source"] == ["vc_expr", 0]
+        assert lines[0]["patchline"]["destination"] == ["vc_clip", 0]
+
+
+class TestTranspose:
+    def test_returns_add_and_clip(self):
+        boxes, lines = transpose("tp")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_default_zero_semitones(self):
+        boxes, _ = transpose("tp")
+        assert "+ 0" in _box_texts(boxes)
+
+    def test_custom_semitones(self):
+        boxes, _ = transpose("tp", semitones=7)
+        assert "+ 7" in _box_texts(boxes)
+
+    def test_negative_semitones(self):
+        boxes, _ = transpose("tp", semitones=-12)
+        assert "+ -12" in _box_texts(boxes)
+
+    def test_clip_0_127(self):
+        boxes, _ = transpose("tp")
+        assert "clip 0 127" in _box_texts(boxes)
+
+    def test_add_to_clip_connection(self):
+        _, lines = transpose("tp")
+        assert lines[0]["patchline"]["source"] == ["tp_add", 0]
+        assert lines[0]["patchline"]["destination"] == ["tp_clip", 0]
+
+
+class TestMidiThru:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = midi_thru("mt")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_box_texts(self):
+        boxes, _ = midi_thru("mt")
+        texts = _box_texts(boxes)
+        assert "midiin" in texts
+        assert "midiout" in texts
+
+    def test_midiin_to_midiout_connection(self):
+        _, lines = midi_thru("mt")
+        assert lines[0]["patchline"]["source"] == ["mt_midiin", 0]
+        assert lines[0]["patchline"]["destination"] == ["mt_midiout", 0]
+
+
+class TestGateExpander:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = gate_expander("ge")
+        assert len(boxes) == 8  # 4 per channel (abs, slide, thresh, gate) x 2
+        assert len(lines) == 6  # 3 per channel x 2
+
+    def test_stereo_box_ids(self):
+        boxes, _ = gate_expander("ge")
+        ids = _box_ids(boxes)
+        assert "ge_abs_l" in ids
+        assert "ge_abs_r" in ids
+        assert "ge_gate_l" in ids
+        assert "ge_gate_r" in ids
+
+    def test_contains_abs_tilde(self):
+        boxes, _ = gate_expander("ge")
+        texts = _box_texts(boxes)
+        assert texts.count("abs~") == 2
+
+    def test_contains_slide_tilde(self):
+        boxes, _ = gate_expander("ge")
+        texts = _box_texts(boxes)
+        slide_count = sum(1 for t in texts if t.startswith("slide~"))
+        assert slide_count == 2
+
+    def test_contains_threshold_compare(self):
+        boxes, _ = gate_expander("ge")
+        texts = _box_texts(boxes)
+        thresh_count = sum(1 for t in texts if t.startswith(">~"))
+        assert thresh_count == 2
+
+    def test_all_outlets_are_signal(self):
+        boxes, _ = gate_expander("ge")
+        for b in boxes:
+            if b["box"].get("outlettype"):
+                assert b["box"]["outlettype"] == ["signal"]
+
+
+class TestSidechainDetect:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = sidechain_detect("sc")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_box_ids(self):
+        boxes, _ = sidechain_detect("sc")
+        ids = _box_ids(boxes)
+        assert "sc_abs" in ids
+        assert "sc_slide" in ids
+
+    def test_abs_to_slide_connection(self):
+        _, lines = sidechain_detect("sc")
+        assert lines[0]["patchline"]["source"] == ["sc_abs", 0]
+        assert lines[0]["patchline"]["destination"] == ["sc_slide", 0]
+
+
+class TestSampleAndHold:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = sample_and_hold("sh")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_box_ids(self):
+        boxes, _ = sample_and_hold("sh")
+        ids = _box_ids(boxes)
+        assert "sh_noise" in ids
+        assert "sh_sah" in ids
+
+    def test_noise_to_sah_connection(self):
+        _, lines = sample_and_hold("sh")
+        assert lines[0]["patchline"]["source"] == ["sh_noise", 0]
+        assert lines[0]["patchline"]["destination"] == ["sh_sah", 0]
+
+    def test_contains_noise_tilde(self):
+        boxes, _ = sample_and_hold("sh")
+        assert "noise~" in _box_texts(boxes)
+
+    def test_contains_sah_tilde(self):
+        boxes, _ = sample_and_hold("sh")
+        assert "sah~" in _box_texts(boxes)
+
+
+class TestMultibandCompressor:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = multiband_compressor("mbc")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_contains_crossover_boxes(self):
+        boxes, _ = multiband_compressor("mbc")
+        ids = _box_ids(boxes)
+        assert any("xover" in id for id in ids)
+
+    def test_contains_compressor_boxes(self):
+        boxes, _ = multiband_compressor("mbc")
+        ids = _box_ids(boxes)
+        assert any("lo" in id for id in ids)
+        assert any("mid" in id for id in ids)
+        assert any("hi" in id for id in ids)
+
+    def test_contains_summing(self):
+        boxes, _ = multiband_compressor("mbc")
+        ids = _box_ids(boxes)
+        assert any("sum" in id for id in ids)
+
+
+class TestReverbNetwork:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = reverb_network("rv")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_default_4_combs(self):
+        boxes, _ = reverb_network("rv")
+        comb_count = sum(1 for b in boxes if "comb" in b["box"].get("text", ""))
+        assert comb_count == 4
+
+    def test_default_2_allpasses(self):
+        boxes, _ = reverb_network("rv")
+        ids = _box_ids(boxes)
+        ap_count = sum(1 for id in ids if "_ap_" in id)
+        assert ap_count == 2
+
+    def test_custom_num_combs(self):
+        boxes, _ = reverb_network("rv", num_combs=6)
+        comb_ids = [id for id in _box_ids(boxes) if "_comb_" in id]
+        assert len(comb_ids) == 6
+
+    def test_custom_num_allpasses(self):
+        boxes, _ = reverb_network("rv", num_allpasses=4)
+        ap_ids = [id for id in _box_ids(boxes) if "_ap_" in id]
+        assert len(ap_ids) == 4
+
+    def test_single_comb_no_summers(self):
+        boxes, _ = reverb_network("rv", num_combs=1)
+        sum_ids = [id for id in _box_ids(boxes) if "_sum_" in id]
+        assert len(sum_ids) == 0
+
+    def test_all_outlets_are_signal(self):
+        boxes, _ = reverb_network("rv")
+        for b in boxes:
+            if b["box"].get("outlettype"):
+                assert b["box"]["outlettype"] == ["signal"]
+
+
+class TestWavetableOsc:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = wavetable_osc("wt")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_wavetable_object(self):
+        boxes, _ = wavetable_osc("wt")
+        box = _find_box(boxes, "wt_wt")
+        assert box["text"] == "wavetable~"
+        assert box["numinlets"] == 3
+        assert box["numoutlets"] == 1
+        assert box["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = wavetable_osc("myosc")
+        assert "myosc_wt" in _box_ids(boxes)
+
+
+class TestBufferLoad:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = buffer_load("bl", "mywave")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_buffer_object(self):
+        boxes, _ = buffer_load("bl", "mywave")
+        box = _find_box(boxes, "bl_buf")
+        assert "buffer~" in box["text"]
+        assert "mywave" in box["text"]
+        assert "1024" in box["text"]
+
+    def test_custom_size(self):
+        boxes, _ = buffer_load("bl", "wave2", size=512)
+        box = _find_box(boxes, "bl_buf")
+        assert "512" in box["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = buffer_load("mybuf", "tab")
+        assert "mybuf_buf" in _box_ids(boxes)
+
+
+class TestArpeggiator:
+    def test_returns_2_boxes_2_lines(self):
+        boxes, lines = arpeggiator("arp")
+        assert len(boxes) == 2
+        assert len(lines) == 2
+
+    def test_default_mode_up(self):
+        boxes, _ = arpeggiator("arp")
+        box = _find_box(boxes, "arp_arp")
+        assert "arpeggiate up" in box["text"]
+
+    def test_custom_mode(self):
+        boxes, _ = arpeggiator("arp", mode="down")
+        box = _find_box(boxes, "arp_arp")
+        assert "arpeggiate down" in box["text"]
+
+    def test_has_makenote(self):
+        boxes, _ = arpeggiator("arp")
+        box = _find_box(boxes, "arp_make")
+        assert "makenote" in box["text"]
+
+    def test_invalid_mode_raises(self):
+        with pytest.raises(ValueError, match="Unknown arpeggiator mode"):
+            arpeggiator("arp", mode="zigzag")
+
+    def test_arp_to_make_connection(self):
+        _, lines = arpeggiator("arp")
+        assert any(
+            l["patchline"]["source"] == ["arp_arp", 0]
+            and l["patchline"]["destination"] == ["arp_make", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = arpeggiator("myarp")
+        ids = _box_ids(boxes)
+        assert "myarp_arp" in ids
+        assert "myarp_make" in ids
+
+
+class TestChord:
+    def test_default_major_triad(self):
+        boxes, _ = chord("ch")
+        assert len(boxes) == 2
+
+    def test_default_intervals_in_text(self):
+        boxes, _ = chord("ch")
+        texts = _box_texts(boxes)
+        assert any("4" in t for t in texts)
+        assert any("7" in t for t in texts)
+
+    def test_custom_intervals(self):
+        boxes, _ = chord("ch", intervals=[3, 7, 10])
+        assert len(boxes) == 3
+
+    def test_uses_plus_objects(self):
+        boxes, _ = chord("ch")
+        for b in boxes:
+            assert b["box"]["text"].startswith("+ ")
+
+    def test_returns_no_lines(self):
+        _, lines = chord("ch")
+        assert len(lines) == 0
+
+    def test_ids_use_prefix(self):
+        boxes, _ = chord("mychord", intervals=[4, 7])
+        ids = _box_ids(boxes)
+        assert "mychord_int_0" in ids
+        assert "mychord_int_1" in ids
+
+
+class TestPitchQuantize:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = pitch_quantize("pq")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_chromatic(self):
+        boxes, _ = pitch_quantize("pq")
+        box = _find_box(boxes, "pq_scale")
+        assert "scale chromatic" in box["text"]
+
+    def test_custom_scale(self):
+        boxes, _ = pitch_quantize("pq", scale="major")
+        box = _find_box(boxes, "pq_scale")
+        assert "scale major" in box["text"]
+
+    def test_invalid_scale_raises(self):
+        with pytest.raises(ValueError, match="Unknown scale"):
+            pitch_quantize("pq", scale="blues")
+
+    def test_all_valid_scales(self):
+        for scale in ("chromatic", "major", "minor", "pentatonic", "dorian"):
+            boxes, _ = pitch_quantize("pq", scale=scale)
+            assert len(boxes) == 1
+
+    def test_ids_use_prefix(self):
+        boxes, _ = pitch_quantize("myq")
+        assert "myq_scale" in _box_ids(boxes)
+
+
+class TestLookaheadEnvelopeFollower:
+    def test_returns_4_boxes_2_lines(self):
+        boxes, lines = lookahead_envelope_follower("lah")
+        assert len(boxes) == 4
+        assert len(lines) == 2
+
+    def test_has_tapin(self):
+        boxes, _ = lookahead_envelope_follower("lah")
+        box = _find_box(boxes, "lah_tapin")
+        assert "tapin~" in box["text"]
+        assert box["outlettype"] == ["tapconnect"]
+
+    def test_has_tapout(self):
+        boxes, _ = lookahead_envelope_follower("lah")
+        box = _find_box(boxes, "lah_tapout")
+        assert "tapout~" in box["text"]
+        assert box["outlettype"] == ["signal"]
+
+    def test_has_abs_and_slide(self):
+        boxes, _ = lookahead_envelope_follower("lah")
+        _find_box(boxes, "lah_abs")
+        _find_box(boxes, "lah_slide")
+
+    def test_tapin_feeds_tapout(self):
+        _, lines = lookahead_envelope_follower("lah")
+        assert any(
+            l["patchline"]["source"] == ["lah_tapin", 0]
+            and l["patchline"]["destination"] == ["lah_tapout", 0]
+            for l in lines
+        )
+
+    def test_abs_feeds_slide(self):
+        _, lines = lookahead_envelope_follower("lah")
+        assert any(
+            l["patchline"]["source"] == ["lah_abs", 0]
+            and l["patchline"]["destination"] == ["lah_slide", 0]
+            for l in lines
+        )
+
+    def test_custom_lookahead(self):
+        boxes, _ = lookahead_envelope_follower("lah", lookahead_ms=10)
+        box = _find_box(boxes, "lah_tapout")
+        assert "10" in box["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = lookahead_envelope_follower("myenv")
+        ids = _box_ids(boxes)
+        assert "myenv_tapin" in ids
+        assert "myenv_abs" in ids
+
+
+class TestFdnReverb:
+    def test_default_8_delays(self):
+        boxes, _ = fdn_reverb("fdn")
+        tapin_count = sum(1 for b in boxes if "tapin~" in b["box"].get("text", ""))
+        assert tapin_count == 8
+
+    def test_default_8_tapouts(self):
+        boxes, _ = fdn_reverb("fdn")
+        tapout_count = sum(1 for b in boxes if "tapout~" in b["box"].get("text", ""))
+        assert tapout_count == 8
+
+    def test_prime_delay_times(self):
+        boxes, _ = fdn_reverb("fdn")
+        texts = [b["box"]["text"] for b in boxes if "tapin~" in b["box"].get("text", "")]
+        # First tapin should use 47ms
+        assert any("47" in t for t in texts)
+
+    def test_has_sum_output(self):
+        boxes, _ = fdn_reverb("fdn")
+        ids = _box_ids(boxes)
+        assert "fdn_sum" in ids
+
+    def test_single_delay_no_adders(self):
+        boxes, _ = fdn_reverb("fdn", num_delays=1)
+        add_ids = [id for id in _box_ids(boxes) if "_add_" in id]
+        assert len(add_ids) == 0
+
+    def test_custom_num_delays(self):
+        boxes, _ = fdn_reverb("fdn", num_delays=4)
+        tapin_count = sum(1 for b in boxes if "tapin~" in b["box"].get("text", ""))
+        assert tapin_count == 4
+
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = fdn_reverb("fdn")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_ids_use_prefix(self):
+        boxes, _ = fdn_reverb("myfdn")
+        assert "myfdn_tapin_0" in _box_ids(boxes)
+
+
+class TestSpectralGate:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = spectral_gate("sg")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_pfft_object(self):
+        boxes, _ = spectral_gate("sg")
+        box = _find_box(boxes, "sg_pfft")
+        assert "pfft~" in box["text"]
+        assert "spectral_gate_sub.maxpat" in box["text"]
+
+    def test_inlets_outlets(self):
+        boxes, _ = spectral_gate("sg")
+        box = _find_box(boxes, "sg_pfft")
+        assert box["numinlets"] == 2
+        assert box["numoutlets"] == 1
+        assert box["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = spectral_gate("mysg")
+        assert "mysg_pfft" in _box_ids(boxes)
+
+
+class TestSpectralGateSubpatcher:
+    def test_returns_dict_with_patcher_key(self):
+        result = spectral_gate_subpatcher()
+        assert "patcher" in result
+
+    def test_has_fftin(self):
+        result = spectral_gate_subpatcher()
+        boxes = result["patcher"]["boxes"]
+        texts = [b["box"]["text"] for b in boxes]
+        assert any("fftin~" in t for t in texts)
+
+    def test_has_fftout(self):
+        result = spectral_gate_subpatcher()
+        boxes = result["patcher"]["boxes"]
+        texts = [b["box"]["text"] for b in boxes]
+        assert any("fftout~" in t for t in texts)
+
+    def test_has_threshold_comparison(self):
+        result = spectral_gate_subpatcher(threshold=0.05)
+        boxes = result["patcher"]["boxes"]
+        texts = [b["box"]["text"] for b in boxes]
+        assert any("0.05" in t for t in texts)
+
+    def test_has_lines(self):
+        result = spectral_gate_subpatcher()
+        assert len(result["patcher"]["lines"]) > 0
+
+
+class TestVocoder:
+    def test_default_16_bands(self):
+        boxes, _ = vocoder("vc")
+        out_ids = [id for id in _box_ids(boxes) if id.startswith("vc_out_")]
+        assert len(out_ids) == 16
+
+    def test_custom_num_bands(self):
+        boxes, _ = vocoder("vc", num_bands=4)
+        out_ids = [id for id in _box_ids(boxes) if id.startswith("vc_out_")]
+        assert len(out_ids) == 4
+
+    def test_has_carrier_bandpass(self):
+        boxes, _ = vocoder("vc", num_bands=2)
+        ids = _box_ids(boxes)
+        assert any("car_bp" in id for id in ids)
+
+    def test_has_modulator_bandpass(self):
+        boxes, _ = vocoder("vc", num_bands=2)
+        ids = _box_ids(boxes)
+        assert any("mod_bp" in id for id in ids)
+
+    def test_has_envelope_followers(self):
+        boxes, _ = vocoder("vc", num_bands=2)
+        ids = _box_ids(boxes)
+        assert any("env" in id for id in ids)
+
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = vocoder("vc", num_bands=2)
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_out_multiplier_objects(self):
+        boxes, _ = vocoder("vc", num_bands=2)
+        for i in range(2):
+            box = _find_box(boxes, f"vc_out_{i}")
+            assert box["text"] == "*~"
+
+    def test_ids_use_prefix(self):
+        boxes, _ = vocoder("myvc", num_bands=1)
+        ids = _box_ids(boxes)
+        assert "myvc_out_0" in ids
+
+
+class TestMcExpand:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = mc_expand("mc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_mc_pack(self):
+        boxes, _ = mc_expand("mc")
+        box = _find_box(boxes, "mc_pack")
+        assert "mc.pack~" in box["text"]
+
+    def test_default_8_channels(self):
+        boxes, _ = mc_expand("mc")
+        box = _find_box(boxes, "mc_pack")
+        assert "8" in box["text"]
+
+    def test_custom_channels(self):
+        boxes, _ = mc_expand("mc", channels=4)
+        box = _find_box(boxes, "mc_pack")
+        assert "4" in box["text"]
+        assert box["numinlets"] == 4
+
+    def test_ids_use_prefix(self):
+        boxes, _ = mc_expand("mymc")
+        assert "mymc_pack" in _box_ids(boxes)
+
+
+class TestMcCollapse:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = mc_collapse("mc")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_mc_unpack(self):
+        boxes, _ = mc_collapse("mc")
+        box = _find_box(boxes, "mc_unpack")
+        assert "mc.unpack~" in box["text"]
+
+    def test_default_8_channels(self):
+        boxes, _ = mc_collapse("mc")
+        box = _find_box(boxes, "mc_unpack")
+        assert "8" in box["text"]
+
+    def test_has_stereo_sum_outputs(self):
+        boxes, _ = mc_collapse("mc")
+        ids = _box_ids(boxes)
+        assert "mc_sum_l" in ids
+        assert "mc_sum_r" in ids
+
+    def test_custom_channels(self):
+        boxes, _ = mc_collapse("mc", channels=4)
+        box = _find_box(boxes, "mc_unpack")
+        assert "4" in box["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = mc_collapse("mymc")
+        ids = _box_ids(boxes)
+        assert "mymc_unpack" in ids
+
+
+class TestNoteExpressionDecode:
+    def test_returns_3_boxes_0_lines(self):
+        boxes, lines = note_expression_decode("ned")
+        assert len(boxes) == 3
+        assert len(lines) == 0
+
+    def test_has_notein(self):
+        boxes, _ = note_expression_decode("ned")
+        box = _find_box(boxes, "ned_notein")
+        assert box["text"] == "notein"
+        assert box["numoutlets"] == 3
+
+    def test_has_polytouchin(self):
+        boxes, _ = note_expression_decode("ned")
+        box = _find_box(boxes, "ned_polytouch")
+        assert "polytouchin" in box["text"]
+        assert box["numoutlets"] == 3
+
+    def test_has_pitchin(self):
+        boxes, _ = note_expression_decode("ned")
+        box = _find_box(boxes, "ned_pitchin")
+        assert "pitchin" in box["text"]
+        assert box["numoutlets"] == 2
+
+    def test_ids_use_prefix(self):
+        boxes, _ = note_expression_decode("myned")
+        ids = _box_ids(boxes)
+        assert "myned_notein" in ids
+        assert "myned_polytouch" in ids
+        assert "myned_pitchin" in ids
+
+
+class TestTransportLfo:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = transport_lfo("tlfo")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_transport_object(self):
+        boxes, _ = transport_lfo("tlfo")
+        t = _find_box(boxes, "tlfo_transport")
+        assert t["text"] == "transport"
+
+    def test_has_bpm_float(self):
+        boxes, _ = transport_lfo("tlfo")
+        b = _find_box(boxes, "tlfo_bpm")
+        assert b["text"] == "f"
+
+    def test_has_rate_expr(self):
+        boxes, _ = transport_lfo("tlfo")
+        r = _find_box(boxes, "tlfo_rate")
+        assert "expr" in r["text"]
+
+    def test_default_sine_uses_cycle(self):
+        boxes, _ = transport_lfo("tlfo", shape="sine")
+        osc = _find_box(boxes, "tlfo_osc")
+        assert osc["text"] == "cycle~"
+
+    def test_saw_uses_phasor(self):
+        boxes, _ = transport_lfo("tlfo", shape="saw")
+        osc = _find_box(boxes, "tlfo_osc")
+        assert osc["text"] == "phasor~"
+
+    def test_square_uses_rect(self):
+        boxes, _ = transport_lfo("tlfo", shape="square")
+        osc = _find_box(boxes, "tlfo_osc")
+        assert osc["text"] == "rect~"
+
+    def test_invalid_division_raises(self):
+        with pytest.raises(ValueError, match="Unknown division"):
+            transport_lfo("tlfo", division="1/3")
+
+    def test_invalid_shape_raises(self):
+        with pytest.raises(ValueError, match="Unknown shape"):
+            transport_lfo("tlfo", shape="triangle")
+
+    def test_rate_feeds_osc(self):
+        _, lines = transport_lfo("tlfo")
+        assert any(
+            l["patchline"]["source"] == ["tlfo_rate", 0]
+            and l["patchline"]["destination"] == ["tlfo_osc", 0]
+            for l in lines
+        )
+
+    def test_division_changes_rate_expr(self):
+        boxes1, _ = transport_lfo("tlfo", division="1/8")
+        boxes2, _ = transport_lfo("tlfo", division="1/1")
+        r1 = _find_box(boxes1, "tlfo_rate")["text"]
+        r2 = _find_box(boxes2, "tlfo_rate")["text"]
+        assert r1 != r2
+
+    def test_ids_use_prefix(self):
+        boxes, _ = transport_lfo("mysync")
+        ids = _box_ids(boxes)
+        assert "mysync_transport" in ids
+        assert "mysync_osc" in ids
+
+
+class TestPitchbendIn:
+    def test_returns_2_boxes_1_line(self):
+        boxes, lines = pitchbend_in("pb")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_has_bendin(self):
+        boxes, _ = pitchbend_in("pb")
+        b = _find_box(boxes, "pb_bendin")
+        assert b["text"] == "bendin"
+        assert b["numoutlets"] == 2
+
+    def test_has_scale_expr(self):
+        boxes, _ = pitchbend_in("pb")
+        s = _find_box(boxes, "pb_scale")
+        assert "expr" in s["text"]
+        assert "8192" in s["text"]
+
+    def test_default_semitones_in_expr(self):
+        boxes, _ = pitchbend_in("pb")
+        s = _find_box(boxes, "pb_scale")
+        assert "2" in s["text"]
+
+    def test_custom_semitones(self):
+        boxes, _ = pitchbend_in("pb", semitones=12)
+        s = _find_box(boxes, "pb_scale")
+        assert "12" in s["text"]
+
+    def test_bendin_feeds_scale(self):
+        _, lines = pitchbend_in("pb")
+        assert any(
+            l["patchline"]["source"] == ["pb_bendin", 0]
+            and l["patchline"]["destination"] == ["pb_scale", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = pitchbend_in("mypb")
+        ids = _box_ids(boxes)
+        assert "mypb_bendin" in ids
+        assert "mypb_scale" in ids
+
+
+class TestModwheelIn:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = modwheel_in("mw")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_ctlin_1(self):
+        boxes, _ = modwheel_in("mw")
+        b = _find_box(boxes, "mw_ctlin")
+        assert b["text"] == "ctlin 1"
+
+    def test_three_outlets(self):
+        boxes, _ = modwheel_in("mw")
+        b = _find_box(boxes, "mw_ctlin")
+        assert b["numoutlets"] == 3
+
+    def test_ids_use_prefix(self):
+        boxes, _ = modwheel_in("mymod")
+        assert "mymod_ctlin" in _box_ids(boxes)
+
+
+class TestAftertouchIn:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = aftertouch_in("at")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_touchin(self):
+        boxes, _ = aftertouch_in("at")
+        b = _find_box(boxes, "at_touchin")
+        assert b["text"] == "touchin"
+
+    def test_two_outlets(self):
+        boxes, _ = aftertouch_in("at")
+        b = _find_box(boxes, "at_touchin")
+        assert b["numoutlets"] == 2
+
+    def test_ids_use_prefix(self):
+        boxes, _ = aftertouch_in("myat")
+        assert "myat_touchin" in _box_ids(boxes)
+
+
+class TestXfadeMatrix:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = xfade_matrix("xf")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_ctrl_input(self):
+        boxes, _ = xfade_matrix("xf")
+        ids = _box_ids(boxes)
+        assert "xf_ctrl" in ids
+
+    def test_has_weight_objects(self):
+        boxes, _ = xfade_matrix("xf", sources=4)
+        ids = _box_ids(boxes)
+        for i in range(4):
+            assert f"xf_wt_{i}" in ids
+
+    def test_has_mul_objects(self):
+        boxes, _ = xfade_matrix("xf", sources=4)
+        ids = _box_ids(boxes)
+        for i in range(4):
+            assert f"xf_mul_{i}" in ids
+
+    def test_has_sum_output(self):
+        boxes, _ = xfade_matrix("xf", sources=4)
+        ids = _box_ids(boxes)
+        assert "xf_sum" in ids
+
+    def test_ctrl_line_feeds_weights(self):
+        _, lines = xfade_matrix("xf", sources=2)
+        assert any(
+            l["patchline"]["source"] == ["xf_ctrl_line", 0]
+            and "xf_wt_" in l["patchline"]["destination"][0]
+            for l in lines
+        )
+
+    def test_single_source(self):
+        boxes, lines = xfade_matrix("xf", sources=1)
+        assert "xf_sum" in _box_ids(boxes)
+
+    def test_ids_use_prefix(self):
+        boxes, _ = xfade_matrix("myxf", sources=2)
+        ids = _box_ids(boxes)
+        assert "myxf_wt_0" in ids
+        assert "myxf_mul_0" in ids
+        assert "myxf_sum" in ids
+
+
+class TestMidiLearnChain:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = midi_learn_chain("ml", "my_param")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_ctlin(self):
+        boxes, _ = midi_learn_chain("ml", "p")
+        b = _find_box(boxes, "ml_ctlin")
+        assert b["text"] == "ctlin"
+
+    def test_has_learn_toggle(self):
+        boxes, _ = midi_learn_chain("ml", "p")
+        b = _find_box(boxes, "ml_learn")
+        assert b["text"] == "toggle"
+
+    def test_has_send_with_param_name(self):
+        boxes, _ = midi_learn_chain("ml", "cutoff")
+        b = _find_box(boxes, "ml_send")
+        assert "send cutoff" in b["text"]
+
+    def test_has_gate_and_store(self):
+        boxes, _ = midi_learn_chain("ml", "p")
+        ids = _box_ids(boxes)
+        assert "ml_gate" in ids
+        assert "ml_cc_store" in ids
+
+    def test_ids_use_prefix(self):
+        boxes, _ = midi_learn_chain("myml", "p")
+        ids = _box_ids(boxes)
+        assert "myml_ctlin" in ids
+        assert "myml_send" in ids
+
+
+class TestConvolver:
+    def test_returns_2_boxes_0_lines(self):
+        boxes, lines = convolver("cv")
+        assert len(boxes) == 2
+        assert len(lines) == 0
+
+    def test_has_buffer(self):
+        boxes, _ = convolver("cv")
+        b = _find_box(boxes, "cv_ir_buf")
+        assert "buffer~" in b["text"]
+
+    def test_has_convolve(self):
+        boxes, _ = convolver("cv")
+        b = _find_box(boxes, "cv_conv")
+        assert "convolve~" in b["text"]
+
+    def test_default_ir_buffer_name(self):
+        boxes, _ = convolver("cv")
+        buf = _find_box(boxes, "cv_ir_buf")
+        assert "ir_buf" in buf["text"]
+        conv = _find_box(boxes, "cv_conv")
+        assert "ir_buf" in conv["text"]
+
+    def test_custom_ir_buffer_name(self):
+        boxes, _ = convolver("cv", ir_buffer="my_ir")
+        buf = _find_box(boxes, "cv_ir_buf")
+        assert "my_ir" in buf["text"]
+        conv = _find_box(boxes, "cv_conv")
+        assert "my_ir" in conv["text"]
+
+    def test_convolve_has_signal_outlet(self):
+        boxes, _ = convolver("cv")
+        b = _find_box(boxes, "cv_conv")
+        assert b["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = convolver("mycv")
+        ids = _box_ids(boxes)
+        assert "mycv_ir_buf" in ids
+        assert "mycv_conv" in ids
+
+
+class TestProgramChangeIn:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = program_change_in("pc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_default_all_channels(self):
+        boxes, _ = program_change_in("pc")
+        b = _find_box(boxes, "pc_pgmin")
+        assert b["text"] == "pgmin"
+
+    def test_specific_channel(self):
+        boxes, _ = program_change_in("pc", channel=3)
+        b = _find_box(boxes, "pc_pgmin")
+        assert b["text"] == "pgmin 3"
+
+    def test_two_outlets(self):
+        boxes, _ = program_change_in("pc")
+        b = _find_box(boxes, "pc_pgmin")
+        assert b["numoutlets"] == 2
+
+    def test_ids_use_prefix(self):
+        boxes, _ = program_change_in("mypc")
+        assert "mypc_pgmin" in _box_ids(boxes)
+
+
+class TestBankSelectIn:
+    def test_returns_4_boxes_3_lines(self):
+        boxes, lines = bank_select_in("bs")
+        assert len(boxes) == 4
+        assert len(lines) == 3
+
+    def test_has_msb_ctlin(self):
+        boxes, _ = bank_select_in("bs")
+        b = _find_box(boxes, "bs_msb")
+        assert "ctlin 0" in b["text"]
+
+    def test_has_lsb_ctlin(self):
+        boxes, _ = bank_select_in("bs")
+        b = _find_box(boxes, "bs_lsb")
+        assert "ctlin 32" in b["text"]
+
+    def test_has_bank_expr(self):
+        boxes, _ = bank_select_in("bs")
+        b = _find_box(boxes, "bs_bank")
+        assert "expr" in b["text"]
+        assert "128" in b["text"]
+
+    def test_msb_feeds_store(self):
+        _, lines = bank_select_in("bs")
+        assert any(
+            l["patchline"]["source"] == ["bs_msb", 0]
+            and l["patchline"]["destination"] == ["bs_msb_store", 0]
+            for l in lines
+        )
+
+    def test_store_feeds_bank_expr(self):
+        _, lines = bank_select_in("bs")
+        assert any(
+            l["patchline"]["source"] == ["bs_msb_store", 0]
+            and l["patchline"]["destination"] == ["bs_bank", 0]
+            for l in lines
+        )
+
+    def test_lsb_feeds_bank_expr(self):
+        _, lines = bank_select_in("bs")
+        assert any(
+            l["patchline"]["source"] == ["bs_lsb", 0]
+            and l["patchline"]["destination"] == ["bs_bank", 1]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = bank_select_in("mybs")
+        ids = _box_ids(boxes)
+        assert "mybs_msb" in ids
+        assert "mybs_lsb" in ids
+        assert "mybs_bank" in ids
+
+
+class TestSampleAndHoldTriggered:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = sample_and_hold_triggered("sht")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_samphold(self):
+        boxes, _ = sample_and_hold_triggered("sht")
+        b = _find_box(boxes, "sht_sah")
+        assert b["text"] == "samphold~"
+
+    def test_two_inlets(self):
+        boxes, _ = sample_and_hold_triggered("sht")
+        b = _find_box(boxes, "sht_sah")
+        assert b["numinlets"] == 2
+
+    def test_signal_outlet(self):
+        boxes, _ = sample_and_hold_triggered("sht")
+        b = _find_box(boxes, "sht_sah")
+        assert b["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = sample_and_hold_triggered("mysht")
+        assert "mysht_sah" in _box_ids(boxes)
+
+
+class TestBitcrusher:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = bitcrusher("bc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_degrade(self):
+        boxes, _ = bitcrusher("bc")
+        b = _find_box(boxes, "bc_degrade")
+        assert "degrade~" in b["text"]
+
+    def test_default_bits_in_text(self):
+        boxes, _ = bitcrusher("bc")
+        b = _find_box(boxes, "bc_degrade")
+        assert "8" in b["text"]
+
+    def test_default_rate_reduction_in_text(self):
+        boxes, _ = bitcrusher("bc")
+        b = _find_box(boxes, "bc_degrade")
+        assert "1" in b["text"]
+
+    def test_custom_bits(self):
+        boxes, _ = bitcrusher("bc", bits=4)
+        b = _find_box(boxes, "bc_degrade")
+        assert "4" in b["text"]
+
+    def test_custom_rate_reduction(self):
+        boxes, _ = bitcrusher("bc", rate_reduction=4)
+        b = _find_box(boxes, "bc_degrade")
+        assert "4" in b["text"]
+
+    def test_three_inlets(self):
+        boxes, _ = bitcrusher("bc")
+        b = _find_box(boxes, "bc_degrade")
+        assert b["numinlets"] == 3
+
+    def test_signal_outlet(self):
+        boxes, _ = bitcrusher("bc")
+        b = _find_box(boxes, "bc_degrade")
+        assert b["outlettype"] == ["signal"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = bitcrusher("mybc")
+        assert "mybc_degrade" in _box_ids(boxes)
+
+
+class TestPolyVoices:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = poly_voices("pv")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_poly_object(self):
+        boxes, _ = poly_voices("pv")
+        b = _find_box(boxes, "pv_poly")
+        assert "poly~" in b["text"]
+
+    def test_default_patch_name(self):
+        boxes, _ = poly_voices("pv")
+        b = _find_box(boxes, "pv_poly")
+        assert "voice" in b["text"]
+
+    def test_default_num_voices(self):
+        boxes, _ = poly_voices("pv")
+        b = _find_box(boxes, "pv_poly")
+        assert "4" in b["text"]
+
+    def test_custom_voices(self):
+        boxes, _ = poly_voices("pv", num_voices=8)
+        b = _find_box(boxes, "pv_poly")
+        assert "8" in b["text"]
+
+    def test_custom_patch_name(self):
+        boxes, _ = poly_voices("pv", patch_name="mysynth")
+        b = _find_box(boxes, "pv_poly")
+        assert "mysynth" in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = poly_voices("mypv")
+        assert "mypv_poly" in _box_ids(boxes)
+
+
+class TestSpectralCrossover:
+    def test_returns_1_box_0_lines(self):
+        boxes, lines = spectral_crossover("sc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_pfft_object(self):
+        boxes, _ = spectral_crossover("sc")
+        b = _find_box(boxes, "sc_pfft")
+        assert "pfft~" in b["text"]
+        assert "spectral_crossover_sub.maxpat" in b["text"]
+
+    def test_default_4_bands(self):
+        boxes, _ = spectral_crossover("sc")
+        b = _find_box(boxes, "sc_pfft")
+        assert b["numoutlets"] == 4
+
+    def test_custom_bands(self):
+        boxes, _ = spectral_crossover("sc", bands=8)
+        b = _find_box(boxes, "sc_pfft")
+        assert b["numoutlets"] == 8
+
+    def test_ids_use_prefix(self):
+        boxes, _ = spectral_crossover("mysc")
+        assert "mysc_pfft" in _box_ids(boxes)
+
+
+class TestSpectralCrossoverSubpatcher:
+    def test_returns_dict_with_patcher_key(self):
+        result = spectral_crossover_subpatcher()
+        assert "patcher" in result
+
+    def test_has_fftin(self):
+        result = spectral_crossover_subpatcher()
+        boxes = result["patcher"]["boxes"]
+        texts = [b["box"]["text"] for b in boxes]
+        assert any("fftin~" in t for t in texts)
+
+    def test_has_fftout_per_band(self):
+        result = spectral_crossover_subpatcher(bands=4)
+        boxes = result["patcher"]["boxes"]
+        fftout_boxes = [b for b in boxes if "fftout~" in b["box"]["text"]]
+        assert len(fftout_boxes) == 4
+
+    def test_custom_bands(self):
+        result = spectral_crossover_subpatcher(bands=8)
+        boxes = result["patcher"]["boxes"]
+        fftout_boxes = [b for b in boxes if "fftout~" in b["box"]["text"]]
+        assert len(fftout_boxes) == 8
+
+    def test_has_cartopol(self):
+        result = spectral_crossover_subpatcher()
+        boxes = result["patcher"]["boxes"]
+        texts = [b["box"]["text"] for b in boxes]
+        assert any("cartopol~" in t for t in texts)
+
+    def test_has_lines(self):
+        result = spectral_crossover_subpatcher()
+        assert len(result["patcher"]["lines"]) > 0
+
+
+class TestGrainCloud:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = grain_cloud("gc", "my_sample")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_buffer(self):
+        boxes, _ = grain_cloud("gc", "my_sample")
+        b = _find_box(boxes, "gc_buf")
+        assert "buffer~" in b["text"]
+        assert "my_sample" in b["text"]
+
+    def test_has_groove_instances(self):
+        boxes, _ = grain_cloud("gc", "smp", num_voices=4)
+        ids = _box_ids(boxes)
+        for i in range(4):
+            assert f"gc_groove_{i}" in ids
+
+    def test_groove_uses_buffer_name(self):
+        boxes, _ = grain_cloud("gc", "my_sample", num_voices=2)
+        g = _find_box(boxes, "gc_groove_0")
+        assert "my_sample" in g["text"]
+
+    def test_has_sum_output(self):
+        boxes, _ = grain_cloud("gc", "smp", num_voices=4)
+        assert "gc_sum" in _box_ids(boxes)
+
+    def test_single_voice(self):
+        boxes, lines = grain_cloud("gc", "smp", num_voices=1)
+        assert "gc_sum" in _box_ids(boxes)
+        assert any(
+            l["patchline"]["source"] == ["gc_groove_0", 0]
+            and l["patchline"]["destination"] == ["gc_sum", 0]
+            for l in lines
+        )
+
+    def test_groove_has_signal_outlet(self):
+        boxes, _ = grain_cloud("gc", "smp", num_voices=2)
+        g = _find_box(boxes, "gc_groove_0")
+        assert "signal" in g["outlettype"][0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = grain_cloud("mygc", "s")
+        ids = _box_ids(boxes)
+        assert "mygc_buf" in ids
+        assert "mygc_groove_0" in ids
+
+
+class TestArpeggiatorExtendedModes:
+    def test_converge_mode(self):
+        boxes, _ = arpeggiator("arp", mode="converge")
+        b = _find_box(boxes, "arp_arp")
+        assert "arpeggiate converge" in b["text"]
+
+    def test_diverge_mode(self):
+        boxes, _ = arpeggiator("arp", mode="diverge")
+        b = _find_box(boxes, "arp_arp")
+        assert "arpeggiate diverge" in b["text"]
+
+    def test_sweep_mode(self):
+        boxes, _ = arpeggiator("arp", mode="sweep")
+        b = _find_box(boxes, "arp_arp")
+        assert "arpeggiate sweep" in b["text"]
+
+    def test_original_modes_still_valid(self):
+        for mode in ("up", "down", "up_down", "random", "as_played"):
+            boxes, _ = arpeggiator("arp", mode=mode)
+            b = _find_box(boxes, "arp_arp")
+            assert f"arpeggiate {mode}" in b["text"]
+
+    def test_invalid_mode_still_raises(self):
+        with pytest.raises(ValueError, match="Unknown arpeggiator mode"):
+            arpeggiator("arp", mode="zigzag")
+
+
+class TestAutoGain:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = auto_gain("ag")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_env(self):
+        boxes, _ = auto_gain("ag")
+        b = _find_box(boxes, "ag_env")
+        assert "env~" in b["text"]
+
+    def test_has_mul(self):
+        boxes, _ = auto_gain("ag")
+        b = _find_box(boxes, "ag_mul")
+        assert "*~" in b["text"]
+
+    def test_mul_has_signal_outlet(self):
+        boxes, _ = auto_gain("ag")
+        b = _find_box(boxes, "ag_mul")
+        assert "signal" in b["outlettype"][0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = auto_gain("mygain")
+        ids = _box_ids(boxes)
+        assert "mygain_env" in ids
+        assert "mygain_mul" in ids
+
+
+class TestMidiClockOut:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = midi_clock_out("mc")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_transport(self):
+        boxes, _ = midi_clock_out("mc")
+        b = _find_box(boxes, "mc_transport")
+        assert "transport" in b["text"]
+
+    def test_has_midiout(self):
+        boxes, _ = midi_clock_out("mc")
+        b = _find_box(boxes, "mc_midiout")
+        assert "midiout" in b["text"]
+
+    def test_has_metro(self):
+        boxes, _ = midi_clock_out("mc")
+        b = _find_box(boxes, "mc_metro")
+        assert "metro" in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = midi_clock_out("clk")
+        ids = _box_ids(boxes)
+        assert "clk_transport" in ids
+        assert "clk_midiout" in ids
+
+
+class TestMacromap:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = macromap("mm", "MyParam")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_remote(self):
+        boxes, _ = macromap("mm", "MyParam")
+        b = _find_box(boxes, "mm_remote")
+        assert "live.remote~" in b["text"]
+        assert "macro1" in b["text"]
+
+    def test_macro_num_param(self):
+        boxes, _ = macromap("mm", "MyParam", macro_num=5)
+        b = _find_box(boxes, "mm_remote")
+        assert "macro5" in b["text"]
+
+    def test_has_param(self):
+        boxes, _ = macromap("mm", "Cutoff")
+        b = _find_box(boxes, "mm_param")
+        assert "live.param~" in b["text"]
+        assert "Cutoff" in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = macromap("mymap", "Gain")
+        ids = _box_ids(boxes)
+        assert "mymap_remote" in ids
+        assert "mymap_param" in ids
+
+
+class TestStftPhaseVocoder:
+    def test_returns_boxes_no_lines(self):
+        boxes, lines = stft_phase_vocoder("pv")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_pfft(self):
+        boxes, _ = stft_phase_vocoder("pv")
+        b = _find_box(boxes, "pv_pfft")
+        assert "pfft~" in b["text"]
+        assert "phase_vocoder_sub.maxpat" in b["text"]
+
+    def test_pfft_signal_outlet(self):
+        boxes, _ = stft_phase_vocoder("pv")
+        b = _find_box(boxes, "pv_pfft")
+        assert "signal" in b["outlettype"][0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = stft_phase_vocoder("mypv")
+        assert "mypv_pfft" in _box_ids(boxes)
+
+
+class TestPhaseVocoderSubpatcher:
+    def test_returns_dict_with_patcher(self):
+        result = phase_vocoder_subpatcher()
+        assert "patcher" in result
+
+    def test_has_fftin(self):
+        result = phase_vocoder_subpatcher()
+        texts = [b["box"]["text"] for b in result["patcher"]["boxes"]]
+        assert any("fftin~" in t for t in texts)
+
+    def test_has_fftout(self):
+        result = phase_vocoder_subpatcher()
+        texts = [b["box"]["text"] for b in result["patcher"]["boxes"]]
+        assert any("fftout~" in t for t in texts)
+
+    def test_has_phase_acc(self):
+        result = phase_vocoder_subpatcher()
+        texts = [b["box"]["text"] for b in result["patcher"]["boxes"]]
+        assert any("+~" in t for t in texts)
+
+    def test_has_lines(self):
+        result = phase_vocoder_subpatcher()
+        assert len(result["patcher"]["lines"]) > 0
+
+    def test_has_cartopol(self):
+        result = phase_vocoder_subpatcher()
+        texts = [b["box"]["text"] for b in result["patcher"]["boxes"]]
+        assert any("cartopol~" in t for t in texts)
+
+
+class TestSpectrumBandExtract:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = spectrum_band_extract("sbe")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_has_highpass(self):
+        boxes, _ = spectrum_band_extract("sbe")
+        b = _find_box(boxes, "sbe_hp")
+        assert "hip~" in b["text"]
+        assert "200" in b["text"]
+
+    def test_has_lowpass(self):
+        boxes, _ = spectrum_band_extract("sbe")
+        b = _find_box(boxes, "sbe_lp")
+        assert "lop~" in b["text"]
+        assert "2000" in b["text"]
+
+    def test_custom_freqs(self):
+        boxes, _ = spectrum_band_extract("sbe", low_hz=500, high_hz=5000)
+        hp = _find_box(boxes, "sbe_hp")
+        lp = _find_box(boxes, "sbe_lp")
+        assert "500" in hp["text"]
+        assert "5000" in lp["text"]
+
+    def test_hp_feeds_lp(self):
+        _, lines = spectrum_band_extract("sbe")
+        assert any(
+            l["patchline"]["source"] == ["sbe_hp", 0]
+            and l["patchline"]["destination"] == ["sbe_lp", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = spectrum_band_extract("band")
+        ids = _box_ids(boxes)
+        assert "band_hp" in ids
+        assert "band_lp" in ids
+
+
+class TestMorphingLfo:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = morphing_lfo("mlfo")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_phasor(self):
+        boxes, _ = morphing_lfo("mlfo")
+        b = _find_box(boxes, "mlfo_phasor")
+        assert "phasor~" in b["text"]
+
+    def test_has_sine(self):
+        boxes, _ = morphing_lfo("mlfo")
+        b = _find_box(boxes, "mlfo_sine")
+        assert "cycle~" in b["text"]
+
+    def test_has_selector(self):
+        boxes, _ = morphing_lfo("mlfo")
+        b = _find_box(boxes, "mlfo_sel")
+        assert "selector~" in b["text"]
+
+    def test_has_waveform_exprs(self):
+        boxes, _ = morphing_lfo("mlfo")
+        ids = _box_ids(boxes)
+        assert "mlfo_tri" in ids
+        assert "mlfo_sq" in ids
+        assert "mlfo_saw" in ids
+
+    def test_selector_has_signal_outlet(self):
+        boxes, _ = morphing_lfo("mlfo")
+        b = _find_box(boxes, "mlfo_sel")
+        assert "signal" in b["outlettype"][0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = morphing_lfo("myx")
+        ids = _box_ids(boxes)
+        assert "myx_phasor" in ids
+        assert "myx_sel" in ids
+
+
+class TestMidiClockIn:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = midi_clock_in("mci")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_midiin(self):
+        boxes, _ = midi_clock_in("mci")
+        b = _find_box(boxes, "mci_midiin")
+        assert "midiin" in b["text"]
+
+    def test_has_midiparse(self):
+        boxes, _ = midi_clock_in("mci")
+        b = _find_box(boxes, "mci_midiparse")
+        assert "midiparse" in b["text"]
+
+    def test_has_clockdet(self):
+        boxes, _ = midi_clock_in("mci")
+        b = _find_box(boxes, "mci_clockdet")
+        assert "248" in b["text"]
+
+    def test_has_bpm_scale(self):
+        boxes, _ = midi_clock_in("mci")
+        b = _find_box(boxes, "mci_bpm_scale")
+        assert "60" in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = midi_clock_in("ck")
+        ids = _box_ids(boxes)
+        assert "ck_midiin" in ids
+        assert "ck_bpm_scale" in ids
+
+
+class TestSidechainRouting:
+    def test_returns_boxes_no_lines(self):
+        boxes, lines = sidechain_routing("sc")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_has_plugin(self):
+        boxes, _ = sidechain_routing("sc")
+        b = _find_box(boxes, "sc_plugin")
+        assert "plugin~" in b["text"]
+
+    def test_plugin_has_4_outlets(self):
+        boxes, _ = sidechain_routing("sc")
+        b = _find_box(boxes, "sc_plugin")
+        assert b["numoutlets"] == 4
+
+    def test_ids_use_prefix(self):
+        boxes, _ = sidechain_routing("mysc")
+        assert "mysc_plugin" in _box_ids(boxes)
+
+
+class TestRandomWalk:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = random_walk("rw")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_noise(self):
+        boxes, _ = random_walk("rw")
+        b = _find_box(boxes, "rw_noise")
+        assert "noise~" in b["text"]
+
+    def test_has_clip(self):
+        boxes, _ = random_walk("rw")
+        b = _find_box(boxes, "rw_clip")
+        assert "clip~" in b["text"]
+
+    def test_has_slide(self):
+        boxes, _ = random_walk("rw")
+        b = _find_box(boxes, "rw_slide")
+        assert "slide~" in b["text"]
+
+    def test_custom_step_size(self):
+        boxes, _ = random_walk("rw", step_size=0.05)
+        b = _find_box(boxes, "rw_scale")
+        assert "0.05" in b["text"]
+
+    def test_slide_has_signal_outlet(self):
+        boxes, _ = random_walk("rw")
+        b = _find_box(boxes, "rw_slide")
+        assert "signal" in b["outlettype"][0]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = random_walk("walk")
+        ids = _box_ids(boxes)
+        assert "walk_noise" in ids
+        assert "walk_slide" in ids
+
+
+class TestMatrixMixer:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = matrix_mixer("mx")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_gain_cells(self):
+        boxes, _ = matrix_mixer("mx", inputs=2, outputs=2)
+        ids = _box_ids(boxes)
+        assert "mx_in_0_gain_0" in ids
+        assert "mx_in_0_gain_1" in ids
+        assert "mx_in_1_gain_0" in ids
+        assert "mx_in_1_gain_1" in ids
+
+    def test_gain_cells_count(self):
+        boxes, _ = matrix_mixer("mx", inputs=3, outputs=3)
+        gain_cells = [b for b in boxes if "_gain_" in b["box"]["id"]]
+        assert len(gain_cells) == 9
+
+    def test_has_output_nodes(self):
+        boxes, _ = matrix_mixer("mx", inputs=2, outputs=2)
+        ids = _box_ids(boxes)
+        assert "mx_out_0" in ids
+        assert "mx_out_1" in ids
+
+    def test_output_has_signal_outlet(self):
+        boxes, _ = matrix_mixer("mx", inputs=2, outputs=2)
+        b = _find_box(boxes, "mx_out_0")
+        assert "signal" in b["outlettype"][0]
+
+    def test_default_4x4(self):
+        boxes, _ = matrix_mixer("mx")
+        gain_cells = [b for b in boxes if "_gain_" in b["box"]["id"]]
+        assert len(gain_cells) == 16
+
+    def test_ids_use_prefix(self):
+        boxes, _ = matrix_mixer("mymx", inputs=2, outputs=2)
+        ids = _box_ids(boxes)
+        assert "mymx_in_0_gain_0" in ids
+        assert "mymx_out_0" in ids
+
+
+class TestCvRecorder:
+    def test_returns_boxes_no_lines(self):
+        boxes, lines = cv_recorder("cvr")
+        assert len(boxes) == 3
+        assert len(lines) == 0
+
+    def test_has_buffer(self):
+        boxes, _ = cv_recorder("cvr")
+        b = _find_box(boxes, "cvr_table")
+        assert "buffer~" in b["text"]
+
+    def test_has_record(self):
+        boxes, _ = cv_recorder("cvr")
+        b = _find_box(boxes, "cvr_rec")
+        assert "record~" in b["text"]
+
+    def test_has_play(self):
+        boxes, _ = cv_recorder("cvr")
+        b = _find_box(boxes, "cvr_play")
+        assert "play~" in b["text"]
+
+    def test_play_has_signal_outlet(self):
+        boxes, _ = cv_recorder("cvr")
+        b = _find_box(boxes, "cvr_play")
+        assert "signal" in b["outlettype"][0]
+
+    def test_custom_buffer_size(self):
+        boxes, _ = cv_recorder("cvr", buffer_size=8820)
+        b = _find_box(boxes, "cvr_table")
+        assert "8820" in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = cv_recorder("rec")
+        ids = _box_ids(boxes)
+        assert "rec_table" in ids
+        assert "rec_rec" in ids
+        assert "rec_play" in ids
+
+
+class TestQuantizeTime:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = quantize_time("qt")
+        assert len(boxes) == 2
+        assert len(lines) == 1
+
+    def test_has_transport(self):
+        boxes, _ = quantize_time("qt")
+        b = _find_box(boxes, "qt_transport")
+        assert "transport" in b["text"]
+
+    def test_has_quantize(self):
+        boxes, _ = quantize_time("qt")
+        b = _find_box(boxes, "qt_quant")
+        assert "quantize" in b["text"]
+        assert "1/16" in b["text"]
+
+    def test_custom_division(self):
+        boxes, _ = quantize_time("qt", division="1/8")
+        b = _find_box(boxes, "qt_quant")
+        assert "1/8" in b["text"]
+
+    def test_transport_feeds_quant(self):
+        _, lines = quantize_time("qt")
+        assert any(
+            l["patchline"]["source"] == ["qt_transport", 0]
+            and l["patchline"]["destination"] == ["qt_quant", 0]
+            for l in lines
+        )
+
+    def test_ids_use_prefix(self):
+        boxes, _ = quantize_time("myqt")
+        ids = _box_ids(boxes)
+        assert "myqt_transport" in ids
+        assert "myqt_quant" in ids
+
+
+class TestMacroModulationMatrix:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = macro_modulation_matrix("mmm")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_source_cells(self):
+        boxes, _ = macro_modulation_matrix("mmm", sources=2, targets=2)
+        ids = _box_ids(boxes)
+        assert "mmm_src_0_to_0" in ids
+        assert "mmm_src_0_to_1" in ids
+        assert "mmm_src_1_to_0" in ids
+
+    def test_has_target_outputs(self):
+        boxes, _ = macro_modulation_matrix("mmm", sources=2, targets=2)
+        ids = _box_ids(boxes)
+        assert "mmm_tgt_0" in ids
+        assert "mmm_tgt_1" in ids
+
+    def test_cell_count(self):
+        boxes, _ = macro_modulation_matrix("mmm", sources=3, targets=3)
+        cells = [b for b in boxes if "_to_" in b["box"]["id"]]
+        assert len(cells) == 9
+
+    def test_target_has_signal_outlet(self):
+        boxes, _ = macro_modulation_matrix("mmm", sources=2, targets=2)
+        b = _find_box(boxes, "mmm_tgt_0")
+        assert "signal" in b["outlettype"][0]
+
+    def test_default_4x4(self):
+        boxes, _ = macro_modulation_matrix("mmm")
+        cells = [b for b in boxes if "_to_" in b["box"]["id"]]
+        assert len(cells) == 16
+
+    def test_ids_use_prefix(self):
+        boxes, _ = macro_modulation_matrix("mymod", sources=2, targets=2)
+        ids = _box_ids(boxes)
+        assert "mymod_src_0_to_0" in ids
+        assert "mymod_tgt_0" in ids
+
+
+class TestAnalogOscillatorBank:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = analog_oscillator_bank("aob")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_phasors(self):
+        boxes, _ = analog_oscillator_bank("aob", num_oscs=4)
+        ids = _box_ids(boxes)
+        for i in range(4):
+            assert f"aob_osc_{i}" in ids
+
+    def test_phasor_signal_outlet(self):
+        boxes, _ = analog_oscillator_bank("aob", num_oscs=2)
+        b = _find_box(boxes, "aob_osc_0")
+        assert "signal" in b["outlettype"][0]
+
+    def test_has_detune_exprs(self):
+        boxes, _ = analog_oscillator_bank("aob", num_oscs=4)
+        ids = _box_ids(boxes)
+        for i in range(4):
+            assert f"aob_detune_{i}" in ids
+
+    def test_has_sum_output(self):
+        boxes, _ = analog_oscillator_bank("aob", num_oscs=4)
+        assert "aob_sum" in _box_ids(boxes)
+
+    def test_single_osc(self):
+        boxes, lines = analog_oscillator_bank("aob", num_oscs=1)
+        assert "aob_osc_0" in _box_ids(boxes)
+        assert "aob_sum" in _box_ids(boxes)
+
+    def test_detune_offset_zero_for_center(self):
+        boxes, _ = analog_oscillator_bank("aob", num_oscs=1)
+        b = _find_box(boxes, "aob_detune_0")
+        assert "0.0000" in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = analog_oscillator_bank("myosc", num_oscs=2)
+        ids = _box_ids(boxes)
+        assert "myosc_osc_0" in ids
+        assert "myosc_sum" in ids
+
+
+class TestLfsrGenerator:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = lfsr_generator("lfsr")
+        assert len(boxes) > 0
+        assert len(lines) > 0
+
+    def test_has_reg(self):
+        boxes, _ = lfsr_generator("lfsr")
+        b = _find_box(boxes, "lfsr_reg")
+        assert "i" in b["text"]
+
+    def test_has_bit_output(self):
+        boxes, _ = lfsr_generator("lfsr")
+        b = _find_box(boxes, "lfsr_bit")
+        assert "bitand" in b["text"]
+
+    def test_has_feedback(self):
+        boxes, _ = lfsr_generator("lfsr")
+        b = _find_box(boxes, "lfsr_feedback")
+        assert "expr" in b["text"]
+
+    def test_has_shift(self):
+        boxes, _ = lfsr_generator("lfsr")
+        b = _find_box(boxes, "lfsr_shift")
+        assert "expr" in b["text"]
+
+    def test_has_clock(self):
+        boxes, _ = lfsr_generator("lfsr")
+        b = _find_box(boxes, "lfsr_clock")
+        assert "t b b" in b["text"]
+
+    def test_custom_poly_order(self):
+        boxes, _ = lfsr_generator("lfsr", poly_order=16)
+        b = _find_box(boxes, "lfsr_reg")
+        assert str((1 << 16) - 1) in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = lfsr_generator("mylfsr")
+        ids = _box_ids(boxes)
+        assert "mylfsr_reg" in ids
+        assert "mylfsr_bit" in ids
+
+
+class TestCvSmoothLag:
+    def test_exponential_mode(self):
+        boxes, lines = cv_smooth_lag("lag")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_exponential_uses_slide(self):
+        boxes, _ = cv_smooth_lag("lag", lag_ms=50)
+        b = _find_box(boxes, "lag_smoother")
+        assert "slide~" in b["text"]
+        assert "50" in b["text"]
+
+    def test_linear_mode(self):
+        boxes, lines = cv_smooth_lag("lag", mode="linear")
+        assert len(boxes) == 1
+        assert len(lines) == 0
+
+    def test_linear_uses_line(self):
+        boxes, _ = cv_smooth_lag("lag", lag_ms=100, mode="linear")
+        b = _find_box(boxes, "lag_smoother")
+        assert "line~" in b["text"]
+        assert "100" in b["text"]
+
+    def test_smoother_signal_outlet_exponential(self):
+        boxes, _ = cv_smooth_lag("lag")
+        b = _find_box(boxes, "lag_smoother")
+        assert "signal" in b["outlettype"][0]
+
+    def test_smoother_signal_outlet_linear(self):
+        boxes, _ = cv_smooth_lag("lag", mode="linear")
+        b = _find_box(boxes, "lag_smoother")
+        assert "signal" in b["outlettype"][0]
+
+    def test_custom_lag_ms(self):
+        boxes, _ = cv_smooth_lag("lag", lag_ms=200)
+        b = _find_box(boxes, "lag_smoother")
+        assert "200" in b["text"]
+
+    def test_ids_use_prefix(self):
+        boxes, _ = cv_smooth_lag("mylag")
+        assert "mylag_smoother" in _box_ids(boxes)
