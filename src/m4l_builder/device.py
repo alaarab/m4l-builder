@@ -1,6 +1,8 @@
 """High-level Device API for building M4L devices."""
 
+import json
 import os
+import struct
 
 from .constants import DEVICE_TYPE_CODES
 from .container import write_amxd, build_amxd
@@ -33,6 +35,7 @@ class Device:
         self.boxes = []
         self.lines = []
         self._js_files = {}  # {filename: js_code_string}
+        self._param_banks = {}  # {varname: (bank, position)}
 
     def add_box(self, box_dict: dict) -> str:
         """Add a raw box dict and return its object ID."""
@@ -221,6 +224,15 @@ class Device:
         return self.add_box(newobj(id, text, numinlets=numinlets,
                                    numoutlets=numoutlets, **kwargs))
 
+    def add_subpatcher(self, subpatcher, id: str, rect: list, *,
+                       numinlets: int = 1, numoutlets: int = 1,
+                       outlettype: list = None) -> str:
+        """Add a Subpatcher as an embedded patcher box and return its ID."""
+        box_dict = subpatcher.to_box(id, rect, numinlets=numinlets,
+                                     numoutlets=numoutlets,
+                                     outlettype=outlettype)
+        return self.add_box(box_dict)
+
     def row(self, x, y, *, spacing=8, height=None, width=None):
         return Row(self, x, y, spacing=spacing, height=height, width=width)
 
@@ -231,6 +243,112 @@ class Device:
         return Grid(self, x, y, cols=cols, col_width=col_width,
                     row_height=row_height, spacing_x=spacing_x,
                     spacing_y=spacing_y)
+
+    def to_json(self, indent: int = 2) -> str:
+        """Return the patcher dict as formatted JSON."""
+        return json.dumps(self.to_patcher(), indent=indent)
+
+    def wire_chain(self, obj_ids: list, outlet: int = 0, inlet: int = 0):
+        """Wire a list of object IDs in series."""
+        for i in range(len(obj_ids) - 1):
+            self.add_line(obj_ids[i], outlet, obj_ids[i + 1], inlet)
+
+    def validate(self) -> list:
+        """Check the device for common problems. Returns a list of warning strings."""
+        warnings = []
+
+        # Collect all box IDs
+        seen_ids = {}
+        for box in self.boxes:
+            box_id = box["box"]["id"]
+            if box_id in seen_ids:
+                warnings.append(f"Duplicate box ID: {box_id}")
+            seen_ids[box_id] = True
+
+        # Check patchlines reference valid IDs
+        for line in self.lines:
+            pl = line["patchline"]
+            src = pl["source"][0]
+            dst = pl["destination"][0]
+            if src not in seen_ids:
+                warnings.append(f"Patchline references unknown source: {src}")
+            if dst not in seen_ids:
+                warnings.append(f"Patchline references unknown destination: {dst}")
+
+        # AudioEffect must have plugin~ and plugout~
+        if self.device_type == "audio_effect":
+            if "obj-plugin" not in seen_ids:
+                warnings.append("AudioEffect missing obj-plugin")
+            if "obj-plugout" not in seen_ids:
+                warnings.append("AudioEffect missing obj-plugout")
+
+        # Orphan detection: boxes with no connections at all
+        connected = set()
+        for line in self.lines:
+            pl = line["patchline"]
+            connected.add(pl["source"][0])
+            connected.add(pl["destination"][0])
+        for box_id in seen_ids:
+            if box_id not in connected:
+                warnings.append(f"Orphan box (no connections): {box_id}")
+
+        return warnings
+
+    def assign_parameter_bank(self, varname: str, bank: int, position: int):
+        """Assign a parameter to a specific bank and position."""
+        self._param_banks[varname] = (bank, position)
+
+    @classmethod
+    def from_amxd(cls, path: str):
+        """Parse a .amxd file back into a Device instance."""
+        with open(path, "rb") as f:
+            data = f.read()
+
+        # Read type code at offset 8-11
+        type_code = data[8:12]
+        type_map = {
+            b"aaaa": "audio_effect",
+            b"iiii": "instrument",
+            b"mmmm": "midi_effect",
+        }
+        device_type = type_map.get(type_code, "audio_effect")
+
+        # Read metadata length at offset 16-19, skip to JSON
+        meta_len = struct.unpack_from("<I", data, 16)[0]
+        # JSON starts after: 20 + meta_len (metadata) + 4 (ptch tag) + 4 (json len)
+        json_offset = 20 + meta_len + 8
+        json_bytes = data[json_offset:].rstrip(b"\x00").rstrip(b"\n")
+        patcher_dict = json.loads(json_bytes)
+
+        patcher = patcher_dict["patcher"]
+        width = patcher.get("devicewidth", patcher.get("openrect", [0, 0, 400, 170])[2])
+        height = patcher.get("openrect", [0, 0, 400, 170])[3]
+
+        # Pick the right subclass
+        subclass_map = {
+            "audio_effect": AudioEffect,
+            "instrument": Instrument,
+            "midi_effect": MidiEffect,
+        }
+        klass = subclass_map.get(device_type, Device)
+
+        if klass is Device:
+            device = Device("Untitled", width, height, device_type=device_type)
+        else:
+            device = klass("Untitled", width, height)
+
+        # For AudioEffect, the constructor already added plugin~/plugout~.
+        # Clear them so we load from the file instead.
+        if klass is AudioEffect:
+            device.boxes.clear()
+            device.lines.clear()
+
+        for box in patcher.get("boxes", []):
+            device.boxes.append(box)
+        for line in patcher.get("lines", []):
+            device.lines.append(line)
+
+        return device
 
     def to_patcher(self) -> dict:
         patcher = build_patcher(
@@ -247,6 +365,23 @@ class Device:
                 "type": "TEXT",
                 "implicit": 1,
             })
+        # Populate parameter banks from assign_parameter_bank() calls
+        if self._param_banks:
+            banks = {}
+            for varname, (bank, position) in self._param_banks.items():
+                bank_key = str(bank)
+                if bank_key not in banks:
+                    banks[bank_key] = {
+                        "index": bank,
+                        "name": "",
+                        "parameters": [],
+                    }
+                banks[bank_key]["parameters"].append({
+                    "index": position,
+                    "name": varname,
+                    "visible": 1,
+                })
+            patcher["patcher"]["parameters"]["parameterbanks"] = banks
         return patcher
 
     def to_bytes(self) -> bytes:
