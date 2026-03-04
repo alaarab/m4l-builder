@@ -1,4 +1,4 @@
-"""Morphing LFO Demo — AudioEffect example.
+"""Morphing LFO Demo - AudioEffect example.
 
 Demonstrates: morphing_lfo (waveform blend 0.0-3.0), LFO rate/depth controls,
 auto_gain output normalization, dry/wet mix, tremolo effect.
@@ -60,7 +60,7 @@ device.add_scope("scope", [270, 36, 60, 70],
                  smooth=2, line_width=1.5, calccount=128)
 
 # =========================================================================
-# DSP — morphing_lfo, auto_gain, dry_wet_mix
+# DSP: morphing_lfo, auto_gain, dry_wet_mix
 # =========================================================================
 
 lfo_boxes, lfo_lines = morphing_lfo("mlfo")

@@ -1,4 +1,4 @@
-"""Modulation Matrix Demo — AudioEffect example.
+"""Modulation Matrix Demo - AudioEffect example.
 
 Demonstrates: macro_modulation_matrix (4 sources x 4 targets),
 4 morphing_lfo instances as sources, targets mapped to filter cutoff,
@@ -62,7 +62,7 @@ for i, lbl in enumerate(TARGET_LABELS):
                        fontsize=7.5, textcolor=[0.55, 0.55, 0.57, 0.7])
 
 # =========================================================================
-# DSP — 4 morphing LFOs
+# DSP: 4 morphing LFOs
 # =========================================================================
 
 for i in range(4):
@@ -73,7 +73,7 @@ for i in range(4):
         device.lines.append(l)
 
 # =========================================================================
-# DSP — modulation matrix (4x4)
+# DSP: modulation matrix (4x4)
 # =========================================================================
 
 mm_boxes, mm_lines = macro_modulation_matrix("mm", sources=4, targets=4)
@@ -83,7 +83,7 @@ for l in mm_lines:
     device.lines.append(l)
 
 # =========================================================================
-# DSP — signal chain: saturation → lowpass → reverb
+# DSP: signal chain: saturation -> lowpass -> reverb
 # =========================================================================
 
 sat_boxes, sat_lines = saturation("sat", mode="tanh")
@@ -170,7 +170,7 @@ device.add_line("tgt_cutoff_scale", 0, "lp_r", 1)
 for c in range(4):
     device.add_line("tgt_rv_scale", 0, f"rv_comb_{c}", 1)
 
-# Drive target → sat multiplier (passthrough — tanh~ has 1 inlet; use upstream *~)
+# Drive target -> sat multiplier (passthrough, tanh~ has 1 inlet; use upstream *~)
 # We can't easily modulate tanh~ drive, so we modulate the output level
 device.add_newobj("sat_drive_l", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[30, 700, 40, 20])

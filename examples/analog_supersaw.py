@@ -1,4 +1,4 @@
-"""Analog Supersaw — Instrument example.
+"""Analog Supersaw - Instrument example.
 
 Demonstrates: analog_oscillator_bank (8 oscillators), notein for MIDI input,
 lowpass_filter for tone shaping, adsr_envelope for amplitude,
@@ -36,7 +36,7 @@ device.add_comment("lbl_env", [240, 26, 60, 12], "ENVELOPE",
 device.add_comment("lbl_out", [340, 26, 50, 12], "OUTPUT",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
 
-# Detune spread dial — controls how wide the oscillator spread is
+# Detune spread dial, controls how wide the oscillator spread is
 device.add_dial("detune_dial", "Detune", [8, 36, 50, 70],
                 min_val=0.0, max_val=50.0, initial=12.0,
                 unitstyle=0, appearance=1,
