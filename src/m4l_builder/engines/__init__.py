@@ -1,4 +1,4 @@
-"""Visual engines for jsui — pre-built JavaScript displays.
+"""Visual engines for jsui: pre-built JavaScript displays.
 
 Each engine module provides a function that returns JavaScript source code
 for Max's jsui object (mgraphics/Cairo vector graphics). The code renders

@@ -64,7 +64,7 @@ def dial(id: str, varname: str, rect: list, *,
     """Create a live.dial with parameter storage.
 
     appearance: 0=Vertical, 1=Tiny, 2=Panel, 3=Large.
-    parameter_exponent: log scaling — use 3.0 for frequency knobs.
+    parameter_exponent: log scaling, use 3.0 for frequency knobs.
     unitstyle: see constants.py UNITSTYLE_* values.
     """
     box = {

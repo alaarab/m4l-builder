@@ -12,7 +12,7 @@ def stereo_io(plugin_id: str = "obj-plugin", plugout_id: str = "obj-plugout",
               plugin_rect: list = None, plugout_rect: list = None) -> tuple:
     """Create plugin~ and plugout~ pair for audio I/O.
 
-    Returns (boxes, lines) with no lines — caller wires the DSP chain.
+    Returns (boxes, lines) with no lines. Caller wires the DSP chain.
     """
     boxes = [
         newobj(plugin_id, "plugin~", numinlets=1, numoutlets=2,
@@ -52,18 +52,18 @@ def dry_wet_mix(id_prefix: str,
     p = id_prefix
     boxes = [
         # Mix control: t f f f fans the float to 3 destinations.
-        # don't use sig~ here — starts at 0.0 on load and overrides *~ args, causing silence.
+        # don't use sig~ here, starts at 0.0 on load and overrides *~ args, causing silence.
         newobj(f"{p}_mix_in", "t f f f", numinlets=1, numoutlets=3,
                outlettype=["", "", ""], patching_rect=[400, 80, 55, 20]),
         # Invert mix for dry: !-~ 1. gives (1 - mix)
         newobj(f"{p}_inv", "!-~ 1.", numinlets=2, numoutlets=1,
                outlettype=["signal"], patching_rect=[400, 110, 45, 20]),
-        # Wet gain — default 0 (muted until mix value arrives)
+        # Wet gain, default 0 (muted until mix value arrives)
         newobj(f"{p}_wet_l", "*~ 0.", numinlets=2, numoutlets=1,
                outlettype=["signal"], patching_rect=[300, 140, 30, 20]),
         newobj(f"{p}_wet_r", "*~ 0.", numinlets=2, numoutlets=1,
                outlettype=["signal"], patching_rect=[340, 140, 30, 20]),
-        # Dry gain — default 1 (pass-through: audio always flows at startup)
+        # Dry gain, default 1 (pass-through: audio always flows at startup)
         newobj(f"{p}_dry_l", "*~ 1.", numinlets=2, numoutlets=1,
                outlettype=["signal"], patching_rect=[460, 140, 30, 20]),
         newobj(f"{p}_dry_r", "*~ 1.", numinlets=2, numoutlets=1,
@@ -139,7 +139,7 @@ def dc_block(id_prefix: str) -> tuple:
     """Create a stereo DC blocking filter.
 
     dcblock~ doesn't exist in Max 8, so this uses biquad~ with HP coefficients:
-    biquad~ 1. -1. 0. -0.9997 0. — biquad~ has 6 inlets (signal + 5 coefficients).
+    biquad~ 1. -1. 0. -0.9997 0. (biquad~ has 6 inlets: signal + 5 coefficients).
     """
     boxes = [
         newobj(f"{id_prefix}_l", "biquad~ 1. -1. 0. -0.9997 0.",
@@ -156,10 +156,10 @@ def saturation(id_prefix: str, mode: str) -> tuple:
     """Create a stereo saturation stage.
 
     Modes:
-    - "tanh": tanh~ — smooth tape-like saturation
-    - "overdrive": overdrive~ — tube-like saturation
-    - "clip": clip~ -1. 1. — hard clipping (3 inlets: signal, min, max)
-    - "degrade": degrade~ — bit/sample rate crush (3 inlets: signal, sr_factor, bit_depth)
+    - "tanh": tanh~, smooth tape-like saturation
+    - "overdrive": overdrive~, tube-like saturation
+    - "clip": clip~ -1. 1., hard clipping (3 inlets: signal, min, max)
+    - "degrade": degrade~, bit/sample rate crush (3 inlets: signal, sr_factor, bit_depth)
 
     Raises ValueError for unknown modes.
     """
@@ -188,7 +188,7 @@ def selector(id_prefix: str, num_inputs: int, initial: int = 1) -> tuple:
     """Create a selector~ for switching between signal inputs.
 
     selector~ N initial has N+1 inlets (int selector + N signal inputs).
-    selector~ N without an initial arg defaults to input 0 (silence) — always pass initial.
+    selector~ N without an initial arg defaults to input 0 (silence), so always pass initial.
     """
     if initial < 0 or initial > num_inputs:
         raise ValueError(f"selector~ initial {initial} out of range [0, {num_inputs}]")
@@ -280,7 +280,7 @@ def onepole_filter(id_prefix: str, freq: float = 1000.) -> tuple:
 def signal_divide(id_prefix: str) -> tuple:
     """Create a signal-rate division block.
 
-    /~ doesn't work for signal/signal in Max — uses !/~ 1. to get the reciprocal
+    /~ doesn't work for signal/signal in Max, so this uses !/~ 1. to get the reciprocal
     (1/denominator), then multiplies by the numerator with *~.
 
     Wire denominator into {prefix}_recip inlet 0.
@@ -305,7 +305,7 @@ def tilt_eq(id_prefix: str, freq: float = 1000.) -> tuple:
     """Create a stereo tilt EQ using onepole~ as a crossover.
 
     Low band (onepole~ output) and high band (original minus LP) are scaled
-    independently and summed — boost one side to tilt.
+    independently and summed. Boost one side to tilt.
 
     Per channel:
         signal -> onepole~ -> *~ (low gain)  -> +~ (output)
@@ -954,8 +954,8 @@ def noise_source(id_prefix: str, color: str = "white") -> tuple:
     """Create a noise generator.
 
     Colors:
-    - "white": noise~ — flat spectrum
-    - "pink": noise~ filtered through onepole~ 0.95 — approximates -3dB/oct rolloff
+    - "white": noise~, flat spectrum
+    - "pink": noise~ filtered through onepole~ 0.95, approximates -3dB/oct rolloff
 
     Raises ValueError for unknown colors.
     Output from {prefix}_noise outlet 0 (white) or {prefix}_lp outlet 0 (pink).
@@ -1446,7 +1446,7 @@ def wavetable_osc(id_prefix: str) -> tuple:
 def buffer_load(id_prefix: str, buffer_name: str, size: int = 1024) -> tuple:
     """Create a buffer~ for wavetable storage.
 
-    Wire nothing — buffer~ is self-contained. Send read/set messages to inlet 0.
+    buffer~ is self-contained. Send read/set messages to inlet 0.
     """
     p = id_prefix
     boxes = [
@@ -2342,7 +2342,7 @@ def midi_clock_out(id_prefix: str) -> tuple:
     """Send MIDI clock (24 ppqn) synced to Live transport.
 
     Uses transport to get tempo, formats clock bytes via midiformat, sends via midiout.
-    Wire nothing — this self-drives from the Live transport.
+    Self-drives from the Live transport, no wiring needed.
     Output MIDI clock on the default MIDI out.
     """
     p = id_prefix

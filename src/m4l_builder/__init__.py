@@ -1,4 +1,4 @@
-"""m4l_builder — Programmatically build Max for Live (.amxd) devices."""
+"""m4l_builder: Programmatically build Max for Live (.amxd) devices."""
 
 from .device import Device, AudioEffect, Instrument, MidiEffect
 from .container import build_amxd, write_amxd

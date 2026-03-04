@@ -1,4 +1,4 @@
-"""Hardware Sync — AudioEffect example.
+"""Hardware Sync - AudioEffect example.
 
 Demonstrates: midi_clock_out (send clock to external gear),
 midi_clock_in (detect incoming clock + display BPM), sync mode toggle,
@@ -64,7 +64,7 @@ device.add_meter("meter_r", [WIDTH - 16, 22, 10, HEIGHT - 32],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # =========================================================================
-# DSP — clock out and clock in blocks
+# DSP: clock out and clock in blocks
 # =========================================================================
 
 clkout_boxes, clkout_lines = midi_clock_out("clkout")
