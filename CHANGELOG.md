@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.5.0] — 2026-03-04
+
+### Added
+
+**Device methods**
+- `device.validate()` — static analysis returning list of warnings (duplicate IDs, bad patchlines, missing plugin~/plugout~, orphan boxes)
+- `device.to_json(indent=2)` — patcher dict as formatted JSON string for inspection/diffing
+- `device.wire_chain(obj_ids, outlet, inlet)` — wire a list of IDs in series
+- `device.assign_parameter_bank(varname, bank, position)` — Push/controller bank layout
+- `device.from_amxd(path)` classmethod — parse an existing .amxd back to a Device
+
+**DSP blocks**
+- `send_signal` / `receive_signal` — send~/receive~ signal routing without patch cords
+- `send_msg` / `receive_msg` — message-domain routing
+- `loadbang` — fires bang on device load for initialization
+- `scale_range` — range mapping with optional exponential curve
+- `groove_player` — buffer~ + groove~ sample playback pair
+- `coll_store` / `dict_store` — persistent indexed and key-value data storage
+- `pattr_system` — autopattr + pattrstorage for full parameter save/recall
+- `midi_channel_filter` — route MIDI from a specific channel
+
+**Subpatcher system**
+- `Subpatcher` class — mini-Device builder that embeds into a parent via `device.add_subpatcher()`
+
+**Recipe system**
+- `gain_controlled_stage` — live.dial + dbtoa + param_smooth + *~ in one call
+- `dry_wet_stage` — dial + wet/dry gain pair with inverter
+- `tempo_synced_delay` — two dials + tapin~/tapout~ + transport
+- `midi_note_gate` — notein + stripnote + kslider display
+
+**Examples**
+- `validate_demo.py` — shows validate() catching errors and to_json() output
+- `send_receive_demo.py` — stereo device with parallel paths via send~/receive~
+
 ## [0.4.0] — 2026-03-03
 
 ### Added
