@@ -37,91 +37,84 @@ Parameter smoothing:
 import os
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
-device = AudioEffect("Comb Resonator", width=330, height=195, theme=MIDNIGHT)
+device = AudioEffect("Comb Resonator", width=330, height=210, theme=MIDNIGHT)
 
-# --- UI ---
-device.add_panel("bg", [0, 0, 330, 195], bgcolor=[0.10, 0.10, 0.12, 1.0])
+device.add_panel("bg", [0, 0, 330, 210])
 
-# Resonance output scope — shows the resonating waveform
-device.add_scope("res_scope", [8, 8, 314, 42],
-                 bgcolor=[0.06, 0.06, 0.08, 1.0],
+# Resonance output scope
+device.add_scope("res_scope", [8, 8, 284, 58],
+                 bgcolor=[0.04, 0.04, 0.06, 1.0],
                  activelinecolor=[0.45, 0.75, 0.65, 1.0],
-                 gridcolor=[0.15, 0.15, 0.17, 0.4],
+                 gridcolor=[0.12, 0.12, 0.14, 0.4],
                  range_vals=[-1.0, 1.0],
                  calccount=64, smooth=2, line_width=1.5)
 
 # Chord tab: UNI / OCT / 5TH / MAJ / MIN
-device.add_tab("chord_tab", "Chord", [8, 54, 314, 20],
+device.add_tab("chord_tab", "Chord", [8, 70, 284, 22],
                options=["UNI", "OCT", "5TH", "MAJ", "MIN"],
-               bgcolor=[0.18, 0.18, 0.20, 1.0],
+               bgcolor=[0.08, 0.08, 0.10, 1.0],
                bgoncolor=[0.45, 0.75, 0.65, 1.0],
-               textcolor=[0.75, 0.75, 0.75, 1.0],
+               textcolor=[0.65, 0.65, 0.65, 1.0],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
 # Section labels
-device.add_comment("lbl_tuning", [8, 77, 60, 12], "TUNING",
+device.add_comment("lbl_tuning", [8, 95, 60, 12], "TUNING",
                    textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
-device.add_comment("lbl_color", [112, 77, 60, 12], "COLOR",
+device.add_comment("lbl_color", [112, 95, 60, 12], "COLOR",
                    textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
-device.add_comment("lbl_output", [240, 77, 48, 12], "OUTPUT",
+device.add_comment("lbl_output", [224, 95, 48, 12], "OUTPUT",
                    textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
 
-# Dials row: Root / Resonance / Damping / HP Freq / Mix
-device.add_dial("root_dial", "Root", [8, 87, 48, 82],
+# Dials — bigger (56x90) for the key controls
+device.add_dial("root_dial", "Root", [8, 105, 56, 90],
                 min_val=24.0, max_val=96.0, initial=60.0,
                 unitstyle=8,
                 annotation_name="Root Note")  # MIDI note
 
-device.add_dial("res_dial", "Resonance", [60, 87, 48, 82],
+device.add_dial("res_dial", "Resonance", [66, 105, 56, 90],
                 min_val=0.0, max_val=99.0, initial=60.0,
                 unitstyle=5,
                 annotation_name="Comb Resonance")  # PERCENT
 
-device.add_dial("damp_dial", "Damping", [112, 87, 48, 82],
+device.add_dial("damp_dial", "Damping", [124, 105, 48, 90],
                 min_val=500.0, max_val=20000.0, initial=8000.0,
                 unitstyle=3,
                 annotation_name="Damping Frequency")  # HZ
 
-device.add_dial("hp_dial", "HP Freq", [164, 87, 48, 82],
+device.add_dial("hp_dial", "HP Freq", [174, 105, 48, 90],
                 min_val=20.0, max_val=500.0, initial=80.0,
                 unitstyle=3,
                 annotation_name="Input Highpass")  # HZ
 
-device.add_dial("mix_dial", "Mix", [240, 87, 48, 82],
+device.add_dial("mix_dial", "Mix", [224, 105, 60, 90],
                 min_val=0.0, max_val=100.0, initial=30.0,
                 unitstyle=5,
                 annotation_name="Dry/Wet Mix")  # PERCENT
 
-# Voice note displays — show the 4 active MIDI notes below the root dial
-device.add_comment("lbl_voices", [8, 170, 180, 10], "VOICES",
-                   textcolor=[0.45, 0.75, 0.65, 0.5], fontsize=8.0)
+# Voice note displays — compact row at the bottom
+device.add_comment("lbl_voices", [8, 196, 100, 10], "VOICES",
+                   textcolor=[0.45, 0.75, 0.65, 0.4], fontsize=7.5)
 
-device.add_number_box("note_v0", "V1 Note", [8, 180, 28, 12],
+device.add_number_box("note_v0", "V1 Note", [8, 196, 28, 12],
                       min_val=0.0, max_val=127.0, initial=60.0,
                       unitstyle=8, patching_rect=[1300, 0, 28, 12])
-device.add_number_box("note_v1", "V2 Note", [40, 180, 28, 12],
+device.add_number_box("note_v1", "V2 Note", [40, 196, 28, 12],
                       min_val=0.0, max_val=127.0, initial=60.0,
                       unitstyle=8, patching_rect=[1330, 0, 28, 12])
-device.add_number_box("note_v2", "V3 Note", [72, 180, 28, 12],
+device.add_number_box("note_v2", "V3 Note", [72, 196, 28, 12],
                       min_val=0.0, max_val=127.0, initial=60.0,
                       unitstyle=8, patching_rect=[1360, 0, 28, 12])
-device.add_number_box("note_v3", "V4 Note", [104, 180, 28, 12],
+device.add_number_box("note_v3", "V4 Note", [104, 196, 28, 12],
                       min_val=0.0, max_val=127.0, initial=60.0,
                       unitstyle=8, patching_rect=[1390, 0, 28, 12])
 
-# --- Output L/R meters (right edge) using theme colors ---
-device.add_comment("lbl_meters", [301, 77, 24, 12], "OUT",
-                   textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
-device.add_comment("lbl_meter_l", [301, 165, 12, 12], "L",
-                   textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
-device.add_meter("meter_out_l", [301, 87, 12, 76],
+# --- Output L/R meters (right edge, full height) ---
+device.add_meter("meter_out_l", [300, 8, 10, 187],
                  coldcolor=[0.45, 0.75, 0.65, 1.0],
                  warmcolor=[0.85, 0.75, 0.25, 1.0],
                  hotcolor=[0.85, 0.45, 0.15, 1.0],
                  overloadcolor=[0.85, 0.20, 0.20, 1.0])
-device.add_comment("lbl_meter_r", [315, 165, 12, 12], "R",
-                   textcolor=[0.75, 0.75, 0.75, 1.0], fontsize=8.0)
-device.add_meter("meter_out_r", [315, 87, 12, 76],
+device.add_meter("meter_out_r", [314, 8, 10, 187],
                  coldcolor=[0.45, 0.75, 0.65, 1.0],
                  warmcolor=[0.85, 0.75, 0.25, 1.0],
                  hotcolor=[0.85, 0.45, 0.15, 1.0],
@@ -154,7 +147,7 @@ device.add_newobj("hp_fan", "t f f", numinlets=1, numoutlets=2,
 # We compute 4 MIDI note values from root + offsets for each chord mode.
 # Strategy: use selector~ to choose between 5 chord sets per voice.
 # Each voice needs 5 options (UNI/OCT/5TH/MAJ/MIN).
-# We use int addition (+ offset) for each chord/voice combo,
+# int addition (+ offset) for each chord/voice combo,
 # then selector (int) to pick the right offset per voice.
 # Voice 0 = root (always offset 0)
 # Voice 1 = UNI:0, OCT:12, 5TH:7,  MAJ:4,  MIN:3
@@ -575,7 +568,6 @@ device.add_line("damp_l", 0, "res_scope", 0)
 device.add_line("out_l", 0, "meter_out_l", 0)
 device.add_line("out_r", 0, "meter_out_r", 0)
 
-# --- Build ---
 output = device_output_path("Comb Resonator")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

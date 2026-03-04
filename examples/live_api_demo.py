@@ -22,9 +22,6 @@ device = AudioEffect("Live API Demo", width=WIDTH, height=HEIGHT, theme=MIDNIGHT
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 100, 16], "LIVE API",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 device.add_comment("lbl_tempo", [8, 26, 80, 12], "CURRENT TEMPO",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
@@ -37,7 +34,7 @@ device.add_comment("lbl_btn", [100, 26, 100, 12], "SET TEMPO TO 120",
 device.add_button("tempo_btn", "Set 120", [100, 38, 80, 22])
 
 # =========================================================================
-# DSP — passthrough (AudioEffect auto-adds plugin~/plugout~)
+# DSP
 # =========================================================================
 
 # Live observer: watches live_set tempo

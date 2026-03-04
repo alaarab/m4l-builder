@@ -46,8 +46,6 @@ device.add_dial("rate_dial", "Rate", [222, 38, 40, 70],
                 unitstyle=5,
                 annotation_name="Auto-randomize speed — 0 slow, 100 fast")
 
-# --- DSP / Logic ---
-
 # Metro for auto-randomization (default 500ms interval, stopped)
 device.add_newobj("metro", "metro 500", numinlets=2, numoutlets=1,
                   outlettype=["bang"], patching_rect=[20, 200, 70, 20])
@@ -76,8 +74,6 @@ for i in range(7):
     device.add_newobj(f"rdiv_{i+1}", "/ 100.",
                       numinlets=2, numoutlets=1,
                       outlettype=[""], patching_rect=[20 + i * 50, 310, 40, 20])
-
-# --- Connections ---
 
 # Auto toggle -> metro on/off
 device.add_line("auto_toggle", 0, "metro", 0)

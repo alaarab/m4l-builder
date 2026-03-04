@@ -33,7 +33,6 @@ CRITICAL RULES followed:
 import os
 from m4l_builder import AudioEffect, WARM, device_output_path
 
-# --- Device setup --- widened 30px to accommodate meters
 device = AudioEffect("Transient Shaper", width=310, height=170, theme=WARM)
 
 # =========================================================================

@@ -33,9 +33,6 @@ device = AudioEffect("Algorithmic Reverb", width=WIDTH, height=HEIGHT, theme=LIG
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT])
 
-device.add_comment("title", [8, 5, 80, 16], "REVERB",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.12, 0.12, 0.14, 1.0])
 
 # Room type tab — switches comb delay ratios
 device.add_tab("room_tab", "Room Type", [8, 22, 220, 20],
@@ -121,7 +118,7 @@ device.add_newobj("size_store", "f 0.5", numinlets=2, numoutlets=1,
 # room_tab → sel → message to size_trig that fans ratios to comb tapouts.
 # Base delays (ms): 29.7, 37.1, 41.1, 43.7 × room_size × room_ratio
 # Use expr to compute: base_ms * room_ratio * room_size
-# We use: room-type adjusts base delay constants via a "scale" baked into each comb.
+# Room-type adjusts base delay constants via a scale factor baked into each comb.
 # ROOM (tab 0): factors 1.0 for base delays as given
 # HALL (tab 1): multiply base by 1.5 (longer)
 # PLATE (tab 2): multiply base by 0.7 (shorter)

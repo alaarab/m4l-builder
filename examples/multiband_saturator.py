@@ -15,43 +15,46 @@ Signal flow:
 """
 
 import os
-from m4l_builder import AudioEffect, WARM, device_output_path
+from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
 # -------------------------------------------------------------------
-# Device setup
+# Device setup — taller to fit scope at top
 # -------------------------------------------------------------------
-device = AudioEffect("Multiband Saturator", width=380, height=170, theme=WARM)
+device = AudioEffect("Multiband Saturator", width=380, height=205, theme=MIDNIGHT)
 
 # -------------------------------------------------------------------
 # UI panels (background MUST have background:1)
 # -------------------------------------------------------------------
-device.add_panel("bg", [0, 0, 380, 170],
-                 bgcolor=[0.10, 0.10, 0.12, 1.0])
+device.add_panel("bg", [0, 0, 380, 205],
+                 bgcolor=[0.05, 0.05, 0.06, 1.0])
 
-# Band column backgrounds (subtle tint)
+# Output waveform scope — hero visual at top
+device.add_scope("out_scope", [8, 8, 328, 46],
+                 bgcolor=[0.04, 0.04, 0.05, 1.0],
+                 activelinecolor=[0.45, 0.75, 0.65, 1.0],
+                 gridcolor=[0.12, 0.12, 0.14, 0.4],
+                 range_vals=[-1.0, 1.0],
+                 calccount=64, smooth=2, line_width=1.5)
+
+# Band column backgrounds (subtle tint, dark MIDNIGHT palette)
 band_colors = {
-    "low":  [0.14, 0.14, 0.18, 1.0],
-    "mid":  [0.14, 0.18, 0.14, 1.0],
-    "high": [0.18, 0.14, 0.14, 1.0],
+    "low":  [0.08, 0.09, 0.12, 1.0],
+    "mid":  [0.08, 0.11, 0.09, 1.0],
+    "high": [0.12, 0.08, 0.08, 1.0],
 }
 band_x = {"low": 100, "mid": 180, "high": 260}
 for band, bx in band_x.items():
-    device.add_panel(f"panel_{band}", [bx, 18, 78, 148],
+    device.add_panel(f"panel_{band}", [bx, 58, 78, 143],
                      bgcolor=band_colors[band])
 
-device.add_comment("title", [6, 4, 90, 10], "MULTISAT",
-                   textcolor=WARM.text_dim, fontsize=9.0)
-
 # Stereo output meters
-device.add_comment("lbl_out", [342, 4, 36, 14], "OUT",
-                   textcolor=[0.65, 0.65, 0.65, 1.0], fontsize=9.0)
-device.add_meter("meter_l", [342, 20, 12, 110],
-                 coldcolor=WARM.accent,
+device.add_meter("meter_l", [342, 8, 12, 155],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
-device.add_meter("meter_r", [358, 20, 12, 110],
-                 coldcolor=WARM.accent,
+device.add_meter("meter_r", [358, 8, 12, 155],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
@@ -59,15 +62,15 @@ device.add_meter("meter_r", [358, 20, 12, 110],
 # -------------------------------------------------------------------
 # Crossover frequency dials
 # -------------------------------------------------------------------
-device.add_comment("lbl_xover", [6, 10, 96, 12], "CROSSOVER",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
+device.add_comment("lbl_xover", [6, 58, 96, 12], "CROSSOVER",
+                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
 
-device.add_dial("low_xover", "Low Xover", [6, 20, 50, 68],
+device.add_dial("low_xover", "Low Xover", [6, 68, 50, 68],
                 min_val=40.0, max_val=1000.0, initial=200.0,
                 unitstyle=3,   # Hz
                 annotation_name="Low crossover frequency")
 
-device.add_dial("high_xover", "High Xover", [52, 20, 50, 68],
+device.add_dial("high_xover", "High Xover", [52, 68, 50, 68],
                 min_val=400.0, max_val=12000.0, initial=3000.0,
                 unitstyle=3,   # Hz
                 annotation_name="High crossover frequency")
@@ -75,10 +78,10 @@ device.add_dial("high_xover", "High Xover", [52, 20, 50, 68],
 # -------------------------------------------------------------------
 # Global Mix dial
 # -------------------------------------------------------------------
-device.add_comment("lbl_mix", [6, 90, 50, 12], "MIX",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
+device.add_comment("lbl_mix", [6, 140, 50, 12], "MIX",
+                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
 
-device.add_dial("mix_dial", "Mix", [6, 100, 50, 68],
+device.add_dial("mix_dial", "Mix", [6, 152, 50, 50],
                 min_val=0.0, max_val=100.0, initial=100.0,
                 unitstyle=5,   # percent
                 annotation_name="Dry/wet mix amount")
@@ -88,42 +91,42 @@ device.add_dial("mix_dial", "Mix", [6, 100, 50, 68],
 # Tab options: TAPE / TUBE / CLIP / OFF  (selector~ expects 1-indexed)
 # -------------------------------------------------------------------
 tab_colors = {
-    "low":  [0.30, 0.40, 0.65, 1.0],
-    "mid":  [0.30, 0.55, 0.35, 1.0],
-    "high": [0.65, 0.35, 0.30, 1.0],
+    "low":  [0.25, 0.35, 0.60, 1.0],
+    "mid":  [0.25, 0.50, 0.30, 1.0],
+    "high": [0.55, 0.25, 0.25, 1.0],
 }
 band_labels = {"low": "LOW", "mid": "MID", "high": "HIGH"}
 
-device.add_comment("lbl_drive_gain", [100, 20, 238, 12], "DRIVE / GAIN",
-                   fontsize=9.0, textcolor=[0.85, 0.55, 0.25, 0.6])
+device.add_comment("lbl_drive_gain", [100, 58, 238, 12], "DRIVE / GAIN",
+                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.5])
 
 for band, bx in band_x.items():
     # Column label
-    device.add_comment(f"lbl_{band}", [bx + 2, 20, 74, 12],
+    device.add_comment(f"lbl_{band}", [bx + 2, 58, 74, 12],
                        band_labels[band],
                        textcolor=[0.80, 0.80, 0.80, 1.0], fontsize=10.0)
 
-    # Drive dial: 0-100% displayed, internally mapped to 0.5-8.0 via scale
+    # Drive dial
     device.add_dial(f"drive_{band}", f"Drive {band_labels[band]}",
-                    [bx + 2, 32, 36, 50],
+                    [bx + 2, 70, 36, 50],
                     min_val=0.0, max_val=100.0, initial=15.0,
                     unitstyle=5,
                     annotation_name=f"{band_labels[band]} band saturation drive")
 
     # Gain dial: -12 to +6 dB
     device.add_dial(f"gain_{band}", f"Gain {band_labels[band]}",
-                    [bx + 40, 32, 36, 50],
+                    [bx + 40, 70, 36, 50],
                     min_val=-12.0, max_val=6.0, initial=0.0,
                     unitstyle=4,
                     annotation_name=f"{band_labels[band]} band post-saturation gain")
 
     # Mode tab
     device.add_tab(f"mode_{band}", f"Mode {band_labels[band]}",
-                   [bx + 2, 88, 74, 20],
+                   [bx + 2, 126, 74, 20],
                    options=["TAPE", "TUBE", "CLIP", "OFF"],
-                   bgcolor=[0.20, 0.20, 0.22, 1.0],
+                   bgcolor=[0.10, 0.10, 0.12, 1.0],
                    bgoncolor=tab_colors[band],
-                   textcolor=[0.65, 0.65, 0.65, 1.0],
+                   textcolor=[0.55, 0.55, 0.55, 1.0],
                    textoncolor=[1.0, 1.0, 1.0, 1.0])
 
     # +1 offset: live.tab outputs 0-indexed, selector~ needs 1-indexed
@@ -518,6 +521,9 @@ device.add_line("out_r", 0, "obj-plugout", 1)
 # Output meters: tap final output
 device.add_line("out_l", 0, "meter_l", 0)
 device.add_line("out_r", 0, "meter_r", 0)
+
+# Output scope: show the saturated mix
+device.add_line("out_l", 0, "out_scope", 0)
 
 # -------------------------------------------------------------------
 # Build

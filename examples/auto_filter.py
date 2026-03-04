@@ -2,18 +2,17 @@
 
 Showcase: MIDNIGHT theme, hero filter curve display showing frequency response.
 
-Layout (width=410, height=200):
+Layout (width=440, height=230):
   ┌──────────────────────────────────────────────────────┐
-  │ AUTO FILTER                              [Mix]       │
   │ ┌──────────────────────────────────────────────┐     │
   │ │                                              │ L R │
   │ │         FILTER CURVE DISPLAY                │ │ │ │
-  │ │         (hero — large jsui)                 │ │ │ │
+  │ │         (hero — ~55% of height)             │ │ │ │
   │ │                                              │ │ │ │
   │ └──────────────────────────────────────────────┘     │
   │ FILTER          ENVELOPE           LFO              │
   │ [Cutoff] [Res]  [Depth] [Atk] [Rel] [Dpth][Rate]   │
-  │ [LP|HP|BP|NOTCH]                                    │
+  │ [LP|HP|BP|NOTCH]                   [Mix]            │
   └──────────────────────────────────────────────────────┘
 
 DSP signal flow:
@@ -55,21 +54,18 @@ import os
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 from m4l_builder.engines.filter_curve import filter_curve_js
 
-# --- Device setup --- (widened for meters + mix dial)
-device = AudioEffect("Auto Filter", width=440, height=200, theme=MIDNIGHT)
+# Device — taller to give the filter display more visual weight
+device = AudioEffect("Auto Filter", width=440, height=230, theme=MIDNIGHT)
 
 # =========================================================================
 # UI
 # =========================================================================
 
 # Background panel
-device.add_panel("bg", [0, 0, 440, 200])
+device.add_panel("bg", [0, 0, 440, 230])
 
-device.add_comment("title", [8, 5, 80, 12], "AUTO FILTER",
-                   fontsize=10.0, textcolor=MIDNIGHT.text_dim)
-
-# ---- HERO: Filter curve display ----
-device.add_jsui("filter_display", [10, 18, 360, 84],
+# ---- HERO: Filter curve display — takes 55% of height ----
+device.add_jsui("filter_display", [10, 8, 360, 118],
                 js_code=filter_curve_js(
                     line_color="0.45, 0.75, 0.65, 1.0",
                     fill_color="0.45, 0.75, 0.65, 0.15",
@@ -80,78 +76,88 @@ device.add_jsui("filter_display", [10, 18, 360, 84],
                 ),
                 numinlets=3)
 
-# Output meters — right edge
-device.add_meter("meter_l", [414, 5, 10, 190],
+# Output meters — right edge, full height
+device.add_meter("meter_l", [414, 5, 10, 220],
                  coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
-device.add_meter("meter_r", [428, 5, 10, 190],
+device.add_meter("meter_r", [428, 5, 10, 220],
                  coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
-# Mix dial — bottom right, tall enough to interact easily
-device.add_comment("lbl_mix", [376, 108, 34, 11], "MIX",
-                   textcolor=MIDNIGHT.accent, fontsize=8.5)
-device.add_dial("mix_dial", "Mix", [376, 118, 34, 52],
-                min_val=0.0, max_val=100.0, initial=100.0,
-                unitstyle=5, appearance=1,
-                annotation_name="Dry/Wet Mix")
+# Live cutoff Hz readout — prominent, sits below the display
+device.add_comment("lbl_hz", [376, 10, 30, 11], "Hz",
+                   textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=8.5)
+device.add_number_box("cutoff_hz", "Cutoff Hz", [376, 22, 34, 22],
+                      min_val=20.0, max_val=20000.0, initial=1000.0,
+                      fontsize=9.0,
+                      textcolor=[0.45, 0.75, 0.65, 1.0],
+                      bgcolor=[0.07, 0.07, 0.09, 1.0],
+                      bordercolor=[0.25, 0.25, 0.28, 0.7])
 
-# Section labels row (y=108)
-device.add_comment("lbl_filter", [8, 108, 60, 11], "FILTER",
+# Section labels row (y=132)
+device.add_comment("lbl_filter", [8, 132, 60, 11], "FILTER",
                    textcolor=[0.45, 0.75, 0.65, 1.0], fontsize=8.5)
 
-device.add_comment("lbl_env", [128, 108, 70, 11], "ENVELOPE",
+device.add_comment("lbl_env", [128, 132, 70, 11], "ENVELOPE",
                    textcolor=[0.85, 0.65, 0.25, 1.0], fontsize=8.5)
 
-device.add_comment("lbl_lfo", [260, 108, 40, 11], "LFO",
+device.add_comment("lbl_lfo", [260, 132, 40, 11], "LFO",
                    textcolor=[0.45, 0.75, 0.65, 1.0], fontsize=8.5)
 
-# --- Filter section dials (y=118) ---
-device.add_dial("cutoff_dial", "Cutoff", [5, 118, 55, 52],
+# --- Filter section dials (y=142) ---
+device.add_dial("cutoff_dial", "Cutoff", [5, 142, 55, 56],
                 min_val=20.0, max_val=20000.0, initial=1000.0,
                 unitstyle=3, appearance=1, parameter_exponent=3.0,
                 annotation_name="Filter Cutoff Frequency")
 
-device.add_dial("res_dial", "Resonance", [62, 118, 55, 52],
+device.add_dial("res_dial", "Resonance", [62, 142, 55, 56],
                 min_val=0.0, max_val=100.0, initial=25.0,
                 unitstyle=5, appearance=1,
                 annotation_name="Filter Resonance")
 
-# Mode tab (y=172, below filter dials)
-device.add_tab("filter_type", "Mode", [5, 172, 115, 20],
+# Mode tab — below filter dials
+device.add_tab("filter_type", "Mode", [5, 200, 115, 22],
                options=["LP", "HP", "BP", "NOTCH"],
                rounded=3.0, spacing_x=1.0)
 
-# --- Envelope section dials (y=118) ---
-device.add_dial("env_depth_dial", "Env Depth", [123, 118, 52, 52],
+# --- Envelope section dials (y=142) ---
+device.add_dial("env_depth_dial", "Env Depth", [123, 142, 52, 56],
                 min_val=0.0, max_val=10000.0, initial=500.0,
                 unitstyle=3, appearance=1,
                 annotation_name="Envelope Modulation Depth")
 
-device.add_dial("attack_dial", "Attack", [177, 118, 52, 52],
+device.add_dial("attack_dial", "Attack", [177, 142, 52, 56],
                 min_val=1.0, max_val=500.0, initial=10.0,
                 unitstyle=2, appearance=1,
                 annotation_name="Envelope Attack Time")
 
-device.add_dial("release_dial", "Release", [231, 118, 52, 52],
+device.add_dial("release_dial", "Release", [231, 142, 52, 56],
                 min_val=10.0, max_val=2000.0, initial=100.0,
                 unitstyle=2, appearance=1,
                 annotation_name="Envelope Release Time")
 
-# --- LFO section dials (y=118) ---
-device.add_dial("lfo_depth_dial", "LFO Depth", [290, 118, 42, 52],
+# --- LFO section dials (y=142) ---
+device.add_dial("lfo_depth_dial", "LFO Depth", [290, 142, 42, 56],
                 min_val=0.0, max_val=10000.0, initial=200.0,
                 unitstyle=3, appearance=1,
                 annotation_name="LFO Modulation Depth")
 
-device.add_dial("rate_dial", "Rate", [334, 118, 42, 52],
+device.add_dial("rate_dial", "Rate", [334, 142, 42, 56],
                 min_val=0.1, max_val=20.0, initial=1.0,
                 unitstyle=1, appearance=1,
                 annotation_name="LFO Rate")
+
+# Mix dial — bottom right corner, aligned with LFO section
+device.add_comment("lbl_mix", [376, 132, 34, 11], "MIX",
+                   textcolor=MIDNIGHT.accent, fontsize=8.5)
+device.add_dial("mix_dial", "Mix", [376, 142, 34, 56],
+                min_val=0.0, max_val=100.0, initial=100.0,
+                unitstyle=5, appearance=1,
+                annotation_name="Dry/Wet Mix")
 
 # =========================================================================
 # DSP objects
@@ -373,6 +379,9 @@ device.add_line("dry_r", 0, "out_r", 1)
 device.add_line("out_l", 0, "obj-plugout", 0)
 device.add_line("out_r", 0, "obj-plugout", 1)
 
+# --- Live cutoff Hz readout ---
+device.add_line("cutoff_snap", 0, "cutoff_hz", 0)
+
 # --- Output meters: tap final output ---
 device.add_line("out_l", 0, "meter_l", 0)
 device.add_line("out_r", 0, "meter_r", 0)
@@ -380,6 +389,6 @@ device.add_line("out_r", 0, "meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Auto Filter")
+output = device_output_path("Auto Filter")  # width=440, height=230
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "m4l-builder"
-version = "0.6.0"
+version = "0.7.0"
 description = "Programmatically build Max for Live (.amxd) devices"
 readme = "README.md"
 license = "MIT"

@@ -126,12 +126,13 @@ def tab(id: str, varname: str, rect: list, *,
         "patching_rect": patching_rect or [700, 200, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
+        "tabs": len(options),
         "saved_attribute_attributes": {
             "valueof": {
                 "parameter_longname": varname,
                 "parameter_shortname": varname,
                 "parameter_type": 2,
-                "parameter_enum": " ".join(options),
+                "parameter_enum": list(options),
             }
         },
     }
@@ -178,7 +179,7 @@ def toggle(id: str, varname: str, rect: list, *, shortname: str = None,
                 "parameter_longname": varname,
                 "parameter_shortname": shortname or varname,
                 "parameter_type": 2,
-                "parameter_enum": f"{labels[0]} {labels[1]}",
+                "parameter_enum": [labels[0], labels[1]],
             }
         },
     }
@@ -261,7 +262,7 @@ def menu(id: str, varname: str, rect: list, *, options: list,
                 "parameter_longname": varname,
                 "parameter_shortname": shortname or varname,
                 "parameter_type": 2,
-                "parameter_enum": " ".join(options),
+                "parameter_enum": list(options),
             }
         },
     }
@@ -357,7 +358,7 @@ def button(id: str, varname: str, rect: list, *, shortname: str = None,
                 "parameter_longname": varname,
                 "parameter_shortname": shortname or varname,
                 "parameter_type": 2,
-                "parameter_enum": "off on",
+                "parameter_enum": ["off", "on"],
             }
         },
     }
@@ -442,7 +443,7 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
                 "parameter_longname": varname,
                 "parameter_shortname": shortname or varname,
                 "parameter_type": 2,
-                "parameter_enum": text_off + " " + text_on,
+                "parameter_enum": [text_off, text_on],
             }
         },
     }

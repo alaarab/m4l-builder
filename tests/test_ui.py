@@ -274,10 +274,10 @@ class TestTab:
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_type"] == 2
 
-    def test_parameter_enum_is_space_separated(self):
+    def test_parameter_enum_is_list(self):
         result = tab("t-1", "mode", [0, 0, 200, 30], options=["sine", "saw", "square"])
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
-        assert valueof["parameter_enum"] == "sine saw square"
+        assert valueof["parameter_enum"] == ["sine", "saw", "square"]
 
     def test_num_lines_patching_is_1(self):
         options = ["A", "B", "C", "D"]
@@ -378,7 +378,7 @@ class TestToggle:
     def test_parameter_enum_is_off_on(self):
         result = toggle("tog-1", "enabled", [10, 10, 20, 20])
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
-        assert valueof["parameter_enum"] == "off on"
+        assert valueof["parameter_enum"] == ["off", "on"]
 
     def test_numinlets_is_1(self):
         result = toggle("tog-1", "enabled", [10, 10, 20, 20])
@@ -736,10 +736,10 @@ class TestMenu:
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_type"] == 2
 
-    def test_parameter_enum_is_space_separated(self):
+    def test_parameter_enum_is_list(self):
         result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["sine", "saw", "square"])
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
-        assert valueof["parameter_enum"] == "sine saw square"
+        assert valueof["parameter_enum"] == ["sine", "saw", "square"]
 
     def test_saved_attribute_attributes_present(self):
         result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B"])
@@ -986,7 +986,7 @@ class TestButton:
     def test_parameter_enum_is_off_on(self):
         result = button("btn-1", "trigger", [10, 10, 24, 24])
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
-        assert valueof["parameter_enum"] == "off on"
+        assert valueof["parameter_enum"] == ["off", "on"]
 
     def test_shortname_defaults_to_varname(self):
         result = button("btn-1", "fire", [10, 10, 24, 24])
@@ -1090,7 +1090,7 @@ class TestLiveText:
         result = live_text("lt-1", "bypass", [0, 0, 60, 20],
                             text_on="ACTIVE", text_off="BYPASS")
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
-        assert valueof["parameter_enum"] == "BYPASS ACTIVE"
+        assert valueof["parameter_enum"] == ["BYPASS", "ACTIVE"]
 
     def test_kwargs_passthrough(self):
         result = live_text("lt-1", "bypass", [0, 0, 60, 20], custom=42)

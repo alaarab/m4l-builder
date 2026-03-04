@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.7.0] — 2026-03-04
+
+### Added
+
+**New JS Engines**
+- `lfo_display_js()` — animated LFO waveform with sweeping playhead; inlets: shape, phase, depth
+- `compressor_display_js()` — transfer curve with live gain-reduction dot riding the curve; inlets: threshold, ratio, gr
+- `xy_trail_display_js()` — XY pad with 32-point fading circular buffer trail
+
+**New Devices**
+- `probability_gate.py` — 16-step MIDI gate with per-step probability bars (multislider), tempo-synced via live.beat~
+- `morphing_filter.py` — large XY pad (cutoff × resonance) with filter type tab and Lissajous LFO auto-movement
+- `glue_compressor.py` — SSL-style bus compressor with transfer curve display, stepped ratio tab, auto-gain toggle
+- `parallel_compressor.py` — NY-style parallel fattener with blend control and dry/wet meters
+
+### Changed
+
+**Bug Fix**
+- `ui.py`: `parameter_enum` now emits a JSON array instead of a space-joined string in all 5 places (`tab`, `toggle`, `menu`, `button`, `live_text`). Fixes tabs/menus showing "0"/"1" index labels instead of option text in Ableton.
+
+**Visual Improvements — all 46 example devices**
+- Titles removed from all plugins (device name appears in Ableton's browser; in-plugin titles are redundant noise)
+- `simple_compressor`: upgraded with compressor transfer curve + live GR dot via `compressor_display_js`
+- `rhythmic_gate`: upgraded with LFO waveform preview via `lfo_display_js`
+- `auto_filter`: filter display now 51% of device height; live Hz readout prominent
+- `multiband_saturator`: switched to MIDNIGHT theme; scope at top; darker background
+- `comb_bank`: bigger scope, primary tuning dials wider
+- `lofi_processor`: scope at 35% of height, primary controls more prominent
+- `midside_suite`: MIDNIGHT theme; M/S section panels with teal/blue visual separators
+- `stereo_delay`: scope at top showing output waveform; larger L/R time dials
+- `analog_supersaw`: oscilloscope at top wired to output; MIDNIGHT theme; better layout
+- `step_sequencer`: step grid takes 80% of height; division tab; live step number display
+- `midi_arpeggiator`: kslider piano display showing active notes; mode as full-width tab
+- `probability_gate`: multislider at 70% of height; GATE flash indicator; teal bars
+- `midi_chord`: chord type as tab (MAJ/MIN/DIM/AUG/SUS2/SUS4); kslider showing chord shape
+
+**Code Quality**
+- `dsp.py`: moved `import math` from inside `_biquad_shelf()` to top-level imports
+- Humanize pass across all 46 examples: removed restating-the-code comments, "We use..." voice, redundant section headers
+
 ## [0.6.0] — 2026-03-04
 
 ### Added

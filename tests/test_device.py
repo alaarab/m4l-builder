@@ -131,7 +131,7 @@ class TestDevice:
         d = self._make()
         d.add_tab("t1", "Mode", [0, 0, 120, 24], options=["Low", "Mid", "High"])
         attrs = d.boxes[0]["box"]["saved_attribute_attributes"]["valueof"]
-        assert attrs["parameter_enum"] == "Low Mid High"
+        assert attrs["parameter_enum"] == ["Low", "Mid", "High"]
 
     def test_add_toggle_returns_id(self):
         d = self._make()

@@ -26,7 +26,6 @@ for i in range(8):
     device.add_comment(f"lbl_cc{i+1}", [x, 92, 34, 10], f"CC{i+1}",
                        fontsize=7.5, textcolor=[0.45, 0.75, 0.65, 0.6])
 
-# --- DSP: scale 0-127 -> 0-127 int and send via ctlout ---
 # Each dial -> int (clip to 0-127) -> ctlout (cc number, channel 1)
 
 for i in range(8):
@@ -39,7 +38,6 @@ for i in range(8):
                       numinlets=3, numoutlets=0,
                       outlettype=[], patching_rect=[20 + i * 50, 230, 60, 20])
 
-# --- Connections ---
 for i in range(8):
     device.add_line(f"macro_{i+1}", 0, f"int_{i+1}", 0)
     device.add_line(f"int_{i+1}", 0, f"ctlout_{i+1}", 0)

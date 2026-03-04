@@ -13,7 +13,7 @@ from m4l_builder import Instrument, MIDNIGHT, device_output_path
 from m4l_builder.dsp import analog_oscillator_bank, notein, lowpass_filter, adsr_envelope
 
 WIDTH = 400
-HEIGHT = 200
+HEIGHT = 240
 device = Instrument("Analog Supersaw", width=WIDTH, height=HEIGHT, theme=MIDNIGHT)
 
 # =========================================================================
@@ -22,61 +22,63 @@ device = Instrument("Analog Supersaw", width=WIDTH, height=HEIGHT, theme=MIDNIGH
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 160, 16], "ANALOG SUPERSAW",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
+# Oscilloscope at the top -- shows the output waveform
+device.add_scope("osc_scope", [8, 8, WIDTH - 16, 55],
+                 bgcolor=[0.05, 0.05, 0.06, 1.0],
+                 gridcolor=[0.15, 0.15, 0.17, 0.3],
+                 fgcolor=MIDNIGHT.accent)
 
 # Section labels
-device.add_comment("lbl_osc", [8, 26, 60, 12], "OSCILLATOR",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
-device.add_comment("lbl_filter", [140, 26, 50, 12], "FILTER",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
-device.add_comment("lbl_env", [240, 26, 60, 12], "ENVELOPE",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
-device.add_comment("lbl_out", [340, 26, 50, 12], "OUTPUT",
-                   fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_comment("lbl_osc", [8, 68, 60, 12], "OSCILLATOR",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_comment("lbl_filter", [140, 68, 50, 12], "FILTER",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_comment("lbl_env", [240, 68, 60, 12], "ENVELOPE",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
+device.add_comment("lbl_out", [350, 68, 50, 12], "OUTPUT",
+                   fontsize=8.0, textcolor=[0.45, 0.75, 0.65, 0.6])
 
-# Detune spread dial, controls how wide the oscillator spread is
-device.add_dial("detune_dial", "Detune", [8, 36, 50, 70],
+# Detune spread dial
+device.add_dial("detune_dial", "Detune", [8, 80, 50, 70],
                 min_val=0.0, max_val=50.0, initial=12.0,
                 unitstyle=0, appearance=1,
                 annotation_name="Supersaw detune spread in cents (0-50)")
 
 # Frequency display
-device.add_number_box("freq_numbox", "Freq", [70, 36, 60, 18],
+device.add_number_box("freq_numbox", "Freq", [70, 80, 60, 18],
                       min_val=20.0, max_val=20000.0, initial=440.0,
                       unitstyle=3, shortname="Hz")
 
 # Filter dials
-device.add_dial("cutoff_dial", "Cutoff", [140, 36, 50, 70],
+device.add_dial("cutoff_dial", "Cutoff", [140, 80, 50, 70],
                 min_val=20.0, max_val=20000.0, initial=3000.0,
                 unitstyle=3, parameter_exponent=3.0, appearance=1,
                 annotation_name="Lowpass filter cutoff frequency")
-device.add_dial("res_dial", "Res", [200, 36, 30, 70],
+device.add_dial("res_dial", "Res", [200, 80, 30, 70],
                 min_val=0.0, max_val=100.0, initial=15.0,
                 unitstyle=5, appearance=1,
                 annotation_name="Filter resonance")
 
 # ADSR dials
-device.add_dial("attack_dial", "A", [240, 36, 24, 70],
+device.add_dial("attack_dial", "A", [240, 80, 24, 70],
                 min_val=1.0, max_val=2000.0, initial=10.0,
                 unitstyle=2, parameter_exponent=2.0, appearance=1,
                 annotation_name="Attack time in ms")
-device.add_dial("decay_dial", "D", [268, 36, 24, 70],
+device.add_dial("decay_dial", "D", [268, 80, 24, 70],
                 min_val=1.0, max_val=2000.0, initial=150.0,
                 unitstyle=2, parameter_exponent=2.0, appearance=1,
                 annotation_name="Decay time in ms")
-device.add_dial("sustain_dial", "S", [296, 36, 24, 70],
+device.add_dial("sustain_dial", "S", [296, 80, 24, 70],
                 min_val=0.0, max_val=100.0, initial=60.0,
                 unitstyle=5, appearance=1,
                 annotation_name="Sustain level 0-100%")
-device.add_dial("release_dial", "R", [324, 36, 24, 70],
+device.add_dial("release_dial", "R", [324, 80, 24, 70],
                 min_val=1.0, max_val=4000.0, initial=300.0,
                 unitstyle=2, parameter_exponent=2.0, appearance=1,
                 annotation_name="Release time in ms")
 
 # Master volume with live.gain~
-device.add_live_gain("gain", "Volume", [360, 36, 30, 155],
+device.add_live_gain("gain", "Volume", [360, 80, 30, 155],
                      min_val=-70.0, max_val=6.0, initial=0.0,
                      orientation=1, shortname="Vol")
 
@@ -209,6 +211,10 @@ device.add_line("amp_l", 0, "gain", 0)
 device.add_line("amp_r", 0, "gain", 1)
 device.add_line("gain", 0, "plugout", 0)
 device.add_line("gain", 1, "plugout", 1)
+
+# Scope wiring -- show output waveform
+device.add_line("amp_l", 0, "osc_scope", 0)
+device.add_line("amp_r", 0, "osc_scope", 1)
 
 # =========================================================================
 # Build

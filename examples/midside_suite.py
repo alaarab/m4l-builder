@@ -34,126 +34,117 @@ CRITICAL RULES:
 """
 
 import os
-from m4l_builder import AudioEffect, COOL, device_output_path
+from m4l_builder import AudioEffect, MIDNIGHT, device_output_path
 
-# Device dimensions: widened 30px for L/R output meters, tallened for mix dial
 W, H = 410, 200
-device = AudioEffect("MidSide Suite", width=W, height=H, theme=COOL)
+device = AudioEffect("MidSide Suite", width=W, height=H, theme=MIDNIGHT)
 
 # =========================================================================
 # UI
 # =========================================================================
 
-# Background panel (dark)
-device.add_panel("bg", [0, 0, W, H], bgcolor=[0.12, 0.12, 0.14, 1.0])
+# Background panel
+device.add_panel("bg", [0, 0, W, H])
 
-device.add_comment("title", [8, 5, 90, 12], "M/S",
-                   textcolor=COOL.text_dim, fontsize=10.0)
+# MID section background panel — subtle teal tint
+device.add_panel("panel_mid", [0, 0, 162, H],
+                 bgcolor=[0.04, 0.07, 0.06, 1.0])
+
+# SIDE section background panel — subtle blue tint
+device.add_panel("panel_side", [166, 0, 162, H],
+                 bgcolor=[0.04, 0.05, 0.08, 1.0])
 
 # Section labels
-device.add_comment("lbl_mid_sec", [8, 24, 40, 12], "MID",
-                   textcolor=[0.6, 0.85, 0.6, 1.0], fontsize=9.5)
-device.add_comment("lbl_side_sec", [168, 24, 40, 12], "SIDE",
-                   textcolor=[0.6, 0.7, 0.95, 1.0], fontsize=9.5)
+device.add_comment("lbl_mid_sec", [8, 8, 40, 14], "MID",
+                   textcolor=[0.45, 0.85, 0.65, 1.0], fontsize=10.5)
+device.add_comment("lbl_side_sec", [174, 8, 40, 14], "SIDE",
+                   textcolor=[0.45, 0.65, 0.95, 1.0], fontsize=10.5)
 
 # --- MID section controls ---
-# Gain dial: -12 to +12 dB
-device.add_dial("mid_gain_dial", "Mid Gain", [8, 35, 50, 58],
+device.add_dial("mid_gain_dial", "Mid Gain", [8, 26, 50, 60],
                 min_val=-12.0, max_val=12.0, initial=0.0,
                 shortname="M Gain", unitstyle=4,
-                annotation_name="Mid Channel Gain")  # DB
-device.add_comment("lbl_mid_gain", [8, 95, 50, 12], "GAIN",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
+                annotation_name="Mid Channel Gain")
+device.add_comment("lbl_mid_gain", [8, 88, 50, 12], "GAIN",
+                   textcolor=[0.45, 0.75, 0.65, 0.7], fontsize=8.0,
                    justification=1)
 
-# Tilt dial: -100 to 100 (negative = more low, positive = more high)
-device.add_dial("mid_tilt_dial", "Mid Tilt", [62, 35, 50, 58],
+# Tilt EQ: negative = bass boost, positive = treble boost
+device.add_dial("mid_tilt_dial", "Mid Tilt EQ", [62, 26, 50, 60],
                 min_val=-100.0, max_val=100.0, initial=0.0,
-                shortname="M Tilt", unitstyle=5,
-                annotation_name="Mid Tilt EQ")  # PERCENT
-device.add_comment("lbl_mid_tilt", [62, 95, 50, 12], "TILT",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
+                shortname="M Lo/Hi", unitstyle=5,
+                annotation_name="Mid Tilt EQ — left = bass, right = treble")
+device.add_comment("lbl_mid_tilt", [62, 88, 50, 12], "LO — HI",
+                   textcolor=[0.45, 0.75, 0.65, 0.7], fontsize=8.0,
                    justification=1)
 
-# Drive dial: 0 to 100%
-device.add_dial("mid_drive_dial", "Mid Drive", [116, 35, 50, 58],
+device.add_dial("mid_drive_dial", "Mid Drive", [116, 26, 50, 60],
                 min_val=0.0, max_val=100.0, initial=0.0,
                 shortname="M Drive", unitstyle=5,
-                annotation_name="Mid Saturation Drive")  # PERCENT
-device.add_comment("lbl_mid_drive", [116, 95, 50, 12], "DRIVE",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
+                annotation_name="Mid Saturation Drive")
+device.add_comment("lbl_mid_drive", [116, 88, 50, 12], "DRIVE",
+                   textcolor=[0.45, 0.75, 0.65, 0.7], fontsize=8.0,
                    justification=1)
 
-# Saturation mode tab (TAPE/TUBE/CLIP/OFF) - 4 tabs
-device.add_tab("mid_sat_tab", "Mid Sat", [8, 110, 158, 20],
+device.add_tab("mid_sat_tab", "Mid Sat", [8, 104, 154, 20],
                options=["TAPE", "TUBE", "CLIP", "OFF"],
-               bgcolor=[0.18, 0.18, 0.20, 1.0],
-               bgoncolor=[0.3, 0.55, 0.3, 1.0],
-               textcolor=[0.65, 0.65, 0.65, 1.0],
+               bgcolor=[0.06, 0.08, 0.07, 1.0],
+               bgoncolor=[0.25, 0.50, 0.35, 1.0],
+               textcolor=[0.55, 0.55, 0.55, 1.0],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
 # --- SIDE section controls ---
-device.add_dial("side_gain_dial", "Side Gain", [168, 35, 50, 58],
+device.add_dial("side_gain_dial", "Side Gain", [174, 26, 50, 60],
                 min_val=-12.0, max_val=12.0, initial=0.0,
                 shortname="S Gain", unitstyle=4,
-                annotation_name="Side Channel Gain")  # DB
-device.add_comment("lbl_side_gain", [168, 95, 50, 12], "GAIN",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
+                annotation_name="Side Channel Gain")
+device.add_comment("lbl_side_gain", [174, 88, 50, 12], "GAIN",
+                   textcolor=[0.45, 0.60, 0.90, 0.7], fontsize=8.0,
                    justification=1)
 
-device.add_dial("side_tilt_dial", "Side Tilt", [222, 35, 50, 58],
+device.add_dial("side_tilt_dial", "Side Tilt EQ", [228, 26, 50, 60],
                 min_val=-100.0, max_val=100.0, initial=0.0,
-                shortname="S Tilt", unitstyle=5,
-                annotation_name="Side Tilt EQ")  # PERCENT
-device.add_comment("lbl_side_tilt", [222, 95, 50, 12], "TILT",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
+                shortname="S Lo/Hi", unitstyle=5,
+                annotation_name="Side Tilt EQ — left = bass, right = treble")
+device.add_comment("lbl_side_tilt", [228, 88, 50, 12], "LO — HI",
+                   textcolor=[0.45, 0.60, 0.90, 0.7], fontsize=8.0,
                    justification=1)
 
-device.add_dial("side_drive_dial", "Side Drive", [276, 35, 50, 58],
+device.add_dial("side_drive_dial", "Side Drive", [282, 26, 50, 60],
                 min_val=0.0, max_val=100.0, initial=0.0,
                 shortname="S Drive", unitstyle=5,
-                annotation_name="Side Saturation Drive")  # PERCENT
-device.add_comment("lbl_side_drive", [276, 95, 50, 12], "DRIVE",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
+                annotation_name="Side Saturation Drive")
+device.add_comment("lbl_side_drive", [282, 88, 50, 12], "DRIVE",
+                   textcolor=[0.45, 0.60, 0.90, 0.7], fontsize=8.0,
                    justification=1)
 
-device.add_tab("side_sat_tab", "Side Sat", [168, 110, 152, 20],
+device.add_tab("side_sat_tab", "Side Sat", [174, 104, 154, 20],
                options=["TAPE", "TUBE", "CLIP", "OFF"],
-               bgcolor=[0.18, 0.18, 0.20, 1.0],
-               bgoncolor=[0.25, 0.35, 0.6, 1.0],
-               textcolor=[0.65, 0.65, 0.65, 1.0],
+               bgcolor=[0.05, 0.06, 0.09, 1.0],
+               bgoncolor=[0.20, 0.30, 0.60, 1.0],
+               textcolor=[0.55, 0.55, 0.55, 1.0],
                textoncolor=[1.0, 1.0, 1.0, 1.0])
 
 # --- Output L/R Meters (right edge) ---
-device.add_comment("lbl_meters", [332, 24, 70, 12], "OUT",
-                   textcolor=COOL.text_dim, fontsize=8.0)
-
-device.add_comment("lbl_out_l", [333, 130, 12, 12], "L",
-                   textcolor=COOL.text_dim, fontsize=8.0)
-device.add_meter("meter_out_l", [333, 38, 12, 90],
-                 coldcolor=COOL.accent,
+device.add_meter("meter_out_l", [333, 8, 12, 130],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
-device.add_comment("lbl_out_r", [356, 130, 12, 12], "R",
-                   textcolor=COOL.text_dim, fontsize=8.0)
-device.add_meter("meter_out_r", [356, 38, 12, 90],
-                 coldcolor=COOL.accent,
+device.add_meter("meter_out_r", [350, 8, 12, 130],
+                 coldcolor=MIDNIGHT.accent,
                  warmcolor=[0.9, 0.8, 0.2, 1.0],
                  hotcolor=[0.9, 0.4, 0.1, 1.0],
                  overloadcolor=[0.9, 0.15, 0.15, 1.0])
 
 # --- Output mix dial ---
-device.add_comment("lbl_output_sec", [8, 132, 50, 12], "OUTPUT",
-                   textcolor=[0.35, 0.60, 0.90, 0.6], fontsize=9.0)
-device.add_dial("mix_dial", "Mix", [8, 144, 50, 50],
+device.add_comment("lbl_output_sec", [333, 144, 32, 12], "MIX",
+                   textcolor=[0.45, 0.75, 0.65, 0.6], fontsize=9.0)
+device.add_dial("mix_dial", "Mix", [333, 156, 38, 38],
                 min_val=0.0, max_val=100.0, initial=100.0,
                 shortname="Mix", unitstyle=5,
-                annotation_name="Dry/Wet Mix")  # PERCENT
-device.add_comment("lbl_mix", [8, 193, 50, 8], "MIX",
-                   textcolor=[0.55, 0.55, 0.55, 1.0], fontsize=8.0,
-                   justification=1)
+                annotation_name="Dry/Wet Mix")
 
 # =========================================================================
 # DSP objects  (patching_rect x/y layout — grouped by function)

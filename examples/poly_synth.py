@@ -24,9 +24,6 @@ device = Instrument("Poly Synth", width=WIDTH, height=HEIGHT, theme=MIDNIGHT)
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 80, 16], "POLY SYNTH",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 device.add_comment("lbl_env", [8, 22, 80, 12], "ENVELOPE",
                    fontsize=9.0, textcolor=[0.45, 0.75, 0.65, 0.6])
@@ -73,7 +70,6 @@ ni_boxes, ni_lines = notein("ni")
 for b in ni_boxes:
     device.add_box(b)
 
-# poly~ — 8 voices
 pv_boxes, pv_lines = poly_voices("pv", num_voices=8, patch_name='sine_voice')
 for b in pv_boxes:
     device.add_box(b)

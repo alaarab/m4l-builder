@@ -23,9 +23,6 @@ device = AudioEffect("Modulation Matrix Demo", width=WIDTH, height=HEIGHT, theme
 
 device.add_panel("bg", [0, 0, WIDTH, HEIGHT], background=1)
 
-device.add_comment("title", [8, 5, 180, 16], "MODULATION MATRIX",
-                   fontname="Ableton Sans Bold", fontsize=12.0,
-                   textcolor=[0.88, 0.88, 0.88, 1.0])
 
 # Section labels
 device.add_comment("lbl_src", [8, 26, 80, 12], "LFO SOURCES",
@@ -171,7 +168,7 @@ for c in range(4):
     device.add_line("tgt_rv_scale", 0, f"rv_comb_{c}", 1)
 
 # Drive target -> sat multiplier (passthrough, tanh~ has 1 inlet; use upstream *~)
-# We can't easily modulate tanh~ drive, so we modulate the output level
+# tanh~ has one inlet, so modulate output level instead of drive directly
 device.add_newobj("sat_drive_l", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[30, 700, 40, 20])
 device.add_newobj("sat_drive_r", "*~ 1.", numinlets=2, numoutlets=1,
