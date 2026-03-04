@@ -8,6 +8,118 @@ by extending a device's boxes and lines lists.
 from .objects import newobj, patchline
 
 
+def _svf_filter(id_prefix: str, outlet_index: int) -> tuple:
+    """Shared stereo svf~ filter wiring an outlet through *~ 1. pass-through.
+
+    outlet_index: 0=LP, 1=HP, 2=BP, 3=notch.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_l", "svf~", numinlets=3, numoutlets=4,
+               outlettype=["signal", "signal", "signal", "signal"],
+               patching_rect=[30, 120, 40, 20]),
+        newobj(f"{p}_r", "svf~", numinlets=3, numoutlets=4,
+               outlettype=["signal", "signal", "signal", "signal"],
+               patching_rect=[150, 120, 40, 20]),
+        newobj(f"{p}_out_l", "*~ 1.", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
+        newobj(f"{p}_out_r", "*~ 1.", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[150, 150, 40, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_l", outlet_index, f"{p}_out_l", 0),
+        patchline(f"{p}_r", outlet_index, f"{p}_out_r", 0),
+    ]
+    return (boxes, lines)
+
+
+def _signal_sum_chain(id_prefix: str, source_ids: list) -> tuple:
+    """Sum N signal sources via a +~ chain, output from {prefix}_sum.
+
+    Returns (boxes, lines) for the summing chain only.
+    Caller must provide the source boxes separately.
+    """
+    p = id_prefix
+    n = len(source_ids)
+    boxes = []
+    lines = []
+
+    if n == 0:
+        boxes.append(newobj(f"{p}_sum", "*~ 0.", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[30, 180, 40, 20]))
+    elif n == 1:
+        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[30, 180, 40, 20]))
+        lines.append(patchline(source_ids[0], 0, f"{p}_sum", 0))
+    else:
+        boxes.append(newobj(f"{p}_add_0", "+~", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[30, 180, 30, 20]))
+        lines.append(patchline(source_ids[0], 0, f"{p}_add_0", 0))
+        lines.append(patchline(source_ids[1], 0, f"{p}_add_0", 1))
+        prev = f"{p}_add_0"
+        for i in range(2, n):
+            adder_id = f"{p}_add_{i - 1}"
+            boxes.append(newobj(adder_id, "+~", numinlets=2, numoutlets=1,
+                                outlettype=["signal"],
+                                patching_rect=[30, 180 + (i - 1) * 30, 30, 20]))
+            lines.append(patchline(prev, 0, adder_id, 0))
+            lines.append(patchline(source_ids[i], 0, adder_id, 1))
+            prev = adder_id
+        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
+                            outlettype=["signal"],
+                            patching_rect=[30, 180 + (n - 1) * 30, 40, 20]))
+        lines.append(patchline(prev, 0, f"{p}_sum", 0))
+
+    return (boxes, lines)
+
+
+def _biquad_shelf(id_prefix: str, shelf_type: str,
+                  freq: float, gain_db: float) -> tuple:
+    """Shared biquad~ shelf filter (high or low).
+
+    shelf_type: 'high' or 'low'.
+    """
+    import math
+    p = id_prefix
+    A = 10 ** (gain_db / 40.0)
+    w0 = 2 * math.pi * freq / 44100.0
+    cos_w0 = math.cos(w0)
+    alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1 / A) * (1 / 0.7071 - 1) + 2)
+
+    if shelf_type == 'high':
+        b0 = A * ((A + 1) + (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha)
+        b1 = -2 * A * ((A - 1) + (A + 1) * cos_w0)
+        b2 = A * ((A + 1) + (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha)
+        a0 = (A + 1) - (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha
+        a1 = 2 * ((A - 1) - (A + 1) * cos_w0)
+        a2 = (A + 1) - (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha
+    else:
+        b0 = A * ((A + 1) - (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha)
+        b1 = 2 * A * ((A - 1) - (A + 1) * cos_w0)
+        b2 = A * ((A + 1) - (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha)
+        a0 = (A + 1) + (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha
+        a1 = -2 * ((A - 1) + (A + 1) * cos_w0)
+        a2 = (A + 1) + (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha
+
+    b0n = round(b0 / a0, 6)
+    b1n = round(b1 / a0, 6)
+    b2n = round(b2 / a0, 6)
+    a1n = round(-a1 / a0, 6)
+    a2n = round(-a2 / a0, 6)
+    coeff_str = f"biquad~ {b0n} {b1n} {b2n} {a1n} {a2n}"
+
+    boxes = [
+        newobj(f"{p}_l", coeff_str, numinlets=6, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 120, 200, 20]),
+        newobj(f"{p}_r", coeff_str, numinlets=6, numoutlets=1,
+               outlettype=["signal"], patching_rect=[240, 120, 200, 20]),
+    ]
+    return (boxes, [])
+
+
 def stereo_io(plugin_id: str = "obj-plugin", plugout_id: str = "obj-plugout",
               plugin_rect: list = None, plugout_rect: list = None) -> tuple:
     """Create plugin~ and plugout~ pair for audio I/O.
@@ -210,26 +322,7 @@ def highpass_filter(id_prefix: str) -> tuple:
     Wire cutoff into inlet 1, resonance into inlet 2.
     Output from {prefix}_out_l / {prefix}_out_r outlet 0.
     """
-    p = id_prefix
-    boxes = [
-        newobj(f"{p}_l", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[30, 120, 40, 20]),
-        newobj(f"{p}_r", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[150, 120, 40, 20]),
-        # Pass-through to isolate HP outlet
-        newobj(f"{p}_out_l", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
-        newobj(f"{p}_out_r", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[150, 150, 40, 20]),
-    ]
-    lines = [
-        # svf~ outlet 1 = HP
-        patchline(f"{p}_l", 1, f"{p}_out_l", 0),
-        patchline(f"{p}_r", 1, f"{p}_out_r", 0),
-    ]
-    return (boxes, lines)
+    return _svf_filter(id_prefix, 1)
 
 
 def lowpass_filter(id_prefix: str) -> tuple:
@@ -242,26 +335,7 @@ def lowpass_filter(id_prefix: str) -> tuple:
     Wire cutoff into inlet 1, resonance into inlet 2.
     Output from {prefix}_out_l / {prefix}_out_r outlet 0.
     """
-    p = id_prefix
-    boxes = [
-        newobj(f"{p}_l", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[30, 120, 40, 20]),
-        newobj(f"{p}_r", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[150, 120, 40, 20]),
-        # Pass-through to isolate LP outlet
-        newobj(f"{p}_out_l", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
-        newobj(f"{p}_out_r", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[150, 150, 40, 20]),
-    ]
-    lines = [
-        # svf~ outlet 0 = LP
-        patchline(f"{p}_l", 0, f"{p}_out_l", 0),
-        patchline(f"{p}_r", 0, f"{p}_out_r", 0),
-    ]
-    return (boxes, lines)
+    return _svf_filter(id_prefix, 0)
 
 
 def onepole_filter(id_prefix: str, freq: float = 1000.) -> tuple:
@@ -556,47 +630,21 @@ def comb_resonator(id_prefix: str, num_voices: int = 4) -> tuple:
     Wire audio into each {prefix}_comb_{n} inlet 0.
     Output from {prefix}_sum outlet 0.
     """
+    if num_voices < 1:
+        raise ValueError(f"comb_resonator num_voices must be >= 1, got {num_voices}")
     p = id_prefix
     boxes = []
-    lines = []
 
     for i in range(num_voices):
         boxes.append(newobj(f"{p}_comb_{i}", "comb~", numinlets=5, numoutlets=1,
                             outlettype=["signal"],
                             patching_rect=[30 + i * 100, 120, 50, 20]))
 
-    # Build summing chain: comb_0 + comb_1 -> +~ -> + comb_2 -> +~ -> ...
-    if num_voices == 1:
-        # Single comb, just pass through
-        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 180, 40, 20]))
-        lines.append(patchline(f"{p}_comb_0", 0, f"{p}_sum", 0))
-    else:
-        # First adder sums comb_0 + comb_1
-        boxes.append(newobj(f"{p}_add_0", "+~", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 180, 30, 20]))
-        lines.append(patchline(f"{p}_comb_0", 0, f"{p}_add_0", 0))
-        lines.append(patchline(f"{p}_comb_1", 0, f"{p}_add_0", 1))
+    source_ids = [f"{p}_comb_{i}" for i in range(num_voices)]
+    sum_boxes, sum_lines = _signal_sum_chain(p, source_ids)
+    boxes.extend(sum_boxes)
 
-        prev_sum = f"{p}_add_0"
-        for i in range(2, num_voices):
-            adder_id = f"{p}_add_{i - 1}"
-            boxes.append(newobj(adder_id, "+~", numinlets=2, numoutlets=1,
-                                outlettype=["signal"],
-                                patching_rect=[30, 180 + (i - 1) * 30, 30, 20]))
-            lines.append(patchline(prev_sum, 0, adder_id, 0))
-            lines.append(patchline(f"{p}_comb_{i}", 0, adder_id, 1))
-            prev_sum = adder_id
-
-        # Pass-through for consistent output naming
-        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 180 + (num_voices - 1) * 30, 40, 20]))
-        lines.append(patchline(prev_sum, 0, f"{p}_sum", 0))
-
-    return (boxes, lines)
+    return (boxes, sum_lines)
 
 
 def feedback_delay(id_prefix: str, max_delay_ms: int = 5000) -> tuple:
@@ -707,25 +755,7 @@ def bandpass_filter(id_prefix: str) -> tuple:
     Wire cutoff Hz into inlet 1, resonance (0-1) into inlet 2.
     Output from {prefix}_out_l / {prefix}_out_r outlet 0.
     """
-    p = id_prefix
-    boxes = [
-        newobj(f"{p}_l", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[30, 120, 40, 20]),
-        newobj(f"{p}_r", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[150, 120, 40, 20]),
-        newobj(f"{p}_out_l", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
-        newobj(f"{p}_out_r", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[150, 150, 40, 20]),
-    ]
-    lines = [
-        # svf~ outlet 2 = BP
-        patchline(f"{p}_l", 2, f"{p}_out_l", 0),
-        patchline(f"{p}_r", 2, f"{p}_out_r", 0),
-    ]
-    return (boxes, lines)
+    return _svf_filter(id_prefix, 2)
 
 
 def notch_filter(id_prefix: str) -> tuple:
@@ -738,25 +768,7 @@ def notch_filter(id_prefix: str) -> tuple:
     Wire cutoff Hz into inlet 1, resonance (0-1) into inlet 2.
     Output from {prefix}_out_l / {prefix}_out_r outlet 0.
     """
-    p = id_prefix
-    boxes = [
-        newobj(f"{p}_l", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[30, 120, 40, 20]),
-        newobj(f"{p}_r", "svf~", numinlets=3, numoutlets=4,
-               outlettype=["signal", "signal", "signal", "signal"],
-               patching_rect=[150, 120, 40, 20]),
-        newobj(f"{p}_out_l", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
-        newobj(f"{p}_out_r", "*~ 1.", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[150, 150, 40, 20]),
-    ]
-    lines = [
-        # svf~ outlet 3 = notch
-        patchline(f"{p}_l", 3, f"{p}_out_l", 0),
-        patchline(f"{p}_r", 3, f"{p}_out_r", 0),
-    ]
-    return (boxes, lines)
+    return _svf_filter(id_prefix, 3)
 
 
 def highshelf_filter(id_prefix: str, freq: float = 3000., gain_db: float = 0.) -> tuple:
@@ -768,33 +780,7 @@ def highshelf_filter(id_prefix: str, freq: float = 3000., gain_db: float = 0.) -
     Wire audio into {prefix}_l / {prefix}_r inlet 0.
     Output from {prefix}_l / {prefix}_r outlet 0.
     """
-    p = id_prefix
-    import math
-    # Compute high-shelf biquad coefficients
-    A = 10 ** (gain_db / 40.0)
-    w0 = 2 * math.pi * freq / 44100.0
-    cos_w0 = math.cos(w0)
-    alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1 / A) * (1 / 0.7071 - 1) + 2)
-    b0 = A * ((A + 1) + (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha)
-    b1 = -2 * A * ((A - 1) + (A + 1) * cos_w0)
-    b2 = A * ((A + 1) + (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha)
-    a0 = (A + 1) - (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha
-    a1 = 2 * ((A - 1) - (A + 1) * cos_w0)
-    a2 = (A + 1) - (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha
-    # Normalize
-    b0n = round(b0 / a0, 6)
-    b1n = round(b1 / a0, 6)
-    b2n = round(b2 / a0, 6)
-    a1n = round(-a1 / a0, 6)
-    a2n = round(-a2 / a0, 6)
-    coeff_str = f"biquad~ {b0n} {b1n} {b2n} {a1n} {a2n}"
-    boxes = [
-        newobj(f"{p}_l", coeff_str, numinlets=6, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 120, 200, 20]),
-        newobj(f"{p}_r", coeff_str, numinlets=6, numoutlets=1,
-               outlettype=["signal"], patching_rect=[240, 120, 200, 20]),
-    ]
-    return (boxes, [])
+    return _biquad_shelf(id_prefix, 'high', freq, gain_db)
 
 
 def lowshelf_filter(id_prefix: str, freq: float = 300., gain_db: float = 0.) -> tuple:
@@ -806,31 +792,7 @@ def lowshelf_filter(id_prefix: str, freq: float = 300., gain_db: float = 0.) -> 
     Wire audio into {prefix}_l / {prefix}_r inlet 0.
     Output from {prefix}_l / {prefix}_r outlet 0.
     """
-    p = id_prefix
-    import math
-    A = 10 ** (gain_db / 40.0)
-    w0 = 2 * math.pi * freq / 44100.0
-    cos_w0 = math.cos(w0)
-    alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1 / A) * (1 / 0.7071 - 1) + 2)
-    b0 = A * ((A + 1) - (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha)
-    b1 = 2 * A * ((A - 1) - (A + 1) * cos_w0)
-    b2 = A * ((A + 1) - (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha)
-    a0 = (A + 1) + (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha
-    a1 = -2 * ((A - 1) + (A + 1) * cos_w0)
-    a2 = (A + 1) + (A - 1) * cos_w0 - 2 * math.sqrt(A) * alpha
-    b0n = round(b0 / a0, 6)
-    b1n = round(b1 / a0, 6)
-    b2n = round(b2 / a0, 6)
-    a1n = round(-a1 / a0, 6)
-    a2n = round(-a2 / a0, 6)
-    coeff_str = f"biquad~ {b0n} {b1n} {b2n} {a1n} {a2n}"
-    boxes = [
-        newobj(f"{p}_l", coeff_str, numinlets=6, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 120, 200, 20]),
-        newobj(f"{p}_r", coeff_str, numinlets=6, numoutlets=1,
-               outlettype=["signal"], patching_rect=[240, 120, 200, 20]),
-    ]
-    return (boxes, [])
+    return _biquad_shelf(id_prefix, 'low', freq, gain_db)
 
 
 def compressor(id_prefix: str) -> tuple:
@@ -1123,7 +1085,7 @@ def allpass_filter(id_prefix: str, *, freq: float = 1000,
 
 # -- MIDI DSP blocks --
 
-def gate_expander(id_prefix):
+def gate_expander(id_prefix: str) -> tuple:
     """Stereo noise gate with threshold detection.
 
     Signal flow per channel: input -> abs~ -> slide~ -> >~ threshold -> *~ original
@@ -1154,7 +1116,7 @@ def gate_expander(id_prefix):
     return (boxes, lines)
 
 
-def sidechain_detect(id_prefix):
+def sidechain_detect(id_prefix: str) -> tuple:
     """Mono envelope follower for sidechain signal detection.
 
     Signal flow: input -> abs~ -> slide~ -> envelope output (0-1 range).
@@ -1171,13 +1133,13 @@ def sidechain_detect(id_prefix):
     return (boxes, lines)
 
 
-def sample_and_hold(id_prefix):
+def sample_and_hold(id_prefix: str) -> tuple:
     """Sample-and-hold modulation source.
 
     noise~ feeds sah~ signal input. Trigger input comes via sah~ inlet.
     """
     boxes = [
-        newobj(f"{id_prefix}_noise", "noise~", numinlets=1, numoutlets=1,
+        newobj(f"{id_prefix}_noise", "noise~", numinlets=0, numoutlets=1,
                outlettype=["signal"]),
         newobj(f"{id_prefix}_sah", "sah~", numinlets=2, numoutlets=1,
                outlettype=["signal"]),
@@ -1188,7 +1150,7 @@ def sample_and_hold(id_prefix):
     return (boxes, lines)
 
 
-def multiband_compressor(id_prefix):
+def multiband_compressor(id_prefix: str) -> tuple:
     """3-band mono compressor using crossover_3band and compressor blocks.
 
     Splits signal into 3 bands via crossover, compresses each band
@@ -1247,12 +1209,16 @@ def multiband_compressor(id_prefix):
     return (boxes, lines)
 
 
-def reverb_network(id_prefix, num_combs=4, num_allpasses=2):
+def reverb_network(id_prefix: str, num_combs: int = 4, num_allpasses: int = 2) -> tuple:
     """Schroeder reverb network with parallel combs and series allpasses.
 
     Mono input, mono output. Comb filters run in parallel, their outputs
     are summed, then passed through a chain of allpass filters.
     """
+    if num_combs < 1:
+        raise ValueError(f"reverb_network num_combs must be >= 1, got {num_combs}")
+    if num_allpasses < 0:
+        raise ValueError(f"reverb_network num_allpasses must be >= 0, got {num_allpasses}")
     # Classic Schroeder delay times in ms
     comb_delays = [29.7, 37.1, 41.1, 43.7, 31.3, 36.7, 40.1, 45.3]
     allpass_delays = [5.0, 1.7, 3.3, 4.1]
@@ -1308,7 +1274,7 @@ def reverb_network(id_prefix, num_combs=4, num_allpasses=2):
     return (boxes, lines)
 
 
-def notein(id_prefix, channel=0):
+def notein(id_prefix: str, channel: int = 0) -> tuple:
     """Receive MIDI note messages (pitch, velocity, channel).
 
     Returns (boxes, lines) with one notein object.
@@ -1321,7 +1287,7 @@ def notein(id_prefix, channel=0):
     return (boxes, [])
 
 
-def noteout(id_prefix, channel=0):
+def noteout(id_prefix: str, channel: int = 0) -> tuple:
     """Send MIDI note messages."""
     text = f"noteout {channel}" if channel else "noteout"
     boxes = [
@@ -1330,7 +1296,7 @@ def noteout(id_prefix, channel=0):
     return (boxes, [])
 
 
-def ctlin(id_prefix, cc=None, channel=0):
+def ctlin(id_prefix: str, cc: int = None, channel: int = 0) -> tuple:
     """Receive MIDI continuous controller messages."""
     parts = ["ctlin"]
     if cc is not None:
@@ -1348,7 +1314,7 @@ def ctlin(id_prefix, cc=None, channel=0):
     return (boxes, [])
 
 
-def ctlout(id_prefix, cc=1, channel=1):
+def ctlout(id_prefix: str, cc: int = 1, channel: int = 1) -> tuple:
     """Send MIDI continuous controller messages."""
     boxes = [
         newobj(f"{id_prefix}_ctlout", f"ctlout {cc} {channel}",
@@ -1357,7 +1323,7 @@ def ctlout(id_prefix, cc=1, channel=1):
     return (boxes, [])
 
 
-def velocity_curve(id_prefix, curve="linear"):
+def velocity_curve(id_prefix: str, curve: str = "linear") -> tuple:
     """Remap MIDI velocity with a curve function.
 
     Curves: linear, compress, expand, soft, hard.
@@ -1398,7 +1364,7 @@ def velocity_curve(id_prefix, curve="linear"):
     return (boxes, lines)
 
 
-def transpose(id_prefix, semitones=0):
+def transpose(id_prefix: str, semitones: int = 0) -> tuple:
     """Transpose MIDI pitch by semitones with 0-127 clamping."""
     boxes = [
         newobj(f"{id_prefix}_add", f"+ {semitones}", numinlets=2, numoutlets=1,
@@ -1412,7 +1378,7 @@ def transpose(id_prefix, semitones=0):
     return (boxes, lines)
 
 
-def midi_thru(id_prefix):
+def midi_thru(id_prefix: str) -> tuple:
     """Raw MIDI byte passthrough (midiin -> midiout)."""
     boxes = [
         newobj(f"{id_prefix}_midiin", "midiin", numinlets=1, numoutlets=1,
@@ -1573,8 +1539,10 @@ def fdn_reverb(id_prefix: str, num_delays: int = 8) -> tuple:
     All tapout~ outputs are summed with a +~ chain.
 
     Wire audio into each {prefix}_tapin_{n} inlet 0.
-    Output from {prefix}_sum outlet 0 (or {prefix}_tapout_0 if N=1).
+    Output from {prefix}_sum outlet 0.
     """
+    if num_delays < 1:
+        raise ValueError(f"fdn_reverb num_delays must be >= 1, got {num_delays}")
     prime_delays = [47, 53, 59, 61, 67, 71, 73, 79]
     p = id_prefix
     boxes = []
@@ -1590,38 +1558,15 @@ def fdn_reverb(id_prefix: str, num_delays: int = 8) -> tuple:
                             patching_rect=[30 + i * 100, 150, 80, 20]))
         lines.append(patchline(f"{p}_tapin_{i}", 0, f"{p}_tapout_{i}", 0))
 
-    if num_delays == 1:
-        # No summing needed for a single delay
-        return (boxes, lines)
-
-    # Sum all tapout outputs with a +~ chain
-    for i in range(num_delays - 1):
-        boxes.append(newobj(f"{p}_add_{i}", "+~", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30 + i * 60, 200, 30, 20]))
-
-    # First adder: tapout_0 + tapout_1
-    lines.append(patchline(f"{p}_tapout_0", 0, f"{p}_add_0", 0))
-    lines.append(patchline(f"{p}_tapout_1", 0, f"{p}_add_0", 1))
-
-    prev = f"{p}_add_0"
-    for i in range(2, num_delays):
-        adder = f"{p}_add_{i - 1}"
-        lines.append(patchline(prev, 0, adder, 0))
-        lines.append(patchline(f"{p}_tapout_{i}", 0, adder, 1))
-        prev = adder
-
-    # Rename last adder to _sum for a consistent output name
-    boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
-                        outlettype=["signal"],
-                        patching_rect=[30, 240, 40, 20]))
-    lines.append(patchline(prev, 0, f"{p}_sum", 0))
+    source_ids = [f"{p}_tapout_{i}" for i in range(num_delays)]
+    sum_boxes, sum_lines = _signal_sum_chain(p, source_ids)
+    boxes.extend(sum_boxes)
+    lines.extend(sum_lines)
 
     return (boxes, lines)
 
 
-def spectral_gate(id_prefix: str, threshold: float = 0.01,
-                  fade_time: float = 10) -> tuple:
+def spectral_gate(id_prefix: str, threshold: float = 0.01) -> tuple:
     """Spectral gate using pfft~ pointing to spectral_gate_sub.maxpat.
 
     Wire audio into {prefix}_pfft inlet 0.
@@ -1708,6 +1653,8 @@ def vocoder(id_prefix: str, num_bands: int = 16) -> tuple:
     Wire modulator into each {prefix}_mod_bp_{n}_l inlet 0.
     Each band output comes from {prefix}_out_{n} outlet 0.
     """
+    if num_bands < 1:
+        raise ValueError(f"vocoder num_bands must be >= 1, got {num_bands}")
     p = id_prefix
     all_boxes = []
     all_lines = []
@@ -1743,6 +1690,8 @@ def mc_expand(id_prefix: str, channels: int = 8) -> tuple:
     Wire stereo signals into {prefix}_pack inlet 0 and 1.
     Output MC signal from {prefix}_pack outlet 0.
     """
+    if channels < 1:
+        raise ValueError(f"mc_expand channels must be >= 1, got {channels}")
     p = id_prefix
     boxes = [
         newobj(f"{p}_pack", f"mc.pack~ {channels}", numinlets=channels,
@@ -1758,6 +1707,8 @@ def mc_collapse(id_prefix: str, channels: int = 8) -> tuple:
     Wire MC signal into {prefix}_unpack inlet 0.
     Output stereo L/R from {prefix}_sum_l / {prefix}_sum_r outlet 0.
     """
+    if channels < 1:
+        raise ValueError(f"mc_collapse channels must be >= 1, got {channels}")
     p = id_prefix
     boxes = [
         newobj(f"{p}_unpack", f"mc.unpack~ {channels}", numinlets=1,
@@ -1956,6 +1907,8 @@ def xfade_matrix(id_prefix: str, sources: int = 4) -> tuple:
     Wire control float into {prefix}_ctrl inlet 0.
     Output from {prefix}_sum outlet 0.
     """
+    if sources < 1:
+        raise ValueError(f"xfade_matrix sources must be >= 1, got {sources}")
     p = id_prefix
     boxes = []
     lines = []
@@ -1985,32 +1938,11 @@ def xfade_matrix(id_prefix: str, sources: int = 4) -> tuple:
                             patching_rect=[30 + i * 130, 170, 30, 20]))
         lines.append(patchline(f"{p}_wt_{i}", 0, f"{p}_mul_{i}", 1))
 
-    # Sum all weighted sources with +~ chain
-    if sources == 1:
-        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 220, 40, 20]))
-        lines.append(patchline(f"{p}_mul_0", 0, f"{p}_sum", 0))
-    else:
-        boxes.append(newobj(f"{p}_add_0", "+~", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 220, 30, 20]))
-        lines.append(patchline(f"{p}_mul_0", 0, f"{p}_add_0", 0))
-        lines.append(patchline(f"{p}_mul_1", 0, f"{p}_add_0", 1))
-        prev = f"{p}_add_0"
-        for i in range(2, sources):
-            adder = f"{p}_add_{i - 1}"
-            boxes.append(newobj(adder, "+~", numinlets=2, numoutlets=1,
-                                outlettype=["signal"],
-                                patching_rect=[30, 220 + (i - 1) * 30, 30, 20]))
-            lines.append(patchline(prev, 0, adder, 0))
-            lines.append(patchline(f"{p}_mul_{i}", 0, adder, 1))
-            prev = adder
-
-        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 220 + (sources - 1) * 30, 40, 20]))
-        lines.append(patchline(prev, 0, f"{p}_sum", 0))
+    # Sum all weighted sources
+    source_ids = [f"{p}_mul_{i}" for i in range(sources)]
+    sum_boxes, sum_lines = _signal_sum_chain(p, source_ids)
+    boxes.extend(sum_boxes)
+    lines.extend(sum_lines)
 
     return (boxes, lines)
 
@@ -2163,6 +2095,10 @@ def bitcrusher(id_prefix: str, bits: int = 8,
     Wire audio into {prefix}_degrade inlet 0.
     Output from {prefix}_degrade outlet 0.
     """
+    if bits < 1 or bits > 32:
+        raise ValueError(f"bitcrusher bits must be 1-32, got {bits}")
+    if rate_reduction < 1:
+        raise ValueError(f"bitcrusher rate_reduction must be >= 1, got {rate_reduction}")
     p = id_prefix
     boxes = [
         newobj(f"{p}_degrade", f"degrade~ {rate_reduction} {bits}",
@@ -2181,6 +2117,8 @@ def poly_voices(id_prefix: str, num_voices: int = 4,
     Wire velocity into {prefix}_poly inlet 1.
     Output from {prefix}_poly outlet 0.
     """
+    if num_voices < 1:
+        raise ValueError(f"poly_voices num_voices must be >= 1, got {num_voices}")
     p = id_prefix
     boxes = [
         newobj(f"{p}_poly", f"poly~ {patch_name} {num_voices}",
@@ -2259,6 +2197,8 @@ def grain_cloud(id_prefix: str, buffer_name: str,
     Wire record trigger into {prefix}_buf inlet 0.
     Output from {prefix}_sum outlet 0.
     """
+    if num_voices < 1:
+        raise ValueError(f"grain_cloud num_voices must be >= 1, got {num_voices}")
     p = id_prefix
     boxes = [
         newobj(f"{p}_buf", f"buffer~ {buffer_name} 10000",
@@ -2273,32 +2213,10 @@ def grain_cloud(id_prefix: str, buffer_name: str,
                             outlettype=["signal", "signal"],
                             patching_rect=[30 + i * 100, 90, 100, 20]))
 
-    # Sum all groove~ outputs with a +~ chain
-    if num_voices == 1:
-        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 150, 40, 20]))
-        lines.append(patchline(f"{p}_groove_0", 0, f"{p}_sum", 0))
-    else:
-        boxes.append(newobj(f"{p}_add_0", "+~", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 150, 30, 20]))
-        lines.append(patchline(f"{p}_groove_0", 0, f"{p}_add_0", 0))
-        lines.append(patchline(f"{p}_groove_1", 0, f"{p}_add_0", 1))
-        prev = f"{p}_add_0"
-        for i in range(2, num_voices):
-            adder = f"{p}_add_{i - 1}"
-            boxes.append(newobj(adder, "+~", numinlets=2, numoutlets=1,
-                                outlettype=["signal"],
-                                patching_rect=[30, 150 + (i - 1) * 30, 30, 20]))
-            lines.append(patchline(prev, 0, adder, 0))
-            lines.append(patchline(f"{p}_groove_{i}", 0, adder, 1))
-            prev = adder
-
-        boxes.append(newobj(f"{p}_sum", "*~ 1.", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
-                            patching_rect=[30, 150 + (num_voices - 1) * 30, 40, 20]))
-        lines.append(patchline(prev, 0, f"{p}_sum", 0))
+    source_ids = [f"{p}_groove_{i}" for i in range(num_voices)]
+    sum_boxes, sum_lines = _signal_sum_chain(p, source_ids)
+    boxes.extend(sum_boxes)
+    lines.extend(sum_lines)
 
     return (boxes, lines)
 
@@ -2666,6 +2584,10 @@ def matrix_mixer(id_prefix: str, inputs: int = 4, outputs: int = 4) -> tuple:
     Wire each input signal into {prefix}_in_{i}_gain_{j} inlet 0.
     Output from {prefix}_out_{j} outlet 0.
     """
+    if inputs < 1:
+        raise ValueError(f"matrix_mixer inputs must be >= 1, got {inputs}")
+    if outputs < 1:
+        raise ValueError(f"matrix_mixer outputs must be >= 1, got {outputs}")
     p = id_prefix
     boxes, lines = _nxn_signal_sum(
         p, inputs, outputs,
@@ -2728,6 +2650,10 @@ def macro_modulation_matrix(id_prefix: str, sources: int = 4,
     Wire source signal i into {prefix}_src_{i}_to_{j} inlet 0 for each target j.
     Output for target j from {prefix}_tgt_{j} outlet 0.
     """
+    if sources < 1:
+        raise ValueError(f"macro_modulation_matrix sources must be >= 1, got {sources}")
+    if targets < 1:
+        raise ValueError(f"macro_modulation_matrix targets must be >= 1, got {targets}")
     p = id_prefix
     boxes, lines = _nxn_signal_sum(
         p, sources, targets,
@@ -2744,6 +2670,8 @@ def analog_oscillator_bank(id_prefix: str, num_oscs: int = 4) -> tuple:
     Wire base frequency (Hz) into {prefix}_detune_{i} inlet 0 for each osc.
     Output summed signal from {prefix}_sum outlet 0.
     """
+    if num_oscs < 1:
+        raise ValueError(f"analog_oscillator_bank num_oscs must be >= 1, got {num_oscs}")
     p = id_prefix
     boxes = []
     lines = []
@@ -2764,31 +2692,10 @@ def analog_oscillator_bank(id_prefix: str, num_oscs: int = 4) -> tuple:
                             patching_rect=[30 + i * 100, 70, 60, 20]))
         lines.append(patchline(add_id, 0, osc_id, 0))
 
-    if num_oscs == 1:
-        boxes.append(newobj(f"{p}_sum", "*~ 1.",
-                            numinlets=2, numoutlets=1, outlettype=["signal"],
-                            patching_rect=[30, 130, 50, 20]))
-        lines.append(patchline(f"{p}_osc_0", 0, f"{p}_sum", 0))
-    else:
-        adder_id = f"{p}_add_0"
-        boxes.append(newobj(adder_id, "+~",
-                            numinlets=2, numoutlets=1, outlettype=["signal"],
-                            patching_rect=[30, 130, 30, 20]))
-        lines.append(patchline(f"{p}_osc_0", 0, adder_id, 0))
-        lines.append(patchline(f"{p}_osc_1", 0, adder_id, 1))
-        prev = adder_id
-        for i in range(2, num_oscs):
-            next_adder = f"{p}_add_{i - 1}"
-            boxes.append(newobj(next_adder, "+~",
-                                numinlets=2, numoutlets=1, outlettype=["signal"],
-                                patching_rect=[30, 130 + (i - 1) * 30, 30, 20]))
-            lines.append(patchline(prev, 0, next_adder, 0))
-            lines.append(patchline(f"{p}_osc_{i}", 0, next_adder, 1))
-            prev = next_adder
-        boxes.append(newobj(f"{p}_sum", "*~ 1.",
-                            numinlets=2, numoutlets=1, outlettype=["signal"],
-                            patching_rect=[30, 130 + (num_oscs - 1) * 30, 50, 20]))
-        lines.append(patchline(prev, 0, f"{p}_sum", 0))
+    source_ids = [f"{p}_osc_{i}" for i in range(num_oscs)]
+    sum_boxes, sum_lines = _signal_sum_chain(p, source_ids)
+    boxes.extend(sum_boxes)
+    lines.extend(sum_lines)
 
     return (boxes, lines)
 

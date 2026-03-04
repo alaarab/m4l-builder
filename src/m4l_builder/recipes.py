@@ -26,24 +26,20 @@ def gain_controlled_stage(device, id_prefix, dial_rect, x=30, y=30):
     """
     p = id_prefix
 
-    # UI: gain dial in dB
     dial_id = device.add_dial(
         f"{p}_dial", f"{p}_gain", dial_rect,
         min_val=-70.0, max_val=6.0, initial=0.0,
         unitstyle=4, annotation_name=f"{p} Gain",
     )
 
-    # DSP: dbtoa converts dB to linear
     dbtoa_id = device.add_newobj(
         f"{p}_dbtoa", "dbtoa", numinlets=1, numoutlets=1,
         outlettype=[""], patching_rect=[x, y, 50, 20],
     )
 
-    # DSP: parameter smoothing (pack f 20 -> line~)
     smooth_boxes, smooth_lines = param_smooth(f"{p}_smooth")
     device.add_dsp(smooth_boxes, smooth_lines)
 
-    # DSP: *~ gain multiplier
     gain_id = device.add_newobj(
         f"{p}_gain", "*~ 1.", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x, y + 90, 40, 20],
@@ -78,46 +74,39 @@ def dry_wet_stage(device, id_prefix, dial_rect, x=30, y=30):
     """
     p = id_prefix
 
-    # UI: dry/wet dial 0-100%
     dial_id = device.add_dial(
         f"{p}_dial", f"{p}_mix", dial_rect,
         min_val=0.0, max_val=100.0, initial=50.0,
         unitstyle=5, annotation_name=f"{p} Dry/Wet",
     )
 
-    # Scale 0-100 to 0.0-1.0
     scale_id = device.add_newobj(
         f"{p}_scale", "*~ 0.01", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x, y, 55, 20],
     )
 
-    # Trigger to fan value to wet and dry paths
     trig_id = device.add_newobj(
         f"{p}_trig", "t f f", numinlets=1, numoutlets=2,
         outlettype=["", ""], patching_rect=[x, y + 30, 40, 20],
     )
 
-    # Smoothing for wet path
     wet_smooth_boxes, wet_smooth_lines = param_smooth(f"{p}_wet_smooth")
     device.add_dsp(wet_smooth_boxes, wet_smooth_lines)
 
-    # Smoothing for dry path (through inverter)
     dry_smooth_boxes, dry_smooth_lines = param_smooth(f"{p}_dry_smooth")
     device.add_dsp(dry_smooth_boxes, dry_smooth_lines)
 
-    # Invert for dry: !-~ 1. gives (1 - mix)
+    # !-~ 1. gives (1 - mix) for the dry side
     inv_id = device.add_newobj(
         f"{p}_inv", "!-~ 1.", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x + 80, y + 30, 45, 20],
     )
 
-    # Wet gain multiplier
     wet_gain_id = device.add_newobj(
         f"{p}_wet_gain", "*~ 0.", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x, y + 90, 40, 20],
     )
 
-    # Dry gain multiplier
     dry_gain_id = device.add_newobj(
         f"{p}_dry_gain", "*~ 1.", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x + 80, y + 90, 40, 20],
@@ -156,60 +145,50 @@ def tempo_synced_delay(device, id_prefix, time_dial_rect, feedback_dial_rect,
     """
     p = id_prefix
 
-    # UI: delay time dial
     time_dial_id = device.add_dial(
         f"{p}_time_dial", f"{p}_time", time_dial_rect,
         min_val=1.0, max_val=5000.0, initial=375.0,
         unitstyle=2, annotation_name=f"{p} Delay Time",
     )
 
-    # UI: feedback dial
     fb_dial_id = device.add_dial(
         f"{p}_fb_dial", f"{p}_feedback", feedback_dial_rect,
         min_val=0.0, max_val=95.0, initial=40.0,
         unitstyle=5, annotation_name=f"{p} Feedback",
     )
 
-    # DSP: delay line (tapin~/tapout~)
     delay_boxes, delay_lines = delay_line(f"{p}_delay", max_delay_ms=5000)
     device.add_dsp(delay_boxes, delay_lines)
     tapin_id = f"{p}_delay_tapin"
     tapout_id = f"{p}_delay_tapout"
 
-    # DSP: transport for tempo sync
     transport_id = device.add_newobj(
         f"{p}_transport", "transport", numinlets=1, numoutlets=7,
         outlettype=["int", "", "float", "float", "float", "", "int"],
         patching_rect=[x + 200, y, 70, 20],
     )
 
-    # DSP: loadbang to get initial BPM
     loadbang_id = device.add_newobj(
         f"{p}_loadbang", "loadbang", numinlets=1, numoutlets=1,
         outlettype=["bang"], patching_rect=[x + 200, y - 30, 55, 20],
     )
 
-    # DSP: smoothing for time dial
     time_smooth_boxes, time_smooth_lines = param_smooth(f"{p}_time_smooth")
     device.add_dsp(time_smooth_boxes, time_smooth_lines)
 
-    # DSP: feedback scaling 0-95 -> 0.0-0.95
     fb_scale_id = device.add_newobj(
         f"{p}_fb_scale", "scale 0. 95. 0. 0.95", numinlets=6, numoutlets=1,
         outlettype=[""], patching_rect=[x + 100, y + 60, 120, 20],
     )
 
-    # DSP: feedback smoothing
     fb_smooth_boxes, fb_smooth_lines = param_smooth(f"{p}_fb_smooth")
     device.add_dsp(fb_smooth_boxes, fb_smooth_lines)
 
-    # DSP: feedback multiplier
     fb_mul_id = device.add_newobj(
         f"{p}_fb_mul", "*~ 0.", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x, y + 120, 40, 20],
     )
 
-    # DSP: sum input with feedback
     sum_id = device.add_newobj(
         f"{p}_sum", "+~", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x, y + 150, 30, 20],
@@ -259,33 +238,26 @@ def midi_note_gate(device, id_prefix, x=30, y=30):
     """
     p = id_prefix
 
-    # DSP: notein (from dsp.py)
     notein_boxes, notein_lines = dsp_notein(p)
     device.add_dsp(notein_boxes, notein_lines)
     notein_id = f"{p}_notein"
 
-    # DSP: stripnote filters out note-offs (velocity 0)
-    # stripnote takes pitch in inlet 0, velocity in inlet 1
-    # outputs pitch from outlet 0, velocity from outlet 1 (only when velocity > 0)
+    # stripnote passes pitch/velocity only when velocity > 0
     stripnote_id = device.add_newobj(
         f"{p}_stripnote", "stripnote", numinlets=2, numoutlets=2,
         outlettype=["", ""], patching_rect=[x, y + 30, 60, 20],
     )
 
-    # UI: kslider for visual note display
     kslider_id = device.add_kslider(
         f"{p}_kslider", [x, y + 60, 200, 40],
     )
 
-    # Wiring: notein outlet 0 (pitch) -> stripnote inlet 0
     device.add_line(notein_id, 0, stripnote_id, 0)
-    # Wiring: notein outlet 1 (velocity) -> stripnote inlet 1
     device.add_line(notein_id, 1, stripnote_id, 1)
-    # Wiring: stripnote outlet 0 (pitch) -> kslider inlet 0
     device.add_line(stripnote_id, 0, kslider_id, 0)
 
     return {
         "notein": notein_id,
-        "pitch": stripnote_id,
-        "velocity": f"{p}_stripnote",
+        "pitch": stripnote_id,      # outlet 0
+        "velocity": stripnote_id,   # outlet 1
     }

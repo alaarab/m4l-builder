@@ -245,11 +245,11 @@ class Device:
                     spacing_y=spacing_y)
 
     def to_json(self, indent: int = 2) -> str:
-        """Return the patcher dict as formatted JSON."""
+        """Serialize the device patcher structure to a JSON string."""
         return json.dumps(self.to_patcher(), indent=indent)
 
     def wire_chain(self, obj_ids: list, outlet: int = 0, inlet: int = 0):
-        """Wire a list of object IDs in series."""
+        """Connect objects end-to-end, each output feeding the next input."""
         for i in range(len(obj_ids) - 1):
             self.add_line(obj_ids[i], outlet, obj_ids[i + 1], inlet)
 
@@ -257,7 +257,6 @@ class Device:
         """Check the device for common problems. Returns a list of warning strings."""
         warnings = []
 
-        # Collect all box IDs
         seen_ids = {}
         for box in self.boxes:
             box_id = box["box"]["id"]
@@ -265,7 +264,6 @@ class Device:
                 warnings.append(f"Duplicate box ID: {box_id}")
             seen_ids[box_id] = True
 
-        # Check patchlines reference valid IDs
         for line in self.lines:
             pl = line["patchline"]
             src = pl["source"][0]
@@ -275,14 +273,12 @@ class Device:
             if dst not in seen_ids:
                 warnings.append(f"Patchline references unknown destination: {dst}")
 
-        # AudioEffect must have plugin~ and plugout~
         if self.device_type == "audio_effect":
             if "obj-plugin" not in seen_ids:
                 warnings.append("AudioEffect missing obj-plugin")
             if "obj-plugout" not in seen_ids:
                 warnings.append("AudioEffect missing obj-plugout")
 
-        # Orphan detection: boxes with no connections at all
         connected = set()
         for line in self.lines:
             pl = line["patchline"]
@@ -295,7 +291,11 @@ class Device:
         return warnings
 
     def assign_parameter_bank(self, varname: str, bank: int, position: int):
-        """Assign a parameter to a specific bank and position."""
+        """Map a parameter into Push's bank layout for hardware control."""
+        if bank < 0:
+            raise ValueError(f"bank must be >= 0, got {bank}")
+        if position < 0:
+            raise ValueError(f"position must be >= 0, got {position}")
         self._param_banks[varname] = (bank, position)
 
     @classmethod

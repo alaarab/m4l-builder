@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.1] — 2026-03-04
+
+### Changed
+- Extracted `_svf_filter`, `_signal_sum_chain`, `_biquad_shelf` helpers in dsp.py — removes ~150 lines of duplication across filter/sum/shelf groups
+- Added `ValueError` guards to 13 DSP functions with unbounded count params (`comb_resonator`, `fdn_reverb`, `vocoder`, `grain_cloud`, `mc_expand/collapse`, `analog_oscillator_bank`, `poly_voices`, `matrix_mixer`, `macro_modulation_matrix`, `xfade_matrix`, `bitcrusher`, `reverb_network`) and `device.assign_parameter_bank`
+- Removed unused `fade_time` parameter from `spectral_gate`
+- Fixed `sample_and_hold` noise~ numinlets (0, not 1)
+- Added type annotations to 12 DSP functions missing them
+- Humanize pass: removed restate comments in `device.py` and `recipes.py`, rewrote 3 docstrings
+- Creative pass: beat grouping gridlines in `grid_sequencer_display`, level reference lines in `spectral_vocoder_display`, beat emphasis in `piano_roll`
+
 ## [0.5.0] — 2026-03-04
 
 ### Added
