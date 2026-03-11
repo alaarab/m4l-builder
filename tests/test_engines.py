@@ -241,8 +241,10 @@ class TestEqCurveEngine:
     def test_contains_double_click_delete_and_drag_fast_path(self):
         js = eq_curve_js()
         assert "var DOUBLE_CLICK_MS = 280;" in js
+        assert "var last_click_was_create = 0;" in js
         assert "function delete_band_at(idx)" in js
         assert "if (last_click_band === hit && click_ms - last_click_ms <= DOUBLE_CLICK_MS)" in js
+        assert "if (!last_click_was_create)" in js
         assert "if (uses_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
         assert "if (!uses_gain && new_freq === b.freq && new_q === b.q) return;" in js
 

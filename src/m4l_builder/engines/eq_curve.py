@@ -151,6 +151,7 @@ var drag_start_gain = 0;
 var drag_start_q = 1.0;
 var last_click_ms = 0;
 var last_click_band = -1;
+var last_click_was_create = 0;
 var DOUBLE_CLICK_MS = 280;
 
 var bands = [];
@@ -321,6 +322,7 @@ function delete_band_at(idx) {
     dragging = 0;
     last_click_band = -1;
     last_click_ms = 0;
+    last_click_was_create = 0;
     mgraphics.redraw();
 }
 
@@ -1048,6 +1050,7 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
             outlet(0, "selected_band", created_idx);
             last_click_band = created_idx;
             last_click_ms = click_ms;
+            last_click_was_create = 1;
             mgraphics.redraw();
             return;
         }
@@ -1055,11 +1058,21 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
 
     if (hit >= 0) {
         if (last_click_band === hit && click_ms - last_click_ms <= DOUBLE_CLICK_MS) {
-            delete_band_at(hit);
+            if (!last_click_was_create) {
+                delete_band_at(hit);
+                return;
+            }
+            selected_band = hit;
+            dragging = 0;
+            outlet(0, "selected_band", hit);
+            last_click_ms = click_ms;
+            last_click_was_create = 0;
+            mgraphics.redraw();
             return;
         }
         last_click_band = hit;
         last_click_ms = click_ms;
+        last_click_was_create = 0;
         selected_band = hit;
         dragging = 1;
         drag_start_freq = bands[hit].freq;
@@ -1069,6 +1082,7 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     } else {
         last_click_band = -1;
         last_click_ms = 0;
+        last_click_was_create = 0;
         selected_band = -1;
         dragging = 0;
     }
