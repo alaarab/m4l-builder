@@ -149,6 +149,9 @@ var dragging = 0;
 var drag_start_freq = 0;
 var drag_start_gain = 0;
 var drag_start_q = 1.0;
+var last_click_ms = 0;
+var last_click_band = -1;
+var DOUBLE_CLICK_MS = 280;
 
 var bands = [];
 var band_cache = [];
@@ -302,6 +305,23 @@ function next_enabled_band(preferred_idx) {
         if (band_cache[i].enabled) return i;
     }
     return -1;
+}
+
+function delete_band_at(idx) {
+    var next_idx;
+    if (idx < 0 || idx >= num_bands) return;
+    if (!bands[idx].enabled) return;
+
+    bands[idx].enabled = 0;
+    rebuild_band_cache();
+    next_idx = next_enabled_band(idx === selected_band ? idx + 1 : selected_band);
+    selected_band = next_idx;
+    outlet(0, "delete_band", idx);
+    outlet(0, "selected_band", next_idx);
+    dragging = 0;
+    last_click_band = -1;
+    last_click_ms = 0;
+    mgraphics.redraw();
 }
 
 // ── Filter coefficients / response ───────────────────────────────────
@@ -992,20 +1012,11 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     var created_idx;
     var created_freq;
     var created_gain;
-    var next_idx;
+    var click_ms = new Date().getTime();
 
     if (opt) {
         if (hit >= 0) {
-            bands[hit].enabled = 0;
-            rebuild_band_cache();
-            next_idx = next_enabled_band(hit === selected_band ? hit + 1 : selected_band);
-            selected_band = next_idx;
-            outlet(0, "delete_band", hit);
-            if (next_idx >= 0) {
-                outlet(0, "selected_band", next_idx);
-            }
-            dragging = 0;
-            mgraphics.redraw();
+            delete_band_at(hit);
             return;
         }
     }
@@ -1035,12 +1046,20 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
                 1
             );
             outlet(0, "selected_band", created_idx);
+            last_click_band = created_idx;
+            last_click_ms = click_ms;
             mgraphics.redraw();
             return;
         }
     }
 
     if (hit >= 0) {
+        if (last_click_band === hit && click_ms - last_click_ms <= DOUBLE_CLICK_MS) {
+            delete_band_at(hit);
+            return;
+        }
+        last_click_band = hit;
+        last_click_ms = click_ms;
         selected_band = hit;
         dragging = 1;
         drag_start_freq = bands[hit].freq;
@@ -1048,6 +1067,8 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
         drag_start_q = bands[hit].q;
         outlet(0, "selected_band", hit);
     } else {
+        last_click_band = -1;
+        last_click_ms = 0;
         selected_band = -1;
         dragging = 0;
     }
@@ -1107,6 +1128,9 @@ function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
     }
     new_freq = clamp(new_freq, MIN_FREQ, MAX_FREQ);
 
+    if (uses_gain && new_freq === b.freq && new_gain === b.gain) return;
+    if (!uses_gain && new_freq === b.freq && new_q === b.q) return;
+
     bands[selected_band].freq = new_freq;
     if (uses_gain) {
         bands[selected_band].gain = new_gain;
@@ -1149,6 +1173,7 @@ function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl) {
     q = q * (1.0 + scrolly * factor);
     q = clamp(q, MIN_Q, MAX_Q);
     q = Math.round(q * 100.0) / 100.0;
+    if (q === bands[target].q) return;
 
     bands[target].q = q;
     rebuild_band_cache();

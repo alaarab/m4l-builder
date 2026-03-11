@@ -381,6 +381,8 @@ class TestLinearPhaseEqExample:
 
         assert "+ ADD BAND" not in chips_js
         assert "Click empty graph" in display_js
+        assert "function delete_band_at(idx)" in display_js
+        assert "var DOUBLE_CLICK_MS = 280;" in display_js
         assert "function draw_nodes()" in display_js
         assert "function set_display_range(v)" in display_js
         assert "function set_analyzer_enabled(v)" in display_js
