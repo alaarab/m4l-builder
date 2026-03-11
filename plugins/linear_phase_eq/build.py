@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path, newobj, patchline
-from m4l_builder.engines import linear_phase_eq_display_js
+from m4l_builder.engines import eq_curve_js
 from m4l_builder.engines.spectrum_analyzer import spectrum_analyzer_dsp
 
 
@@ -52,9 +52,9 @@ KERNEL_FILENAMES = {
     "high": "linear_phase_eq_high_core.maxpat",
 }
 
-STATE_FILENAME = "linear_phase_eq_state.js"
-CHIPROW_FILENAME = "linear_phase_eq_chips.js"
-DISPLAY_FILENAME = "lpeq_display_v2.js"
+STATE_FILENAME = "linear_phase_eq_state_v2.js"
+CHIPROW_FILENAME = "linear_phase_eq_chips_v2.js"
+DISPLAY_FILENAME = "lpeq_eqcurve_display_v2.js"
 
 BG = [0.05, 0.06, 0.08, 1.0]
 SURFACE = [0.08, 0.10, 0.13, 1.0]
@@ -295,7 +295,6 @@ outlets = 3;
 var RESPONSE_BUFFERS = $buffer_names;
 var FFT_SIZES = $fft_sizes;
 var TYPE_NAMES = ["Peak", "LShelf", "HShelf", "LCut", "HCut", "Notch", "BPass"];
-var DEFAULT_FREQS = [80.0, 320.0, 1800.0, 9000.0, 160.0, 640.0, 3600.0, 14000.0];
 var TYPE_PEAK = 0;
 var TYPE_LOSHELF = 1;
 var TYPE_HISHELF = 2;
@@ -303,6 +302,12 @@ var TYPE_LOWCUT = 3;
 var TYPE_HIGHCUT = 4;
 var TYPE_NOTCH = 5;
 var TYPE_BANDPASS = 6;
+var DEFAULT_FREQS = [30.0, 200.0, 1000.0, 5000.0, 3600.0, 7200.0, 12000.0, 18000.0];
+var DEFAULT_GAINS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+var DEFAULT_QS = [0.707, 1.0, 1.0, 0.707, 1.0, 1.0, 1.0, 0.707];
+var DEFAULT_TYPES = [TYPE_LOSHELF, TYPE_PEAK, TYPE_PEAK, TYPE_HISHELF, TYPE_PEAK, TYPE_PEAK, TYPE_PEAK, TYPE_HIGHCUT];
+var DEFAULT_ENABLED = [1, 1, 1, 1, 0, 0, 0, 0];
+var DEFAULT_SLOPES = [0, 0, 0, 0, 0, 0, 0, 0];
 var NUM_BANDS = 8;
 var MIN_FREQ = 10.0;
 var MAX_FREQ = 22050.0;
@@ -346,20 +351,33 @@ function slope_stage_count(slope) {
     return 1;
 }
 
+function display_type_for_band(type) {
+    if (type === TYPE_LOWCUT) return 4;
+    if (type === TYPE_HIGHCUT) return 3;
+    return type;
+}
+
+function state_type_from_display(type) {
+    type = Math.floor(type);
+    if (type === 3) return TYPE_HIGHCUT;
+    if (type === 4) return TYPE_LOWCUT;
+    return Math.floor(clamp(type, 0, TYPE_BANDPASS));
+}
+
 function reset_bands() {
     bands = [];
     for (i = 0; i < NUM_BANDS; i++) {
         bands[i] = {
             freq: DEFAULT_FREQS[i],
-            gain: 0.0,
-            q: 1.0,
-            type: TYPE_PEAK,
-            enabled: i < 4 ? 1 : 0,
-            slope: 0,
+            gain: DEFAULT_GAINS[i],
+            q: DEFAULT_QS[i],
+            type: DEFAULT_TYPES[i],
+            enabled: DEFAULT_ENABLED[i],
+            slope: DEFAULT_SLOPES[i],
             solo: 0
         };
     }
-    selected_band = 2;
+    selected_band = -1;
 }
 
 function clone_band(idx) {
@@ -560,7 +578,7 @@ function emit_graph_band(idx) {
         bands[idx].freq,
         bands[idx].gain,
         bands[idx].q,
-        bands[idx].type,
+        display_type_for_band(bands[idx].type),
         bands[idx].enabled,
         bands[idx].slope,
         bands[idx].solo
@@ -593,7 +611,7 @@ function emit_strip_state() {
     var band;
     if (selected_band < 0 || selected_band >= NUM_BANDS) {
         outlet(1, "band_label", "NO BAND");
-        outlet(1, "band_status", "Click the graph to add a band.");
+        outlet(1, "band_status", "Select a node or click the graph to add one.");
         outlet(1, "freq", 1000.0);
         outlet(1, "gain", 0.0);
         outlet(1, "q", 1.0);
@@ -725,7 +743,7 @@ function add_band_from_graph(idx, freq, gain, q, type, enabled, slope, solo) {
     bands[idx].freq = clamp(freq, 20.0, 20000.0);
     bands[idx].gain = clamp(gain, MIN_GAIN, MAX_GAIN);
     bands[idx].q = clamp(q, MIN_Q, MAX_Q);
-    bands[idx].type = Math.floor(type);
+    bands[idx].type = state_type_from_display(type);
     bands[idx].enabled = enabled ? 1 : 0;
     bands[idx].slope = Math.floor(clamp(slope, 0, 2));
     bands[idx].solo = solo ? 1 : 0;
@@ -758,7 +776,7 @@ function set_selected_param(name, value) {
     } else if (name === "q") {
         bands[selected_band].q = clamp(value, MIN_Q, MAX_Q);
     } else if (name === "type") {
-        bands[selected_band].type = Math.floor(clamp(value, 0, TYPE_BANDPASS));
+        bands[selected_band].type = state_type_from_display(value);
     } else if (name === "slope") {
         bands[selected_band].slope = Math.floor(clamp(value, 0, 2));
     } else if (name === "enable") {
@@ -916,7 +934,7 @@ function anything() {
     )
 
 
-device = AudioEffect("Linear Phase EQ", width=752, height=188, theme=MIDNIGHT)
+device = AudioEffect("Linear Phase EQ", width=752, height=176, theme=MIDNIGHT)
 
 for slug, _, fft_size in QUALITY_MODES:
     device.add_support_file(
@@ -936,43 +954,43 @@ device.add_support_file(
 # ---------------------------------------------------------------------------
 # UI shell
 # ---------------------------------------------------------------------------
-device.add_panel("bg", [0, 0, 752, 188], bgcolor=BG)
-device.add_panel("hero_frame", [8, 8, 736, 148], bgcolor=[0.05, 0.05, 0.06, 1.0],
+device.add_panel("bg", [0, 0, 752, 176], bgcolor=BG)
+device.add_panel("hero_frame", [8, 8, 736, 136], bgcolor=[0.05, 0.05, 0.06, 1.0],
                  border=1, bordercolor=BORDER, rounded=8)
-device.add_panel("chips_frame", [8, 160, 736, 20], bgcolor=SURFACE,
+device.add_panel("chips_frame", [8, 148, 736, 20], bgcolor=SURFACE,
                  border=1, bordercolor=BORDER, rounded=6)
 
-device.add_comment("strip_band_label", [356, 163, 58, 10], "NO BAND",
+device.add_comment("strip_band_label", [356, 151, 58, 10], "NO BAND",
                    fontname="Ableton Sans Bold", fontsize=6.8, textcolor=TEXT)
-device.add_comment("freq_caption", [414, 163, 8, 8], "F",
+device.add_comment("freq_caption", [414, 151, 8, 8], "F",
                    fontsize=6.0, textcolor=TEXT_DIM)
-device.add_number_box("selected_freq", "Selected Freq", [422, 160, 62, 16],
+device.add_number_box("selected_freq", "Selected Freq", [422, 148, 62, 16],
                       min_val=20.0, max_val=20000.0, initial=1000.0,
                       unitstyle=3, patching_rect=[700, 130, 70, 16], fontsize=7.2)
-device.add_comment("gain_caption", [482, 163, 8, 8], "G",
+device.add_comment("gain_caption", [482, 151, 8, 8], "G",
                    fontsize=6.0, textcolor=TEXT_DIM)
-device.add_number_box("selected_gain", "Selected Gain", [490, 160, 46, 16],
+device.add_number_box("selected_gain", "Selected Gain", [490, 148, 46, 16],
                       min_val=-30.0, max_val=30.0, initial=0.0,
                       unitstyle=4, patching_rect=[700, 160, 52, 16], fontsize=7.2)
-device.add_comment("q_caption", [534, 163, 8, 8], "Q",
+device.add_comment("q_caption", [534, 151, 8, 8], "Q",
                    fontsize=6.0, textcolor=TEXT_DIM)
-device.add_number_box("selected_q", "Selected Q", [542, 160, 38, 16],
+device.add_number_box("selected_q", "Selected Q", [542, 148, 38, 16],
                       min_val=0.1, max_val=30.0, initial=1.0,
                       unitstyle=1, patching_rect=[700, 190, 44, 16], fontsize=7.2)
-device.add_live_text("selected_enable", "Selected Enable", [648, 160, 40, 16],
+device.add_live_text("selected_enable", "Selected Enable", [648, 148, 40, 16],
                      text_on="ON", text_off="BYP",
                      bgcolor=ACCENT_SOFT, bgoncolor=[0.26, 0.78, 0.52, 1.0],
                      textcolor=TEXT_DIM, textoncolor=[0.04, 0.06, 0.08, 1.0],
                      rounded=5, fontsize=6.2)
-device.add_live_text("selected_solo", "Selected Solo", [692, 160, 48, 16],
+device.add_live_text("selected_solo", "Selected Solo", [692, 148, 48, 16],
                      text_on="LISTEN", text_off="LISTEN",
                      bgcolor=ACCENT_SOFT, bgoncolor=[0.90, 0.74, 0.24, 1.0],
                      textcolor=TEXT_DIM, textoncolor=[0.04, 0.06, 0.08, 1.0],
                      rounded=5, fontsize=6.0)
 
-device.add_comment("lbl_quality", [150, 163, 8, 8], "Q",
+device.add_comment("lbl_quality", [150, 151, 8, 8], "Q",
                    fontsize=5.8, textcolor=TEXT_DIM)
-device.add_tab("quality_tab", "Quality", [158, 160, 52, 16], options=QUALITY_OPTIONS,
+device.add_tab("quality_tab", "Quality", [158, 148, 52, 16], options=QUALITY_OPTIONS,
                bgcolor=ACCENT_SOFT, bgoncolor=[0.24, 0.30, 0.38, 1.0],
                textcolor=TEXT_DIM, textoncolor=[0.04, 0.05, 0.07, 1.0], rounded=4, spacing_x=1.0,
                saved_attribute_attributes={
@@ -988,9 +1006,9 @@ device.add_tab("quality_tab", "Quality", [158, 160, 52, 16], options=QUALITY_OPT
                    }
                    })
 
-device.add_comment("lbl_analyzer", [222, 163, 8, 8], "A",
+device.add_comment("lbl_analyzer", [222, 151, 8, 8], "A",
                    fontsize=5.8, textcolor=TEXT_DIM)
-device.add_tab("analyzer_tab", "Analyzer", [230, 160, 56, 16], options=ANALYZER_OPTIONS,
+device.add_tab("analyzer_tab", "Analyzer", [230, 148, 56, 16], options=ANALYZER_OPTIONS,
                bgcolor=ACCENT_SOFT, bgoncolor=[ANALYZER[0], ANALYZER[1], ANALYZER[2], 1.0],
                textcolor=TEXT_DIM, textoncolor=[0.04, 0.05, 0.07, 1.0],
                rounded=4, spacing_x=1.0,
@@ -1007,9 +1025,9 @@ device.add_tab("analyzer_tab", "Analyzer", [230, 160, 56, 16], options=ANALYZER_
                    }
                    })
 
-device.add_comment("lbl_range", [294, 163, 8, 8], "R",
+device.add_comment("lbl_range", [294, 151, 8, 8], "R",
                    fontsize=5.8, textcolor=TEXT_DIM)
-device.add_tab("range_tab", "Range", [302, 160, 44, 16], options=RANGE_OPTIONS,
+device.add_tab("range_tab", "Range", [302, 148, 44, 16], options=RANGE_OPTIONS,
                bgcolor=ACCENT_SOFT, bgoncolor=[0.24, 0.30, 0.38, 1.0],
                textcolor=TEXT_DIM, textoncolor=[0.04, 0.05, 0.07, 1.0], rounded=4, spacing_x=1.0,
                saved_attribute_attributes={
@@ -1063,7 +1081,7 @@ device.add_tab("collision_tab", "Collision", [900, 160, 8, 8], options=COLLISION
                    }
                })
 
-device.add_comment("latency_readout", [586, 163, 56, 10], "46.4 ms",
+device.add_comment("latency_readout", [586, 151, 56, 10], "46.4 ms",
                    fontsize=6.0, textcolor=TEXT_DIM, justification=1)
 
 device.add_box({
@@ -1082,39 +1100,38 @@ device.add_box({
         "logamp": 1,
         "domain": [20.0, 20000.0],
         "bgcolor": [0.05, 0.06, 0.07, 0.0],
-        "fgcolor": [0.32, 0.92, 1.0, 0.12],
+        "fgcolor": [0.32, 0.92, 1.0, 0.62],
         "markercolor": [0.62, 0.62, 0.62, 0.0],
-        "patching_rect": [10, 30, 728, 142],
-        "presentation": 0,
+        "patching_rect": [10, 30, 728, 130],
+        "presentation": 1,
+        "presentation_rect": [12, 10, 728, 130],
     }
 })
 
 device.add_jsui(
     "lpeq_display",
-    [12, 10, 728, 142],
-    js_code=linear_phase_eq_display_js(
+    [12, 10, 728, 130],
+    js_code=eq_curve_js(
         bg_color="0.05, 0.06, 0.07, 0.0",
-        composite_color="0.95, 0.97, 1.0, 1.0",
-        fill_color="0.42, 0.74, 0.94, 0.10",
-        analyzer_fill_color="0.24, 0.84, 0.98, 0.02",
-        analyzer_line_color="0.40, 0.94, 1.0, 0.18",
-        analyzer_peak_color="0.96, 0.98, 1.0, 0.0",
+        composite_color="0.86, 0.92, 0.98, 0.03",
+        fill_color="0.32, 0.56, 0.72, 0.0",
+        analyzer_fill_color="0.24, 0.84, 0.98, 0.10",
+        analyzer_line_color="0.40, 0.94, 1.0, 0.28",
+        analyzer_peak_color="0.96, 0.98, 1.0, 0.14",
         grid_color="0.18, 0.20, 0.25, 0.64",
         text_color="0.48, 0.52, 0.58, 1.0",
         zero_line_color="0.34, 0.37, 0.42, 0.94",
-        badge_color="0.10, 0.12, 0.15, 0.92",
-        badge_border_color="0.25, 0.28, 0.34, 1.0",
     ),
     js_filename=DISPLAY_FILENAME,
     numinlets=3,
     numoutlets=4,
     outlettype=["", "", "", ""],
-    patching_rect=[10, 30, 728, 142],
+    patching_rect=[10, 30, 728, 130],
 )
 
 device.add_jsui(
     "band_chip_row",
-    [12, 163, 132, 14],
+    [12, 151, 132, 14],
     js_code=band_chip_row_js(),
     js_filename=CHIPROW_FILENAME,
     numinlets=1,
