@@ -5,8 +5,23 @@ import pytest
 
 from m4l_builder import AudioEffect, MIDNIGHT
 from m4l_builder.engines.filter_curve import filter_curve_js, FILTER_CURVE_INLETS
+from m4l_builder.engines.crossover_display import (
+    crossover_display_js,
+    CROSSOVER_DISPLAY_INLETS,
+)
+from m4l_builder.engines.eq_band_column import (
+    eq_band_column_js, EQ_BAND_COLUMN_INLETS, EQ_BAND_COLUMN_OUTLETS)
 from m4l_builder.engines.eq_curve import eq_curve_js, EQ_CURVE_INLETS
-from m4l_builder.engines.spectrum_analyzer import spectrum_analyzer_js, SPECTRUM_INLETS
+from m4l_builder.engines.linear_phase_eq_display import (
+    linear_phase_eq_display_js,
+    LINEAR_PHASE_EQ_DISPLAY_INLETS,
+    LINEAR_PHASE_EQ_DISPLAY_OUTLETS,
+)
+from m4l_builder.engines.spectrum_analyzer import (
+    spectrum_analyzer_js,
+    spectrum_analyzer_dsp,
+    SPECTRUM_INLETS,
+)
 from m4l_builder.engines.envelope_display import envelope_display_js, ENVELOPE_INLETS
 from m4l_builder.engines.waveform_display import waveform_display_js, WAVEFORM_INLETS
 from m4l_builder.engines.xy_pad import xy_pad_js, XY_PAD_INLETS, XY_PAD_OUTLETS
@@ -33,6 +48,38 @@ from m4l_builder.engines.wavetable_editor import (
     wavetable_editor_js, WAVETABLE_EDITOR_INLETS, WAVETABLE_EDITOR_OUTLETS)
 from m4l_builder.engines.spectral_vocoder_display import (
     spectral_vocoder_display_js, SPECTRAL_VOCODER_INLETS, SPECTRAL_VOCODER_OUTLETS)
+
+
+class TestCrossoverDisplayEngine:
+    def test_returns_string(self):
+        js = crossover_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_inlets(self):
+        js = crossover_display_js()
+        assert "inlets = 3;" in js
+
+    def test_contains_paint_function(self):
+        js = crossover_display_js()
+        assert "function paint()" in js
+
+    def test_contains_msg_float_handler(self):
+        js = crossover_display_js()
+        assert "function msg_float" in js
+
+    def test_contains_band_labels(self):
+        js = crossover_display_js()
+        assert '"LOW"' in js
+        assert '"MID"' in js
+        assert '"HIGH"' in js
+
+    def test_custom_colors_present(self):
+        js = crossover_display_js(low_color="0.1, 0.2, 0.3, 0.4")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+
+    def test_inlet_count_metadata(self):
+        assert CROSSOVER_DISPLAY_INLETS == 3
 
 
 class TestFilterCurveEngine:
@@ -105,6 +152,95 @@ class TestFilterCurveEngine:
         assert "0.45, 0.75, 0.65, 1.0" in js
 
 
+class TestEqBandColumnEngine:
+    def test_returns_string(self):
+        js = eq_band_column_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_handlers(self):
+        js = eq_band_column_js()
+        assert "function paint()" in js
+        assert "function set_band" in js
+        assert "function set_selected" in js
+        assert "function onclick" in js
+        assert "function ondrag" in js
+
+    def test_contains_expected_messages(self):
+        js = eq_band_column_js(show_slope=True, show_solo=True, show_motion=True, show_dynamic=True)
+        assert '"band_freq"' in js
+        assert '"band_gain"' in js
+        assert '"band_q"' in js
+        assert '"band_type"' in js
+        assert '"band_slope"' in js
+        assert '"band_enable"' in js
+        assert '"band_solo"' in js
+        assert '"band_motion"' in js
+        assert '"band_dynamic"' in js
+        assert '"band_motion_rate"' in js
+        assert '"band_motion_depth"' in js
+        assert '"band_motion_direction"' in js
+
+    def test_custom_titles_and_types_present(self):
+        js = eq_band_column_js(title="DETAIL", type_names=["Peak", "Shelf"])
+        assert '"DETAIL"' in js
+        assert '"Shelf"' in js
+
+    def test_inlet_and_outlet_metadata(self):
+        assert EQ_BAND_COLUMN_INLETS == 1
+        assert EQ_BAND_COLUMN_OUTLETS == 1
+
+    def test_normalizes_cut_filter_q_and_disables_unsupported_dynamic(self):
+        js = eq_band_column_js(show_motion=True, show_dynamic=True)
+        assert "function apply_type_change(next_type)" in js
+        assert "if (next_type === 3 || next_type === 4)" in js
+        assert 'outlet(0, "band_q", selected_band, band.q);' in js
+        assert "function supports_dynamic(type_idx)" in js
+        assert "if (!supports_dynamic(band.type)) return;" in js
+
+    def test_uses_distinct_motion_knob_accent(self):
+        js = eq_band_column_js(show_motion=True)
+        assert "var MOTION_ACCENT_COLOR = [0.34, 0.86, 0.98, 1.0];" in js
+        assert "function knob_accent_color(info)" in js
+        assert "function default_motion_rate(idx)" in js
+
+    def test_supports_motion_direction_knob(self):
+        js = eq_band_column_js(show_motion=True, show_type_controls=False)
+        assert '"band_motion_direction"' in js
+        assert "function default_motion_direction(idx)" in js
+        assert "function clamp_motion_direction(value)" in js
+        assert 'key: "motion_direction"' in js
+        assert 'label: "DIR"' in js
+
+    def test_can_hide_type_scroller_and_keep_vertical_state_stack(self):
+        js = eq_band_column_js(show_motion=True, show_dynamic=True, show_type_controls=False)
+        assert "var SHOW_TYPE_CONTROLS = 0;" in js
+        assert "if (SHOW_TYPE_CONTROLS) {" in js
+        assert "push_stack(\"enable\")" in js
+
+    def test_uses_theme_font_hooks_and_compact_breakpoint(self):
+        js = eq_band_column_js(font_name="Ableton Sans Medium", font_bold_name="Ableton Sans Bold")
+        assert 'var FONT_NAME = "Ableton Sans Medium";' in js
+        assert 'var FONT_BOLD_NAME = "Ableton Sans Bold";' in js
+        assert "return mgraphics.size[0] <= 118 || mgraphics.size[1] <= 148;" in js
+        assert "function mix_color(color_a, color_b, amount)" in js
+
+    def test_supports_frameless_headerless_rail_and_alt_scroll_q(self):
+        js = eq_band_column_js(show_header=False, show_frame=False, force_regular_layout=True)
+        assert "var SHOW_HEADER = 0;" in js
+        assert "var SHOW_FRAME = 0;" in js
+        assert "var FORCE_REGULAR_LAYOUT = 1;" in js
+        assert "function uses_minimal_rail_layout()" in js
+        assert "if (FORCE_REGULAR_LAYOUT) return 0;" in js
+        assert "function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl)" in js
+        assert 'emit_value("q", next_q);' in js
+
+    def test_uses_10hz_to_22khz_frequency_range(self):
+        js = eq_band_column_js()
+        assert "var MIN_FREQ = 10.0;" in js
+        assert "var MAX_FREQ = 22000.0;" in js
+
+
 class TestEqCurveEngine:
     def test_returns_string(self):
         js = eq_curve_js()
@@ -122,11 +258,12 @@ class TestEqCurveEngine:
     def test_contains_mouse_handlers(self):
         js = eq_curve_js()
         assert "function onclick" in js
+        assert "function ondblclick" in js
         assert "function ondrag" in js
 
     def test_declares_inlets(self):
         js = eq_curve_js()
-        assert "inlets = 1;" in js
+        assert "inlets = 3;" in js
 
     def test_declares_outlets(self):
         js = eq_curve_js()
@@ -137,7 +274,7 @@ class TestEqCurveEngine:
         assert EQ_CURVE_OUTLETS == 4
 
     def test_inlet_count_metadata(self):
-        assert EQ_CURVE_INLETS == 1
+        assert EQ_CURVE_INLETS == 3
 
     def test_custom_bg_color(self):
         js = eq_curve_js(bg_color="0.1, 0.2, 0.3, 1.0")
@@ -175,10 +312,79 @@ class TestEqCurveEngine:
         js = eq_curve_js()
         assert "draw_tooltip" in js
 
+    def test_contains_sample_rate_state(self):
+        js = eq_curve_js()
+        assert "var sample_rate = DEFAULT_SR;" in js
+        assert "if (inlet === 1)" in js
+
+    def test_contains_analyzer_support(self):
+        js = eq_curve_js()
+        assert "function draw_analyzer" in js
+        assert "function set_analyzer_enabled" in js
+        assert "if (inlet === 2)" in js
+        assert "function list()" in js
+
+    def test_contains_graph_band_management_messages(self):
+        js = eq_curve_js()
+        assert '"add_band"' in js
+        assert '"delete_band"' in js
+        assert "find_free_band" in js
+
+    def test_contains_node_menu_motion_and_dynamic_messages(self):
+        js = eq_curve_js()
+        assert "function draw_node_menu" in js
+        assert "function node_menu_hit_test" in js
+        assert "function draw_dynamic_handles" in js
+        assert "function dynamic_hit_test" in js
+        assert "function open_node_menu_for" in js
+        assert '"band_motion"' in js
+        assert '"band_dynamic"' in js
+        assert '"band_dynamic_amount"' in js
+        assert '"band_motion_rate"' in js
+        assert '"band_motion_depth"' in js
+        assert "MAX_DYNAMIC_RANGE" in js
+        assert "TYPE_SHORT_NAMES" in js
+
+    def test_contains_double_click_create_delete_and_drag_fast_path(self):
+        js = eq_curve_js()
+        assert "function create_band_at(x, y)" in js
+        assert "function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl)" in js
+        assert "function delete_band_at(idx)" in js
+        assert "var DOUBLE_CLICK_MS = 320;" in js
+        assert "var suppress_next_ondblclick_delete = 0;" in js
+        assert "delete_band_at(clicked_band);" in js
+        assert "suppress_next_ondblclick_delete = 1;" in js
+        assert "if (dynamic_hit >= 0 || hit >= 0)" in js
+        assert "create_band_at(x, y);" in js
+        assert "if (uses_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
+        assert "if (!uses_gain && new_freq === b.freq && new_q === b.q) return;" in js
+
+    def test_contains_biquad_coeffs(self):
+        js = eq_curve_js()
+        assert "function biquad_coeffs" in js
+        assert "function response_db" in js
+
+    def test_contains_allpass_type(self):
+        js = eq_curve_js()
+        assert "TYPE_ALLPASS" in js
+        assert "AllPass" in js
+
     def test_gain_range_30db(self):
         js = eq_curve_js()
-        assert "MIN_GAIN   = -30" in js
-        assert "MAX_GAIN   = 30" in js
+        assert "MIN_GAIN" in js and "= -30" in js
+        assert "MAX_GAIN" in js and "= 30" in js
+
+    def test_display_range_defaults_to_15db(self):
+        js = eq_curve_js()
+        assert "var display_range = 15.0;" in js
+        assert "if (display_range <= 15.0) return 3.0;" in js
+        assert "display_range = 15.0;" in js
+
+    def test_uses_10hz_to_22khz_frequency_range(self):
+        js = eq_curve_js()
+        assert "var MIN_FREQ      = 10;" in js
+        assert "var MAX_FREQ      = 22000;" in js
+        assert 'var FREQ_LABELS = ["10", "20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "22k"];' in js
 
     def test_no_ondragend(self):
         """ondragend does not exist in jsui — use but===0 in ondrag."""
@@ -189,6 +395,144 @@ class TestEqCurveEngine:
         """ondrag checks but === 0 for mouse release."""
         js = eq_curve_js()
         assert "but === 0" in js
+
+    def test_normalizes_cut_filter_q_on_type_change(self):
+        js = eq_curve_js()
+        assert "function apply_band_type(idx, type_idx)" in js
+        assert "if ((next_type === TYPE_LOWPASS || next_type === TYPE_HIGHPASS) && prev_type !== next_type)" in js
+        assert 'outlet(3, "band_q", idx, band_cache[idx].q);' in js
+
+    def test_contains_motion_animation_scheduler_and_redraw_throttle(self):
+        js = eq_curve_js()
+        assert "var REDRAW_INTERVAL_MS = 33;" in js
+        assert "function request_redraw()" in js
+        assert "function animation_tick()" in js
+        assert 'typeof Task !== "undefined"' in js
+        assert "refresh_animation_task();" in js
+
+    def test_supports_motion_direction_and_draws_guides(self):
+        js = eq_curve_js()
+        assert "function motion_direction_components(direction)" in js
+        assert "function draw_motion_guides()" in js
+        assert "function set_motion_direction(idx, value)" in js
+        assert 'outlet(0, "band_motion_direction", created_idx, bands[created_idx].motion_direction);' in js
+        assert "Math.cos(radians)" in js
+        assert "Math.sin(radians)" in js
+
+    def test_includes_motion_readout_in_tooltip(self):
+        js = eq_curve_js()
+        assert 'line3 += "MOT " + format_motion_rate(b.motion_rate) + "  " + format_motion_depth(b.motion_depth) + "  DIR " + Math.round(clamp_motion_direction(b.motion_direction)) + "°";' in js
+        assert "var tw = line3 ? 214 : 104;" in js
+
+    def test_draws_continuous_analyzer_fill(self):
+        js = eq_curve_js()
+        assert "analyzer_display[i] = analyzer_display[i] * 0.55 + incoming * 0.45;" in js
+        assert "mgraphics.set_line_width(1.0);" in js
+        assert "mgraphics.move_to(xs[i], ys[i]);" in js
+        assert "mgraphics.line_to(xs[i], ys[i]);" in js
+
+    def test_only_draws_individual_band_curves_for_selected_or_hovered_band(self):
+        js = eq_curve_js()
+        assert "if (i !== selected_band && i !== hover_band) continue;" in js
+
+    def test_bypass_keeps_nodes_visible_and_no_longer_calls_delete(self):
+        js = eq_curve_js()
+        assert "enabled_alpha = band_cache[i].enabled ? 1.0 : 0.26;" in js
+        assert 'line2 += "  BYPASSED";' in js
+        assert 'bands[idx].enabled = bands[idx].enabled ? 0 : 1;' in js
+        assert 'outlet(0, "band_enable", idx, bands[idx].enabled ? 1 : 0);' in js
+        assert "close_node_menu();" in js
+
+
+class TestLinearPhaseEqDisplayEngine:
+    def test_returns_string(self):
+        js = linear_phase_eq_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_inlets(self):
+        js = linear_phase_eq_display_js()
+        assert "inlets = 3;" in js
+
+    def test_declares_outlets(self):
+        js = linear_phase_eq_display_js()
+        assert "outlets = 4;" in js
+
+    def test_inlet_count_metadata(self):
+        assert LINEAR_PHASE_EQ_DISPLAY_INLETS == 3
+
+    def test_outlet_count_metadata(self):
+        assert LINEAR_PHASE_EQ_DISPLAY_OUTLETS == 4
+
+    def test_contains_quality_and_latency_handlers(self):
+        js = linear_phase_eq_display_js()
+        assert "function set_quality_mode" in js
+        assert "function set_latency_ms" in js
+        assert "QUALITY_NAMES" in js
+
+    def test_contains_redraw_throttle_for_analyzer_updates(self):
+        js = linear_phase_eq_display_js()
+        assert "var REDRAW_INTERVAL_MS = 33;" in js
+        assert "function request_redraw()" in js
+
+    def test_contains_collision_and_empty_state_support(self):
+        js = linear_phase_eq_display_js()
+        assert "function set_collision_mode" in js
+        assert "function draw_empty_state" in js
+        assert "label_overlaps" in js
+
+    def test_contains_click_add_band_and_context_menu(self):
+        js = linear_phase_eq_display_js()
+        assert "function create_band_at" in js
+        assert "function delete_band_at(idx)" in js
+        assert "function draw_dynamic_handles" in js
+        assert "function dynamic_hit_test" in js
+        assert "function pointer_context_click" in js
+        assert "function pointer_x" in js
+        assert "function pointer_y" in js
+        assert "function pointer_buttons" in js
+        assert "function onpointerdown" in js
+        assert "function onpointermove" in js
+        assert "function onpointerup" in js
+        assert "function handle_press" in js
+        assert "function handle_double_click(x, y)" in js
+        assert "function handle_drag_at" in js
+        assert "function draw_context_menu" in js
+        assert "function ensure_curve_cache" in js
+        assert "function graph_db_to_y" in js
+        assert "function draw_tooltip" in js
+        assert "curve_dirty = 1" in js
+        assert "pointerevent.contextModifier" in js
+        assert "pointerevent.x !== undefined" in js
+        assert "pointerevent.localX !== undefined" in js
+        assert "legacy mouse handlers now receive an additional pointerevent struct" not in js
+        assert "mgraphics.clip();" in js
+        assert "if (cache.uses_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
+        assert "if (!cache.uses_gain && new_freq === b.freq && new_q === b.q) return;" in js
+        assert '"context_type"' in js
+        assert '"context_dynamic"' in js
+        assert '"context_slope"' in js
+        assert '"context_solo"' in js
+        assert '"context_enable"' in js
+        assert '"band_dynamic_amount"' in js
+        assert '"Make Dynamic"' in js
+        assert '"add_band"' in js
+        assert '"delete_band"' in js
+        assert "find_free_band" in js
+        assert "handle_double_click(x, y);" in js
+
+    def test_excludes_allpass(self):
+        js = linear_phase_eq_display_js()
+        assert "AllPass" not in js
+        assert "TYPE_ALLPASS" not in js
+
+    def test_custom_badge_color(self):
+        js = linear_phase_eq_display_js(badge_color="0.1, 0.2, 0.3, 0.4")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+
+    def test_can_disable_dynamic_controls(self):
+        js = linear_phase_eq_display_js(show_dynamic=False)
+        assert "var SHOW_DYNAMIC = 0;" in js
 
 
 class TestEnvelopeDisplayEngine:
@@ -676,7 +1020,7 @@ class TestDeviceJsuiIntegration:
         """Build a device using actual EQ curve engine code."""
         d = AudioEffect("Test EQ", 400, 200)
         d.add_jsui("eq", [10, 10, 300, 120],
-                   js_code=eq_curve_js(), numinlets=1, numoutlets=3)
+                   js_code=eq_curve_js(), numinlets=3, numoutlets=4)
         with tempfile.TemporaryDirectory() as tmpdir:
             amxd_path = os.path.join(tmpdir, "TestEQ.amxd")
             d.build(amxd_path)
@@ -687,6 +1031,54 @@ class TestDeviceJsuiIntegration:
                 content = f.read()
                 assert "mgraphics" in content
                 assert "function paint()" in content
+
+    def test_spectrum_dsp_can_target_nonzero_inlet(self):
+        d = AudioEffect("Test EQ", 400, 200)
+        d.add_jsui("eq", [10, 10, 300, 120],
+                   js_code=eq_curve_js(), numinlets=3, numoutlets=4)
+        spectrum_analyzer_dsp(
+            d,
+            "eq",
+            "obj-plugin",
+            source_outlet=0,
+            num_bands=4,
+            id_prefix="spec",
+            target_inlet=2,
+            min_db=-72.0,
+            max_db=0.0,
+        )
+        patcher = d.to_patcher()
+        boxes = patcher["patcher"]["boxes"]
+        lines = patcher["patcher"]["lines"]
+        clip_texts = {box["box"].get("text", "") for box in boxes}
+        assert "clip -72.0 0.0" in clip_texts
+        assert any(
+            line["patchline"]["source"] == ["spec_group", 0]
+            and line["patchline"]["destination"] == ["eq", 2]
+            for line in lines
+        )
+
+    def test_spectrum_dsp_supports_custom_resolution(self):
+        d = AudioEffect("Test EQ", 400, 200)
+        d.add_jsui("eq", [10, 10, 300, 120],
+                   js_code=eq_curve_js(), numinlets=3, numoutlets=4)
+        spectrum_analyzer_dsp(
+            d,
+            "eq",
+            "obj-plugin",
+            source_outlet=0,
+            num_bands=8,
+            id_prefix="specx",
+            target_inlet=2,
+            peak_window=256,
+            q_min=4.0,
+            q_max=12.0,
+        )
+        patcher = d.to_patcher()
+        texts = {box["box"].get("text", "") for box in patcher["patcher"]["boxes"]}
+        assert "zl.group 8" in texts
+        assert "peakamp~ 256" in texts
+        assert any(text.startswith("reson~ ") and " 4.0 " in text for text in texts)
 
     def test_build_with_envelope_engine_code(self):
         """Build a device using actual envelope display engine code."""

@@ -160,8 +160,8 @@ var FONT_NAME = $font_name;
 var FONT_BOLD_NAME = $font_bold_name;
 
 var MAX_BANDS = 8;
-var MIN_FREQ = 20.0;
-var MAX_FREQ = 20000.0;
+var MIN_FREQ = 10.0;
+var MAX_FREQ = 22000.0;
 var MIN_GAIN = -30.0;
 var MAX_GAIN = 30.0;
 var MIN_Q = 0.1;

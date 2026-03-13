@@ -22,7 +22,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from m4l_builder import AudioEffect, MIDNIGHT, device_output_path, newobj, patchline
-from m4l_builder.engines import linear_phase_eq_display_js
+from m4l_builder.engines.eq_band_column import eq_band_column_js
+from m4l_builder.engines.linear_phase_eq_display import linear_phase_eq_display_js
 from m4l_builder.engines.spectrum_analyzer import spectrum_analyzer_dsp
 
 
@@ -39,6 +40,7 @@ QUALITY_MODES = [
     ("medium", "Medium", 4096),
     ("high", "High", 8192),
 ]
+FFT_OVERLAP = 4
 
 RESPONSE_BUFFERS = {
     "short": "lpeq_resp_short",
@@ -52,9 +54,9 @@ KERNEL_FILENAMES = {
     "high": "linear_phase_eq_high_core.maxpat",
 }
 
-STATE_FILENAME = "linear_phase_eq_state.js"
-CHIPROW_FILENAME = "linear_phase_eq_chips.js"
-DISPLAY_FILENAME = "lpeq_display_v2.js"
+STATE_FILENAME = "linear_phase_eq_state_v2.js"
+CHIPROW_FILENAME = "linear_phase_eq_chips_v2.js"
+DISPLAY_FILENAME = "lpeq_eqcurve_display_v2.js"
 
 BG = [0.05, 0.06, 0.08, 1.0]
 SURFACE = [0.08, 0.10, 0.13, 1.0]
@@ -286,7 +288,7 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
 """
 
 
-def linear_phase_state_js(buffer_names, fft_sizes) -> str:
+def linear_phase_state_js(buffer_names, fft_sizes, fft_overlap) -> str:
     """Return regular-js code for state coordination and response buffers."""
     return Template("""\
 inlets = 1;
@@ -294,8 +296,8 @@ outlets = 3;
 
 var RESPONSE_BUFFERS = $buffer_names;
 var FFT_SIZES = $fft_sizes;
+var FFT_OVERLAP = $fft_overlap;
 var TYPE_NAMES = ["Peak", "LShelf", "HShelf", "LCut", "HCut", "Notch", "BPass"];
-var DEFAULT_FREQS = [80.0, 320.0, 1800.0, 9000.0, 160.0, 640.0, 3600.0, 14000.0];
 var TYPE_PEAK = 0;
 var TYPE_LOSHELF = 1;
 var TYPE_HISHELF = 2;
@@ -303,6 +305,12 @@ var TYPE_LOWCUT = 3;
 var TYPE_HIGHCUT = 4;
 var TYPE_NOTCH = 5;
 var TYPE_BANDPASS = 6;
+var DEFAULT_FREQS = [30.0, 200.0, 1000.0, 5000.0, 3600.0, 7200.0, 12000.0, 18000.0];
+var DEFAULT_GAINS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+var DEFAULT_QS = [0.707, 1.0, 1.0, 0.707, 1.0, 1.0, 1.0, 0.707];
+var DEFAULT_TYPES = [TYPE_LOSHELF, TYPE_PEAK, TYPE_PEAK, TYPE_HISHELF, TYPE_PEAK, TYPE_PEAK, TYPE_PEAK, TYPE_HIGHCUT];
+var DEFAULT_ENABLED = [0, 0, 0, 0, 0, 0, 0, 0];
+var DEFAULT_SLOPES = [0, 0, 0, 0, 0, 0, 0, 0];
 var NUM_BANDS = 8;
 var MIN_FREQ = 10.0;
 var MAX_FREQ = 22050.0;
@@ -346,20 +354,33 @@ function slope_stage_count(slope) {
     return 1;
 }
 
+function display_type_for_band(type) {
+    if (type === TYPE_LOWCUT) return 4;
+    if (type === TYPE_HIGHCUT) return 3;
+    return type;
+}
+
+function state_type_from_display(type) {
+    type = Math.floor(type);
+    if (type === 3) return TYPE_HIGHCUT;
+    if (type === 4) return TYPE_LOWCUT;
+    return Math.floor(clamp(type, 0, TYPE_BANDPASS));
+}
+
 function reset_bands() {
     bands = [];
     for (i = 0; i < NUM_BANDS; i++) {
         bands[i] = {
             freq: DEFAULT_FREQS[i],
-            gain: 0.0,
-            q: 1.0,
-            type: TYPE_PEAK,
-            enabled: i < 4 ? 1 : 0,
-            slope: 0,
+            gain: DEFAULT_GAINS[i],
+            q: DEFAULT_QS[i],
+            type: DEFAULT_TYPES[i],
+            enabled: DEFAULT_ENABLED[i],
+            slope: DEFAULT_SLOPES[i],
             solo: 0
         };
     }
-    selected_band = 2;
+    selected_band = -1;
 }
 
 function clone_band(idx) {
@@ -560,7 +581,7 @@ function emit_graph_band(idx) {
         bands[idx].freq,
         bands[idx].gain,
         bands[idx].q,
-        bands[idx].type,
+        display_type_for_band(bands[idx].type),
         bands[idx].enabled,
         bands[idx].slope,
         bands[idx].solo
@@ -593,7 +614,7 @@ function emit_strip_state() {
     var band;
     if (selected_band < 0 || selected_band >= NUM_BANDS) {
         outlet(1, "band_label", "NO BAND");
-        outlet(1, "band_status", "Click the graph to add a band.");
+        outlet(1, "band_status", "Select a node or click the graph to add one.");
         outlet(1, "freq", 1000.0);
         outlet(1, "gain", 0.0);
         outlet(1, "q", 1.0);
@@ -621,7 +642,10 @@ function emit_strip_state() {
 }
 
 function current_latency_ms() {
-    return (FFT_SIZES[quality_mode] * 0.5 / Math.max(sample_rate, 1.0)) * 1000.0;
+    var fftSize, hopSize;
+    fftSize = FFT_SIZES[quality_mode];
+    hopSize = fftSize / Math.max(FFT_OVERLAP, 1.0);
+    return ((fftSize - hopSize) / Math.max(sample_rate, 1.0)) * 1000.0;
 }
 
 function response_buffer_for(qIndex) {
@@ -725,8 +749,10 @@ function add_band_from_graph(idx, freq, gain, q, type, enabled, slope, solo) {
     bands[idx].freq = clamp(freq, 20.0, 20000.0);
     bands[idx].gain = clamp(gain, MIN_GAIN, MAX_GAIN);
     bands[idx].q = clamp(q, MIN_Q, MAX_Q);
-    bands[idx].type = Math.floor(type);
+    bands[idx].type = state_type_from_display(type);
     bands[idx].enabled = enabled ? 1 : 0;
+    if (slope === undefined) slope = 0;
+    if (solo === undefined) solo = 0;
     bands[idx].slope = Math.floor(clamp(slope, 0, 2));
     bands[idx].solo = solo ? 1 : 0;
     commit_band(idx, 1);
@@ -758,7 +784,7 @@ function set_selected_param(name, value) {
     } else if (name === "q") {
         bands[selected_band].q = clamp(value, MIN_Q, MAX_Q);
     } else if (name === "type") {
-        bands[selected_band].type = Math.floor(clamp(value, 0, TYPE_BANDPASS));
+        bands[selected_band].type = state_type_from_display(value);
     } else if (name === "slope") {
         bands[selected_band].slope = Math.floor(clamp(value, 0, 2));
     } else if (name === "enable") {
@@ -817,7 +843,7 @@ function anything() {
             if (args.length > 0) set_selected_band(args[0]);
             return;
         case "add_band":
-            if (args.length >= 8) {
+            if (args.length >= 6) {
                 add_band_from_graph(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
             } else {
                 add_default_band();
@@ -913,10 +939,11 @@ function anything() {
 """).substitute(
         buffer_names=json.dumps([buffer_names["short"], buffer_names["medium"], buffer_names["high"]]),
         fft_sizes=json.dumps([fft_sizes["short"], fft_sizes["medium"], fft_sizes["high"]]),
+        fft_overlap=json.dumps(fft_overlap),
     )
 
 
-device = AudioEffect("Linear Phase EQ", width=752, height=188, theme=MIDNIGHT)
+device = AudioEffect("Linear Phase EQ", width=752, height=176, theme=MIDNIGHT)
 
 for slug, _, fft_size in QUALITY_MODES:
     device.add_support_file(
@@ -930,49 +957,50 @@ device.add_support_file(
     linear_phase_state_js(
         RESPONSE_BUFFERS,
         {slug: fft_size for slug, _, fft_size in QUALITY_MODES},
+        FFT_OVERLAP,
     ),
 )
 
 # ---------------------------------------------------------------------------
 # UI shell
 # ---------------------------------------------------------------------------
-device.add_panel("bg", [0, 0, 752, 188], bgcolor=BG)
-device.add_panel("hero_frame", [8, 8, 736, 148], bgcolor=[0.05, 0.05, 0.06, 1.0],
+device.add_panel("bg", [0, 0, 752, 176], bgcolor=BG)
+device.add_panel("hero_frame", [8, 8, 736, 136], bgcolor=[0.05, 0.05, 0.06, 1.0],
                  border=1, bordercolor=BORDER, rounded=8)
-device.add_panel("chips_frame", [8, 160, 736, 20], bgcolor=SURFACE,
+device.add_panel("chips_frame", [8, 148, 550, 20], bgcolor=SURFACE,
                  border=1, bordercolor=BORDER, rounded=6)
 
-device.add_comment("strip_band_label", [356, 163, 58, 10], "NO BAND",
+device.add_comment("strip_band_label", [900, 151, 58, 10], "NO BAND",
                    fontname="Ableton Sans Bold", fontsize=6.8, textcolor=TEXT)
-device.add_comment("freq_caption", [414, 163, 8, 8], "F",
+device.add_comment("freq_caption", [900, 151, 8, 8], "F",
                    fontsize=6.0, textcolor=TEXT_DIM)
-device.add_number_box("selected_freq", "Selected Freq", [422, 160, 62, 16],
+device.add_number_box("selected_freq", "Selected Freq", [900, 148, 62, 16],
                       min_val=20.0, max_val=20000.0, initial=1000.0,
                       unitstyle=3, patching_rect=[700, 130, 70, 16], fontsize=7.2)
-device.add_comment("gain_caption", [482, 163, 8, 8], "G",
+device.add_comment("gain_caption", [900, 151, 8, 8], "G",
                    fontsize=6.0, textcolor=TEXT_DIM)
-device.add_number_box("selected_gain", "Selected Gain", [490, 160, 46, 16],
+device.add_number_box("selected_gain", "Selected Gain", [900, 148, 46, 16],
                       min_val=-30.0, max_val=30.0, initial=0.0,
                       unitstyle=4, patching_rect=[700, 160, 52, 16], fontsize=7.2)
-device.add_comment("q_caption", [534, 163, 8, 8], "Q",
+device.add_comment("q_caption", [900, 151, 8, 8], "Q",
                    fontsize=6.0, textcolor=TEXT_DIM)
-device.add_number_box("selected_q", "Selected Q", [542, 160, 38, 16],
+device.add_number_box("selected_q", "Selected Q", [900, 148, 38, 16],
                       min_val=0.1, max_val=30.0, initial=1.0,
                       unitstyle=1, patching_rect=[700, 190, 44, 16], fontsize=7.2)
-device.add_live_text("selected_enable", "Selected Enable", [648, 160, 40, 16],
+device.add_live_text("selected_enable", "Selected Enable", [900, 148, 40, 16],
                      text_on="ON", text_off="BYP",
                      bgcolor=ACCENT_SOFT, bgoncolor=[0.26, 0.78, 0.52, 1.0],
                      textcolor=TEXT_DIM, textoncolor=[0.04, 0.06, 0.08, 1.0],
                      rounded=5, fontsize=6.2)
-device.add_live_text("selected_solo", "Selected Solo", [692, 160, 48, 16],
+device.add_live_text("selected_solo", "Selected Solo", [900, 148, 48, 16],
                      text_on="LISTEN", text_off="LISTEN",
                      bgcolor=ACCENT_SOFT, bgoncolor=[0.90, 0.74, 0.24, 1.0],
                      textcolor=TEXT_DIM, textoncolor=[0.04, 0.06, 0.08, 1.0],
                      rounded=5, fontsize=6.0)
 
-device.add_comment("lbl_quality", [150, 163, 8, 8], "Q",
+device.add_comment("lbl_quality", [150, 151, 8, 8], "Q",
                    fontsize=5.8, textcolor=TEXT_DIM)
-device.add_tab("quality_tab", "Quality", [158, 160, 52, 16], options=QUALITY_OPTIONS,
+device.add_tab("quality_tab", "Quality", [158, 148, 52, 16], options=QUALITY_OPTIONS,
                bgcolor=ACCENT_SOFT, bgoncolor=[0.24, 0.30, 0.38, 1.0],
                textcolor=TEXT_DIM, textoncolor=[0.04, 0.05, 0.07, 1.0], rounded=4, spacing_x=1.0,
                saved_attribute_attributes={
@@ -988,9 +1016,9 @@ device.add_tab("quality_tab", "Quality", [158, 160, 52, 16], options=QUALITY_OPT
                    }
                    })
 
-device.add_comment("lbl_analyzer", [222, 163, 8, 8], "A",
+device.add_comment("lbl_analyzer", [222, 151, 8, 8], "A",
                    fontsize=5.8, textcolor=TEXT_DIM)
-device.add_tab("analyzer_tab", "Analyzer", [230, 160, 56, 16], options=ANALYZER_OPTIONS,
+device.add_tab("analyzer_tab", "Analyzer", [230, 148, 56, 16], options=ANALYZER_OPTIONS,
                bgcolor=ACCENT_SOFT, bgoncolor=[ANALYZER[0], ANALYZER[1], ANALYZER[2], 1.0],
                textcolor=TEXT_DIM, textoncolor=[0.04, 0.05, 0.07, 1.0],
                rounded=4, spacing_x=1.0,
@@ -1007,9 +1035,9 @@ device.add_tab("analyzer_tab", "Analyzer", [230, 160, 56, 16], options=ANALYZER_
                    }
                    })
 
-device.add_comment("lbl_range", [294, 163, 8, 8], "R",
+device.add_comment("lbl_range", [294, 151, 8, 8], "R",
                    fontsize=5.8, textcolor=TEXT_DIM)
-device.add_tab("range_tab", "Range", [302, 160, 44, 16], options=RANGE_OPTIONS,
+device.add_tab("range_tab", "Range", [302, 148, 44, 16], options=RANGE_OPTIONS,
                bgcolor=ACCENT_SOFT, bgoncolor=[0.24, 0.30, 0.38, 1.0],
                textcolor=TEXT_DIM, textoncolor=[0.04, 0.05, 0.07, 1.0], rounded=4, spacing_x=1.0,
                saved_attribute_attributes={
@@ -1063,8 +1091,11 @@ device.add_tab("collision_tab", "Collision", [900, 160, 8, 8], options=COLLISION
                    }
                })
 
-device.add_comment("latency_readout", [586, 163, 56, 10], "46.4 ms",
+device.add_comment("latency_readout", [150, 151, 56, 10], "64.0 ms",
                    fontsize=6.0, textcolor=TEXT_DIM, justification=1)
+device.add_number_box("output_gain_compact", "Output Gain Compact", [214, 148, 70, 16],
+                      min_val=-24.0, max_val=24.0, initial=0.0,
+                      unitstyle=4, patching_rect=[700, 260, 52, 16], fontsize=7.0)
 
 device.add_box({
     "box": {
@@ -1082,45 +1113,76 @@ device.add_box({
         "logamp": 1,
         "domain": [20.0, 20000.0],
         "bgcolor": [0.05, 0.06, 0.07, 0.0],
-        "fgcolor": [0.32, 0.92, 1.0, 0.12],
+        "fgcolor": [0.32, 0.92, 1.0, 0.62],
         "markercolor": [0.62, 0.62, 0.62, 0.0],
-        "patching_rect": [10, 30, 728, 142],
-        "presentation": 0,
+        "patching_rect": [10, 30, 646, 130],
+        "presentation": 1,
+        "presentation_rect": [12, 10, 646, 130],
     }
 })
 
 device.add_jsui(
     "lpeq_display",
-    [12, 10, 728, 142],
+    [12, 10, 646, 130],
     js_code=linear_phase_eq_display_js(
         bg_color="0.05, 0.06, 0.07, 0.0",
-        composite_color="0.95, 0.97, 1.0, 1.0",
-        fill_color="0.42, 0.74, 0.94, 0.10",
-        analyzer_fill_color="0.24, 0.84, 0.98, 0.02",
-        analyzer_line_color="0.40, 0.94, 1.0, 0.18",
-        analyzer_peak_color="0.96, 0.98, 1.0, 0.0",
+        composite_color="0.86, 0.92, 0.98, 0.03",
+        fill_color="0.32, 0.56, 0.72, 0.0",
+        analyzer_fill_color="0.24, 0.84, 0.98, 0.10",
+        analyzer_line_color="0.40, 0.94, 1.0, 0.28",
+        analyzer_peak_color="0.96, 0.98, 1.0, 0.14",
         grid_color="0.18, 0.20, 0.25, 0.64",
         text_color="0.48, 0.52, 0.58, 1.0",
         zero_line_color="0.34, 0.37, 0.42, 0.94",
         badge_color="0.10, 0.12, 0.15, 0.92",
         badge_border_color="0.25, 0.28, 0.34, 1.0",
+        show_dynamic=False,
     ),
     js_filename=DISPLAY_FILENAME,
     numinlets=3,
     numoutlets=4,
     outlettype=["", "", "", ""],
-    patching_rect=[10, 30, 728, 142],
+    patching_rect=[10, 30, 646, 130],
+    bgcolor=[0.0, 0.0, 0.0, 0.0],
+    border=0,
+    background=0,
 )
 
 device.add_jsui(
-    "band_chip_row",
-    [12, 163, 132, 14],
-    js_code=band_chip_row_js(),
-    js_filename=CHIPROW_FILENAME,
+    "selected_band_column",
+    [668, 10, 68, 130],
+    js_code=eq_band_column_js(
+        title="SELECTED BAND",
+        subtitle="Mastering-side controls",
+        type_names=TYPE_OPTIONS,
+        gain_enabled_types=[0, 1, 2],
+        slope_enabled_types=[3, 4],
+        show_slope=False,
+        show_solo=False,
+        show_type_controls=False,
+        show_toggle_stack=False,
+        show_header=False,
+        show_frame=False,
+        force_regular_layout=True,
+        bg_color="0.0, 0.0, 0.0, 0.0",
+        panel_color="0.08, 0.09, 0.11, 1.0",
+        border_color="0.18, 0.20, 0.24, 1.0",
+        text_color="0.92, 0.95, 1.0, 1.0",
+        text_dim_color="0.46, 0.50, 0.58, 1.0",
+        accent_color="0.86, 0.90, 0.98, 1.0",
+        knob_fill_color="0.12, 0.14, 0.18, 1.0",
+        knob_track_color="0.21, 0.24, 0.30, 1.0",
+        disabled_color="0.22, 0.24, 0.28, 1.0",
+        enable_color="0.28, 0.82, 0.56, 1.0",
+        solo_color="0.92, 0.76, 0.24, 1.0",
+    ),
     numinlets=1,
     numoutlets=1,
     outlettype=[""],
-    patching_rect=[10, 320, 132, 20],
+    bgcolor=[0.0, 0.0, 0.0, 0.0],
+    border=0,
+    background=0,
+    patching_rect=[10, 190, 166, 148],
 )
 
 # ---------------------------------------------------------------------------
@@ -1190,7 +1252,7 @@ for route_id, target_id, patch_x in [
     device.add_line(route_id, 0, target_id, 0)
 
 device.add_line("state_js", 0, "lpeq_display", 0)
-device.add_line("state_js", 2, "band_chip_row", 0)
+device.add_line("state_js", 0, "selected_band_column", 0)
 
 device.add_newobj("prepend_quality", "prepend set_quality", numinlets=1, numoutlets=1,
                   outlettype=[""], patching_rect=[20, 620, 110, 20])
@@ -1362,7 +1424,60 @@ for control_id, message_name, patch_x in [
     device.add_line(control_id, 0, prepend_id, 0)
     device.add_line(prepend_id, 0, "state_js", 0)
 
-device.add_line("band_chip_row", 0, "state_js", 0)
+device.add_newobj("route_column_freq", "route band_freq", numinlets=1, numoutlets=2,
+                  outlettype=["", ""], patching_rect=[840, 730, 100, 20])
+device.add_newobj("route_column_gain", "route band_gain", numinlets=1, numoutlets=2,
+                  outlettype=["", ""], patching_rect=[840, 756, 100, 20])
+device.add_newobj("route_column_q", "route band_q", numinlets=1, numoutlets=2,
+                  outlettype=["", ""], patching_rect=[840, 782, 90, 20])
+device.add_newobj("route_column_type", "route band_type", numinlets=1, numoutlets=2,
+                  outlettype=["", ""], patching_rect=[840, 808, 100, 20])
+device.add_newobj("route_column_slope", "route band_slope", numinlets=1, numoutlets=2,
+                  outlettype=["", ""], patching_rect=[840, 834, 108, 20])
+device.add_newobj("route_column_enable", "route band_enable", numinlets=1, numoutlets=2,
+                  outlettype=["", ""], patching_rect=[840, 860, 116, 20])
+device.add_newobj("route_column_solo", "route band_solo", numinlets=1, numoutlets=2,
+                  outlettype=["", ""], patching_rect=[840, 886, 104, 20])
+
+device.add_newobj("unpack_column_freq", "unpack i f", numinlets=1, numoutlets=2,
+                  outlettype=["int", "float"], patching_rect=[960, 730, 70, 20])
+device.add_newobj("unpack_column_gain", "unpack i f", numinlets=1, numoutlets=2,
+                  outlettype=["int", "float"], patching_rect=[960, 756, 70, 20])
+device.add_newobj("unpack_column_q", "unpack i f", numinlets=1, numoutlets=2,
+                  outlettype=["int", "float"], patching_rect=[960, 782, 70, 20])
+device.add_newobj("unpack_column_type", "unpack i i", numinlets=1, numoutlets=2,
+                  outlettype=["int", "int"], patching_rect=[960, 808, 70, 20])
+device.add_newobj("unpack_column_slope", "unpack i i", numinlets=1, numoutlets=2,
+                  outlettype=["int", "int"], patching_rect=[960, 834, 70, 20])
+device.add_newobj("unpack_column_enable", "unpack i i", numinlets=1, numoutlets=2,
+                  outlettype=["int", "int"], patching_rect=[960, 860, 70, 20])
+device.add_newobj("unpack_column_solo", "unpack i i", numinlets=1, numoutlets=2,
+                  outlettype=["int", "int"], patching_rect=[960, 886, 70, 20])
+
+device.add_line("selected_band_column", 0, "route_column_freq", 0)
+device.add_line("selected_band_column", 0, "route_column_gain", 0)
+device.add_line("selected_band_column", 0, "route_column_q", 0)
+device.add_line("selected_band_column", 0, "route_column_type", 0)
+device.add_line("selected_band_column", 0, "route_column_slope", 0)
+device.add_line("selected_band_column", 0, "route_column_enable", 0)
+device.add_line("selected_band_column", 0, "route_column_solo", 0)
+
+device.add_line("route_column_freq", 0, "unpack_column_freq", 0)
+device.add_line("route_column_gain", 0, "unpack_column_gain", 0)
+device.add_line("route_column_q", 0, "unpack_column_q", 0)
+device.add_line("route_column_type", 0, "unpack_column_type", 0)
+device.add_line("route_column_slope", 0, "unpack_column_slope", 0)
+device.add_line("route_column_enable", 0, "unpack_column_enable", 0)
+device.add_line("route_column_solo", 0, "unpack_column_solo", 0)
+
+device.add_line("unpack_column_freq", 1, "selected_freq", 0)
+device.add_line("unpack_column_gain", 1, "selected_gain", 0)
+device.add_line("unpack_column_q", 1, "selected_q", 0)
+device.add_line("unpack_column_type", 1, "selected_type", 0)
+device.add_line("unpack_column_slope", 1, "selected_slope", 0)
+device.add_line("unpack_column_enable", 1, "selected_enable", 0)
+device.add_line("unpack_column_solo", 1, "selected_solo", 0)
+
 device.add_line("lpeq_display", 0, "state_js", 0)
 device.add_line("lpeq_display", 1, "state_js", 0)
 device.add_line("lpeq_display", 2, "state_js", 0)
@@ -1379,7 +1494,7 @@ for slug, _, fft_size in QUALITY_MODES:
 for slug, _, fft_size in QUALITY_MODES:
     pfft_id = f"pfft_{slug}"
     filename = KERNEL_FILENAMES[slug].replace(".maxpat", "")
-    device.add_newobj(pfft_id, f"pfft~ {filename} {fft_size} 4",
+    device.add_newobj(pfft_id, f"pfft~ {filename} {fft_size} {FFT_OVERLAP}",
                       numinlets=2, numoutlets=2, outlettype=["signal", "signal"],
                       patching_rect=[220, 780 + QUALITY_MODES.index((slug, _, fft_size)) * 28, 180, 20])
     device.add_line("obj-plugin", 0, pfft_id, 0)
@@ -1410,10 +1525,15 @@ device.add_newobj("out_mul_r", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[856, 780, 44, 20])
 
 device.add_line("output_gain", 0, "out_dbtoa", 0)
+device.add_line("output_gain_compact", 0, "output_gain", 0)
 device.add_line("out_dbtoa", 0, "out_gain_pack", 0)
 device.add_line("out_gain_pack", 0, "out_gain_line", 0)
 device.add_line("out_gain_line", 0, "out_mul_l", 1)
 device.add_line("out_gain_line", 0, "out_mul_r", 1)
+device.add_newobj("prepend_set_output_gain_compact", "prepend set", numinlets=1, numoutlets=1,
+                  outlettype=[""], patching_rect=[908, 780, 84, 20])
+device.add_line("output_gain", 0, "prepend_set_output_gain_compact", 0)
+device.add_line("prepend_set_output_gain_compact", 0, "output_gain_compact", 0)
 device.add_line("quality_sel_l", 0, "out_mul_l", 0)
 device.add_line("quality_sel_r", 0, "out_mul_r", 0)
 device.add_line("out_mul_l", 0, "obj-plugout", 0)

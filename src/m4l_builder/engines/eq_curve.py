@@ -136,8 +136,8 @@ var TYPE_ALLPASS  = 7;
 var TYPE_NAMES = ["Peak", "LShelf", "HShelf", "LP", "HP", "Notch", "BP", "AllPass"];
 var TYPE_SHORT_NAMES = ["PK", "LS", "HS", "LP", "HP", "NT", "BP", "AP"];
 // ── Constants ────────────────────────────────────────────────────────
-var MIN_FREQ      = 20;
-var MAX_FREQ      = 20000;
+var MIN_FREQ      = 10;
+var MAX_FREQ      = 22000;
 var MIN_GAIN      = -30;
 var MAX_GAIN      = 30;
 var DISPLAY_FLOOR = -30;
@@ -776,8 +776,8 @@ function paint() {
 }
 
 // ── Grid ─────────────────────────────────────────────────────────────
-var FREQ_LINES  = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
-var FREQ_LABELS = ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"];
+var FREQ_LINES  = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 22000];
+var FREQ_LABELS = ["10", "20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "22k"];
 function gain_grid_step() {
     if (display_range <= 15.0) return 3.0;
     if (display_range <= 18.0) return 3.0;
