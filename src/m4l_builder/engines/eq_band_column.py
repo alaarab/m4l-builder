@@ -289,10 +289,10 @@ function knob_defs(band) {
     var center_x = SHOW_TYPE_CONTROLS ? Math.floor(w * 0.5) : (SHOW_TOGGLE_STACK ? Math.floor(w * 0.41) : Math.floor(w * 0.5));
     var motion_pad = 0;
     if (uses_minimal_rail_layout()) {
-        var slim_radius = Math.max(17, Math.min(20, Math.floor(Math.min(w * 0.31, h * 0.145))));
-        var slim_top_y = 8 + slim_radius;
+        var slim_radius = Math.max(15, Math.min(17, Math.floor(Math.min(w * 0.27, h * 0.125))));
+        var slim_top_y = 11 + slim_radius;
         var slim_middle_y = Math.floor(h * 0.50);
-        var slim_lower_y = h - slim_radius - 10;
+        var slim_lower_y = h - slim_radius - 12;
         return [
             {key: "freq",  label: "FREQ", cx: center_x, cy: slim_top_y, radius: slim_radius},
             {key: "gain",  label: "GAIN", cx: center_x, cy: slim_middle_y, radius: slim_radius},
@@ -615,19 +615,19 @@ function draw_knob(knob, info) {
 
     draw_label(
         knob.cx,
-        knob.cy - knob.radius - (minimal ? 2 : (compact ? 4 : 5)),
+        knob.cy - knob.radius - (minimal ? 1 : (compact ? 4 : 5)),
         knob_label(info, compact && !minimal),
         label_color,
-        minimal ? 6.2 : (compact ? 5.1 : 5.8),
+        minimal ? 6.8 : (compact ? 5.1 : 5.8),
         1,
         1
     );
     draw_label(
         knob.cx,
-        knob.cy + knob.radius + (minimal ? 8 : (compact ? 9 : 11)),
+        knob.cy + knob.radius + (minimal ? 7 : (compact ? 9 : 11)),
         format_value(info),
         info.disabled ? TEXT_DIM_COLOR : TEXT_COLOR,
-        minimal ? 6.9 : (compact ? 5.2 : 6.4),
+        minimal ? 7.5 : (compact ? 5.2 : 6.4),
         0,
         1
     );
