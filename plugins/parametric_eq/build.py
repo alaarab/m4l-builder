@@ -155,9 +155,6 @@ device.add_panel("bg", [0, 0, 780, 176])
 device.add_panel("hero_frame", [12, 6, GRAPH_WIDTH, 162],
                  bgcolor=GRAPH_BG, border=1,
                  bordercolor=GRAPH_BORDER, rounded=8)
-device.add_panel("detail_frame", [DETAIL_X, 6, DETAIL_WIDTH, 162],
-                 bgcolor=SURFACE_ALT, border=1,
-                 bordercolor=RAIL_BORDER, rounded=8)
 device.add_panel("bands_bg", [900, 900, 1, 1],
                  bgcolor=SURFACE, border=1,
                  bordercolor=RAIL_BORDER, rounded=8)
@@ -226,7 +223,7 @@ device.add_jsui(
 
 device.add_jsui(
     "selected_band_column",
-    [DETAIL_X + 3, 8, 68, 160],
+    [DETAIL_X, 6, DETAIL_WIDTH, 162],
     js_code=eq_band_column_js(
         title="SELECTED BAND",
         subtitle="Focus follows graph selection",

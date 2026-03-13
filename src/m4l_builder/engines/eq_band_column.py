@@ -721,7 +721,7 @@ function paint() {
         fill_round_rect(0, 0, w, h, 8, BG_COLOR, 1.0);
         fill_round_rect(1, 1, w - 2, h - 2, 8, PANEL_COLOR, 1.0);
         stroke_round_rect(1, 1, w - 2, h - 2, 8, BORDER_COLOR, 1.0, 1.0);
-    } else {
+    } else if (!uses_minimal_rail_layout()) {
         fill_round_rect(0, 0, w, h, 0, BG_COLOR, 1.0);
     }
 
