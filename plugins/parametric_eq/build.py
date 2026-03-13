@@ -105,7 +105,7 @@ RAIL_MOTION = mix(ACCENT, TEXT, 0.20)
 DYNAMIC_COLOR = list(theme.meter_warm)
 BYPASS_COLOR = [0.74, 0.32, 0.32, 1.0]
 TEXT_ON_DARK = [0.05, 0.05, 0.06, 1.0]
-GRAPH_WIDTH = 676
+GRAPH_WIDTH = 756
 DETAIL_WIDTH = 74
 DETAIL_X = 694
 
@@ -191,7 +191,7 @@ device.add_box({
         "scroll": 0,
         "sono": 0,
         "logamp": 1,
-        "domain": [20.0, 20000.0],
+        "domain": [10.0, 22000.0],
         "bgcolor": [GRAPH_BG[0], GRAPH_BG[1], GRAPH_BG[2], 0.0],
         "fgcolor": [GRAPH_ANALYZER[0], GRAPH_ANALYZER[1], GRAPH_ANALYZER[2], 0.58],
         "markercolor": [TEXT_DIM[0], TEXT_DIM[1], TEXT_DIM[2], 0.0],
@@ -219,6 +219,9 @@ device.add_jsui(
     numoutlets=EQ_CURVE_OUTLETS,
     outlettype=[""] * EQ_CURVE_OUTLETS,
     patching_rect=[10, 30, 668, 158],
+    bgcolor=alpha(BG, 0.0),
+    border=0,
+    background=0,
 )
 
 device.add_jsui(
@@ -257,6 +260,9 @@ device.add_jsui(
     numinlets=1,
     numoutlets=1,
     outlettype=[""],
+    bgcolor=alpha(BG, 0.0),
+    border=0,
+    background=0,
     patching_rect=[10, 260, 92, 154],
 )
 
@@ -303,7 +309,7 @@ for i, bx in enumerate(BAND_X):
 
     device.add_dial(f"freq_b{i}", f"Freq B{lbl}",
                     [bx + 6, CARD_Y + 34, 30, 40],
-                    min_val=20.0, max_val=20000.0, initial=default_freq,
+                    min_val=10.0, max_val=22000.0, initial=default_freq,
                     unitstyle=3, appearance=1, parameter_exponent=3.0,
                     activedialcolor=bc, showname=0, shownumber=0,
                     annotation_name=f"Band {lbl} Frequency")
