@@ -1097,30 +1097,6 @@ device.add_number_box("output_gain_compact", "Output Gain Compact", [214, 148, 7
                       min_val=-24.0, max_val=24.0, initial=0.0,
                       unitstyle=4, patching_rect=[700, 260, 52, 16], fontsize=7.0)
 
-device.add_box({
-    "box": {
-        "id": "lpeq_spectroscope",
-        "maxclass": "spectroscope~",
-        "numinlets": 2,
-        "numoutlets": 1,
-        "outlettype": [""],
-        "background": 1,
-        "ignoreclick": 1,
-        "logfreq": 1,
-        "interval": 20,
-        "scroll": 0,
-        "sono": 0,
-        "logamp": 1,
-        "domain": [20.0, 20000.0],
-        "bgcolor": [0.05, 0.06, 0.07, 0.0],
-        "fgcolor": [0.32, 0.92, 1.0, 0.62],
-        "markercolor": [0.62, 0.62, 0.62, 0.0],
-        "patching_rect": [10, 30, 646, 130],
-        "presentation": 1,
-        "presentation_rect": [12, 10, 646, 130],
-    }
-})
-
 device.add_jsui(
     "lpeq_display",
     [12, 10, 646, 130],
@@ -1128,8 +1104,8 @@ device.add_jsui(
         bg_color="0.05, 0.06, 0.07, 0.0",
         composite_color="0.86, 0.92, 0.98, 0.03",
         fill_color="0.32, 0.56, 0.72, 0.0",
-        analyzer_fill_color="0.24, 0.84, 0.98, 0.10",
-        analyzer_line_color="0.40, 0.94, 1.0, 0.28",
+        analyzer_fill_color="0.24, 0.84, 0.98, 0.08",
+        analyzer_line_color="0.40, 0.94, 1.0, 0.20",
         analyzer_peak_color="0.96, 0.98, 1.0, 0.14",
         grid_color="0.18, 0.20, 0.25, 0.64",
         text_color="0.48, 0.52, 0.58, 1.0",
@@ -1569,7 +1545,6 @@ device.add_line("msg_analyzer_off", 0, "analyzer_gain_pack", 0)
 device.add_line("msg_analyzer_on", 0, "analyzer_gain_pack", 0)
 device.add_line("analyzer_gain_pack", 0, "analyzer_gain_line", 0)
 device.add_line("analyzer_gain_line", 0, "analyzer_gate", 1)
-device.add_line("analyzer_gate", 0, "lpeq_spectroscope", 0)
 spectrum_analyzer_dsp(
     device,
     "lpeq_display",

@@ -732,10 +732,15 @@ function draw_grid() {
 }
 
 function draw_analyzer() {
-    var n, x, y;
+    var n, x, y, peak_db;
     if (!analyzer_enabled) return;
     n = analyzer_display.length;
     if (n < 2) return;
+    peak_db = ANALYZER_MIN_DB;
+    for (i = 0; i < n; i++) {
+        if (analyzer_display[i] > peak_db) peak_db = analyzer_display[i];
+    }
+    if (peak_db <= ANALYZER_MIN_DB + 1.0) return;
 
     mgraphics.set_source_rgba(ANALYZER_FILL_CLR);
     mgraphics.move_to(freq_to_x(analyzer_bin_freq(0, n)), plot_bottom());
