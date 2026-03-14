@@ -2,7 +2,7 @@
 
 from m4l_builder.ui import (panel, dial, tab, toggle, comment, scope, meter,
                              menu, number_box, slider, button, live_text, fpic,
-                             live_gain, multislider, jsui, adsrui, live_drop,
+                             live_gain, multislider, jsui, v8ui, adsrui, live_drop,
                              bpatcher, swatch, textedit, live_step, live_grid,
                              live_line, live_arrows, rslider, kslider,
                              textbutton, umenu, radiogroup, nodes, matrixctrl,
@@ -278,6 +278,13 @@ class TestTab:
         result = tab("t-1", "mode", [0, 0, 200, 30], options=["sine", "saw", "square"])
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_enum"] == ["sine", "saw", "square"]
+
+    def test_parameter_mmax_matches_last_option_index(self):
+        result = tab("t-1", "mode", [0, 0, 200, 30], options=["A", "B", "C", "D"])
+        valueof = result["box"]["saved_attribute_attributes"]["valueof"]
+        assert valueof["parameter_mmin"] == 0
+        assert valueof["parameter_mmax"] == 3
+        assert valueof["parameter_initial"] == [0]
 
     def test_num_lines_patching_is_1(self):
         options = ["A", "B", "C", "D"]
@@ -740,6 +747,13 @@ class TestMenu:
         result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["sine", "saw", "square"])
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_enum"] == ["sine", "saw", "square"]
+
+    def test_parameter_mmax_matches_last_option_index(self):
+        result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B", "C"])
+        valueof = result["box"]["saved_attribute_attributes"]["valueof"]
+        assert valueof["parameter_mmin"] == 0
+        assert valueof["parameter_mmax"] == 2
+        assert valueof["parameter_initial"] == [0]
 
     def test_saved_attribute_attributes_present(self):
         result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B"])
@@ -1319,6 +1333,28 @@ class TestJsui:
         result = jsui("test", [0, 0, 200, 80], js_filename="test.js",
                       patching_rect=[50, 50, 100, 40])
         assert result["box"]["patching_rect"] == [50, 50, 100, 40]
+
+
+class TestV8ui:
+    """Tests for v8ui() UI function."""
+
+    def test_maxclass_is_v8ui(self):
+        result = v8ui("test", [0, 0, 200, 80], js_filename="test.js")
+        assert result["box"]["maxclass"] == "v8ui"
+
+    def test_filename_set(self):
+        result = v8ui("test", [0, 0, 200, 80], js_filename="my_engine.js")
+        assert result["box"]["filename"] == "my_engine.js"
+
+    def test_textfile_metadata_set(self):
+        result = v8ui("test", [0, 0, 200, 80], js_filename="engine.js")
+        assert result["box"]["textfile"]["filename"] == "engine.js"
+        assert result["box"]["textfile"]["autowatch"] == 1
+
+    def test_presentation_mode(self):
+        result = v8ui("test", [10, 20, 200, 80], js_filename="test.js")
+        assert result["box"]["presentation"] == 1
+        assert result["box"]["presentation_rect"] == [10, 20, 200, 80]
 
 
 class TestAdsrui:

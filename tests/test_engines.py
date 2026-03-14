@@ -345,6 +345,35 @@ class TestEqCurveEngine:
         assert "MAX_DYNAMIC_RANGE" in js
         assert "TYPE_SHORT_NAMES" in js
 
+    def test_supports_pointer_context_clicks_for_node_menu(self):
+        js = eq_curve_js()
+        assert "function pointer_middle_click(pointerevent, but)" in js
+        assert "pointerevent.button !== undefined && pointerevent.button === 1" in js
+        assert "pointerevent.buttons !== undefined && (pointerevent.buttons & 4) !== 0" in js
+        assert "if ((but & 4) !== 0) return 1;" in js
+        assert "function pointer_context_click(pointerevent, but, ctrl)" in js
+        assert "pointerevent.button !== undefined && pointerevent.button === 2" in js
+        assert "pointerevent.buttons !== undefined && (pointerevent.buttons & 2) !== 0" in js
+        assert "if ((but & 2) !== 0) return 1;" in js
+        assert "return ctrl ? 1 : 0;" in js
+        assert "function pointer_x(pointerevent, fallback)" in js
+        assert "function pointer_y(pointerevent, fallback)" in js
+        assert "function pointer_buttons(pointerevent, fallback)" in js
+        assert "function note_pointer_press(x, y)" in js
+        assert "function should_ignore_pointer_click(x, y)" in js
+        assert "function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent)" in js
+        assert "var middle_click = pointer_middle_click(pointerevent, but);" in js
+        assert "var context_click = pointer_context_click(pointerevent, but, ctrl);" in js
+        assert "if (middle_click) {" in js
+        assert "if (context_click) {" in js
+        assert "if (dynamic_hit >= 0 || hit >= 0) {" in js
+        assert "open_node_menu_for(selected_band, x, y);" in js
+        assert "if (should_ignore_pointer_click(x, y)) return;" in js
+        assert "function onpointerdown(pointerevent)" in js
+        assert "function onpointermove(pointerevent)" in js
+        assert "function onpointerup(pointerevent)" in js
+        assert "function onpointerleave(pointerevent)" in js
+
     def test_contains_double_click_create_delete_and_drag_fast_path(self):
         js = eq_curve_js()
         assert "function create_band_at(x, y)" in js
@@ -467,8 +496,14 @@ class TestLinearPhaseEqDisplayEngine:
     def test_contains_quality_and_latency_handlers(self):
         js = linear_phase_eq_display_js()
         assert "function set_quality_mode" in js
+        assert "function set_analyzer_mode" in js
         assert "function set_latency_ms" in js
+        assert "draw_hud();" in js
         assert "QUALITY_NAMES" in js
+        assert "ANALYZER_MODE_NAMES" in js
+        assert "RANGE_VALUES" in js
+        assert "var RANGE_VALUES = [15.0];" in js
+        assert "var display_range = 15.0;" in js
 
     def test_contains_redraw_throttle_for_analyzer_updates(self):
         js = linear_phase_eq_display_js()
@@ -485,6 +520,8 @@ class TestLinearPhaseEqDisplayEngine:
         js = linear_phase_eq_display_js()
         assert "function create_band_at" in js
         assert "function delete_band_at(idx)" in js
+        assert "function hud_badges()" in js
+        assert "function cycle_hud_badge(key, reverse)" in js
         assert "function draw_dynamic_handles" in js
         assert "function dynamic_hit_test" in js
         assert "function pointer_context_click" in js
@@ -506,7 +543,6 @@ class TestLinearPhaseEqDisplayEngine:
         assert "pointerevent.x !== undefined" in js
         assert "pointerevent.localX !== undefined" in js
         assert "legacy mouse handlers now receive an additional pointerevent struct" not in js
-        assert "mgraphics.clip();" in js
         assert "if (cache.uses_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
         assert "if (!cache.uses_gain && new_freq === b.freq && new_q === b.q) return;" in js
         assert '"context_type"' in js
@@ -518,8 +554,32 @@ class TestLinearPhaseEqDisplayEngine:
         assert '"Make Dynamic"' in js
         assert '"add_band"' in js
         assert '"delete_band"' in js
+        assert '"hud_quality"' in js
+        assert '"hud_analyzer"' in js
+        assert '"hud_range"' in js
         assert "find_free_band" in js
         assert "handle_double_click(x, y);" in js
+
+    def test_keeps_disabled_nodes_visible_and_selectable(self):
+        js = linear_phase_eq_display_js()
+        assert "var DEFAULT_FREQS = [30.0, 200.0, 1000.0, 5000.0, 3600.0, 7200.0, 12000.0, 18000.0];" in js
+        assert "var num_bands = MAX_BANDS;" in js
+        assert 'band_cache[selected_band].enabled ? "" : "   Bypassed"' in js
+        assert "if (num_bands > 0) {" in js
+        assert "if (!band_cache[i]) continue;" in js
+        assert "display_range = 15.0;" in js
+        assert "mgraphics.arc(x, y, radius, 0, Math.PI * 2.0);" in js
+        assert "mgraphics.rectangle_rounded(box_x" not in js
+
+    def test_context_menu_can_open_for_disabled_nodes(self):
+        js = linear_phase_eq_display_js()
+        assert "if (!band_cache[context_menu_band].enabled) return;" not in js
+
+    def test_paint_does_not_use_clip_state_stack(self):
+        js = linear_phase_eq_display_js()
+        assert "mgraphics.save();" not in js
+        assert "mgraphics.clip();" not in js
+        assert "mgraphics.restore();" not in js
 
     def test_excludes_allpass(self):
         js = linear_phase_eq_display_js()

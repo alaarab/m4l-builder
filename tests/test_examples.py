@@ -248,6 +248,29 @@ class TestExampleBuilds:
                 assert len(parts) >= 3, \
                     f"selector~ missing initial arg: '{text}' (default 0 = silence)"
 
+    def test_parametric_eq_delete_resets_do_not_reemit_deleted_band_state(self):
+        script = "parametric_eq.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+        forbidden_sources = (
+            "msg_off_from_graph_b",
+            "msg_motion_reset_b",
+            "msg_dynamic_reset_b",
+            "msg_dynamic_amt_reset_b",
+            "msg_motion_rate_reset_b",
+            "msg_motion_depth_reset_b",
+            "msg_motion_direction_reset_b",
+        )
+        for line in patcher["patcher"]["lines"]:
+            src_id = line["patchline"]["source"][0]
+            dst_id = line["patchline"]["destination"][0]
+            if src_id.startswith(forbidden_sources):
+                assert not dst_id.startswith("pak_b"), (
+                    f"Delete reset {src_id} should not feed {dst_id}; "
+                    "that re-emits a deleted band back into the EQ graph state."
+                )
+
     @pytest.mark.parametrize("script", EXAMPLE_SCRIPTS)
     def test_minimum_file_size(self, script):
         """Every .amxd should be at least 1KB."""

@@ -1,0 +1,1 @@
+~/.cortex/global/skills/cortex-consolidate.md

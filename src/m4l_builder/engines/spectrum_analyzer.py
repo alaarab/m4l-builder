@@ -382,8 +382,10 @@ def spectrum_analyzer_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
 
 
 def spectrum_analyzer_dsp(device, jsui_id, source_id, source_outlet=0,
-                          num_bands=32, id_prefix="spec"):
-    """Add a bandpass filter bank + peak detection chain to feed a jsui spectrum analyzer.
+                          num_bands=32, id_prefix="spec",
+                          target_inlet=0, min_db=-60.0, max_db=0.0,
+                          peak_window=256, q_min=3.0, q_max=22.0):
+    """Add a bandpass filter bank + peak detection chain to feed a jsui display.
 
     Creates logarithmically-spaced reson~ bandpass filters from 20 Hz to 20 kHz,
     each followed by a peakamp~ for level detection. A metro triggers snapshot
@@ -391,7 +393,7 @@ def spectrum_analyzer_dsp(device, jsui_id, source_id, source_outlet=0,
     then sent to the jsui.
 
     Signal flow per band:
-        source -> reson~ (bandpass) -> peakamp~ 1024 -> atodb -> clip -60 0 -> zl.group
+        source -> reson~ (bandpass) -> peakamp~ 1024 -> atodb -> clip min_db max_db -> zl.group
 
     The zl.group fires a complete list of num_bands values to the jsui every
     time it accumulates enough values.
@@ -403,6 +405,9 @@ def spectrum_analyzer_dsp(device, jsui_id, source_id, source_outlet=0,
         source_outlet: Outlet index on the source object.
         num_bands: Number of frequency bands (default 32).
         id_prefix: Prefix for generated object IDs.
+        target_inlet: Inlet on the destination jsui/listener (default 0).
+        min_db: Floor for analyzer values before grouping.
+        max_db: Ceiling for analyzer values before grouping.
     """
     p = id_prefix
 
@@ -419,13 +424,13 @@ def spectrum_analyzer_dsp(device, jsui_id, source_id, source_outlet=0,
                       numinlets=2, numoutlets=2, outlettype=["", ""])
 
     # Connect group output list to jsui inlet 0
-    device.add_line(f"{p}_group", 0, jsui_id, 0)
+    device.add_line(f"{p}_group", 0, jsui_id, target_inlet)
 
     # Add bandpass + peak detection for each frequency band
     for i in range(num_bands):
         freq = freqs[i]
-        # Q increases for higher frequencies for better resolution
-        q = 2.0 + (i / max(num_bands - 1, 1)) * 3.0
+        # Use a narrower high-frequency analysis band so the graph reads more like a spectrum.
+        q = q_min + (i / max(num_bands - 1, 1)) * (q_max - q_min)
 
         # reson~ bandpass filter: 4 inlets (signal, freq, q, gain), 1 outlet
         reson_id = f"{p}_bp_{i}"
@@ -434,10 +439,9 @@ def spectrum_analyzer_dsp(device, jsui_id, source_id, source_outlet=0,
                           outlettype=["signal"])
         device.add_line(source_id, source_outlet, reson_id, 0)
 
-        # peakamp~ with 1024-sample window (~23ms at 44100 Hz)
-        # Outputs float peak amplitude at its interval automatically
+        # peakamp~ window controls temporal resolution of the analyzer.
         peak_id = f"{p}_peak_{i}"
-        device.add_newobj(peak_id, "peakamp~ 1024",
+        device.add_newobj(peak_id, f"peakamp~ {int(peak_window)}",
                           numinlets=1, numoutlets=1,
                           outlettype=["float"])
         device.add_line(reson_id, 0, peak_id, 0)
@@ -448,9 +452,9 @@ def spectrum_analyzer_dsp(device, jsui_id, source_id, source_outlet=0,
                           outlettype=[""])
         device.add_line(peak_id, 0, db_id, 0)
 
-        # clip -60 0: clamp to display range
+        # clip magnitude to the display range before grouping
         clip_id = f"{p}_clip_{i}"
-        device.add_newobj(clip_id, "clip -60. 0.", numinlets=3, numoutlets=1,
+        device.add_newobj(clip_id, f"clip {min_db:.1f} {max_db:.1f}", numinlets=3, numoutlets=1,
                           outlettype=[""])
         device.add_line(db_id, 0, clip_id, 0)
 

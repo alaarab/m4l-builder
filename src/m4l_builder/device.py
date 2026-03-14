@@ -12,7 +12,7 @@ from .objects import newobj, patchline
 from .patcher import build_patcher
 from .ui import (panel, dial, tab, toggle, comment, scope, meter, menu,
                  number_box, slider, button, live_text, fpic, live_gain,
-                 multislider, jsui, adsrui, live_drop, bpatcher, swatch,
+                 multislider, jsui, v8ui, adsrui, live_drop, bpatcher, swatch,
                  textedit, live_step, live_grid, live_line, live_arrows,
                  rslider, kslider, textbutton, umenu, radiogroup, nodes,
                  matrixctrl, ubutton, nslider)
@@ -36,6 +36,8 @@ class Device:
         self.lines = []
         self._js_files = {}  # {filename: js_code_string}
         self._param_banks = {}  # {varname: (bank, position)}
+        self._param_bank_names = {}  # {bank: name}
+        self._support_files = {}  # {filename: {"content": str, "type": str}}
 
     def add_box(self, box_dict: dict) -> str:
         """Add a raw box dict and return its object ID."""
@@ -165,6 +167,26 @@ class Device:
                                  numinlets=numinlets, numoutlets=numoutlets,
                                  **kwargs))
 
+    def add_v8ui(self, id: str, rect: list, *, js_code: str,
+                 js_filename: str = None, numinlets: int = 1,
+                 numoutlets: int = 0, **kwargs) -> str:
+        """Add a v8ui with embedded JavaScript code for pointer-aware custom UI."""
+        if js_filename is None:
+            js_filename = f"{id}.js"
+        self._js_files[js_filename] = js_code
+        return self.add_box(v8ui(id, rect, js_filename=js_filename,
+                                 numinlets=numinlets, numoutlets=numoutlets,
+                                 **kwargs))
+
+    def add_support_file(self, filename: str, content: str,
+                         file_type: str = "TEXT") -> str:
+        """Register an auxiliary file to write alongside the .amxd build."""
+        self._support_files[filename] = {
+            "content": content,
+            "type": file_type,
+        }
+        return filename
+
     def add_adsrui(self, id: str, rect: list, **kwargs) -> str:
         return self.add_box(adsrui(id, rect, **kwargs))
 
@@ -290,13 +312,22 @@ class Device:
 
         return warnings
 
-    def assign_parameter_bank(self, varname: str, bank: int, position: int):
+    def assign_parameter_bank(self, varname: str, bank: int, position: int,
+                              bank_name: str = None):
         """Map a parameter into Push's bank layout for hardware control."""
         if bank < 0:
             raise ValueError(f"bank must be >= 0, got {bank}")
         if position < 0:
             raise ValueError(f"position must be >= 0, got {position}")
         self._param_banks[varname] = (bank, position)
+        if bank_name is not None:
+            self._param_bank_names[bank] = bank_name
+
+    def set_parameter_bank_name(self, bank: int, name: str):
+        """Set a human-readable label for a parameter bank."""
+        if bank < 0:
+            raise ValueError(f"bank must be >= 0, got {bank}")
+        self._param_bank_names[bank] = name
 
     @classmethod
     def from_amxd(cls, path: str):
@@ -358,7 +389,7 @@ class Device:
             height=self.height,
             device_type=self.device_type,
         )
-        # Add JS file dependencies so Max knows about them
+        # Add sidecar file dependencies so Max can resolve them in-device.
         for js_name in self._js_files:
             patcher["patcher"]["dependency_cache"].append({
                 "name": js_name,
@@ -373,7 +404,7 @@ class Device:
                 if bank_key not in banks:
                     banks[bank_key] = {
                         "index": bank,
-                        "name": "",
+                        "name": self._param_bank_names.get(bank, ""),
                         "parameters": [],
                     }
                 banks[bank_key]["parameters"].append({
@@ -382,6 +413,12 @@ class Device:
                     "visible": 1,
                 })
             patcher["patcher"]["parameters"]["parameterbanks"] = banks
+        for filename, metadata in self._support_files.items():
+            patcher["patcher"]["dependency_cache"].append({
+                "name": filename,
+                "type": metadata["type"],
+                "implicit": 1,
+            })
         return patcher
 
     def to_bytes(self) -> bytes:
@@ -396,7 +433,7 @@ class Device:
         """
         type_code = DEVICE_TYPE_CODES[self.device_type]
         result = write_amxd(self.to_patcher(), output_path, type_code)
-        # Write JS files alongside the .amxd
+        # Write sidecar files alongside the .amxd.
         if self._js_files:
             output_dir = os.path.dirname(output_path)
             for filename, code in self._js_files.items():
@@ -406,6 +443,17 @@ class Device:
                         f.write(code)
                 except IOError as e:
                     raise IOError(f"Cannot write JS file {js_path}: {e}") from e
+        if self._support_files:
+            output_dir = os.path.dirname(output_path)
+            for filename, metadata in self._support_files.items():
+                sidecar_path = os.path.join(output_dir, filename)
+                try:
+                    with open(sidecar_path, "w") as f:
+                        f.write(metadata["content"])
+                except IOError as e:
+                    raise IOError(
+                        f"Cannot write support file {sidecar_path}: {e}"
+                    ) from e
         return result
 
 
