@@ -82,6 +82,14 @@ class TestDevice:
         assert line["patchline"]["source"] == ["obj-src", 1]
         assert line["patchline"]["destination"] == ["obj-dst", 2]
 
+    def test_add_support_file_stores_metadata(self):
+        d = self._make()
+        returned = d.add_support_file("kernel.maxpat", '{"patcher": {}}',
+                                      file_type="JSON")
+        assert returned == "kernel.maxpat"
+        assert d._support_files["kernel.maxpat"]["content"] == '{"patcher": {}}'
+        assert d._support_files["kernel.maxpat"]["type"] == "JSON"
+
     def test_add_panel_returns_id(self):
         d = self._make()
         returned_id = d.add_panel("panel-bg", [0, 0, 400, 170],
@@ -325,6 +333,24 @@ class TestDevice:
             data = f.read()
         recovered = _parse_amxd_json(data)
         assert recovered["patcher"]["project"]["amxdtype"] == 1633771873
+
+    def test_to_patcher_includes_support_file_dependency(self):
+        d = self._make()
+        d.add_support_file("kernel.maxpat", '{"patcher": {}}', file_type="JSON")
+        patcher = d.to_patcher()
+        deps = patcher["patcher"]["dependency_cache"]
+        assert any(dep["name"] == "kernel.maxpat" for dep in deps)
+        dep = next(dep for dep in deps if dep["name"] == "kernel.maxpat")
+        assert dep["type"] == "JSON"
+
+    def test_build_writes_support_file(self, tmp_path):
+        d = self._make()
+        d.add_support_file("kernel.maxpat", '{"patcher": {}}', file_type="JSON")
+        output = str(tmp_path / "test.amxd")
+        d.build(output)
+        support_path = tmp_path / "kernel.maxpat"
+        assert support_path.exists()
+        assert support_path.read_text() == '{"patcher": {}}'
 
 
 class TestAudioEffect:
@@ -713,6 +739,19 @@ class TestParameterBanks:
         output = json.loads(d.to_json())
         params = output["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
         assert any(p["name"] == "Mix" for p in params)
+
+    def test_bank_name_can_be_assigned_inline(self):
+        d = Device("Test", 400, 170)
+        d.assign_parameter_bank("Gain", bank=2, position=0, bank_name="Band 1")
+        patcher = d.to_patcher()
+        assert patcher["patcher"]["parameters"]["parameterbanks"]["2"]["name"] == "Band 1"
+
+    def test_bank_name_can_be_set_separately(self):
+        d = Device("Test", 400, 170)
+        d.assign_parameter_bank("Gain", bank=2, position=0)
+        d.set_parameter_bank_name(2, "Band 1")
+        patcher = d.to_patcher()
+        assert patcher["patcher"]["parameters"]["parameterbanks"]["2"]["name"] == "Band 1"
 
 
 class TestFromAmxd:

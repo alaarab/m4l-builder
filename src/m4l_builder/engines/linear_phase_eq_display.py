@@ -12,7 +12,7 @@ Inlet 0 messages:
     set_band band_idx freq gain q type enabled slope solo dynamic_enabled dynamic_amount dynamic_current
     set_selected band_idx
     set_analyzer_enabled 0|1
-    set_display_range 3|6|12|30
+    set_display_range 15
     set_quality_mode 0|1|2
     set_latency_ms float
     set_collision_mode 0|1
@@ -125,7 +125,9 @@ var TYPE_BANDPASS = 6;
 
 var TYPE_NAMES = ["Peak", "LShelf", "HShelf", "LCut", "HCut", "Notch", "BPass"];
 var QUALITY_NAMES = ["Short", "Medium", "High"];
+var ANALYZER_MODE_NAMES = ["Off", "Pre", "Post"];
 var SLOPE_NAMES = ["12 dB", "24 dB", "48 dB"];
+var RANGE_VALUES = [15.0];
 
 var MIN_FREQ = 20;
 var MAX_FREQ = 20000;
@@ -137,6 +139,11 @@ var MAX_Q = 30.0;
 var ANALYZER_MIN_DB = -72.0;
 var ANALYZER_MAX_DB = 0.0;
 var MAX_BANDS = 8;
+var DEFAULT_FREQS = [30.0, 200.0, 1000.0, 5000.0, 3600.0, 7200.0, 12000.0, 18000.0];
+var DEFAULT_GAINS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+var DEFAULT_QS = [0.707, 1.0, 1.0, 0.707, 1.0, 1.0, 1.0, 0.707];
+var DEFAULT_TYPES = [TYPE_LOSHELF, TYPE_PEAK, TYPE_PEAK, TYPE_HISHELF, TYPE_PEAK, TYPE_PEAK, TYPE_PEAK, TYPE_HIGHCUT];
+var DEFAULT_SLOPES = [0, 0, 0, 0, 0, 0, 0, 0];
 var NUM_POINTS = 768;
 var DEFAULT_SR = 48000.0;
 var NODE_RADIUS = 9.0;
@@ -157,11 +164,12 @@ var MARGIN_BOTTOM = 9;
 
 var sample_rate = DEFAULT_SR;
 var analyzer_enabled = 1;
-var display_range = 12.0;
+var analyzer_mode = 2;
+var display_range = 15.0;
 var quality_mode = 1;
 var latency_ms = 0.0;
 var collision_mode = 1;
-var num_bands = 0;
+var num_bands = MAX_BANDS;
 var selected_band = -1;
 var hover_band = -1;
 var dragging = 0;
@@ -191,30 +199,30 @@ var i;
 
 for (i = 0; i < MAX_BANDS; i++) {
     bands[i] = {
-        freq: 1000.0,
-        gain: 0.0,
-        q: 1.0,
-        type: TYPE_PEAK,
+        freq: DEFAULT_FREQS[i],
+        gain: DEFAULT_GAINS[i],
+        q: DEFAULT_QS[i],
+        type: DEFAULT_TYPES[i],
         enabled: 0,
-        slope: 0,
+        slope: DEFAULT_SLOPES[i],
         solo: 0,
         dynamic_enabled: 0,
         dynamic_amount: 0.0,
         dynamic_current: 0.0
     };
     band_cache[i] = {
-        freq: 1000.0,
-        gain: 0.0,
-        q: 1.0,
-        type: TYPE_PEAK,
+        freq: DEFAULT_FREQS[i],
+        gain: DEFAULT_GAINS[i],
+        q: DEFAULT_QS[i],
+        type: DEFAULT_TYPES[i],
         enabled: 0,
-        slope: 0,
+        slope: DEFAULT_SLOPES[i],
         solo: 0,
         dynamic_enabled: 0,
         dynamic_amount: 0.0,
         dynamic_current: 0.0,
         uses_gain: 1,
-        node_gain: 0.0,
+        node_gain: DEFAULT_GAINS[i],
         coeffs: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
     };
     band_curve_points[i] = [];
@@ -678,10 +686,7 @@ var FREQ_LINES = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
 var FREQ_LABELS = ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "20k"];
 
 function gain_grid_step() {
-    if (display_range <= 3.0) return 1.0;
-    if (display_range <= 6.0) return 1.5;
-    if (display_range <= 12.0) return 3.0;
-    return 6.0;
+    return 3.0;
 }
 
 function gain_grid_values() {
@@ -693,6 +698,10 @@ function gain_grid_values() {
         g += step;
     }
     return vals;
+}
+
+function current_range_index() {
+    return 0;
 }
 
 function draw_grid() {
@@ -708,7 +717,7 @@ function draw_grid() {
         mgraphics.stroke();
 
         mgraphics.set_source_rgba(TEXT_CLR);
-        mgraphics.select_font_face("Ableton Sans Medium");
+        mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(6.1);
         label = FREQ_LABELS[i];
         mgraphics.move_to(x - 6, plot_bottom() + 9);
@@ -723,7 +732,7 @@ function draw_grid() {
         mgraphics.stroke();
 
         mgraphics.set_source_rgba(TEXT_CLR);
-        mgraphics.select_font_face("Ableton Sans Medium");
+        mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(6.1);
         label = Math.abs(gain_lines[i]) < 0.0001 ? "0" : Math.round(gain_lines[i]).toString();
         mgraphics.move_to(2, y + 3);
@@ -793,7 +802,7 @@ function draw_empty_state() {
     mgraphics.line_to(cx + 8, cy - 9);
     mgraphics.stroke();
 
-    mgraphics.select_font_face("Ableton Sans Medium");
+    mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(10.5);
     mgraphics.set_source_rgba(0.82, 0.86, 0.92, 0.88);
     mgraphics.move_to(cx - 52, cy + 16);
@@ -802,7 +811,7 @@ function draw_empty_state() {
     mgraphics.set_font_size(7.2);
     mgraphics.set_source_rgba(0.55, 0.61, 0.68, 0.92);
     mgraphics.move_to(cx - 52, cy + 30);
-    mgraphics.show_text("Click the graph to add a band.");
+    mgraphics.show_text("Enable a node or click to place one.");
 }
 
 function draw_band_curves() {
@@ -863,55 +872,79 @@ function label_overlaps(bounds, used) {
 function draw_nodes() {
     var used_labels = [];
     var compact = compact_mode();
-    var x, y, size, color, label, bounds, box_x, box_y;
+    var x, y, size, radius, color, label, bounds;
+    var enabled_alpha, ring_alpha, fill_alpha, text_alpha, cross_alpha;
     for (i = 0; i < num_bands; i++) {
-        if (!band_cache[i].enabled) continue;
+        if (!band_cache[i]) continue;
         x = freq_to_x(band_cache[i].freq);
         y = gain_to_y(band_cache[i].uses_gain ? band_cache[i].node_gain : 0.0);
-        size = selected_band === i ? 34.0 : (hover_band === i ? 30.0 : 26.0);
+        size = selected_band === i ? 30.0 : (hover_band === i ? 27.0 : 24.0);
+        radius = size * 0.5;
         color = BAND_COLORS[i];
-        box_x = x - size * 0.5;
-        box_y = y - size * 0.5;
+        enabled_alpha = band_cache[i].enabled ? 1.0 : 0.36;
+        ring_alpha = band_cache[i].enabled ? 0.98 : 0.52;
+        fill_alpha = band_cache[i].enabled ? 0.98 : 0.16;
+        text_alpha = band_cache[i].enabled ? 0.96 : 0.54;
+        cross_alpha = band_cache[i].enabled ? 0.0 : 0.34;
 
         if (selected_band === i || hover_band === i) {
-            mgraphics.set_source_rgba(color[0], color[1], color[2], selected_band === i ? 0.18 : 0.12);
+            mgraphics.set_source_rgba(
+                color[0], color[1], color[2],
+                (selected_band === i ? 0.18 : 0.12) * enabled_alpha
+            );
             mgraphics.set_line_width(1.0);
             mgraphics.move_to(x, plot_top());
             mgraphics.line_to(x, plot_bottom());
             mgraphics.stroke();
-            if (band_cache[i].uses_gain) {
+            if (band_cache[i].uses_gain && band_cache[i].enabled) {
                 mgraphics.move_to(plot_left(), y);
                 mgraphics.line_to(plot_right(), y);
                 mgraphics.stroke();
             }
 
-            mgraphics.set_source_rgba(color[0], color[1], color[2], selected_band === i ? 0.28 : 0.18);
-            mgraphics.rectangle_rounded(box_x - 6.0, box_y - 6.0, size + 12.0, size + 12.0, 10.0, 10.0);
+            mgraphics.set_source_rgba(
+                color[0], color[1], color[2],
+                (selected_band === i ? 0.28 : 0.18) * enabled_alpha
+            );
+            mgraphics.arc(x, y, radius + 5.5, 0, Math.PI * 2.0);
             mgraphics.fill();
         }
 
-        mgraphics.set_source_rgba(0.95, 0.97, 1.0, 0.98);
-        mgraphics.rectangle_rounded(box_x, box_y, size, size, 8.0, 8.0);
+        mgraphics.set_source_rgba(0.95, 0.97, 1.0, fill_alpha);
+        mgraphics.arc(x, y, radius, 0, Math.PI * 2.0);
         mgraphics.fill();
 
-        mgraphics.set_source_rgba(color[0], color[1], color[2], 0.98);
+        mgraphics.set_source_rgba(color[0], color[1], color[2], ring_alpha);
         mgraphics.set_line_width(selected_band === i ? 3.6 : 2.8);
-        mgraphics.rectangle_rounded(box_x, box_y, size, size, 8.0, 8.0);
+        mgraphics.arc(x, y, radius - 0.8, 0, Math.PI * 2.0);
         mgraphics.stroke();
 
-        mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.96);
-        mgraphics.select_font_face("Ableton Sans Bold");
+        if (!band_cache[i].enabled) {
+            mgraphics.set_source_rgba(color[0], color[1], color[2], cross_alpha);
+            mgraphics.set_line_width(1.3);
+            mgraphics.move_to(x - radius * 0.52, y - radius * 0.52);
+            mgraphics.line_to(x + radius * 0.52, y + radius * 0.52);
+            mgraphics.move_to(x + radius * 0.52, y - radius * 0.52);
+            mgraphics.line_to(x - radius * 0.52, y + radius * 0.52);
+            mgraphics.stroke();
+        }
+
+        mgraphics.set_source_rgba(0.05, 0.06, 0.08, text_alpha);
+        mgraphics.select_font_face("Arial Bold");
         mgraphics.set_font_size(selected_band === i ? 13.0 : 11.4);
-        mgraphics.move_to(x - (size > 30 ? 4.8 : 4.0), y + 4.6);
+        mgraphics.move_to(x - (selected_band === i ? 4.8 : 4.0), y + 5.8);
         mgraphics.show_text("" + (i + 1));
 
         label = TYPE_NAMES[band_cache[i].type];
-        bounds = [x + size * 0.5 + 6, y + 2, x + size * 0.5 + 60, y + 14];
+        bounds = [x + radius + 8, y + 2, x + radius + 62, y + 14];
         if ((!compact && !label_overlaps(bounds, used_labels)) || selected_band === i || hover_band === i) {
             used_labels.push(bounds);
-            mgraphics.select_font_face("Ableton Sans Medium");
+            mgraphics.select_font_face("Arial");
             mgraphics.set_font_size(7.0);
-            mgraphics.set_source_rgba(color[0], color[1], color[2], selected_band === i ? 0.90 : 0.68);
+            mgraphics.set_source_rgba(
+                color[0], color[1], color[2],
+                (selected_band === i ? 0.90 : 0.68) * (band_cache[i].enabled ? 1.0 : 0.65)
+            );
             mgraphics.move_to(bounds[0], bounds[3]);
             mgraphics.show_text(label);
         }
@@ -978,8 +1011,8 @@ function ensure_curve_cache() {
 
 function tooltip_band_idx() {
     if (context_menu_open) return -1;
-    if (hover_band >= 0 && hover_band < num_bands && band_cache[hover_band].enabled) return hover_band;
-    if (dragging && selected_band >= 0 && selected_band < num_bands && band_cache[selected_band].enabled) {
+    if (hover_band >= 0 && hover_band < num_bands) return hover_band;
+    if (dragging && selected_band >= 0 && selected_band < num_bands) {
         return selected_band;
     }
     return -1;
@@ -1021,13 +1054,13 @@ function draw_tooltip() {
     tx = x + 7;
     ty = y + 10;
 
-    mgraphics.select_font_face("Ableton Sans Bold");
+    mgraphics.select_font_face("Arial Bold");
     mgraphics.set_font_size(6.8);
     mgraphics.set_source_rgba(0.94, 0.97, 1.0, 0.96);
     mgraphics.move_to(tx, ty);
     mgraphics.show_text("B" + (idx + 1) + "  " + TYPE_NAMES[band.type]);
 
-    mgraphics.select_font_face("Ableton Sans Medium");
+    mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(6.2);
     mgraphics.set_source_rgba(0.72, 0.78, 0.86, 0.96);
     mgraphics.move_to(tx, ty + 10);
@@ -1037,7 +1070,6 @@ function draw_tooltip() {
 function draw_context_menu() {
     var bounds, x, y, w, h, row_h, items, i, row_y, color, band;
     if (!context_menu_open || context_menu_band < 0 || context_menu_band >= num_bands) return;
-    if (!band_cache[context_menu_band].enabled) return;
 
     bounds = context_menu_bounds();
     x = bounds[0];
@@ -1064,7 +1096,7 @@ function draw_context_menu() {
             mgraphics.fill();
         }
 
-        mgraphics.select_font_face("Ableton Sans Medium");
+        mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(7);
         mgraphics.set_source_rgba(
             0.92,
@@ -1088,17 +1120,67 @@ function draw_badge(x, y, w, h, label, value) {
     mgraphics.set_line_width(1.0);
     mgraphics.stroke();
 
-    mgraphics.select_font_face("Ableton Sans Medium");
+    mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(6);
     mgraphics.set_source_rgba(0.55, 0.60, 0.67, 0.96);
     mgraphics.move_to(x + 6, y + 11);
     mgraphics.show_text(label);
 
-    mgraphics.select_font_face("Ableton Sans Bold");
+    mgraphics.select_font_face("Arial Bold");
     mgraphics.set_font_size(6.5);
     mgraphics.set_source_rgba(0.95, 0.97, 1.0, 0.96);
     mgraphics.move_to(x + w * 0.48, y + 11);
     mgraphics.show_text(value);
+}
+
+function hud_badges() {
+    var badge_x = plot_left() + 6;
+    var info_y = plot_top() + 5;
+    return [
+        {key: "quality", x: badge_x, y: info_y, w: 58, h: 14, label: "Q", value: QUALITY_NAMES[quality_mode]},
+        {key: "latency", x: badge_x + 62, y: info_y, w: 62, h: 14, label: "LAT", value: latency_ms.toFixed(1) + " ms"},
+        {key: "analyzer", x: badge_x + 128, y: info_y, w: 56, h: 14, label: "AN", value: ANALYZER_MODE_NAMES[analyzer_mode]},
+        {key: "range", x: badge_x + 188, y: info_y, w: 54, h: 14, label: "RNG", value: display_range.toFixed(0) + " dB"}
+    ];
+}
+
+function hud_badge_hit(x, y) {
+    var badges = hud_badges();
+    var badge;
+    for (i = 0; i < badges.length; i++) {
+        badge = badges[i];
+        if (x >= badge.x && x <= badge.x + badge.w && y >= badge.y && y <= badge.y + badge.h) {
+            return badge.key;
+        }
+    }
+    return "";
+}
+
+function cycle_hud_badge(key, reverse) {
+    var idx;
+    if (key === "quality") {
+        quality_mode = reverse ? (quality_mode + QUALITY_NAMES.length - 1) % QUALITY_NAMES.length
+            : (quality_mode + 1) % QUALITY_NAMES.length;
+        outlet(0, "hud_quality", quality_mode);
+        mgraphics.redraw();
+        return 1;
+    }
+    if (key === "analyzer") {
+        analyzer_mode = reverse ? (analyzer_mode + ANALYZER_MODE_NAMES.length - 1) % ANALYZER_MODE_NAMES.length
+            : (analyzer_mode + 1) % ANALYZER_MODE_NAMES.length;
+        analyzer_enabled = analyzer_mode > 0 ? 1 : 0;
+        outlet(0, "hud_analyzer", analyzer_mode);
+        mgraphics.redraw();
+        return 1;
+    }
+    if (key === "range") {
+        display_range = 15.0;
+        curve_dirty = 1;
+        outlet(0, "hud_range", 0);
+        mgraphics.redraw();
+        return 1;
+    }
+    return 0;
 }
 
 function format_freq(freq) {
@@ -1121,17 +1203,17 @@ function format_dynamic(dynamic_amount) {
 }
 
 function draw_hud() {
-    var badge_x = plot_left() + 6;
-    var info_y = plot_top() + 5;
+    var badges = hud_badges();
     var title, subtitle;
+    var badge;
 
-    draw_badge(badge_x, info_y, 58, 14, "Q", QUALITY_NAMES[quality_mode]);
-    draw_badge(badge_x + 62, info_y, 62, 14, "LAT", latency_ms.toFixed(1) + " ms");
-    draw_badge(badge_x + 128, info_y, 56, 14, "AN", analyzer_enabled ? "On" : "Off");
-    draw_badge(badge_x + 188, info_y, 54, 14, "RNG", display_range.toFixed(0) + " dB");
+    for (i = 0; i < badges.length; i++) {
+        badge = badges[i];
+        draw_badge(badge.x, badge.y, badge.w, badge.h, badge.label, badge.value);
+    }
 
-    if (selected_band < 0 || selected_band >= num_bands || !band_cache[selected_band].enabled) {
-        mgraphics.select_font_face("Ableton Sans Medium");
+    if (selected_band < 0 || selected_band >= num_bands) {
+        mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(6.5);
         mgraphics.set_source_rgba(0.60, 0.65, 0.71, 0.90);
         mgraphics.move_to(plot_right() - 128, plot_top() + 12);
@@ -1144,28 +1226,25 @@ function draw_hud() {
         + "   "
         + (band_cache[selected_band].uses_gain ? format_gain(band_cache[selected_band].gain) : SLOPE_NAMES[band_cache[selected_band].slope])
         + "   Q " + format_q(band_cache[selected_band].q)
-        + (band_cache[selected_band].dynamic_enabled ? "   Dyn " + format_dynamic(band_cache[selected_band].dynamic_amount) : "");
+        + (band_cache[selected_band].dynamic_enabled ? "   Dyn " + format_dynamic(band_cache[selected_band].dynamic_amount) : "")
+        + (band_cache[selected_band].enabled ? "" : "   Bypassed");
 
-    mgraphics.select_font_face("Ableton Sans Bold");
+    mgraphics.select_font_face("Arial Bold");
     mgraphics.set_font_size(8.5);
-    mgraphics.set_source_rgba(BAND_COLORS[selected_band][0], BAND_COLORS[selected_band][1], BAND_COLORS[selected_band][2], 0.98);
+    mgraphics.set_source_rgba(
+        BAND_COLORS[selected_band][0],
+        BAND_COLORS[selected_band][1],
+        BAND_COLORS[selected_band][2],
+        band_cache[selected_band].enabled ? 0.98 : 0.62
+    );
     mgraphics.move_to(plot_right() - 170, plot_top() + 12);
     mgraphics.show_text(title);
 
-    mgraphics.select_font_face("Ableton Sans Medium");
+    mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(6.5);
     mgraphics.set_source_rgba(0.76, 0.81, 0.87, 0.94);
     mgraphics.move_to(plot_right() - 170, plot_top() + 22);
     mgraphics.show_text(subtitle);
-}
-
-function draw_debug_state() {
-    var label = "N" + num_bands + " E" + enabled_band_count() + " S" + selected_band;
-    mgraphics.select_font_face("Ableton Sans Medium");
-    mgraphics.set_font_size(10.0);
-    mgraphics.set_source_rgba(1.0, 0.22, 0.18, 0.92);
-    mgraphics.move_to(plot_left() + 10, plot_top() + 18);
-    mgraphics.show_text(label);
 }
 
 function paint() {
@@ -1175,9 +1254,6 @@ function paint() {
 
     draw_grid();
     draw_analyzer();
-    mgraphics.save();
-    mgraphics.rectangle(plot_left(), plot_top(), plot_w(), plot_h());
-    mgraphics.clip();
     if (enabled_band_count() < 1) {
         draw_empty_state();
     } else {
@@ -1185,19 +1261,21 @@ function paint() {
         draw_band_curves();
         draw_composite_curve();
     }
-    mgraphics.restore();
     if (enabled_band_count() >= 1) {
         draw_dynamic_handles();
+    }
+    if (num_bands > 0) {
         draw_nodes();
         draw_tooltip();
     }
+    draw_hud();
     draw_context_menu();
 }
 
 function hit_test(x, y) {
     var dx, dy, node_x, node_y;
     for (i = 0; i < num_bands; i++) {
-        if (!band_cache[i].enabled) continue;
+        if (!band_cache[i]) continue;
         node_x = freq_to_x(band_cache[i].freq);
         node_y = gain_to_y(band_cache[i].node_gain);
         dx = x - node_x;
@@ -1294,15 +1372,19 @@ function set_selected(idx) {
 
 function set_analyzer_enabled(v) {
     analyzer_enabled = v ? 1 : 0;
+    if (!analyzer_enabled) analyzer_mode = 0;
+    else if (analyzer_mode === 0) analyzer_mode = 2;
+    mgraphics.redraw();
+}
+
+function set_analyzer_mode(v) {
+    analyzer_mode = Math.floor(clamp(v, 0, ANALYZER_MODE_NAMES.length - 1));
+    analyzer_enabled = analyzer_mode > 0 ? 1 : 0;
     mgraphics.redraw();
 }
 
 function set_display_range(v) {
-    var next = Math.abs(v);
-    if (next <= 4) display_range = 3.0;
-    else if (next <= 9) display_range = 6.0;
-    else if (next <= 21) display_range = 12.0;
-    else display_range = 30.0;
+    display_range = 15.0;
     curve_dirty = 1;
     mgraphics.redraw();
 }
@@ -1394,12 +1476,17 @@ function pointer_buttons(pointerevent, fallback) {
 }
 
 function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
+    var badge_hit = hud_badge_hit(x, y);
     var hit = hit_test(x, y);
     var dynamic_hit = dynamic_hit_test(x, y);
     var next_idx;
     var menu_idx;
     var band;
     var context_click = pointer_context_click(pointerevent, ctrl, but);
+
+    if (badge_hit) {
+        if (cycle_hud_badge(badge_hit, shift ? 1 : 0)) return;
+    }
 
     if (context_menu_open) {
         menu_idx = context_menu_hit(x, y);

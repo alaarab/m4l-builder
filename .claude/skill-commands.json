@@ -1,0 +1,179 @@
+{
+  "scope": "m4l-builder",
+  "project": "m4l-builder",
+  "generatedAt": "2026-03-10T03:44:29.963Z",
+  "commands": [
+    {
+      "command": "/backlog",
+      "type": "skill",
+      "skillId": "backlog",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/backlog.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/codex",
+      "type": "skill",
+      "skillId": "codex",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/codex.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex",
+      "type": "skill",
+      "skillId": "cortex",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-consolidate",
+      "type": "skill",
+      "skillId": "cortex-consolidate",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-consolidate.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-discover",
+      "type": "skill",
+      "skillId": "cortex-discover",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-discover.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-init",
+      "type": "skill",
+      "skillId": "cortex-init",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-init.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-learn",
+      "type": "skill",
+      "skillId": "cortex-learn",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-learn.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-sync",
+      "type": "skill",
+      "skillId": "cortex-sync",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-sync.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-update",
+      "type": "skill",
+      "skillId": "cortex-update",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-update.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/creative",
+      "type": "skill",
+      "skillId": "creative",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/creative.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/done",
+      "type": "skill",
+      "skillId": "done",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/done.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/humanize",
+      "type": "skill",
+      "skillId": "humanize",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/humanize.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/pipeline",
+      "type": "skill",
+      "skillId": "pipeline",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/pipeline.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/publish",
+      "type": "skill",
+      "skillId": "publish",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/publish.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/README",
+      "type": "skill",
+      "skillId": "README",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/README.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/release",
+      "type": "skill",
+      "skillId": "release",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/release.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/swarm",
+      "type": "skill",
+      "skillId": "swarm",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/swarm.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/test",
+      "type": "skill",
+      "skillId": "test",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/test.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/verify",
+      "type": "skill",
+      "skillId": "verify",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/verify.md",
+      "kind": "primary",
+      "registered": true
+    }
+  ],
+  "problems": []
+}

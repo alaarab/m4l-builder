@@ -47,7 +47,7 @@ Mouse interaction:
     Mouse wheel on node: adjust Q
     Shift + drag / wheel: fine tune
     Cmd/Ctrl + drag: lock the secondary parameter
-    Ctrl/Cmd + click node: open node menu for type / Motion / Dynamic / bypass / delete
+    Right-click node: open node menu for type / Motion / Dynamic / bypass / delete
     Double-click empty graph: add first disabled band at cursor
     Opt/Alt + click node: disable that band
 """
@@ -180,12 +180,18 @@ var drag_start_gain = 0;
 var drag_start_q = 1.0;
 var drag_start_dynamic = 0.0;
 var menu_band = -1;
+var menu_x = 0;
+var menu_y = 0;
 var menu_hover = "";
 var redraw_task = null;
 var redraw_task_running = 0;
 var last_redraw_ms = 0;
 var last_click_ms = 0;
 var last_click_band = -1;
+var last_pointer_press_ms = 0;
+var last_pointer_press_x = 0;
+var last_pointer_press_y = 0;
+var suppress_next_click = 0;
 var suppress_next_ondblclick_delete = 0;
 
 var bands = [];
@@ -496,15 +502,19 @@ function next_enabled_band(preferred_idx) {
 
 function close_node_menu() {
     menu_band = -1;
+    menu_x = 0;
+    menu_y = 0;
     menu_hover = "";
 }
 
-function open_node_menu_for(idx) {
+function open_node_menu_for(idx, x, y) {
     if (idx < 0 || idx >= num_bands || !band_cache[idx].present) {
         close_node_menu();
         return;
     }
     menu_band = idx;
+    menu_x = x;
+    menu_y = y;
     menu_hover = "";
 }
 
@@ -809,7 +819,7 @@ function draw_grid() {
         mgraphics.stroke();
 
         mgraphics.set_source_rgba(TEXT_CLR);
-        mgraphics.select_font_face("Ableton Sans Medium");
+        mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(8);
         label = FREQ_LABELS[i];
         metrics = mgraphics.text_measure(label);
@@ -832,7 +842,7 @@ function draw_grid() {
 
         if (Math.abs(gain_lines[i] % gain_grid_step()) < 0.0001 || Math.abs(gain_lines[i]) < 0.0001) {
             mgraphics.set_source_rgba(TEXT_CLR);
-            mgraphics.select_font_face("Ableton Sans Medium");
+            mgraphics.select_font_face("Arial");
             mgraphics.set_font_size(8);
             label = gain_lines[i] > 0 ? "+" + gain_lines[i] : "" + gain_lines[i];
             if (Math.abs(gain_lines[i]) < 0.0001) label = " 0";
@@ -1117,9 +1127,9 @@ function draw_nodes() {
         }
 
         mgraphics.set_source_rgba(1.0, 1.0, 1.0, band_cache[i].enabled ? 0.88 : 0.42);
-        mgraphics.select_font_face("Ableton Sans Medium");
+        mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(i === selected_band ? 9.0 : 8.0);
-        mgraphics.move_to(x + r + 3, y - r - 1);
+        mgraphics.move_to(x + r + 3, y - r + 1);
         mgraphics.show_text("" + (i + 1));
     }
 }
@@ -1158,10 +1168,18 @@ function draw_dynamic_handles() {
 }
 
 function node_menu_rect(idx) {
-    var x = freq_to_x(band_cache[idx].freq) + 18;
-    var y = node_y_for_band(idx) - 20;
+    var anchor_x = menu_x;
+    var anchor_y = menu_y;
+    var x;
+    var y;
     var w = 126;
     var h = 74;
+    if (anchor_x <= 0 && anchor_y <= 0) {
+        anchor_x = freq_to_x(band_cache[idx].freq);
+        anchor_y = node_y_for_band(idx);
+    }
+    x = anchor_x + 8;
+    y = anchor_y - 10;
     if (x + w > plot_right()) x = freq_to_x(band_cache[idx].freq) - w - 18;
     if (x < plot_left() + 4) x = plot_left() + 4;
     if (y < plot_top() + 28) y = plot_top() + 28;
@@ -1227,7 +1245,7 @@ function draw_menu_chip(x, y, w, h, label, active, color) {
     }
 
     mgraphics.set_source_rgba(active ? 0.05 : 0.92, active ? 0.05 : 0.94, active ? 0.06 : 0.98, 1.0);
-    mgraphics.select_font_face("Ableton Sans Bold");
+    mgraphics.select_font_face("Arial Bold");
     mgraphics.set_font_size(7.0);
     var metrics = mgraphics.text_measure(label);
     mgraphics.move_to(x + (w - metrics[0]) * 0.5, y + 8.5);
@@ -1419,7 +1437,7 @@ function draw_tooltip() {
     mgraphics.stroke();
 
     mgraphics.set_source_rgba(0.92, 0.92, 0.94, 1.0);
-    mgraphics.select_font_face("Ableton Sans Medium");
+    mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(9);
     mgraphics.move_to(tx + 5, ty + 13);
     mgraphics.show_text(line1);
@@ -1634,25 +1652,136 @@ function msg_int(v) {
     }
 }
 
+function pointer_middle_click(pointerevent, but) {
+    if (pointerevent) {
+        if (pointerevent.button !== undefined && pointerevent.button === 1) return 1;
+        if (pointerevent.buttons !== undefined && (pointerevent.buttons & 4) !== 0) return 1;
+    }
+    if (but !== undefined && but !== null) {
+        if ((but & 4) !== 0) return 1;
+    }
+    return 0;
+}
+
+function pointer_context_click(pointerevent, but, ctrl) {
+    if (pointerevent) {
+        if (pointerevent.button !== undefined && pointerevent.button === 2) return 1;
+        if (pointerevent.buttons !== undefined && (pointerevent.buttons & 2) !== 0) return 1;
+    }
+    if (but !== undefined && but !== null) {
+        if ((but & 2) !== 0) return 1;
+    }
+    // In classic jsui mouse callbacks, mod2/ctrl carries right-click on Windows
+    // and control-click on macOS, which should open the context menu here.
+    return ctrl ? 1 : 0;
+}
+
+function pointer_option_key(pointerevent, opt) {
+    if (pointerevent) {
+        if (pointerevent.altKey) return 1;
+        if (pointerevent.optionKey) return 1;
+    }
+    return opt ? 1 : 0;
+}
+
+function pointer_shift_key(pointerevent, shift) {
+    if (pointerevent && pointerevent.shiftKey) return 1;
+    return shift ? 1 : 0;
+}
+
+function pointer_command_key(pointerevent, cmd) {
+    if (pointerevent && pointerevent.commandKey) return 1;
+    return cmd ? 1 : 0;
+}
+
+function pointer_control_key(pointerevent, ctrl) {
+    if (pointerevent && pointerevent.contextModifier) return 1;
+    return ctrl ? 1 : 0;
+}
+
+function pointer_x(pointerevent, fallback) {
+    if (!pointerevent) return fallback;
+    if (pointerevent.x !== undefined) return pointerevent.x;
+    if (pointerevent.localX !== undefined) return pointerevent.localX;
+    if (pointerevent.offsetX !== undefined) return pointerevent.offsetX;
+    if (pointerevent.clientX !== undefined) return pointerevent.clientX;
+    return fallback;
+}
+
+function pointer_y(pointerevent, fallback) {
+    if (!pointerevent) return fallback;
+    if (pointerevent.y !== undefined) return pointerevent.y;
+    if (pointerevent.localY !== undefined) return pointerevent.localY;
+    if (pointerevent.offsetY !== undefined) return pointerevent.offsetY;
+    if (pointerevent.clientY !== undefined) return pointerevent.clientY;
+    return fallback;
+}
+
+function pointer_buttons(pointerevent, fallback) {
+    if (!pointerevent) return fallback;
+    if (pointerevent.buttons !== undefined) return pointerevent.buttons;
+    if (pointerevent.button !== undefined) {
+        if (pointerevent.button === 2) return 2;
+        return 1;
+    }
+    return fallback;
+}
+
+function note_pointer_press(x, y) {
+    last_pointer_press_ms = new Date().getTime();
+    last_pointer_press_x = x;
+    last_pointer_press_y = y;
+    suppress_next_click = 1;
+}
+
+function should_ignore_pointer_click(x, y) {
+    var now_ms;
+    if (!suppress_next_click) return 0;
+    now_ms = new Date().getTime();
+    if ((now_ms - last_pointer_press_ms) > 300) {
+        suppress_next_click = 0;
+        return 0;
+    }
+    if (Math.abs(x - last_pointer_press_x) > 4 || Math.abs(y - last_pointer_press_y) > 4) {
+        suppress_next_click = 0;
+        return 0;
+    }
+    suppress_next_click = 0;
+    return 1;
+}
+
 // ── Mouse interaction ────────────────────────────────────────────────
-function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     var hit = hit_test(x, y);
     var dynamic_hit = dynamic_hit_test(x, y);
     var clicked_band = dynamic_hit >= 0 ? dynamic_hit : hit;
     var menu_hit = node_menu_hit_test(x, y);
     var now_ms = new Date().getTime();
+    var middle_click = pointer_middle_click(pointerevent, but);
+    var context_click = pointer_context_click(pointerevent, but, ctrl);
+    var option_click = pointer_option_key(pointerevent, opt);
+    var command_click = pointer_command_key(pointerevent, cmd);
+    var control_click = pointer_control_key(pointerevent, ctrl);
     var is_delete_double_click = (
         clicked_band >= 0 &&
         clicked_band === last_click_band &&
         (now_ms - last_click_ms) <= DOUBLE_CLICK_MS &&
-        !opt &&
-        !ctrl &&
-        !cmd &&
+        !option_click &&
+        !control_click &&
+        !command_click &&
+        !context_click &&
         but <= 1
     );
 
     last_click_ms = now_ms;
     last_click_band = clicked_band;
+
+    if (middle_click) {
+        dragging = 0;
+        drag_mode = 0;
+        mgraphics.redraw();
+        return;
+    }
 
     if (is_delete_double_click) {
         close_node_menu();
@@ -1676,19 +1805,25 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
         }
     }
 
-    if (opt) {
+    if (option_click) {
         if (dynamic_hit >= 0 || hit >= 0) {
             delete_band_at(dynamic_hit >= 0 ? dynamic_hit : hit);
             return;
         }
     }
 
-    if (but > 1 && (dynamic_hit >= 0 || hit >= 0)) {
-        selected_band = dynamic_hit >= 0 ? dynamic_hit : hit;
+    if (context_click) {
+        if (dynamic_hit >= 0 || hit >= 0) {
+            selected_band = dynamic_hit >= 0 ? dynamic_hit : hit;
+            dragging = 0;
+            drag_mode = 0;
+            outlet(0, "selected_band", selected_band);
+            open_node_menu_for(selected_band, x, y);
+            mgraphics.redraw();
+            return;
+        }
         dragging = 0;
         drag_mode = 0;
-        outlet(0, "selected_band", selected_band);
-        open_node_menu_for(selected_band);
         mgraphics.redraw();
         return;
     }
@@ -1731,7 +1866,7 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     mgraphics.redraw();
 }
 
-function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+function handle_double_click(x, y) {
     if (suppress_next_ondblclick_delete) {
         suppress_next_ondblclick_delete = 0;
         return;
@@ -1748,7 +1883,7 @@ function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     create_band_at(x, y);
 }
 
-function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
+function handle_drag_at(x, y, but, cmd, shift) {
     if (but === 0) {
         dragging = 0;
         drag_mode = 0;
@@ -1843,7 +1978,7 @@ function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
     mgraphics.redraw();
 }
 
-function onidle(x, y, but, cmd, shift, caps, opt, ctrl) {
+function handle_hover(x, y) {
     var prev = hover_band;
     var dynamic_hover;
     var prev_menu = menu_hover;
@@ -1860,12 +1995,90 @@ function onidle(x, y, but, cmd, shift, caps, opt, ctrl) {
     }
 }
 
-function onidleout(x, y, but, cmd, shift, caps, opt, ctrl) {
+function clear_hover_state() {
     if (hover_band >= 0 || menu_hover) {
         hover_band = -1;
         menu_hover = "";
         mgraphics.redraw();
     }
+}
+
+function onpointerdown(pointerevent) {
+    var x = pointer_x(pointerevent, 0);
+    var y = pointer_y(pointerevent, 0);
+    note_pointer_press(x, y);
+    handle_press(
+        x,
+        y,
+        pointer_buttons(pointerevent, 1),
+        pointer_command_key(pointerevent, 0),
+        pointer_shift_key(pointerevent, 0),
+        pointer_option_key(pointerevent, 0),
+        pointer_control_key(pointerevent, 0),
+        pointerevent
+    );
+}
+
+function onpointermove(pointerevent) {
+    var buttons = pointer_buttons(pointerevent, 0);
+    var x = pointer_x(pointerevent, 0);
+    var y = pointer_y(pointerevent, 0);
+    if (dragging && ((buttons & 1) !== 0)) {
+        handle_drag_at(
+            x,
+            y,
+            buttons,
+            pointer_command_key(pointerevent, 0),
+            pointer_shift_key(pointerevent, 0)
+        );
+        return;
+    }
+    if (dragging && buttons === 0) {
+        dragging = 0;
+        drag_mode = 0;
+    }
+    handle_hover(x, y);
+}
+
+function onpointerup(pointerevent) {
+    var x = pointer_x(pointerevent, 0);
+    var y = pointer_y(pointerevent, 0);
+    if (dragging) {
+        dragging = 0;
+        drag_mode = 0;
+        mgraphics.redraw();
+    } else {
+        handle_hover(x, y);
+    }
+}
+
+function onpointerleave(pointerevent) {
+    if (dragging && pointerevent && pointerevent.buttons === 0) {
+        dragging = 0;
+        drag_mode = 0;
+    }
+    clear_hover_state();
+}
+
+function onclick(x, y, but, cmd, shift, caps, opt, ctrl, pointerevent) {
+    if (should_ignore_pointer_click(x, y)) return;
+    handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent);
+}
+
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+    handle_double_click(x, y);
+}
+
+function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
+    handle_drag_at(x, y, but, cmd, shift);
+}
+
+function onidle(x, y, but, cmd, shift, caps, opt, ctrl) {
+    handle_hover(x, y);
+}
+
+function onidleout(x, y, but, cmd, shift, caps, opt, ctrl) {
+    clear_hover_state();
 }
 
 function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl) {

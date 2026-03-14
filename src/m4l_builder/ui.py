@@ -113,6 +113,7 @@ def tab(id: str, varname: str, rect: list, *,
         spacing_x: float = 0.0, appearance: int = 0,
         **kwargs) -> dict:
     """Create a live.tab selector."""
+    enum_max = max(len(options) - 1, 0)
     box = {
         "id": id,
         "maxclass": "live.tab",
@@ -132,6 +133,10 @@ def tab(id: str, varname: str, rect: list, *,
                 "parameter_longname": varname,
                 "parameter_shortname": varname,
                 "parameter_type": 2,
+                "parameter_mmin": 0,
+                "parameter_mmax": enum_max,
+                "parameter_initial_enable": 1,
+                "parameter_initial": [0],
                 "parameter_enum": list(options),
             }
         },
@@ -246,6 +251,7 @@ def menu(id: str, varname: str, rect: list, *, options: list,
          shortname: str = None, patching_rect: list = None,
          **kwargs) -> dict:
     """Create a live.menu dropdown selector."""
+    enum_max = max(len(options) - 1, 0)
     box = {
         "id": id,
         "maxclass": "live.menu",
@@ -262,6 +268,10 @@ def menu(id: str, varname: str, rect: list, *, options: list,
                 "parameter_longname": varname,
                 "parameter_shortname": shortname or varname,
                 "parameter_type": 2,
+                "parameter_mmin": 0,
+                "parameter_mmax": enum_max,
+                "parameter_initial_enable": 1,
+                "parameter_initial": [0],
                 "parameter_enum": list(options),
             }
         },
@@ -551,6 +561,32 @@ def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
         "numoutlets": numoutlets,
         "outlettype": outlettype or ([""] * numoutlets if numoutlets > 0 else []),
         "filename": js_filename,
+        "patching_rect": patching_rect or [700, 1500, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    box.update(kwargs)
+    return {"box": box}
+
+
+def v8ui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
+         numoutlets: int = 0, outlettype: list = None,
+         patching_rect: list = None, **kwargs) -> dict:
+    """Create a v8ui display for modern pointer-aware custom UI rendering."""
+    box = {
+        "id": id,
+        "maxclass": "v8ui",
+        "numinlets": numinlets,
+        "numoutlets": numoutlets,
+        "outlettype": outlettype or ([""] * numoutlets if numoutlets > 0 else []),
+        "filename": js_filename,
+        "textfile": {
+            "filename": js_filename,
+            "flags": 0,
+            "embed": 0,
+            "autowatch": 1,
+        },
+        "parameter_enable": 0,
         "patching_rect": patching_rect or [700, 1500, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,

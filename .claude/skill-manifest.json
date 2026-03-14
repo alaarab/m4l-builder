@@ -1,0 +1,542 @@
+{
+  "scope": "m4l-builder",
+  "generatedAt": "2026-03-10T03:44:29.963Z",
+  "skills": [
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/backlog.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/backlog.md",
+      "name": "backlog",
+      "source": "global",
+      "enabled": true,
+      "description": "Persistent task queue per project. Add, prioritize, delegate. Worker agents pick up items and run the pipeline.",
+      "command": "/backlog",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/backlog.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/codex.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/codex.md",
+      "name": "codex",
+      "source": "global",
+      "enabled": true,
+      "description": "Send a task to Codex via MCP (fast) or isolated worktree (complex). Supports model selection, reasoning effort, sessions, review, and web search.",
+      "command": "/codex",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/codex.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/cortex.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/cortex.md",
+      "name": "cortex",
+      "source": "global",
+      "enabled": true,
+      "description": "Long-term memory for AI coding agents with automatic context injection and finding capture",
+      "command": "/cortex",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/cortex.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-consolidate.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/cortex-consolidate.md",
+      "name": "cortex-consolidate",
+      "source": "global",
+      "enabled": true,
+      "description": "Find patterns across all project FINDINGS.md files and surface insights that apply everywhere.",
+      "command": "/cortex-consolidate",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/cortex-consolidate.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-discover.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/cortex-discover.md",
+      "name": "cortex-discover",
+      "source": "global",
+      "enabled": true,
+      "description": "Audit your cortex repo for missing files, stale content, skill gaps, and stuck backlog items. Returns a prioritized action list.",
+      "command": "/cortex-discover",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/cortex-discover.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-init.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/cortex-init.md",
+      "name": "cortex-init",
+      "source": "global",
+      "enabled": true,
+      "description": "Scaffold a new project in cortex with summary, CLAUDE.md, backlog, and skill templates.",
+      "command": "/cortex-init",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/cortex-init.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-learn.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/cortex-learn.md",
+      "name": "cortex-learn",
+      "source": "global",
+      "enabled": true,
+      "description": "Capture session learnings as durable project-specific notes that persist across conversations.",
+      "command": "/cortex-learn",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/cortex-learn.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-sync.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/cortex-sync.md",
+      "name": "cortex-sync",
+      "source": "global",
+      "enabled": true,
+      "description": "Sync cortex skills and project config across machines using profiles. Pull to a new machine or push config changes back.",
+      "command": "/cortex-sync",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/cortex-sync.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-update.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/cortex-update.md",
+      "name": "cortex-update",
+      "source": "global",
+      "enabled": true,
+      "description": "Capture session learnings, commit, and push at the end of any session.",
+      "command": "/cortex-update",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/cortex-update.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/creative.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/creative.md",
+      "name": "creative",
+      "source": "global",
+      "enabled": true,
+      "description": "Elevate craft and polish. Make it feel like a person designed it, not like AI generated it from a template.",
+      "command": "/creative",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/creative.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/done.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/done.md",
+      "name": "done",
+      "source": "m4l-builder",
+      "enabled": true,
+      "command": "/done",
+      "aliases": [],
+      "scopeType": "project",
+      "sourceKind": "legacy",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/done.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/humanize.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/humanize.md",
+      "name": "humanize",
+      "source": "m4l-builder",
+      "enabled": true,
+      "command": "/humanize",
+      "aliases": [],
+      "scopeType": "project",
+      "sourceKind": "legacy",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [
+        {
+          "source": "global",
+          "path": "/Users/squidbot/.cortex/global/skills/humanize.md",
+          "sourceKind": "canonical"
+        }
+      ],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/humanize.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/pipeline.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/pipeline.md",
+      "name": "pipeline",
+      "source": "global",
+      "enabled": true,
+      "description": "Tell Claude which stage of development you're in and get guidance on what to focus on next.",
+      "command": "/pipeline",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/pipeline.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/publish.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/publish.md",
+      "name": "publish",
+      "source": "m4l-builder",
+      "enabled": true,
+      "command": "/publish",
+      "aliases": [],
+      "scopeType": "project",
+      "sourceKind": "legacy",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/publish.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/README.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/README.md",
+      "name": "README",
+      "source": "m4l-builder",
+      "enabled": true,
+      "command": "/README",
+      "aliases": [],
+      "scopeType": "project",
+      "sourceKind": "legacy",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/README.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/release.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/release.md",
+      "name": "release",
+      "source": "global",
+      "enabled": true,
+      "description": "Get from \"code is ready\" to \"users have it\" with a version bump, changelog, tag, and publish checklist.",
+      "command": "/release",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/release.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/global/skills/swarm.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/global/skills/swarm.md",
+      "name": "swarm",
+      "source": "global",
+      "enabled": true,
+      "description": "Break work into pieces, spawn team agents, ship it. Uses TeamCreate/TaskCreate for coordination.",
+      "command": "/swarm",
+      "aliases": [],
+      "scopeType": "global",
+      "sourceKind": "canonical",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/swarm.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/test.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/test.md",
+      "name": "test",
+      "source": "m4l-builder",
+      "enabled": true,
+      "command": "/test",
+      "aliases": [],
+      "scopeType": "project",
+      "sourceKind": "legacy",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/test.md"
+      ]
+    },
+    {
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/verify.md",
+      "format": "flat",
+      "root": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/verify.md",
+      "name": "verify",
+      "source": "m4l-builder",
+      "enabled": true,
+      "command": "/verify",
+      "aliases": [],
+      "scopeType": "project",
+      "sourceKind": "legacy",
+      "visibleToAgents": true,
+      "commandRegistered": true,
+      "overrides": [],
+      "mirrorTargets": [
+        "/Users/squidbot/Projects/m4l-builder/.claude/skills/verify.md"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "/backlog",
+      "type": "skill",
+      "skillId": "backlog",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/backlog.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/codex",
+      "type": "skill",
+      "skillId": "codex",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/codex.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex",
+      "type": "skill",
+      "skillId": "cortex",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-consolidate",
+      "type": "skill",
+      "skillId": "cortex-consolidate",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-consolidate.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-discover",
+      "type": "skill",
+      "skillId": "cortex-discover",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-discover.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-init",
+      "type": "skill",
+      "skillId": "cortex-init",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-init.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-learn",
+      "type": "skill",
+      "skillId": "cortex-learn",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-learn.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-sync",
+      "type": "skill",
+      "skillId": "cortex-sync",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-sync.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/cortex-update",
+      "type": "skill",
+      "skillId": "cortex-update",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/cortex-update.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/creative",
+      "type": "skill",
+      "skillId": "creative",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/creative.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/done",
+      "type": "skill",
+      "skillId": "done",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/done.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/humanize",
+      "type": "skill",
+      "skillId": "humanize",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/humanize.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/pipeline",
+      "type": "skill",
+      "skillId": "pipeline",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/pipeline.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/publish",
+      "type": "skill",
+      "skillId": "publish",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/publish.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/README",
+      "type": "skill",
+      "skillId": "README",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/README.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/release",
+      "type": "skill",
+      "skillId": "release",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/release.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/swarm",
+      "type": "skill",
+      "skillId": "swarm",
+      "source": "global",
+      "path": "/Users/squidbot/.cortex/global/skills/swarm.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/test",
+      "type": "skill",
+      "skillId": "test",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/test.md",
+      "kind": "primary",
+      "registered": true
+    },
+    {
+      "command": "/verify",
+      "type": "skill",
+      "skillId": "verify",
+      "source": "m4l-builder",
+      "path": "/Users/squidbot/.cortex/m4l-builder/.claude/skills/verify.md",
+      "kind": "primary",
+      "registered": true
+    }
+  ],
+  "problems": [],
+  "project": "m4l-builder"
+}

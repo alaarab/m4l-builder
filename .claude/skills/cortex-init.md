@@ -1,0 +1,1 @@
+/Users/squidbot/.cortex/global/skills/cortex-init.md

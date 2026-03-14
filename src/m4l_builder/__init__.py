@@ -7,7 +7,7 @@ from .layout import Row, Column, Grid
 from .objects import newobj, patchline
 from .ui import (panel, dial, tab, toggle, comment, scope, meter, menu,
                  number_box, slider, button, live_text, fpic, live_gain,
-                 multislider, jsui, adsrui, live_drop, bpatcher, swatch,
+                 multislider, jsui, v8ui, adsrui, live_drop, bpatcher, swatch,
                  textedit, live_step, live_grid, live_line, live_arrows,
                  rslider, kslider, textbutton, umenu, radiogroup, nodes,
                  matrixctrl, ubutton, nslider)
@@ -102,7 +102,7 @@ __all__ = [
     "newobj", "patchline",
     "panel", "dial", "tab", "toggle", "comment", "scope", "meter", "menu",
     "number_box", "slider", "button",
-    "live_text", "fpic", "live_gain", "multislider", "jsui",
+    "live_text", "fpic", "live_gain", "multislider", "jsui", "v8ui",
     "adsrui", "live_drop", "bpatcher", "swatch", "textedit",
     "live_step", "live_grid", "live_line", "live_arrows",
     "rslider", "kslider", "textbutton", "umenu", "radiogroup",

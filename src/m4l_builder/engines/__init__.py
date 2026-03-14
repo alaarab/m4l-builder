@@ -11,7 +11,10 @@ Usage:
 """
 
 from .filter_curve import filter_curve_js
+from .crossover_display import crossover_display_js
 from .eq_curve import eq_curve_js
+from .eq_band_column import eq_band_column_js
+from .linear_phase_eq_display import linear_phase_eq_display_js
 from .envelope_display import envelope_display_js
 from .spectrum_analyzer import spectrum_analyzer_js
 from .waveform_display import waveform_display_js
@@ -34,7 +37,10 @@ from .xy_trail_display import xy_trail_display_js
 
 __all__ = [
     "filter_curve_js",
+    "crossover_display_js",
     "eq_curve_js",
+    "eq_band_column_js",
+    "linear_phase_eq_display_js",
     "envelope_display_js",
     "spectrum_analyzer_js",
     "waveform_display_js",

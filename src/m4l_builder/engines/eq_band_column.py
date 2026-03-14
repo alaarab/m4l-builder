@@ -30,6 +30,21 @@ Outlet 0:
     band_motion_rate band_idx hz
     band_motion_depth band_idx percent
     band_motion_direction band_idx degrees
+    selected_label text
+    selected_status text
+    selected_freq value
+    selected_gain value
+    selected_q value
+    selected_type value
+    selected_slope value
+    selected_enable value
+    selected_solo value
+    selected_motion value
+    selected_dynamic value
+    selected_dynamic_amount value
+    selected_motion_rate value
+    selected_motion_depth value
+    selected_motion_direction value
 """
 
 from __future__ import annotations
@@ -222,6 +237,54 @@ function has_index(list, idx) {
 function current_band() {
     if (selected_band < 0 || selected_band >= num_bands) return null;
     return bands[selected_band];
+}
+
+function selected_status_text(band) {
+    var parts = [];
+    if (!band) return "Select a band";
+    parts.push(band.enabled ? "On" : "Bypassed");
+    if (SHOW_MOTION && band.motion) parts.push("Motion");
+    if (SHOW_DYNAMIC && band.dynamic && supports_dynamic(band.type)) parts.push("Dynamic");
+    if (SHOW_SOLO && band.solo) parts.push("Solo");
+    return parts.join(" | ");
+}
+
+function emit_selected_sync() {
+    var band = current_band();
+    if (!band) {
+        outlet(0, "selected_label", "NO BAND");
+        outlet(0, "selected_status", "Select a band");
+        outlet(0, "selected_freq", 1000.0);
+        outlet(0, "selected_gain", 0.0);
+        outlet(0, "selected_q", 1.0);
+        outlet(0, "selected_type", 0);
+        outlet(0, "selected_slope", 0);
+        outlet(0, "selected_enable", 0);
+        outlet(0, "selected_solo", 0);
+        outlet(0, "selected_motion", 0);
+        outlet(0, "selected_dynamic", 0);
+        outlet(0, "selected_dynamic_amount", 0.0);
+        outlet(0, "selected_motion_rate", default_motion_rate(0));
+        outlet(0, "selected_motion_depth", default_motion_depth(0));
+        outlet(0, "selected_motion_direction", default_motion_direction(0));
+        return;
+    }
+
+    outlet(0, "selected_label", "B" + (selected_band + 1) + " " + TYPE_NAMES[band.type].toUpperCase());
+    outlet(0, "selected_status", selected_status_text(band));
+    outlet(0, "selected_freq", band.freq);
+    outlet(0, "selected_gain", band.gain);
+    outlet(0, "selected_q", band.q);
+    outlet(0, "selected_type", band.type);
+    outlet(0, "selected_slope", band.slope);
+    outlet(0, "selected_enable", band.enabled);
+    outlet(0, "selected_solo", band.solo);
+    outlet(0, "selected_motion", band.motion);
+    outlet(0, "selected_dynamic", band.dynamic);
+    outlet(0, "selected_dynamic_amount", band.dynamic_amount);
+    outlet(0, "selected_motion_rate", band.motion_rate);
+    outlet(0, "selected_motion_depth", band.motion_depth);
+    outlet(0, "selected_motion_direction", band.motion_direction);
 }
 
 function motion_knobs_active(band) {
@@ -849,6 +912,7 @@ function apply_type_change(next_type) {
     if (!supports_dynamic(next_type) && (dynamic_was_active || dynamic_amount_was_active)) {
         outlet(0, "band_dynamic", selected_band, 0);
     }
+    emit_selected_sync();
 }
 
 function apply_drag_value(y) {
@@ -926,6 +990,7 @@ function apply_drag_value(y) {
         band.slope = next_value;
         emit_value("slope", next_value);
     }
+    emit_selected_sync();
     mgraphics.redraw();
 }
 
@@ -953,12 +1018,14 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     if (hover_control === "enable") {
         band.enabled = band.enabled ? 0 : 1;
         outlet(0, "band_enable", selected_band, band.enabled);
+        emit_selected_sync();
         mgraphics.redraw();
         return;
     }
     if (hover_control === "solo" && SHOW_SOLO) {
         band.solo = band.solo ? 0 : 1;
         outlet(0, "band_solo", selected_band, band.solo);
+        emit_selected_sync();
         mgraphics.redraw();
         return;
     }
@@ -969,6 +1036,7 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
         outlet(0, "band_motion", selected_band, band.motion);
         outlet(0, "band_motion_rate", selected_band, band.motion_rate);
         outlet(0, "band_motion_depth", selected_band, band.motion_depth);
+        emit_selected_sync();
         mgraphics.redraw();
         return;
     }
@@ -976,6 +1044,7 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
         if (!supports_dynamic(band.type)) return;
         band.dynamic = band.dynamic ? 0 : 1;
         outlet(0, "band_dynamic", selected_band, band.dynamic);
+        emit_selected_sync();
         mgraphics.redraw();
         return;
     }
@@ -1056,6 +1125,7 @@ function set_selected(v) {
     selected_band = Math.floor(v);
     if (selected_band < 0 || selected_band >= num_bands) selected_band = -1;
     drag_control = "";
+    emit_selected_sync();
     mgraphics.redraw();
 }
 
@@ -1078,6 +1148,7 @@ function set_band(idx, freq, gain, q, type, enabled, extra_a, extra_b, extra_c, 
         if (arguments.length > 10 && extra_e !== undefined) bands[idx].motion_depth = clamp(extra_e, MIN_MOTION_DEPTH, MAX_MOTION_DEPTH);
         if (arguments.length > 11 && extra_f !== undefined) bands[idx].motion_direction = clamp_motion_direction(extra_f);
     }
+    if (idx === selected_band) emit_selected_sync();
     mgraphics.redraw();
 }
 
@@ -1085,6 +1156,7 @@ function set_motion(idx, enabled) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= MAX_BANDS) return;
     bands[idx].motion = enabled ? 1 : 0;
+    if (idx === selected_band) emit_selected_sync();
     mgraphics.redraw();
 }
 
@@ -1092,6 +1164,7 @@ function set_dynamic(idx, enabled) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= MAX_BANDS) return;
     bands[idx].dynamic = enabled ? 1 : 0;
+    if (idx === selected_band) emit_selected_sync();
     mgraphics.redraw();
 }
 
@@ -1099,6 +1172,7 @@ function set_motion_rate(idx, value) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= MAX_BANDS) return;
     bands[idx].motion_rate = clamp(value, MIN_MOTION_RATE, MAX_MOTION_RATE);
+    if (idx === selected_band) emit_selected_sync();
     mgraphics.redraw();
 }
 
@@ -1106,6 +1180,7 @@ function set_motion_depth(idx, value) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= MAX_BANDS) return;
     bands[idx].motion_depth = clamp(value, MIN_MOTION_DEPTH, MAX_MOTION_DEPTH);
+    if (idx === selected_band) emit_selected_sync();
     mgraphics.redraw();
 }
 
@@ -1113,6 +1188,7 @@ function set_motion_direction(idx, value) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= MAX_BANDS) return;
     bands[idx].motion_direction = clamp_motion_direction(value);
+    if (idx === selected_band) emit_selected_sync();
     mgraphics.redraw();
 }
 
