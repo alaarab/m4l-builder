@@ -34,6 +34,8 @@ from .spectral_vocoder_display import spectral_vocoder_display_js
 from .lfo_display import lfo_display_js
 from .compressor_display import compressor_display_js
 from .xy_trail_display import xy_trail_display_js
+from .slice_overview import slice_overview_js
+from .slice_pattern_display import slice_pattern_display_js
 
 __all__ = [
     "filter_curve_js",
@@ -60,4 +62,6 @@ __all__ = [
     "lfo_display_js",
     "compressor_display_js",
     "xy_trail_display_js",
+    "slice_overview_js",
+    "slice_pattern_display_js",
 ]

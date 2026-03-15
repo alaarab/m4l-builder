@@ -48,6 +48,13 @@ from m4l_builder.engines.wavetable_editor import (
     wavetable_editor_js, WAVETABLE_EDITOR_INLETS, WAVETABLE_EDITOR_OUTLETS)
 from m4l_builder.engines.spectral_vocoder_display import (
     spectral_vocoder_display_js, SPECTRAL_VOCODER_INLETS, SPECTRAL_VOCODER_OUTLETS)
+from m4l_builder.engines.slice_overview import (
+    slice_overview_js, SLICE_OVERVIEW_INLETS, SLICE_OVERVIEW_OUTLETS)
+from m4l_builder.engines.slice_pattern_display import (
+    slice_pattern_display_js,
+    SLICE_PATTERN_DISPLAY_INLETS,
+    SLICE_PATTERN_DISPLAY_OUTLETS,
+)
 
 
 class TestCrossoverDisplayEngine:
@@ -259,6 +266,7 @@ class TestEqCurveEngine:
     def test_contains_mgraphics_init(self):
         js = eq_curve_js()
         assert "mgraphics.init()" in js
+
 
     def test_contains_mouse_handlers(self):
         js = eq_curve_js()
@@ -480,6 +488,133 @@ class TestEqCurveEngine:
         assert 'bands[idx].enabled = bands[idx].enabled ? 0 : 1;' in js
         assert 'outlet(0, "band_enable", idx, bands[idx].enabled ? 1 : 0);' in js
         assert "close_node_menu();" in js
+
+
+class TestSliceOverviewEngine:
+    def test_returns_string(self):
+        js = slice_overview_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_expected_io(self):
+        js = slice_overview_js()
+        assert "inlets = 5;" in js
+        assert "outlets = 1;" in js
+        assert SLICE_OVERVIEW_INLETS == 5
+        assert SLICE_OVERVIEW_OUTLETS == 1
+
+    def test_contains_sampler_surface_handlers(self):
+        js = slice_overview_js()
+        assert "function paint()" in js
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function draw_waveform" in js
+        assert "function rebuild_waveform_cache()" in js
+        assert "new Buffer(BUFFER_NAME)" in js
+        assert "DROP SAMPLE" in js
+
+    def test_allows_custom_region_color(self):
+        js = slice_overview_js(region_line="1.0, 0.0, 0.0, 1.0")
+        assert "1.0, 0.0, 0.0, 1.0" in js
+
+    def test_allows_custom_buffer_name(self):
+        js = slice_overview_js(buffer_name="custombuf")
+        assert "var BUFFER_NAME = 'custombuf';" in js
+
+
+class TestSlicePatternDisplayEngine:
+    def test_returns_string(self):
+        js = slice_pattern_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_expected_io(self):
+        js = slice_pattern_display_js()
+        assert "inlets = 15;" in js
+        assert "outlets = 2;" in js
+        assert SLICE_PATTERN_DISPLAY_INLETS == 15
+        assert SLICE_PATTERN_DISPLAY_OUTLETS == 2
+
+    def test_contains_pattern_helpers(self):
+        js = slice_pattern_display_js()
+        assert "function step_base_index(step)" in js
+        assert "function step_computed_index(step)" in js
+        assert "function step_index(step)" in js
+        assert "function step_chopped(step)" in js
+        assert "function step_ratchet_count(step)" in js
+        assert "function main_glitch_shift(step)" in js
+        assert "function step_direction(step)" in js
+        assert "function step_pitch(step)" in js
+        assert "function ratchet_index(step, ratchet_no)" in js
+        assert "function step_arp(step)" in js
+        assert "function onclick(x, y, but, cmd, shift, capslock, option, ctrl)" in js
+        assert "function ondrag(x, y, but, cmd, shift, capslock, option, ctrl)" in js
+        assert "function anything()" in js
+        assert "function normalize_locks()" in js
+        assert "function slice_index_from_point(y)" in js
+        assert "function direction_from_point(y)" in js
+        assert "function pitch_from_point(y)" in js
+        assert "function paint_drag_range(step, y)" in js
+        assert "function emit_scene_dump(slot)" in js
+        assert "outlet(0, 'lock', step, idx);" in js
+        assert "outlet(0, 'unlock', step);" in js
+        assert "outlet(0, 'clear');" in js
+        assert "outlet(0, 'dirlock', step, direction);" in js
+        assert "outlet(0, 'dirunlock', step);" in js
+        assert "outlet(0, 'dirclear');" in js
+        assert "outlet(0, 'pitchlock', step, semitone);" in js
+        assert "outlet(0, 'pitchunlock', step);" in js
+        assert "outlet(0, 'pitchclear');" in js
+        assert "outlet(0, 'gatelock', step, gate);" in js
+        assert "outlet(0, 'gateunlock', step);" in js
+        assert "outlet(0, 'gateclear');" in js
+        assert "outlet(0, 'ratchetlock', step, count);" in js
+        assert "outlet(0, 'ratchetunlock', step);" in js
+        assert "outlet(0, 'ratchetclear');" in js
+        assert "outlet(1, slot, 'set', i, step_locked_index(i));" in js
+        assert "outlet(1, slot, 'dirset', i, step_locked_direction(i));" in js
+        assert "outlet(1, slot, 'pitchset', i, step_locked_pitch(i));" in js
+        assert "outlet(1, slot, 'gateset', i, step_locked_gate(i));" in js
+        assert "outlet(1, slot, 'ratchetset', i, step_locked_ratchet(i));" in js
+        assert "if (inlet !== 14) return;" in js
+        assert "if (messagename === 'dumpa')" in js
+        assert "if (messagename === 'dumpb')" in js
+        assert "if (messagename === 'set' && argv.length >= 2)" in js
+        assert "if (messagename === 'unset' && argv.length >= 1)" in js
+        assert "if (messagename === 'dirset' && argv.length >= 2)" in js
+        assert "if (messagename === 'dirunset' && argv.length >= 1)" in js
+        assert "if (messagename === 'pitchset' && argv.length >= 2)" in js
+        assert "if (messagename === 'pitchunset' && argv.length >= 1)" in js
+        assert "if (messagename === 'gateset' && argv.length >= 2)" in js
+        assert "if (messagename === 'gateunset' && argv.length >= 1)" in js
+        assert "if (messagename === 'ratchetset' && argv.length >= 2)" in js
+        assert "if (messagename === 'ratchetunset' && argv.length >= 1)" in js
+        assert "function step_gate(step)" in js
+        assert "function gate_from_point(y)" in js
+        assert "function ratchet_from_point(y)" in js
+        assert "if (shift && option && !cmd && !ctrl) drag_mode = 5;" in js
+        assert "else if (cmd && option && !ctrl) drag_mode = 4;" in js
+        assert "else if (ctrl) drag_mode = option ? -3 : 3;" in js
+        assert "else if (option) drag_mode = 2;" in js
+        assert "else drag_mode = cmd ? -1 : 1;" in js
+        assert "return y < (h * 0.5) ? 1 : -1;" in js
+        assert "return y < (h * 0.5) ? 1 : 0;" in js
+        assert "return clamp(Math.round((norm * 48.0) - 24.0), -24, 24);" in js
+        assert "return clamp(Math.floor(norm * 4.0), 0, 3);" in js
+        assert "RATCHET_POSITIONS" in js
+        assert "MODE_LABELS" in js
+
+    def test_allows_custom_bar_color(self):
+        js = slice_pattern_display_js(bar_color="0.9, 0.4, 0.1, 1.0")
+        assert "0.9, 0.4, 0.1" in js
+
+    def test_no_es6_arrow_functions(self):
+        js = slice_pattern_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
 
 
 class TestLinearPhaseEqDisplayEngine:
@@ -966,7 +1101,8 @@ class TestEngineImports:
                                           resonance_bank_display_js,
                                           sidechain_display_js, spectral_display_js,
                                           peaking_eq_display_js, step_grid_display_js,
-                                          grain_display_js)
+                                          grain_display_js,
+                                          slice_pattern_display_js)
         assert callable(filter_curve_js)
         assert callable(eq_curve_js)
         assert callable(envelope_display_js)
@@ -982,6 +1118,7 @@ class TestEngineImports:
         assert callable(peaking_eq_display_js)
         assert callable(step_grid_display_js)
         assert callable(grain_display_js)
+        assert callable(slice_pattern_display_js)
 
     def test_import_constants_from_modules(self):
         from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, FILTER_CURVE_OUTLETS

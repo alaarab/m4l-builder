@@ -151,23 +151,23 @@ responsiveness matter more than phase preservation.
 
 The current UI is built around:
 
-- a compact left-side band navigator for fast selection
+- a compact left-side selected-band mini-column using native Live controls
 - a large hero graph with draggable nodes and integrated analyzer
-- a single selected-band column for contextual editing
-- a global utility area for analyzer, display range, output, bypass, and meters
+- a compact right-side switch stack for analyzer, display range, and bypass
+- hidden canonical per-band controls that keep graph and parameter state aligned
 
 Current interaction priorities:
 
 - drag nodes for frequency and gain
 - mouse wheel for Q
 - graph-backed visual decision making
-- click either the graph or the left navigator to change the selected band
+- click the graph to change the selected band; the left mini-column follows that selection
 
 Known direction:
 
 - the graph should remain the unquestioned primary editor
-- the left rail should stay lightweight navigation, not become a second live
-  editor
+- the left strip should stay compact and selection-driven, not become a second
+  full editor
 - the hidden canonical parameter controls still need a more semantic shared
   construction layer in the framework
 
@@ -203,7 +203,7 @@ Known direction:
   - [`docs/ableton_ui_review_checklist.md`](../../docs/ableton_ui_review_checklist.md)
 - Current sprint focus:
   - single contextual selected-band column as the canonical editor
-  - left-side navigation surface instead of a duplicated core editor
+  - tighter left mini-column and compact right utility switches
   - tighter graph, selection, and parameter anti-drift behavior
 - Planned validation note:
   - [`docs/ui_validation/week_03_parametric_eq.md`](../../docs/ui_validation/week_03_parametric_eq.md)
