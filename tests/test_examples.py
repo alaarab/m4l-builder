@@ -117,6 +117,17 @@ def _get_box_texts(patcher):
     return {b["box"].get("text", "") for b in patcher["patcher"]["boxes"]}
 
 
+def _has_patchline(patcher, src_id, src_outlet, dst_id, dst_inlet):
+    for line in patcher["patcher"]["lines"]:
+        patchline = line["patchline"]
+        if (
+            patchline["source"] == [src_id, src_outlet]
+            and patchline["destination"] == [dst_id, dst_inlet]
+        ):
+            return True
+    return False
+
+
 class TestExampleBuilds:
     """Every example script should produce a valid .amxd file."""
 
@@ -313,12 +324,65 @@ class TestExampleBuilds:
         assert os.path.exists(os.path.join(output_dir, BRIDGE_SERVER_FILENAME))
         assert os.path.exists(os.path.join(output_dir, BRIDGE_SCHEMA_FILENAME))
 
-    def test_super_slicer_uses_notein_for_note_velocity_gate(self):
+    def test_super_slicer_uses_midiin_midiparse_for_clip_midi(self):
         script = "super_slicer.py"
         if script not in self.outputs:
             pytest.skip(f"{script} did not produce output")
         _, patcher = _parse_amxd(self.outputs[script])
         texts = _get_box_texts(patcher)
 
-        assert "notein" in texts
-        assert "midiparse" not in texts
+        assert "midiin" in texts
+        assert "midiparse" in texts
+        assert "notein" not in texts
+
+    def test_super_slicer_retriggers_envelopes_on_main_steps(self):
+        script = "super_slicer.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+
+        assert _has_patchline(patcher, "index_fire_trig", 0, "startloop_msg", 0)
+
+    def test_super_slicer_scales_mix_percent_before_dry_wet_stage(self):
+        script = "super_slicer.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+        texts = _get_box_texts(patcher)
+
+        assert "scale 0. 100. 0. 1." in texts
+        assert _has_patchline(patcher, "mix_dial", 0, "mix_scale", 0)
+        assert _has_patchline(patcher, "mix_scale", 0, "mix_mix_in", 0)
+
+    def test_super_slicer_avoids_parallel_raw_voice_bypass(self):
+        script = "super_slicer.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+
+        assert not _has_patchline(patcher, "groove", 0, "voice_gain_1", 0)
+        assert not _has_patchline(patcher, "groove_2", 0, "voice_gain_2", 0)
+        assert not _has_patchline(patcher, "groove_3", 0, "voice_gain_3", 0)
+        assert not _has_patchline(patcher, "groove_4", 0, "voice_gain_4", 0)
+
+    def test_super_slicer_routes_active_slice_window_to_surface(self):
+        script = "super_slicer.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+
+        assert _has_patchline(patcher, "active_slice_start_norm_expr", 0, "slice_surface", 5)
+        assert _has_patchline(patcher, "active_slice_end_norm_expr", 0, "slice_surface", 6)
+        assert _has_patchline(patcher, "slice_start_expr", 0, "active_slice_start_norm_expr", 0)
+        assert _has_patchline(patcher, "slice_end_expr", 0, "active_slice_end_norm_expr", 0)
+
+    def test_super_slicer_decay_control_scales_with_slice_length(self):
+        script = "super_slicer.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+        texts = _get_box_texts(patcher)
+
+        assert "expr max(18.\\, min($f1 * 1.2\\, $f1 * (0.35 + ($f2 / 220.))))" in texts
+        assert _has_patchline(patcher, "effective_slice_ms_expr", 0, "env_decay_expr", 0)
+        assert _has_patchline(patcher, "decay_dial", 0, "env_decay_expr", 1)

@@ -44,6 +44,7 @@ if DEMO_SOURCE_PATH.exists():
     if not DEMO_SAMPLE_PATH.exists():
         copy2(DEMO_SOURCE_PATH, DEMO_SAMPLE_PATH)
 HAS_DEMO_SAMPLE = DEMO_SAMPLE_PATH.exists()
+DEMO_SAMPLE_NAME = DEMO_SAMPLE_PATH.name
 
 SLICER_THEME = Theme.custom(
     bg=[0.055, 0.060, 0.068, 1.0],
@@ -77,6 +78,25 @@ def add_message(dev, box_id, text, rect):
             "outlettype": [""],
             "text": text,
             "patching_rect": rect,
+        }
+    })
+
+
+def add_display_message(dev, box_id, text, patching_rect, presentation_rect):
+    """Add a presentation-visible message box used as a readout."""
+    return dev.add_box({
+        "box": {
+            "id": box_id,
+            "maxclass": "message",
+            "numinlets": 2,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "text": text,
+            "patching_rect": patching_rect,
+            "presentation": 1,
+            "presentation_rect": presentation_rect,
+            "ignoreclick": 1,
+            "fontsize": 9.0,
         }
     })
 
@@ -140,7 +160,7 @@ device.add_jsui(
     ),
     numinlets=SLICE_PATTERN_DISPLAY_INLETS,
     numoutlets=SLICE_PATTERN_DISPLAY_OUTLETS,
-    outlettype=[""],
+    outlettype=["", ""],
 )
 
 device.add_comment("source_title", [504, 18, 96, 12], "SOURCE",
@@ -149,6 +169,13 @@ device.add_live_drop("sample_drop", [504, 32, 110, 28],
                      bgcolor=SLICER_THEME.section,
                      bordercolor=SLICER_THEME.accent,
                      textcolor=SLICER_THEME.text)
+add_display_message(
+    device,
+    "sample_name_display",
+    "DROP SAMPLE",
+    [520, 220, 160, 18],
+    [504, 64, 168, 18],
+)
 if HAS_DEMO_SAMPLE:
     device.add_live_text(
         "demo_btn",
@@ -164,13 +191,6 @@ if HAS_DEMO_SAMPLE:
         textoncolor=SLICER_THEME.bg,
         annotation_name="Load the built-in Super Slicer demo sample",
     )
-    device.add_comment("source_hint", [504, 64, 168, 20],
-                       "Drop your own sample or tap DEMO",
-                       fontsize=8.0, textcolor=SLICER_THEME.text_dim)
-else:
-    device.add_comment("source_hint", [504, 64, 168, 20],
-                       "Drop a loop, phrase, texture, or vocal",
-                       fontsize=8.0, textcolor=SLICER_THEME.text_dim)
 
 device.add_comment("mode_title", [504, 88, 72, 10], "MOTION",
                    fontsize=8.0, textcolor=SLICER_THEME.text_dim)
@@ -234,9 +254,9 @@ STRIDE = 74
 
 row1_controls = [
     ("position_dial", "Position", 0.0, 100.0, 12.0, 5, "SCAN"),
-    ("region_dial", "Region", 5.0, 100.0, 32.0, 5, "REGION"),
-    ("slices_dial", "Slices", 4.0, 32.0, 16.0, 0, "SLICES"),
-    ("steps_dial", "Steps", 1.0, 32.0, 16.0, 0, "STEPS"),
+    ("region_dial", "Region", 5.0, 100.0, 48.0, 5, "REGION"),
+    ("slices_dial", "Slices", 4.0, 32.0, 8.0, 0, "SLICES"),
+    ("steps_dial", "Steps", 1.0, 32.0, 8.0, 0, "STEPS"),
     ("distance_dial", "Distance", 1.0, 8.0, 1.0, 0, "DIST"),
     ("jump_dial", "Jump", 0.0, 100.0, 32.0, 5, "JUMP"),
     ("chop_dial", "Chop", 0.0, 100.0, 0.0, 5, "CHOP"),
@@ -247,7 +267,7 @@ row2_controls = [
     ("jitter_dial", "Jitter", 0.0, 100.0, 10.0, 5, "JITTER"),
     ("pitch_dial", "Pitch", 0.0, 12.0, 3.0, 7, "PITCH"),
     ("pitch_env_dial", "Pitch Env", 0.0, 24.0, 6.0, 7, "P ENV"),
-    ("decay_dial", "Decay", 12.0, 220.0, 72.0, 0, "DECAY"),
+    ("decay_dial", "Decay", 12.0, 220.0, 140.0, 0, "DECAY"),
     ("pan_dial", "Pan", -100.0, 100.0, 0.0, 5, "PAN"),
     ("filter_dial", "Filter", 80.0, 18000.0, 9600.0, 3, "FILTER"),
     ("drive_dial", "Drive", 0.0, 100.0, 24.0, 5, "DRIVE"),
@@ -287,7 +307,7 @@ for row_y, label_y, controls in [
                            fontsize=8.0, justification=1, textcolor=SLICER_THEME.text_dim)
 
 device.add_live_gain("output_gain", "Output", [632, 190, 36, 210],
-                     min_val=-24.0, max_val=6.0, initial=0.0,
+                     min_val=-24.0, max_val=6.0, initial=-24.0,
                      orientation=1, shortname="Out")
 
 sync_x = X0 + 6 * STRIDE
@@ -337,8 +357,11 @@ device.add_live_text(
 # Playback / control core
 # =========================================================================
 
-device.add_newobj("notein", "notein", numinlets=1, numoutlets=3,
-                  outlettype=["int", "int", "int"], patching_rect=[860, 20, 52, 20])
+device.add_newobj("midiin", "midiin", numinlets=1, numoutlets=2,
+                  outlettype=["int", "int"], patching_rect=[860, 20, 52, 20])
+device.add_newobj("midiparse", "midiparse", numinlets=1, numoutlets=7,
+                  outlettype=["int", "int", "int", "int", "int", "int", "int"],
+                  patching_rect=[860, 52, 72, 20])
 
 device.add_newobj("plugout", "plugout~", numinlets=2, numoutlets=0,
                   patching_rect=[1500, 760, 60, 20])
@@ -352,11 +375,11 @@ device.add_newobj("bpm_store", "f 120.", numinlets=2, numoutlets=1,
                   outlettype=["float"], patching_rect=[760, 84, 48, 20])
 
 device.add_newobj("note_store", "f 36", numinlets=2, numoutlets=1,
-                  outlettype=["float"], patching_rect=[860, 20, 44, 20])
+                  outlettype=["float"], patching_rect=[860, 84, 44, 20])
 device.add_newobj("vel_gt", "> 0", numinlets=2, numoutlets=1,
-                  outlettype=["int"], patching_rect=[860, 52, 36, 20])
+                  outlettype=["int"], patching_rect=[912, 84, 36, 20])
 device.add_newobj("gate_sel", "sel 1 0", numinlets=1, numoutlets=3,
-                  outlettype=["bang", "bang", ""], patching_rect=[860, 84, 58, 20])
+                  outlettype=["bang", "bang", ""], patching_rect=[956, 84, 58, 20])
 
 device.add_newobj("metro", "metro 125", numinlets=2, numoutlets=1,
                   outlettype=["bang"], patching_rect=[940, 84, 56, 20])
@@ -446,7 +469,12 @@ device.add_newobj("step_interval_expr", "expr if($i1 > 0\\, $f2\\, $f3)",
                   numinlets=3, numoutlets=1, outlettype=["float"],
                   patching_rect=[1352, 212, 174, 20])
 
-device.add_newobj("sample_buf", "buffer~ slicebuf 60000", numinlets=1, numoutlets=2,
+sample_buf_text = (
+    "buffer~ slicebuf {}".format(str(DEMO_SAMPLE_PATH))
+    if HAS_DEMO_SAMPLE
+    else "buffer~ slicebuf 60000"
+)
+device.add_newobj("sample_buf", sample_buf_text, numinlets=1, numoutlets=2,
                   outlettype=["", ""], patching_rect=[760, 280, 132, 20])
 device.add_newobj("sample_info", "info~ slicebuf", numinlets=1, numoutlets=9,
                   outlettype=["", "", "", "", "", "", "", "", ""],
@@ -454,19 +482,34 @@ device.add_newobj("sample_info", "info~ slicebuf", numinlets=1, numoutlets=9,
 device.add_newobj("sample_ms_store", "f 10000.", numinlets=2, numoutlets=1,
                   outlettype=["float"], patching_rect=[760, 344, 60, 20])
 device.add_newobj("drop_trig", "t b l", numinlets=1, numoutlets=2,
-                  outlettype=["bang", ""], patching_rect=[900, 280, 44, 20])
-device.add_newobj("drop_prep", "prepend replace", numinlets=1, numoutlets=1,
+                  outlettype=["bang", ""], patching_rect=[900, 280, 42, 20])
+device.add_newobj("drop_prep", "prepend read", numinlets=1, numoutlets=1,
                   outlettype=[""], patching_rect=[952, 280, 92, 20])
 device.add_newobj("drop_wait", "delay 120", numinlets=2, numoutlets=1,
                   outlettype=["bang"], patching_rect=[900, 312, 64, 20])
+device.add_newobj("sample_path_symbol", "tosymbol", numinlets=2, numoutlets=1,
+                  outlettype=["symbol"], patching_rect=[1052, 280, 62, 20])
+device.add_newobj("sample_name_regexp", "regexp .*/([^/]+)$ @substitute %1",
+                  numinlets=1, numoutlets=4, outlettype=["", "", "", ""],
+                  patching_rect=[1122, 280, 198, 20])
+device.add_newobj("sample_name_set", "prepend set", numinlets=1, numoutlets=1,
+                  outlettype=[""], patching_rect=[1328, 280, 82, 20])
 if HAS_DEMO_SAMPLE:
     device.add_newobj("demo_sel", "sel 1", numinlets=1, numoutlets=2,
                       outlettype=["bang", ""], patching_rect=[900, 344, 42, 20])
+    device.add_newobj("demo_load_delay", "delay 250", numinlets=2, numoutlets=1,
+                      outlettype=["bang"], patching_rect=[1248, 312, 64, 20])
     add_message(
         device,
         "demo_read_msg",
-        "replace {}".format(str(DEMO_SAMPLE_PATH)),
+        str(DEMO_SAMPLE_PATH),
         [952, 344, 288, 18],
+    )
+    add_message(
+        device,
+        "demo_name_msg",
+        "set {}".format(DEMO_SAMPLE_NAME),
+        [1248, 344, 128, 18],
     )
 add_message(device, "loaded_msg", "1", [972, 312, 28, 18])
 add_message(device, "stop_msg", "stop", [1008, 84, 36, 18])
@@ -548,9 +591,9 @@ device.add_newobj(
 )
 device.add_newobj("index_trig", "t b i", numinlets=1, numoutlets=2,
                   outlettype=["bang", "int"], patching_rect=[760, 552, 44, 20])
-device.add_newobj("index_fire_trig", "t b b b b", numinlets=1, numoutlets=4,
-                  outlettype=["bang", "bang", "bang", "bang"],
-                  patching_rect=[812, 552, 76, 20])
+device.add_newobj("index_fire_trig", "t b b b b b b b", numinlets=1, numoutlets=7,
+                  outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang"],
+                  patching_rect=[812, 552, 126, 20])
 device.add_newobj("glitch_main_dir_expr", "expr if((($i1 + $i2) % 4) < 2\\, 1\\, -1)",
                   numinlets=2, numoutlets=1, outlettype=["int"],
                   patching_rect=[1246, 488, 224, 20])
@@ -792,15 +835,15 @@ device.add_newobj("ratchet_delay_b", "delay 0", numinlets=2, numoutlets=1,
                   outlettype=["bang"], patching_rect=[1706, 552, 56, 20])
 device.add_newobj("ratchet_delay_c", "delay 0", numinlets=2, numoutlets=1,
                   outlettype=["bang"], patching_rect=[1706, 584, 56, 20])
-device.add_newobj("ratchet_trig_a", "t b b b b b b", numinlets=1, numoutlets=6,
-                  outlettype=["bang", "bang", "bang", "bang", "bang", "bang"],
-                  patching_rect=[1770, 520, 98, 20])
-device.add_newobj("ratchet_trig_b", "t b b b b b b", numinlets=1, numoutlets=6,
-                  outlettype=["bang", "bang", "bang", "bang", "bang", "bang"],
-                  patching_rect=[1770, 552, 98, 20])
-device.add_newobj("ratchet_trig_c", "t b b b b b b", numinlets=1, numoutlets=6,
-                  outlettype=["bang", "bang", "bang", "bang", "bang", "bang"],
-                  patching_rect=[1770, 584, 98, 20])
+device.add_newobj("ratchet_trig_a", "t b b b b b b b", numinlets=1, numoutlets=7,
+                  outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang"],
+                  patching_rect=[1770, 520, 118, 20])
+device.add_newobj("ratchet_trig_b", "t b b b b b b b", numinlets=1, numoutlets=7,
+                  outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang"],
+                  patching_rect=[1770, 552, 118, 20])
+device.add_newobj("ratchet_trig_c", "t b b b b b b b", numinlets=1, numoutlets=7,
+                  outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang"],
+                  patching_rect=[1770, 584, 118, 20])
 device.add_newobj(
     "slice_end_expr",
     "expr min($f3\\, $f1 + max(10.\\, $f2))",
@@ -983,16 +1026,16 @@ device.add_newobj("launch_store_3", "f 0.", numinlets=2, numoutlets=1,
 device.add_newobj("launch_store_4", "f 0.", numinlets=2, numoutlets=1,
                   outlettype=["float"], patching_rect=[1680, 680, 42, 20])
 
-device.add_newobj("voice1_gain_expr", "expr 1. / sqrt(max(1.\\, $f1))",
+device.add_newobj("voice1_gain_expr", "expr 0.25 / sqrt(max(1.\\, $f1))",
                   numinlets=1, numoutlets=1, outlettype=["float"],
                   patching_rect=[760, 712, 180, 20])
-device.add_newobj("voice2_gain_expr", "expr if($f1 >= 2.\\, 1. / sqrt(max(1.\\, $f1))\\, 0.)",
+device.add_newobj("voice2_gain_expr", "expr if($f1 >= 2.\\, 0.25 / sqrt(max(1.\\, $f1))\\, 0.)",
                   numinlets=1, numoutlets=1, outlettype=["float"],
                   patching_rect=[948, 712, 244, 20])
-device.add_newobj("voice3_gain_expr", "expr if($f1 >= 3.\\, 1. / sqrt(max(1.\\, $f1))\\, 0.)",
+device.add_newobj("voice3_gain_expr", "expr if($f1 >= 3.\\, 0.25 / sqrt(max(1.\\, $f1))\\, 0.)",
                   numinlets=1, numoutlets=1, outlettype=["float"],
                   patching_rect=[1200, 712, 244, 20])
-device.add_newobj("voice4_gain_expr", "expr if($f1 >= 4.\\, 1. / sqrt(max(1.\\, $f1))\\, 0.)",
+device.add_newobj("voice4_gain_expr", "expr if($f1 >= 4.\\, 0.25 / sqrt(max(1.\\, $f1))\\, 0.)",
                   numinlets=1, numoutlets=1, outlettype=["float"],
                   patching_rect=[1452, 712, 244, 20])
 
@@ -1107,10 +1150,19 @@ device.add_newobj("voice_rate_mul_3", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[2082, 712, 60, 20])
 device.add_newobj("voice_rate_mul_4", "*~ 1.", numinlets=2, numoutlets=1,
                   outlettype=["signal"], patching_rect=[2082, 744, 60, 20])
+device.add_newobj("play_rate_init", "loadmess 1.", numinlets=1, numoutlets=1,
+                  outlettype=[""], patching_rect=[2150, 648, 78, 20])
+device.add_newobj("play_rate_pack", "pack f 20", numinlets=2, numoutlets=1,
+                  outlettype=[""], patching_rect=[2236, 648, 62, 20])
+device.add_newobj("play_rate_line", "line~", numinlets=2, numoutlets=2,
+                  outlettype=["signal", "bang"], patching_rect=[2304, 648, 40, 20])
 
-device.add_newobj("env_decay_expr", "expr max(12.\\, $f1 * 0.88)",
-                  numinlets=1, numoutlets=1, outlettype=["float"],
-                  patching_rect=[1204, 712, 164, 20])
+device.add_newobj(
+    "env_decay_expr",
+    "expr max(18.\\, min($f1 * 1.2\\, $f1 * (0.35 + ($f2 / 220.))))",
+    numinlets=2, numoutlets=1, outlettype=["float"],
+    patching_rect=[1204, 712, 238, 20],
+)
 add_message(device, "env_msg", "0, 1 3, 0 $1 4", [1374, 712, 98, 18])
 device.add_newobj("env_line", "line~", numinlets=2, numoutlets=2,
                   outlettype=["signal", "bang"], patching_rect=[1478, 712, 40, 20])
@@ -1302,6 +1354,8 @@ mix_boxes, mix_lines = dry_wet_mix(
     dry_source_l=("pan_mul_l", 0), dry_source_r=("pan_mul_r", 0),
 )
 device.add_dsp(mix_boxes, mix_lines)
+device.add_newobj("mix_scale", "scale 0. 100. 0. 1.", numinlets=6, numoutlets=1,
+                  outlettype=["float"], patching_rect=[760, 880, 138, 20])
 
 
 # =========================================================================
@@ -1323,6 +1377,18 @@ device.add_newobj(
     "expr if($f3 <= 0.\\, 1.\\, max(0.\\, min(1.\\, ($f1 + $f2) / $f3)))",
     numinlets=3, numoutlets=1, outlettype=["float"],
     patching_rect=[520, 344, 232, 20],
+)
+device.add_newobj(
+    "active_slice_start_norm_expr",
+    "expr if($f2 <= 0.\\, 0.\\, max(0.\\, min(1.\\, $f1 / $f2)))",
+    numinlets=2, numoutlets=1, outlettype=["float"],
+    patching_rect=[760, 344, 182, 20],
+)
+device.add_newobj(
+    "active_slice_end_norm_expr",
+    "expr if($f2 <= 0.\\, 1.\\, max(0.\\, min(1.\\, $f1 / $f2)))",
+    numinlets=2, numoutlets=1, outlettype=["float"],
+    patching_rect=[950, 344, 182, 20],
 )
 device.add_newobj("playhead_pack", "pak f f i i f", numinlets=5, numoutlets=1,
                   outlettype=[""], patching_rect=[520, 376, 88, 20])
@@ -1357,6 +1423,7 @@ for control_id in [
     "mix_dial", "mode_tab", "rate_tab", "sync_btn",
 ]:
     device.add_line("loadbang", 0, control_id, 0)
+device.add_line("loadbang", 0, "sample_name_display", 0)
 device.add_line("reroll_btn", 0, "reroll_sel", 0)
 device.add_line("pattern_seed_btn", 0, "pattern_seed_sel", 0)
 device.add_line("pitch_seed_btn", 0, "pitch_seed_sel", 0)
@@ -1377,27 +1444,45 @@ device.add_line("glitch_seed_rand", 0, "glitch_seed_store", 0)
 device.add_line("pitch_seed_rand", 0, "pitch_seed_store", 0)
 
 device.add_line("sample_drop", 0, "drop_trig", 0)
-device.add_line("drop_trig", 1, "drop_prep", 0)
-device.add_line("drop_prep", 0, "sample_buf", 0)
+device.add_line("drop_trig", 1, "sample_path_symbol", 0)
 device.add_line("drop_trig", 0, "drop_wait", 0)
+device.add_line("sample_path_symbol", 0, "drop_prep", 0)
+device.add_line("drop_prep", 0, "sample_buf", 0)
+device.add_line("sample_path_symbol", 0, "sample_name_regexp", 0)
+device.add_line("sample_name_regexp", 0, "sample_name_set", 0)
+device.add_line("sample_name_set", 0, "sample_name_display", 0)
 if HAS_DEMO_SAMPLE:
     device.add_line("demo_btn", 0, "demo_sel", 0)
     device.add_line("demo_sel", 0, "demo_read_msg", 0)
-    device.add_line("demo_read_msg", 0, "sample_buf", 0)
+    device.add_line("demo_read_msg", 0, "sample_path_symbol", 0)
     device.add_line("demo_sel", 0, "drop_wait", 0)
+    device.add_line("demo_sel", 0, "demo_name_msg", 0)
+    device.add_line("demo_name_msg", 0, "sample_name_display", 0)
+    device.add_line("loadbang", 0, "demo_load_delay", 0)
+    device.add_line("demo_load_delay", 0, "drop_wait", 0)
+    device.add_line("demo_load_delay", 0, "demo_name_msg", 0)
 device.add_line("drop_wait", 0, "sample_info", 0)
 device.add_line("drop_wait", 0, "loaded_msg", 0)
 device.add_line("loaded_msg", 0, "slice_surface", 0)
 device.add_line("drop_wait", 0, "loop_msg", 0)
+device.add_line("sample_buf", 1, "groove", 0)
+device.add_line("sample_buf", 1, "groove_2", 0)
+device.add_line("sample_buf", 1, "groove_3", 0)
+device.add_line("sample_buf", 1, "groove_4", 0)
 device.add_line("loop_msg", 0, "groove", 0)
 device.add_line("loop_msg", 0, "groove_2", 0)
 device.add_line("loop_msg", 0, "groove_3", 0)
 device.add_line("loop_msg", 0, "groove_4", 0)
+device.add_line("startloop_msg", 0, "groove", 0)
+device.add_line("startloop_msg", 0, "groove_2", 0)
+device.add_line("startloop_msg", 0, "groove_3", 0)
+device.add_line("startloop_msg", 0, "groove_4", 0)
 device.add_line("sample_info", 6, "sample_ms_store", 0)
 
 # MIDI gate and tempo
-device.add_line("notein", 0, "note_store", 0)
-device.add_line("notein", 1, "vel_gt", 0)
+device.add_line("midiin", 0, "midiparse", 0)
+device.add_line("midiparse", 0, "note_store", 0)
+device.add_line("midiparse", 1, "vel_gt", 0)
 device.add_line("vel_gt", 0, "metro", 0)
 device.add_line("vel_gt", 0, "gate_sel", 0)
 device.add_line("gate_sel", 0, "step_trig", 0)
@@ -1535,6 +1620,12 @@ device.add_line("region_start_final_expr", 0, "playhead_pack", 0)
 device.add_line("region_ms_expr", 0, "playhead_pack", 1)
 device.add_line("playhead_pack", 0, "playhead_expr", 0)
 device.add_line("playhead_expr", 0, "slice_surface", 3)
+device.add_line("slice_start_expr", 0, "active_slice_start_norm_expr", 0)
+device.add_line("slice_end_expr", 0, "active_slice_end_norm_expr", 0)
+device.add_line("sample_ms_store", 0, "active_slice_start_norm_expr", 1)
+device.add_line("sample_ms_store", 0, "active_slice_end_norm_expr", 1)
+device.add_line("active_slice_start_norm_expr", 0, "slice_surface", 5)
+device.add_line("active_slice_end_norm_expr", 0, "slice_surface", 6)
 
 # Step generation
 device.add_line("metro", 0, "step_trig", 0)
@@ -1686,10 +1777,11 @@ device.add_line("index_trig", 1, "voice2_index_expr", 0)
 device.add_line("index_trig", 1, "voice3_index_expr", 0)
 device.add_line("index_trig", 1, "voice4_index_expr", 0)
 device.add_line("index_trig", 1, "playhead_pack", 2)
-device.add_line("index_fire_trig", 3, "launch_store", 0)
-device.add_line("index_fire_trig", 2, "launch_store_2", 0)
-device.add_line("index_fire_trig", 1, "launch_store_3", 0)
-device.add_line("index_fire_trig", 0, "launch_store_4", 0)
+device.add_line("index_fire_trig", 4, "launch_store", 0)
+device.add_line("index_fire_trig", 3, "launch_store_2", 0)
+device.add_line("index_fire_trig", 2, "launch_store_3", 0)
+device.add_line("index_fire_trig", 1, "launch_store_4", 0)
+device.add_line("index_fire_trig", 0, "startloop_msg", 0)
 
 # Jitter, glitch, and slice timing
 device.add_line("rand_jitter", 0, "jitter_norm_expr", 0)
@@ -1760,25 +1852,23 @@ device.add_line("ratchet_sel_c", 0, "ratchet_delay_c", 0)
 device.add_line("ratchet_delay_a", 0, "ratchet_trig_a", 0)
 device.add_line("ratchet_delay_b", 0, "ratchet_trig_b", 0)
 device.add_line("ratchet_delay_c", 0, "ratchet_trig_c", 0)
-device.add_line("ratchet_trig_a", 5, "speed_env_msg", 0)
-device.add_line("ratchet_trig_a", 4, "env_msg", 0)
-device.add_line("ratchet_trig_a", 3, "ratchet_a_store", 0)
-device.add_line("ratchet_trig_a", 2, "ratchet_a_store_2", 0)
-device.add_line("ratchet_trig_a", 1, "ratchet_a_store_3", 0)
-device.add_line("ratchet_trig_a", 0, "ratchet_a_store_4", 0)
-device.add_line("ratchet_trig_b", 5, "speed_env_msg", 0)
-device.add_line("ratchet_trig_b", 4, "env_msg", 0)
-device.add_line("ratchet_trig_b", 3, "ratchet_b_store", 0)
-device.add_line("ratchet_trig_b", 2, "ratchet_b_store_2", 0)
-device.add_line("ratchet_trig_b", 1, "ratchet_b_store_3", 0)
-device.add_line("ratchet_trig_b", 0, "ratchet_b_store_4", 0)
-device.add_line("ratchet_trig_c", 5, "speed_env_msg", 0)
-device.add_line("ratchet_trig_c", 4, "env_msg", 0)
-device.add_line("ratchet_trig_c", 3, "ratchet_c_store", 0)
-device.add_line("ratchet_trig_c", 2, "ratchet_c_store_2", 0)
-device.add_line("ratchet_trig_c", 1, "ratchet_c_store_3", 0)
-device.add_line("ratchet_trig_c", 0, "ratchet_c_store_4", 0)
+device.add_line("ratchet_trig_a", 4, "ratchet_a_store", 0)
+device.add_line("ratchet_trig_a", 3, "ratchet_a_store_2", 0)
+device.add_line("ratchet_trig_a", 2, "ratchet_a_store_3", 0)
+device.add_line("ratchet_trig_a", 1, "ratchet_a_store_4", 0)
+device.add_line("ratchet_trig_a", 0, "startloop_msg", 0)
+device.add_line("ratchet_trig_b", 4, "ratchet_b_store", 0)
+device.add_line("ratchet_trig_b", 3, "ratchet_b_store_2", 0)
+device.add_line("ratchet_trig_b", 2, "ratchet_b_store_3", 0)
+device.add_line("ratchet_trig_b", 1, "ratchet_b_store_4", 0)
+device.add_line("ratchet_trig_b", 0, "startloop_msg", 0)
+device.add_line("ratchet_trig_c", 4, "ratchet_c_store", 0)
+device.add_line("ratchet_trig_c", 3, "ratchet_c_store_2", 0)
+device.add_line("ratchet_trig_c", 2, "ratchet_c_store_3", 0)
+device.add_line("ratchet_trig_c", 1, "ratchet_c_store_4", 0)
+device.add_line("ratchet_trig_c", 0, "startloop_msg", 0)
 device.add_line("effective_slice_ms_expr", 0, "env_decay_expr", 0)
+device.add_line("decay_dial", 0, "env_decay_expr", 1)
 device.add_line("env_decay_expr", 0, "env_msg", 0)
 device.add_line("env_msg", 0, "env_line", 0)
 device.add_line("slice_start_expr", 0, "slice_end_expr", 0)
@@ -2011,10 +2101,13 @@ device.add_line("voice1_rate_dir_expr", 0, "voice_rate_mul_1", 1)
 device.add_line("voice2_rate_dir_expr", 0, "voice_rate_mul_2", 1)
 device.add_line("voice3_rate_dir_expr", 0, "voice_rate_mul_3", 1)
 device.add_line("voice4_rate_dir_expr", 0, "voice_rate_mul_4", 1)
-device.add_line("voice_rate_mul_1", 0, "groove", 0)
-device.add_line("voice_rate_mul_2", 0, "groove_2", 0)
-device.add_line("voice_rate_mul_3", 0, "groove_3", 0)
-device.add_line("voice_rate_mul_4", 0, "groove_4", 0)
+device.add_line("play_rate_init", 0, "play_rate_pack", 0)
+device.add_line("dir_sign_final_expr", 0, "play_rate_pack", 0)
+device.add_line("play_rate_pack", 0, "play_rate_line", 0)
+device.add_line("play_rate_line", 0, "groove", 0)
+device.add_line("play_rate_line", 0, "groove_2", 0)
+device.add_line("play_rate_line", 0, "groove_3", 0)
+device.add_line("play_rate_line", 0, "groove_4", 0)
 
 # Chop and autopan
 device.add_line("rand_chop", 0, "chop_gate_expr", 0)
@@ -2110,7 +2203,8 @@ device.add_line("drive_line", 0, "predrive_r", 1)
 
 device.add_line("predrive_l", 0, "sat_l", 0)
 device.add_line("predrive_r", 0, "sat_r", 0)
-device.add_line("mix_dial", 0, "mix_mix_in", 0)
+device.add_line("mix_dial", 0, "mix_scale", 0)
+device.add_line("mix_scale", 0, "mix_mix_in", 0)
 
 device.add_line("mix_out_l", 0, "output_gain", 0)
 device.add_line("mix_out_r", 0, "output_gain", 1)

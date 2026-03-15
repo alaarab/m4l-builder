@@ -498,9 +498,9 @@ class TestSliceOverviewEngine:
 
     def test_declares_expected_io(self):
         js = slice_overview_js()
-        assert "inlets = 5;" in js
+        assert "inlets = 7;" in js
         assert "outlets = 1;" in js
-        assert SLICE_OVERVIEW_INLETS == 5
+        assert SLICE_OVERVIEW_INLETS == 7
         assert SLICE_OVERVIEW_OUTLETS == 1
 
     def test_contains_sampler_surface_handlers(self):
@@ -510,7 +510,10 @@ class TestSliceOverviewEngine:
         assert "function ondrag" in js
         assert "function draw_waveform" in js
         assert "function rebuild_waveform_cache()" in js
+        assert "function register_hit()" in js
         assert "new Buffer(BUFFER_NAME)" in js
+        assert "recent_hits" in js
+        assert "ACTIVE" in js
         assert "DROP SAMPLE" in js
 
     def test_allows_custom_region_color(self):
