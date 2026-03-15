@@ -257,6 +257,19 @@ For the EQ overlays specifically:
   interpolation or grouping choices
 - a custom analyzer will need more QA than the stock `spectroscope~` object
 
+## UI Sprint Alignment
+
+- Primary Ableton reference: `Spectrum`
+- Shared standards:
+  - [`docs/ableton_ui_playbook.md`](../../docs/ableton_ui_playbook.md)
+  - [`docs/ableton_ui_review_checklist.md`](../../docs/ableton_ui_review_checklist.md)
+- Current sprint focus:
+  - one shared analyzer language for standalone and overlay use
+  - explicit semantics for block, refresh, averaging, and hold
+  - calm graph hierarchy that stays measurement-first
+- Planned validation note:
+  - [`docs/ui_validation/week_07_spectrum_analyzer.md`](../../docs/ui_validation/week_07_spectrum_analyzer.md)
+
 ## Validation
 
 Automated checks should eventually verify:
@@ -274,6 +287,8 @@ In-Live validation should verify:
 - expected low-frequency readability at larger block sizes
 - peak/max behavior under transient material
 - refresh and averaging behavior that feels stable without becoming misleading
+- whether the standalone analyzer and EQ overlays still feel like the same
+  semantic system
 
 ## References
 

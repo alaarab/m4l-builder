@@ -155,6 +155,19 @@ Immediate reusable primitives already exist for prototyping:
   [`src/m4l_builder/engines/filter_curve.py`](../../src/m4l_builder/engines/filter_curve.py)
 - modulation helpers like `morphing_lfo` and `envelope_follower`
 
+## UI Sprint Alignment
+
+- Primary Ableton reference: `Auto Filter`
+- Shared standards:
+  - [`docs/ableton_ui_playbook.md`](../../docs/ableton_ui_playbook.md)
+  - [`docs/ableton_ui_review_checklist.md`](../../docs/ableton_ui_review_checklist.md)
+- Current sprint focus:
+  - one obvious central cutoff or response gesture
+  - performance-readable modulation state
+  - warning behavior for resonance and self-oscillation that stays useful
+- Planned validation note:
+  - [`docs/ui_validation/week_09_ladder_filter.md`](../../docs/ui_validation/week_09_ladder_filter.md)
+
 ## Validation
 
 Automated validation should catch:
@@ -171,6 +184,8 @@ In-Live validation should catch:
 - whether self-oscillation is musical instead of broken
 - whether the hero display is editing-relevant rather than ornamental
 - whether stereo spread feels deliberate and controllable
+- whether the compact surface still feels like a musical filter rather than a
+  technical modulation panel
 
 ## Future Work
 

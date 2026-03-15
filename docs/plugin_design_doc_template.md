@@ -6,6 +6,15 @@ The goal is not marketing copy. The goal is to explain what problem the plugin
 solves, why it exists, how it works, and what tradeoffs come with the chosen
 approach.
 
+For flagship lanes, also use:
+
+- `docs/ableton_ui_playbook.md`
+- `docs/ableton_ui_review_checklist.md`
+- `docs/ableton_ui_validation_template.md`
+
+The plugin README should define the product role clearly enough that the UI can
+be judged against the shared playbook.
+
 ## Summary
 
 One short paragraph:
@@ -110,6 +119,13 @@ Questions to answer:
 - What stays visible all the time?
 - What is contextual?
 - What belongs in menus or context menus instead of visible rails?
+- If the device edits multiple objects, what is the canonical selected-object
+  editor?
+- What survives in compact or chain view?
+- What changes in expanded view?
+- How are active, selected, bypassed, listened, warned, or monitored states
+  encoded?
+- What direct-manipulation gestures are essential to the product feel?
 
 ## Parameter Semantics
 
@@ -145,6 +161,12 @@ Include:
 - automated tests that matter
 - in-Live checks that matter
 - what would count as a regression
+
+For flagship lanes, the validation section should also point to:
+
+- the current UI rubric score using `docs/ableton_ui_review_checklist.md`
+- the latest validation note in `docs/ui_validation/`
+- any compact-vs-expanded checks that are specific to this product role
 
 ## References
 
