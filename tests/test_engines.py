@@ -112,6 +112,11 @@ class TestFilterCurveEngine:
         js = filter_curve_js(bg_color="0.1, 0.1, 0.1, 1.0")
         assert "0.1, 0.1, 0.1, 1.0" in js
 
+    def test_defaults_to_grey_shell_and_blue_plot(self):
+        js = filter_curve_js()
+        assert "0.24, 0.24, 0.25, 1.0" in js
+        assert "0.07, 0.10, 0.15, 1.0" in js
+
     def test_no_es6_let(self):
         """Verify no 'let' declarations (ES5 only uses var).
         Checks for 'let ' at the start of a statement, not as substring of 'inlet'."""
@@ -279,6 +284,10 @@ class TestEqCurveEngine:
     def test_custom_bg_color(self):
         js = eq_curve_js(bg_color="0.1, 0.2, 0.3, 1.0")
         assert "0.1, 0.2, 0.3, 1.0" in js
+
+    def test_transparent_plot_keeps_transparent_panel(self):
+        js = eq_curve_js(bg_color="0.0, 0.0, 0.0, 0.0")
+        assert "var PANEL_CLR      = [0.0, 0.0, 0.0, 0.0];" in js
 
     def test_contains_set_band_handler(self):
         js = eq_curve_js()
@@ -679,6 +688,10 @@ class TestSpectrumAnalyzerEngine:
         js = spectrum_analyzer_js(bar_color="0.8, 0.4, 0.2, 0.9")
         assert "0.8, 0.4, 0.2, 0.9" in js
 
+    def test_custom_panel_color(self):
+        js = spectrum_analyzer_js(panel_color="0.2, 0.2, 0.2, 1.0")
+        assert "0.2, 0.2, 0.2, 1.0" in js
+
     def test_gradient_true_by_default(self):
         js = spectrum_analyzer_js()
         assert "USE_GRADIENT = true" in js
@@ -693,7 +706,19 @@ class TestSpectrumAnalyzerEngine:
 
     def test_contains_exponential_smoothing(self):
         js = spectrum_analyzer_js()
-        assert "DECAY" in js
+        assert "smoothing" in js
+
+    def test_supports_control_messages_and_hover_readout(self):
+        js = spectrum_analyzer_js()
+        assert "function anything()" in js
+        assert 'messagename == "set_smoothing"' in js
+        assert 'messagename == "set_peak_decay"' in js
+        assert 'messagename == "set_show_peaks"' in js
+        assert 'messagename == "set_range"' in js
+        assert "function onidle(x, y)" in js
+        assert "function onidleout()" in js
+        assert "format_freq" in js
+        assert "show_peaks" in js
 
     def test_no_es6_let(self):
         import re
@@ -1577,6 +1602,10 @@ class TestSpectralDisplay:
         js = spectral_display_js(bg_color="0.1, 0.1, 0.1, 1.0")
         assert "0.1, 0.1, 0.1, 1.0" in js
 
+    def test_custom_panel_color(self):
+        js = spectral_display_js(panel_color="0.2, 0.2, 0.2, 1.0")
+        assert "0.2, 0.2, 0.2, 1.0" in js
+
     def test_custom_bar_color(self):
         js = spectral_display_js(bar_color="0.6, 0.3, 0.9, 0.8")
         assert "0.6, 0.3, 0.9, 0.8" in js
@@ -1665,6 +1694,10 @@ class TestPeakingEqDisplay:
     def test_custom_bg_color(self):
         js = peaking_eq_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
         assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_custom_panel_color(self):
+        js = peaking_eq_display_js(panel_color="0.2, 0.2, 0.2, 1.0")
+        assert "0.2, 0.2, 0.2, 1.0" in js
 
     def test_custom_line_color(self):
         js = peaking_eq_display_js(line_color="0.9, 0.3, 0.3, 1.0")

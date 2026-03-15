@@ -9,11 +9,20 @@ Inlets:
     2: Filter type, int 0-6 (LP, HP, BP, Notch, Peak, LowShelf, HighShelf)
 """
 
+from ._graph_colors import (
+    DEFAULT_GRAPH_PLOT_BORDER_COLOR,
+    DEFAULT_GRAPH_PLOT_COLOR,
+    resolve_graph_panel_color,
+)
+
 FILTER_CURVE_INLETS = 3
 FILTER_CURVE_OUTLETS = 0
 
 
-def filter_curve_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
+def filter_curve_js(*,
+                    bg_color=DEFAULT_GRAPH_PLOT_COLOR,
+                    panel_color=None,
+                    plot_border_color=DEFAULT_GRAPH_PLOT_BORDER_COLOR,
                     line_color="0.45, 0.75, 0.65, 1.0",
                     fill_color="0.45, 0.75, 0.65, 0.15",
                     grid_color="0.2, 0.2, 0.22, 0.5",
@@ -29,7 +38,10 @@ def filter_curve_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
     All color arguments are RGBA strings, e.g. ``"0.45, 0.75, 0.65, 1.0"``.
 
     Args:
-        bg_color: Background color.
+        bg_color: Plot background color.
+        panel_color: Outer panel color. Defaults to Ableton-style grey unless
+            bg_color is transparent, in which case the shell stays transparent.
+        plot_border_color: Outline color for the plot region.
         line_color: Response curve line color.
         fill_color: Semi-transparent fill under/over the curve.
         grid_color: Grid line color.
@@ -39,6 +51,8 @@ def filter_curve_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
     Returns:
         JavaScript source code string (ES5 compatible).
     """
+    panel_color = resolve_graph_panel_color(bg_color, panel_color)
+
     # Parse grid_color to compute brighter (0dB line) and dimmer (minor grid) variants
     gc = [s.strip() for s in grid_color.split(",")]
     grid_bright = ", ".join(gc[:3] + [str(min(1.0, float(gc[3]) * 1.6))])
@@ -185,10 +199,16 @@ def filter_curve_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
         "    var plot_w = w - MARGIN_LEFT - MARGIN_RIGHT;\n"
         "    var plot_h = h - MARGIN_TOP - MARGIN_BOTTOM;\n"
         "\n"
-        "    // --- Background with rounded corners ---\n"
-        "    mgraphics.set_source_rgba(" + bg_color + ");\n"
+        "    // --- Outer shell + plot surface ---\n"
+        "    mgraphics.set_source_rgba(" + panel_color + ");\n"
         "    mgraphics.rectangle_rounded(0, 0, w, h, 4, 4);\n"
         "    mgraphics.fill();\n"
+        "    mgraphics.set_source_rgba(" + bg_color + ");\n"
+        "    mgraphics.rectangle_rounded(plot_x, plot_y, plot_w, plot_h, 4, 4);\n"
+        "    mgraphics.fill_preserve();\n"
+        "    mgraphics.set_source_rgba(" + plot_border_color + ");\n"
+        "    mgraphics.set_line_width(1);\n"
+        "    mgraphics.stroke();\n"
         "\n"
         "    // --- dB grid lines ---\n"
         "    mgraphics.set_line_width(1);\n"

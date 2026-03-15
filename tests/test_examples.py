@@ -11,6 +11,12 @@ import struct
 
 import pytest
 
+from m4l_builder import (
+    BRIDGE_RUNTIME_FILENAME,
+    BRIDGE_SCHEMA_FILENAME,
+    BRIDGE_SERVER_FILENAME,
+)
+
 
 EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), "..", "examples")
 EXAMPLE_SCRIPTS = [
@@ -58,6 +64,7 @@ EXAMPLE_SCRIPTS = [
     "morphing_filter.py",
     "glue_compressor.py",
     "parallel_compressor.py",
+    "livemcp_bridge_demo.py",
 ]
 
 # Non-AudioEffect scripts
@@ -278,3 +285,28 @@ class TestExampleBuilds:
             pytest.skip(f"{script} did not produce output")
         size = os.path.getsize(self.outputs[script])
         assert size >= 1000, f"File too small: {size} bytes"
+
+    def test_livemcp_bridge_demo_registers_support_files(self):
+        script = "livemcp_bridge_demo.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+        deps = {
+            dep["name"]
+            for dep in patcher["patcher"].get("dependency_cache", [])
+        }
+
+        assert BRIDGE_RUNTIME_FILENAME in deps
+        assert BRIDGE_SERVER_FILENAME in deps
+        assert BRIDGE_SCHEMA_FILENAME in deps
+
+    def test_livemcp_bridge_demo_writes_sidecars(self):
+        script = "livemcp_bridge_demo.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        output_path = self.outputs[script]
+        output_dir = os.path.dirname(output_path)
+
+        assert os.path.exists(os.path.join(output_dir, BRIDGE_RUNTIME_FILENAME))
+        assert os.path.exists(os.path.join(output_dir, BRIDGE_SERVER_FILENAME))
+        assert os.path.exists(os.path.join(output_dir, BRIDGE_SCHEMA_FILENAME))

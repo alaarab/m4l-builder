@@ -43,6 +43,12 @@ Mouse interaction:
 
 from string import Template
 
+from ._graph_colors import (
+    DEFAULT_GRAPH_PLOT_BORDER_COLOR,
+    DEFAULT_GRAPH_PLOT_COLOR,
+    resolve_graph_panel_color,
+)
+
 
 LINEAR_PHASE_EQ_DISPLAY_INLETS = 3
 LINEAR_PHASE_EQ_DISPLAY_OUTLETS = 4
@@ -50,7 +56,9 @@ LINEAR_PHASE_EQ_DISPLAY_OUTLETS = 4
 
 def linear_phase_eq_display_js(
     *,
-    bg_color="0.05, 0.06, 0.08, 1.0",
+    bg_color=DEFAULT_GRAPH_PLOT_COLOR,
+    panel_color=None,
+    plot_border_color=DEFAULT_GRAPH_PLOT_BORDER_COLOR,
     composite_color="0.95, 0.97, 1.0, 1.0",
     fill_color="0.42, 0.74, 0.94, 0.10",
     analyzer_fill_color="0.24, 0.84, 0.98, 0.13",
@@ -64,8 +72,11 @@ def linear_phase_eq_display_js(
     show_dynamic=True,
 ):
     """Return JavaScript source for the flagship linear-phase EQ display."""
+    panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
         bg_color=bg_color,
+        panel_color=panel_color,
+        plot_border_color=plot_border_color,
         composite_color=composite_color,
         fill_color=fill_color,
         analyzer_fill_color=analyzer_fill_color,
@@ -92,6 +103,8 @@ inlets = 3;
 outlets = 4;
 
 var BG_COLOR = [$bg_color];
+var PANEL_CLR = [$panel_color];
+var PLOT_BORDER_CLR = [$plot_border_color];
 var COMPOSITE_CLR = [$composite_color];
 var FILL_CLR = [$fill_color];
 var ANALYZER_FILL_CLR = [$analyzer_fill_color];
@@ -1248,9 +1261,16 @@ function draw_hud() {
 }
 
 function paint() {
-    mgraphics.set_source_rgba(BG_COLOR);
+    mgraphics.set_source_rgba(PANEL_CLR);
     mgraphics.rectangle(0, 0, mgraphics.size[0], mgraphics.size[1]);
     mgraphics.fill();
+
+    mgraphics.set_source_rgba(BG_COLOR);
+    mgraphics.rectangle(plot_left(), plot_top(), plot_w(), plot_h());
+    mgraphics.fill_preserve();
+    mgraphics.set_source_rgba(PLOT_BORDER_CLR);
+    mgraphics.set_line_width(1.0);
+    mgraphics.stroke();
 
     draw_grid();
     draw_analyzer();

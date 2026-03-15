@@ -14,13 +14,22 @@ Outlets:
     3 -- Q (float)
 """
 
+from ._graph_colors import (
+    DEFAULT_GRAPH_PLOT_BORDER_COLOR,
+    DEFAULT_GRAPH_PLOT_COLOR,
+    resolve_graph_panel_color,
+)
+
 PEAKING_EQ_DISPLAY_INLETS = 1
 PEAKING_EQ_DISPLAY_OUTLETS = 4
 
 
-def peaking_eq_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
-                            line_color="0.45, 0.75, 0.65, 1.0",
-                            point_color="0.9, 0.6, 0.3, 1.0"):
+def peaking_eq_display_js(*,
+                          bg_color=DEFAULT_GRAPH_PLOT_COLOR,
+                          panel_color=None,
+                          plot_border_color=DEFAULT_GRAPH_PLOT_BORDER_COLOR,
+                          line_color="0.45, 0.75, 0.65, 1.0",
+                          point_color="0.9, 0.6, 0.3, 1.0"):
     """Return JavaScript source for a peaking EQ band display (Max jsui).
 
     Inlet 0 receives [band_index, freq, gain, q] to set a band.
@@ -29,13 +38,17 @@ def peaking_eq_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
     outlets 0-3.
 
     Args:
-        bg_color: Background color (RGBA string).
+        bg_color: Plot background color (RGBA string).
+        panel_color: Outer panel color. Defaults to Ableton-style grey unless
+            bg_color is transparent, in which case the shell stays transparent.
+        plot_border_color: Outline color for the plot region.
         line_color: Frequency response curve color (RGBA string).
         point_color: Draggable band point color (RGBA string).
 
     Returns:
         JavaScript source code string (ES5 compatible).
     """
+    panel_color = resolve_graph_panel_color(bg_color, panel_color)
     lc = [s.strip() for s in line_color.split(",")]
     line_fill = lc[0] + ", " + lc[1] + ", " + lc[2] + ", 0.15"
 
@@ -219,10 +232,16 @@ def peaking_eq_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
         "    var plot_w = w - 2 * PADDING;\n"
         "    var plot_h = h - 2 * PADDING;\n"
         "\n"
-        "    // Background\n"
-        f"    mgraphics.set_source_rgba({bg_color});\n"
+        "    // Outer shell + plot surface\n"
+        f"    mgraphics.set_source_rgba({panel_color});\n"
         "    mgraphics.rectangle(0, 0, w, h);\n"
         "    mgraphics.fill();\n"
+        f"    mgraphics.set_source_rgba({bg_color});\n"
+        "    mgraphics.rectangle(plot_x, plot_y, plot_w, plot_h);\n"
+        "    mgraphics.fill_preserve();\n"
+        f"    mgraphics.set_source_rgba({plot_border_color});\n"
+        "    mgraphics.set_line_width(1.0);\n"
+        "    mgraphics.stroke();\n"
         "\n"
         "    // Zero-gain center line\n"
         "    var zero_y = gain_to_y(0, plot_y, plot_h);\n"
