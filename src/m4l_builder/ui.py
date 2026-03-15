@@ -6,6 +6,54 @@ presentation view.
 """
 
 from .constants import DEFAULT_TEXT_COLOR
+from .parameters import ParameterSpec
+
+
+_PARAM_UNSET = object()
+
+
+def _resolve_parameter_spec(
+    varname_or_spec,
+    *,
+    parameter: ParameterSpec = None,
+    shortname: str = None,
+    parameter_type: int = 0,
+    minimum=None,
+    maximum=None,
+    initial=_PARAM_UNSET,
+    initial_enable=None,
+    unitstyle=None,
+    exponent=None,
+    enum=None,
+):
+    """Build a ParameterSpec from legacy UI args or a first-class spec."""
+    base = parameter or varname_or_spec
+    provided_spec = isinstance(base, ParameterSpec)
+    if provided_spec:
+        spec = base.copy()
+    else:
+        spec = ParameterSpec(name=str(base))
+
+    updates = {
+        "parameter_type": parameter_type,
+    }
+    if shortname is not None and (not provided_spec or spec.shortname is None):
+        updates["shortname"] = shortname
+    if minimum is not None and (not provided_spec or spec.minimum is None):
+        updates["minimum"] = minimum
+    if maximum is not None and (not provided_spec or spec.maximum is None):
+        updates["maximum"] = maximum
+    if initial is not _PARAM_UNSET and (not provided_spec or spec.initial is _PARAM_UNSET):
+        updates["initial"] = initial
+    if initial_enable is not None and (not provided_spec or spec.initial_enable is None):
+        updates["initial_enable"] = initial_enable
+    if unitstyle is not None and (not provided_spec or spec.unitstyle is None):
+        updates["unitstyle"] = unitstyle
+    if exponent is not None and (not provided_spec or spec.exponent is None):
+        updates["exponent"] = exponent
+    if enum is not None and (not provided_spec or spec.enum is None):
+        updates["enum"] = list(enum)
+    return spec.copy(**updates)
 
 
 def _presentation_box(id: str, maxclass: str, rect: list, *,
@@ -60,6 +108,7 @@ def dial(id: str, varname: str, rect: list, *,
          activeneedlecolor: list = None, showname: int = 1,
          shownumber: int = 1, parameter_exponent: float = 1.0,
          triangle: int = 1, focusbordercolor: list = None,
+         parameter: ParameterSpec = None,
          **kwargs) -> dict:
     """Create a live.dial with parameter storage.
 
@@ -67,10 +116,22 @@ def dial(id: str, varname: str, rect: list, *,
     parameter_exponent: log scaling, use 3.0 for frequency knobs.
     unitstyle: see constants.py UNITSTYLE_* values.
     """
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=0,
+        minimum=min_val,
+        maximum=max_val,
+        initial=initial,
+        initial_enable=True,
+        unitstyle=unitstyle,
+        exponent=parameter_exponent,
+    )
     box = {
         "id": id,
         "maxclass": "live.dial",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 2,
         "outlettype": ["", "float"],
@@ -82,19 +143,7 @@ def dial(id: str, varname: str, rect: list, *,
         "showname": showname,
         "shownumber": shownumber,
         "triangle": triangle,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 0,
-                "parameter_mmin": min_val,
-                "parameter_mmax": max_val,
-                "parameter_initial_enable": 1,
-                "parameter_initial": [initial],
-                "parameter_unitstyle": unitstyle,
-                "parameter_exponent": parameter_exponent,
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     if activedialcolor:
         box["activedialcolor"] = activedialcolor
@@ -111,13 +160,24 @@ def tab(id: str, varname: str, rect: list, *,
         textcolor: list = None, textoncolor: list = None,
         patching_rect: list = None, rounded: float = 0.0,
         spacing_x: float = 0.0, appearance: int = 0,
+        parameter: ParameterSpec = None,
         **kwargs) -> dict:
     """Create a live.tab selector."""
     enum_max = max(len(options) - 1, 0)
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        parameter_type=2,
+        minimum=0,
+        maximum=enum_max,
+        initial=0,
+        initial_enable=True,
+        enum=options,
+    )
     box = {
         "id": id,
         "maxclass": "live.tab",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 3,
         "outlettype": ["", "", "float"],
@@ -128,18 +188,7 @@ def tab(id: str, varname: str, rect: list, *,
         "presentation": 1,
         "presentation_rect": rect,
         "tabs": len(options),
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": varname,
-                "parameter_type": 2,
-                "parameter_mmin": 0,
-                "parameter_mmax": enum_max,
-                "parameter_initial_enable": 1,
-                "parameter_initial": [0],
-                "parameter_enum": list(options),
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     if rounded != 0.0:
         box["rounded"] = rounded
@@ -163,15 +212,23 @@ def toggle(id: str, varname: str, rect: list, *, shortname: str = None,
            patching_rect: list = None, activebgcolor: list = None,
            activebgoncolor: list = None, rounded: float = 0.0,
            labels: tuple = ("off", "on"),
+           parameter: ParameterSpec = None,
            **kwargs) -> dict:
     """Create a live.toggle with parameter storage.
 
     labels: (off_label, on_label) for automation display, e.g. ("Normal", "Inverted").
     """
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=2,
+        enum=labels,
+    )
     box = {
         "id": id,
         "maxclass": "live.toggle",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 1,
         "outlettype": [""],
@@ -179,14 +236,7 @@ def toggle(id: str, varname: str, rect: list, *, shortname: str = None,
         "patching_rect": patching_rect or [700, 300, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 2,
-                "parameter_enum": [labels[0], labels[1]],
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     if activebgcolor:
         box["activebgcolor"] = activebgcolor
@@ -249,13 +299,25 @@ def meter(id: str, rect: list, *, orientation: int = 0,
 
 def menu(id: str, varname: str, rect: list, *, options: list,
          shortname: str = None, patching_rect: list = None,
+         parameter: ParameterSpec = None,
          **kwargs) -> dict:
     """Create a live.menu dropdown selector."""
     enum_max = max(len(options) - 1, 0)
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=2,
+        minimum=0,
+        maximum=enum_max,
+        initial=0,
+        initial_enable=True,
+        enum=options,
+    )
     box = {
         "id": id,
         "maxclass": "live.menu",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 3,
         "outlettype": ["", "", "float"],
@@ -263,18 +325,7 @@ def menu(id: str, varname: str, rect: list, *, options: list,
         "patching_rect": patching_rect or [700, 700, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 2,
-                "parameter_mmin": 0,
-                "parameter_mmax": enum_max,
-                "parameter_initial_enable": 1,
-                "parameter_initial": [0],
-                "parameter_enum": list(options),
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     box.update(kwargs)
     return {"box": box}
@@ -284,12 +335,24 @@ def number_box(id: str, varname: str, rect: list, *,
                min_val: float = 0.0, max_val: float = 127.0,
                initial: float = 0.0, shortname: str = None,
                unitstyle: int = 1, patching_rect: list = None,
+               parameter: ParameterSpec = None,
                **kwargs) -> dict:
     """Create a live.numbox numeric display with parameter storage."""
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=0,
+        minimum=min_val,
+        maximum=max_val,
+        initial=initial,
+        initial_enable=True,
+        unitstyle=unitstyle,
+    )
     box = {
         "id": id,
         "maxclass": "live.numbox",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 2,
         "outlettype": ["", "float"],
@@ -297,18 +360,7 @@ def number_box(id: str, varname: str, rect: list, *,
         "patching_rect": patching_rect or [700, 800, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 0,
-                "parameter_mmin": min_val,
-                "parameter_mmax": max_val,
-                "parameter_initial_enable": 1,
-                "parameter_initial": [initial],
-                "parameter_unitstyle": unitstyle,
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     box.update(kwargs)
     return {"box": box}
@@ -318,12 +370,24 @@ def slider(id: str, varname: str, rect: list, *,
            min_val: float = 0.0, max_val: float = 1.0,
            initial: float = 0.5, shortname: str = None,
            unitstyle: int = 1, orientation: int = 0,
-           patching_rect: list = None, **kwargs) -> dict:
+           patching_rect: list = None, parameter: ParameterSpec = None,
+           **kwargs) -> dict:
     """Create a live.slider with parameter storage."""
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=0,
+        minimum=min_val,
+        maximum=max_val,
+        initial=initial,
+        initial_enable=True,
+        unitstyle=unitstyle,
+    )
     box = {
         "id": id,
         "maxclass": "live.slider",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 2,
         "outlettype": ["", "float"],
@@ -332,30 +396,27 @@ def slider(id: str, varname: str, rect: list, *,
         "patching_rect": patching_rect or [700, 900, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 0,
-                "parameter_mmin": min_val,
-                "parameter_mmax": max_val,
-                "parameter_initial_enable": 1,
-                "parameter_initial": [initial],
-                "parameter_unitstyle": unitstyle,
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     box.update(kwargs)
     return {"box": box}
 
 
 def button(id: str, varname: str, rect: list, *, shortname: str = None,
-           patching_rect: list = None, **kwargs) -> dict:
+           patching_rect: list = None, parameter: ParameterSpec = None,
+           **kwargs) -> dict:
     """Create a live.button (momentary trigger, parameter-enabled for automation)."""
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=2,
+        enum=["off", "on"],
+    )
     box = {
         "id": id,
         "maxclass": "live.button",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 1,
         "outlettype": [""],
@@ -363,14 +424,7 @@ def button(id: str, varname: str, rect: list, *, shortname: str = None,
         "patching_rect": patching_rect or [700, 1000, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 2,
-                "parameter_enum": ["off", "on"],
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     box.update(kwargs)
     return {"box": box}
@@ -427,15 +481,23 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
               textoncolor: list = None, fontname: str = "Ableton Sans Medium",
               fontsize: float = 10.0, rounded: float = 0.0, mode: int = 0,
               shortname: str = None, patching_rect: list = None,
+              parameter: ParameterSpec = None,
               **kwargs) -> dict:
     """Create a live.text styled button/toggle.
 
     mode: 0=toggle, 1=button (momentary).
     """
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=2,
+        enum=[text_off, text_on],
+    )
     box = {
         "id": id,
         "maxclass": "live.text",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 1,
         "numoutlets": 2,
         "outlettype": ["", ""],
@@ -448,14 +510,7 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
         "patching_rect": patching_rect or [700, 1100, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 2,
-                "parameter_enum": [text_off, text_on],
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     if bgcolor:
         box["bgcolor"] = bgcolor
@@ -488,12 +543,24 @@ def fpic(id: str, rect: list, *, pic: str = "", autofit: int = 1,
 def live_gain(id: str, varname: str, rect: list, *, min_val: float = -70.0,
               max_val: float = 6.0, initial: float = 0.0,
               shortname: str = None, orientation: int = 0,
-              patching_rect: list = None, **kwargs) -> dict:
+              patching_rect: list = None, parameter: ParameterSpec = None,
+              **kwargs) -> dict:
     """Create a live.gain~ fader with built-in meter."""
+    spec = _resolve_parameter_spec(
+        varname,
+        parameter=parameter,
+        shortname=shortname,
+        parameter_type=0,
+        minimum=min_val,
+        maximum=max_val,
+        initial=initial,
+        initial_enable=True,
+        unitstyle=4,
+    )
     box = {
         "id": id,
         "maxclass": "live.gain~",
-        "varname": varname,
+        "varname": spec.name,
         "numinlets": 2,
         "numoutlets": 5,
         "outlettype": ["signal", "signal", "", "float", "list"],
@@ -502,18 +569,7 @@ def live_gain(id: str, varname: str, rect: list, *, min_val: float = -70.0,
         "patching_rect": patching_rect or [700, 1300, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
-        "saved_attribute_attributes": {
-            "valueof": {
-                "parameter_longname": varname,
-                "parameter_shortname": shortname or varname,
-                "parameter_type": 0,
-                "parameter_mmin": min_val,
-                "parameter_mmax": max_val,
-                "parameter_initial_enable": 1,
-                "parameter_initial": [initial],
-                "parameter_unitstyle": 4,
-            }
-        },
+        "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     box.update(kwargs)
     return {"box": box}

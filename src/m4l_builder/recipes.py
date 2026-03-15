@@ -13,6 +13,7 @@ from .dsp import (notein as dsp_notein, delay_line, param_smooth,
                    midi_learn_chain, macromap)
 from .engines.sidechain_display import sidechain_display_js, SIDECHAIN_DISPLAY_INLETS
 from .engines.spectral_display import spectral_display_js, SPECTRAL_DISPLAY_INLETS
+from .stages import stage_result
 
 
 def gain_controlled_stage(device, id_prefix, dial_rect, x=30, y=30):
@@ -57,7 +58,337 @@ def gain_controlled_stage(device, id_prefix, dial_rect, x=30, y=30):
     device.add_line(dbtoa_id, 0, f"{p}_smooth_pack", 0)
     device.add_line(f"{p}_smooth_line", 0, gain_id, 1)
 
-    return {"dial": dial_id, "gain": gain_id}
+    return stage_result(
+        {"dial": dial_id, "gain": gain_id},
+        name="gain_controlled_stage",
+        params={"gain": device.parameter(dial_id)},
+        ports={
+            "audio_in": gain_id.inlet(0),
+            "audio_out": gain_id.outlet(0),
+            "control_out": dial_id.outlet(0),
+        },
+    )
+
+
+def parametric_eq_band_backend(
+    device,
+    band_index,
+    *,
+    loadbang_id,
+    default_freq,
+    default_type_name,
+    filter_types,
+    default_motion_rate=0.25,
+    coeff_x_base=100,
+    coeff_x_step=60,
+    coeff_y=350,
+    biquad_y=400,
+    right_channel_y_offset=200,
+    control_x=1100,
+    control_y_base=350,
+    control_y_step=30,
+    type_x=700,
+    enable_x=900,
+):
+    """Add one stereo parametric EQ band backend with smoothing and retriggers.
+
+    This recipe assumes the surrounding device already provides the canonical
+    per-band controls and state fanout objects named like `freq_b0`, `gain_b0`,
+    `q_b0`, `type_b0`, `on_b0`, `motion_b0`, and `pak_b0`.
+    """
+    i = band_index
+    coeff_x = coeff_x_base + i * coeff_x_step
+    control_y = control_y_base + i * control_y_step
+
+    coeff_id = device.add_newobj(
+        f"fc_b{i}",
+        f"filtercoeff~ {default_type_name}",
+        numinlets=3, numoutlets=5,
+        outlettype=["signal", "signal", "signal", "signal", "signal"],
+        patching_rect=[coeff_x, coeff_y, 80, 20],
+    )
+    resamp_id = device.add_box({
+        "box": {
+            "id": f"msg_resamp_b{i}",
+            "maxclass": "message",
+            "text": "resamp 1",
+            "numinlets": 2,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [coeff_x, coeff_y - 30, 60, 20],
+        }
+    })
+    device.add_line(loadbang_id, 0, resamp_id, 0)
+    device.add_line(resamp_id, 0, coeff_id, 0)
+
+    biquads = {}
+    for channel, y_offset in (("l", 0), ("r", right_channel_y_offset)):
+        biquad_id = device.add_newobj(
+            f"bq_b{i}_{channel}",
+            "biquad~",
+            numinlets=6, numoutlets=1,
+            outlettype=["signal"],
+            patching_rect=[coeff_x, biquad_y + y_offset, 50, 20],
+        )
+        biquads[channel] = biquad_id
+        for coeff_index in range(5):
+            device.add_line(coeff_id, coeff_index, biquad_id, coeff_index + 1)
+
+    freq_pack_id = device.add_newobj(
+        f"pk_freq_b{i}",
+        f"pack f {default_freq} 20",
+        numinlets=2, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[control_x, control_y, 80, 20],
+    )
+    freq_line_id = device.add_newobj(
+        f"ln_freq_b{i}",
+        "line~",
+        numinlets=2, numoutlets=2,
+        outlettype=["signal", "bang"],
+        patching_rect=[control_x + 90, control_y, 40, 20],
+    )
+    freq_store_id = device.add_newobj(
+        f"freq_store_b{i}",
+        f"float {default_freq}",
+        numinlets=2, numoutlets=1,
+        outlettype=["float"],
+        patching_rect=[control_x - 2, control_y - 24, 76, 20],
+    )
+    device.add_line(freq_pack_id, 0, freq_line_id, 0)
+    device.add_line(freq_store_id, 0, coeff_id, 0)
+
+    motion_lfo_id = device.add_newobj(
+        f"motion_lfo_b{i}",
+        f"cycle~ {default_motion_rate}",
+        numinlets=2, numoutlets=1,
+        outlettype=["signal"],
+        patching_rect=[control_x + 140, control_y, 58, 20],
+    )
+    motion_depth_mul_id = device.add_newobj(
+        f"motion_depth_mul_b{i}",
+        "expr~ pow(2., $v1 * $f2)",
+        numinlets=2, numoutlets=1,
+        outlettype=["signal"],
+        patching_rect=[control_x + 206, control_y, 48, 20],
+    )
+    motion_freq_mul_id = device.add_newobj(
+        f"motion_freq_mul_b{i}",
+        "*~ 1.",
+        numinlets=2, numoutlets=1,
+        outlettype=["signal"],
+        patching_rect=[control_x + 262, control_y, 48, 20],
+    )
+    motion_depth_expr_id = device.add_newobj(
+        f"motion_depth_expr_b{i}",
+        "expr ($f2 > 0.5) ? (($f1 / 100.) * 1.25 * cos($f3 * 0.0174533)) : 0.",
+        numinlets=3, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[control_x + 318, control_y, 120, 20],
+    )
+    device.add_line(freq_line_id, 0, motion_freq_mul_id, 0)
+    device.add_line(motion_lfo_id, 0, motion_depth_mul_id, 0)
+    device.add_line(motion_depth_mul_id, 0, motion_freq_mul_id, 1)
+    device.add_line(motion_freq_mul_id, 0, coeff_id, 0)
+
+    gain_pack_id = device.add_newobj(
+        f"pk_gain_db_b{i}",
+        "pack f 0. 20",
+        numinlets=2, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[control_x, control_y + 40, 80, 20],
+    )
+    gain_line_id = device.add_newobj(
+        f"ln_gain_db_b{i}",
+        "line~",
+        numinlets=2, numoutlets=2,
+        outlettype=["signal", "bang"],
+        patching_rect=[control_x + 90, control_y + 40, 40, 20],
+    )
+    motion_gain_depth_expr_id = device.add_newobj(
+        f"motion_gain_depth_expr_b{i}",
+        "expr ($f2 > 0.5) ? (($f1 / 100.) * 12. * sin($f3 * 0.0174533)) : 0.",
+        numinlets=3, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[control_x + 140, control_y + 40, 120, 20],
+    )
+    motion_gain_mul_id = device.add_newobj(
+        f"motion_gain_mul_b{i}",
+        "*~ 0.",
+        numinlets=2, numoutlets=1,
+        outlettype=["signal"],
+        patching_rect=[control_x + 268, control_y + 40, 44, 20],
+    )
+    motion_gain_sum_id = device.add_newobj(
+        f"motion_gain_sum_b{i}",
+        "+~ 0.",
+        numinlets=2, numoutlets=1,
+        outlettype=["signal"],
+        patching_rect=[control_x + 320, control_y + 40, 44, 20],
+    )
+    gain_dbtoa_sig_id = device.add_newobj(
+        f"gain_dbtoa_sig_b{i}",
+        "expr~ pow(10., $v1 * 0.05)",
+        numinlets=1, numoutlets=1,
+        outlettype=["signal"],
+        patching_rect=[control_x + 372, control_y + 40, 92, 20],
+    )
+    gain_recalc_id = device.add_newobj(
+        f"gain_recalc_trig_b{i}",
+        "t b f",
+        numinlets=1, numoutlets=2,
+        outlettype=["bang", "float"],
+        patching_rect=[control_x + 468, control_y + 40, 44, 20],
+    )
+    gain_dbtoa_ctrl_id = device.add_newobj(
+        f"gain_dbtoa_ctrl_b{i}",
+        "dbtoa",
+        numinlets=1, numoutlets=1,
+        outlettype=["float"],
+        patching_rect=[control_x + 518, control_y + 40, 44, 20],
+    )
+    device.add_line(gain_pack_id, 0, gain_line_id, 0)
+    device.add_line(gain_line_id, 0, motion_gain_sum_id, 0)
+    device.add_line(motion_lfo_id, 0, motion_gain_mul_id, 0)
+    device.add_line(motion_gain_mul_id, 0, motion_gain_sum_id, 1)
+    device.add_line(motion_gain_sum_id, 0, gain_dbtoa_sig_id, 0)
+    device.add_line(gain_dbtoa_sig_id, 0, coeff_id, 1)
+
+    q_pack_id = device.add_newobj(
+        f"pk_q_b{i}",
+        "pack f 1. 20",
+        numinlets=2, numoutlets=1,
+        outlettype=[""],
+        patching_rect=[control_x, control_y + 80, 80, 20],
+    )
+    q_line_id = device.add_newobj(
+        f"ln_q_b{i}",
+        "line~",
+        numinlets=2, numoutlets=2,
+        outlettype=["signal", "bang"],
+        patching_rect=[control_x + 90, control_y + 80, 40, 20],
+    )
+    q_recalc_id = device.add_newobj(
+        f"q_recalc_trig_b{i}",
+        "t b f",
+        numinlets=1, numoutlets=2,
+        outlettype=["bang", "float"],
+        patching_rect=[control_x + 136, control_y + 80, 44, 20],
+    )
+    device.add_line(q_pack_id, 0, q_line_id, 0)
+    device.add_line(q_line_id, 0, coeff_id, 2)
+
+    type_sel_id = device.add_newobj(
+        f"type_sel_b{i}",
+        "select 0 1 2 3 4 5 6 7",
+        numinlets=1, numoutlets=9,
+        outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang", "bang", ""],
+        patching_rect=[type_x, control_y, 140, 20],
+    )
+    for type_index, type_name in enumerate(filter_types):
+        type_msg_id = device.add_box({
+            "box": {
+                "id": f"msg_type_{type_index}_b{i}",
+                "maxclass": "message",
+                "text": type_name,
+                "numinlets": 2,
+                "numoutlets": 1,
+                "outlettype": [""],
+                "patching_rect": [type_x + type_index * 65, control_y + 30, 60, 20],
+            }
+        })
+        device.add_line(type_sel_id, type_index, type_msg_id, 0)
+        device.add_line(type_msg_id, 0, coeff_id, 0)
+
+    on_sel_id = device.add_newobj(
+        f"on_sel_b{i}",
+        "select 0 1",
+        numinlets=1, numoutlets=3,
+        outlettype=["bang", "bang", ""],
+        patching_rect=[enable_x, control_y, 60, 20],
+    )
+    off_id = device.add_box({
+        "box": {
+            "id": f"msg_off_b{i}",
+            "maxclass": "message",
+            "text": "off",
+            "numinlets": 2,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [enable_x, control_y + 30, 30, 20],
+        }
+    })
+    on_bang_id = device.add_newobj(
+        f"on_bang_b{i}",
+        "t b",
+        numinlets=1, numoutlets=1,
+        outlettype=["bang"],
+        patching_rect=[enable_x + 40, control_y + 30, 30, 20],
+    )
+    device.add_line(on_sel_id, 0, off_id, 0)
+    device.add_line(off_id, 0, coeff_id, 0)
+    device.add_line(on_sel_id, 1, on_bang_id, 0)
+    device.add_line(on_bang_id, 0, f"type_b{i}", 0)
+
+    device.add_line(f"freq_b{i}", 0, f"pak_b{i}", 1)
+    device.add_line(f"freq_b{i}", 0, freq_pack_id, 0)
+    device.add_line(f"freq_b{i}", 0, freq_store_id, 1)
+
+    device.add_line(f"gain_b{i}", 0, f"pak_b{i}", 2)
+    device.add_line(f"gain_b{i}", 0, gain_pack_id, 0)
+    device.add_line(f"gain_b{i}", 0, gain_recalc_id, 0)
+    device.add_line(gain_recalc_id, 0, freq_store_id, 0)
+    device.add_line(gain_recalc_id, 1, gain_dbtoa_ctrl_id, 0)
+    device.add_line(gain_dbtoa_ctrl_id, 0, coeff_id, 1)
+
+    device.add_line(f"q_b{i}", 0, f"pak_b{i}", 3)
+    device.add_line(f"q_b{i}", 0, q_pack_id, 0)
+    device.add_line(f"q_b{i}", 0, q_recalc_id, 0)
+    device.add_line(q_recalc_id, 0, freq_store_id, 0)
+    device.add_line(q_recalc_id, 1, coeff_id, 2)
+
+    device.add_line(f"type_b{i}", 0, f"pak_b{i}", 4)
+    device.add_line(f"type_b{i}", 0, type_sel_id, 0)
+
+    device.add_line(f"on_b{i}", 0, f"pak_b{i}", 5)
+    device.add_line(f"on_b{i}", 0, on_sel_id, 0)
+    device.add_line(f"motion_b{i}", 0, f"pak_b{i}", 6)
+    device.add_line(f"dynamic_b{i}", 0, f"pak_b{i}", 7)
+    device.add_line(f"dynamic_amt_b{i}", 0, f"pak_b{i}", 8)
+    device.add_line(f"motion_rate_b{i}", 0, f"pak_b{i}", 9)
+    device.add_line(f"motion_depth_b{i}", 0, f"pak_b{i}", 10)
+    device.add_line(f"motion_direction_b{i}", 0, f"pak_b{i}", 11)
+
+    device.add_line(f"motion_rate_b{i}", 0, motion_lfo_id, 0)
+    device.add_line(f"motion_depth_b{i}", 0, motion_depth_expr_id, 0)
+    device.add_line(f"motion_b{i}", 0, motion_depth_expr_id, 1)
+    device.add_line(f"motion_direction_b{i}", 0, motion_depth_expr_id, 2)
+    device.add_line(motion_depth_expr_id, 0, motion_depth_mul_id, 1)
+
+    device.add_line(f"motion_depth_b{i}", 0, motion_gain_depth_expr_id, 0)
+    device.add_line(f"motion_b{i}", 0, motion_gain_depth_expr_id, 1)
+    device.add_line(f"motion_direction_b{i}", 0, motion_gain_depth_expr_id, 2)
+    device.add_line(motion_gain_depth_expr_id, 0, motion_gain_mul_id, 1)
+
+    return stage_result(
+        {
+            "coeff": coeff_id,
+            "resamp": resamp_id,
+            "biquad_l": biquads["l"],
+            "biquad_r": biquads["r"],
+            "freq_store": freq_store_id,
+            "gain_recalc": gain_recalc_id,
+            "q_recalc": q_recalc_id,
+        },
+        name="parametric_eq_band_backend",
+        ports={
+            "audio_in_l": biquads["l"].inlet(0),
+            "audio_out_l": biquads["l"].outlet(0),
+            "audio_in_r": biquads["r"].inlet(0),
+            "audio_out_r": biquads["r"].outlet(0),
+        },
+        metadata={"band_index": band_index},
+    )
 
 
 def dry_wet_stage(device, id_prefix, dial_rect, x=30, y=30):
@@ -128,7 +459,17 @@ def dry_wet_stage(device, id_prefix, dial_rect, x=30, y=30):
     device.add_line(inv_id, 0, f"{p}_dry_smooth_pack", 0)
     device.add_line(f"{p}_dry_smooth_line", 0, dry_gain_id, 1)
 
-    return {"dial": dial_id, "wet_gain": wet_gain_id, "dry_gain": dry_gain_id}
+    return stage_result(
+        {"dial": dial_id, "wet_gain": wet_gain_id, "dry_gain": dry_gain_id},
+        name="dry_wet_stage",
+        params={"mix": device.parameter(dial_id)},
+        ports={
+            "wet_in": wet_gain_id.inlet(0),
+            "dry_in": dry_gain_id.inlet(0),
+            "wet_out": wet_gain_id.outlet(0),
+            "dry_out": dry_gain_id.outlet(0),
+        },
+    )
 
 
 def tempo_synced_delay(device, id_prefix, time_dial_rect, feedback_dial_rect,
@@ -220,12 +561,24 @@ def tempo_synced_delay(device, id_prefix, time_dial_rect, feedback_dial_rect,
     # Wiring: loadbang -> transport
     device.add_line(loadbang_id, 0, transport_id, 0)
 
-    return {
-        "time_dial": time_dial_id,
-        "feedback_dial": fb_dial_id,
-        "tapin": tapin_id,
-        "tapout": tapout_id,
-    }
+    return stage_result(
+        {
+            "time_dial": time_dial_id,
+            "feedback_dial": fb_dial_id,
+            "tapin": tapin_id,
+            "tapout": tapout_id,
+        },
+        name="tempo_synced_delay",
+        params={
+            "time": device.parameter(time_dial_id),
+            "feedback": device.parameter(fb_dial_id),
+        },
+        ports={
+            "audio_in": device.box(tapin_id).inlet(0),
+            "audio_out": device.box(tapout_id).outlet(0),
+            "feedback_return": device.box(sum_id).inlet(1),
+        },
+    )
 
 
 def midi_note_gate(device, id_prefix, x=30, y=30):
@@ -263,11 +616,19 @@ def midi_note_gate(device, id_prefix, x=30, y=30):
     device.add_line(notein_id, 1, stripnote_id, 1)
     device.add_line(stripnote_id, 0, kslider_id, 0)
 
-    return {
-        "notein": notein_id,
-        "pitch": stripnote_id,      # outlet 0
-        "velocity": stripnote_id,   # outlet 1
-    }
+    return stage_result(
+        {
+            "notein": notein_id,
+            "pitch": stripnote_id,      # outlet 0
+            "velocity": stripnote_id,   # outlet 1
+        },
+        name="midi_note_gate",
+        ports={
+            "note_in": device.box(notein_id).outlet(0),
+            "pitch_out": stripnote_id.outlet(0),
+            "velocity_out": stripnote_id.outlet(1),
+        },
+    )
 
 
 def convolver_controlled_stage(device, id_prefix, dial_rect, x=30, y=30):
@@ -331,7 +692,18 @@ def convolver_controlled_stage(device, id_prefix, dial_rect, x=30, y=30):
     # convolver output -> wet gain
     device.add_line(conv_id, 0, wet_gain_id, 0)
 
-    return {"dial": dial_id, "convolver": conv_id, "wet": wet_gain_id}
+    return stage_result(
+        {"dial": dial_id, "convolver": conv_id, "wet": wet_gain_id},
+        name="convolver_controlled_stage",
+        params={"wet": device.parameter(dial_id)},
+        ports={
+            "audio_in": device.box(conv_id).inlet(0),
+            "wet_in": wet_gain_id.inlet(0),
+            "wet_out": wet_gain_id.outlet(0),
+            "dry_in": dry_gain_id.inlet(0),
+            "dry_out": dry_gain_id.outlet(0),
+        },
+    )
 
 
 def sidechain_compressor_recipe(device, id_prefix, threshold_rect,
@@ -379,12 +751,23 @@ def sidechain_compressor_recipe(device, id_prefix, threshold_rect,
     device.add_line(ratio_dial_id, 0, f"{p}_comp_ratio_l", 1)
     device.add_line(ratio_dial_id, 0, f"{p}_comp_ratio_r", 1)
 
-    return {
-        "threshold_dial": threshold_dial_id,
-        "ratio_dial": ratio_dial_id,
-        "sidechain": sc_id,
-        "compressor": f"{p}_comp_out_l",
-    }
+    return stage_result(
+        {
+            "threshold_dial": threshold_dial_id,
+            "ratio_dial": ratio_dial_id,
+            "sidechain": sc_id,
+            "compressor": f"{p}_comp_out_l",
+        },
+        name="sidechain_compressor_recipe",
+        params={
+            "threshold": device.parameter(threshold_dial_id),
+            "ratio": device.parameter(ratio_dial_id),
+        },
+        ports={
+            "sidechain_in": device.box(sc_id).outlet(0),
+            "audio_out": device.box(f"{p}_comp_out_l").outlet(0),
+        },
+    )
 
 
 def lfo_matrix_distribute(device, id_prefix, targets=4, x=30, y=30):
@@ -427,7 +810,17 @@ def lfo_matrix_distribute(device, id_prefix, targets=4, x=30, y=30):
 
         depth_dials.append(dial_id)
 
-    return {"lfo": lfo_out, "depth_dials": depth_dials}
+    return stage_result(
+        {"lfo": lfo_out, "depth_dials": depth_dials},
+        name="lfo_matrix_distribute",
+        params={
+            f"depth_{i}": device.parameter(dial_id)
+            for i, dial_id in enumerate(depth_dials)
+        },
+        ports={
+            "lfo_out": device.box(lfo_out).outlet(0),
+        },
+    )
 
 
 def spectral_gate_stage(device, id_prefix, threshold_rect, x=30, y=30):
@@ -463,11 +856,20 @@ def spectral_gate_stage(device, id_prefix, threshold_rect, x=30, y=30):
     # threshold dial -> pfft~ inlet 1
     device.add_line(threshold_dial_id, 0, gate_id, 1)
 
-    return {
-        "threshold_dial": threshold_dial_id,
-        "gate": gate_id,
-        "display": display_id,
-    }
+    return stage_result(
+        {
+            "threshold_dial": threshold_dial_id,
+            "gate": gate_id,
+            "display": display_id,
+        },
+        name="spectral_gate_stage",
+        params={"threshold": device.parameter(threshold_dial_id)},
+        ports={
+            "audio_in": device.box(gate_id).inlet(0),
+            "audio_out": device.box(gate_id).outlet(0),
+        },
+        assets=[f"{p}_gate_sub"],
+    )
 
 
 def arpeggio_quantized_stage(device, id_prefix, x=30, y=30):
@@ -493,7 +895,14 @@ def arpeggio_quantized_stage(device, id_prefix, x=30, y=30):
     # arpeggiator pitch output -> quantizer
     device.add_line(f"{p}_arp_make", 0, quant_id, 0)
 
-    return {"arpeggiator": arp_id, "quantizer": quant_id}
+    return stage_result(
+        {"arpeggiator": arp_id, "quantizer": quant_id},
+        name="arpeggio_quantized_stage",
+        ports={
+            "note_in": device.box(arp_id).inlet(0),
+            "pitch_out": device.box(quant_id).outlet(0),
+        },
+    )
 
 
 def grain_playback_controlled(device, id_prefix, buf_name, x=30, y=30):
@@ -531,7 +940,19 @@ def grain_playback_controlled(device, id_prefix, buf_name, x=30, y=30):
         unitstyle=1, annotation_name=f"{p} Density",
     )
 
-    return {"grain": grain_id, "buffer": buf_id}
+    return stage_result(
+        {"grain": grain_id, "buffer": buf_id},
+        name="grain_playback_controlled",
+        params={
+            "position": device.parameter(pos_dial_id),
+            "size": device.parameter(size_dial_id),
+            "density": device.parameter(density_dial_id),
+        },
+        ports={
+            "buffer": device.box(buf_id).outlet(0),
+            "grain_out": device.box(grain_id).outlet(0),
+        },
+    )
 
 
 def poly_midi_gate(device, id_prefix, x=30, y=30):
@@ -563,11 +984,19 @@ def poly_midi_gate(device, id_prefix, x=30, y=30):
     device.add_line(notein_id, 1, vel_id, 0)
     device.add_line(vel_id, 0, poly_id, 1)
 
-    return {
-        "voices": poly_id,
-        "velocity_curve": vel_id,
-        "notein": notein_id,
-    }
+    return stage_result(
+        {
+            "voices": poly_id,
+            "velocity_curve": vel_id,
+            "notein": notein_id,
+        },
+        name="poly_midi_gate",
+        ports={
+            "note_in": device.box(notein_id).outlet(0),
+            "velocity_in": device.box(notein_id).outlet(1),
+            "voice_out": device.box(poly_id).outlet(0),
+        },
+    )
 
 
 def transport_sync_lfo_recipe(device, id_prefix, x=30, y=30):
@@ -604,11 +1033,19 @@ def transport_sync_lfo_recipe(device, id_prefix, x=30, y=30):
     device.add_line(depth_dial_id, 0, depth_mul_id, 0)
     device.add_line(lfo_id, 0, depth_mul_id, 1)
 
-    return {
-        "lfo": lfo_id,
-        "depth_dial": depth_dial_id,
-        "division_menu": menu_id,
-    }
+    return stage_result(
+        {
+            "lfo": lfo_id,
+            "depth_dial": depth_dial_id,
+            "division_menu": menu_id,
+        },
+        name="transport_sync_lfo_recipe",
+        params={"depth": device.parameter(depth_dial_id)},
+        ports={
+            "lfo_out": device.box(depth_mul_id).outlet(0),
+            "division_select": menu_id.outlet(0),
+        },
+    )
 
 
 def midi_learn_macro_assignment(device, id_prefix, num_targets=4, x=30, y=30):
@@ -633,4 +1070,10 @@ def midi_learn_macro_assignment(device, id_prefix, num_targets=4, x=30, y=30):
         device.add_dsp(mm_boxes, mm_lines)
         macro_ids.append(f"{p}_mm_{i}_remote")
 
-    return {"learn_chain": learn_id, "macromaps": macro_ids}
+    return stage_result(
+        {"learn_chain": learn_id, "macromaps": macro_ids},
+        name="midi_learn_macro_assignment",
+        ports={
+            "learn_in": device.box(learn_id).outlet(0),
+        },
+    )
