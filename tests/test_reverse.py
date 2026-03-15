@@ -4,6 +4,7 @@ import os
 
 from m4l_builder import (
     AudioEffect,
+    Instrument,
     Subpatcher,
     build_livemcp_bridge_demo,
     delay_line,
@@ -11,6 +12,7 @@ from m4l_builder import (
     dry_wet_stage,
     gain_stage,
     gain_controlled_stage,
+    init_dispatch_chain,
     live_object_path,
     live_parameter_probe,
     live_observer,
@@ -18,8 +20,11 @@ from m4l_builder import (
     live_set_control,
     live_thisdevice,
     midi_note_gate,
+    named_bus_router,
     patchline,
     param_smooth,
+    poly_shell,
+    poly_shell_bank,
     tempo_synced_delay,
     transport_lfo,
     transport_sync_lfo_recipe,
@@ -28,14 +33,27 @@ from m4l_builder.constants import DEVICE_TYPE_CODES
 from m4l_builder.container import build_amxd
 from m4l_builder.reverse import (
     analyze_snapshot,
+    extract_building_block_candidates,
     detect_snapshot_motifs,
     detect_snapshot_patterns,
     detect_snapshot_recipes,
     extract_controller_shell_candidates,
+    extract_behavior_hints,
     extract_embedded_ui_shell_candidates,
     extract_embedded_patcher_snapshots,
+    extract_first_party_abstraction_family_candidates,
+    extract_first_party_abstraction_host_candidates,
+    extract_first_party_api_rig_candidates,
+    extract_init_dispatch_chain_candidates,
     extract_live_api_normalization_candidates,
+    extract_named_bus_router_candidates,
     extract_parameter_specs,
+    extract_poly_editor_bank_candidates,
+    extract_poly_shell_candidates,
+    extract_poly_shell_bank_candidates,
+    extract_sample_buffer_candidates,
+    extract_gen_processing_candidates,
+    extract_presentation_widget_cluster_candidates,
     extract_snapshot_knowledge,
     generate_builder_python_from_snapshot,
     generate_optimized_python_from_snapshot,
@@ -96,6 +114,39 @@ class TestSnapshotHelpers:
         standard[28:32] = len(trailing_payload).to_bytes(4, "little")
         data = bytes(standard[:32]) + trailing_payload
         path = tmp_path / "trailing_assets.amxd"
+        path.write_bytes(data)
+
+        loaded = read_amxd(str(path))
+
+        assert loaded["device_type"] == "audio_effect"
+        assert loaded["patcher"] == device.to_patcher()
+
+    def test_read_amxd_supports_double_braced_ptch_payload(self, tmp_path):
+        device = AudioEffect("Double Braced", 220, 100)
+        device.add_comment("label", [10, 10, 80, 16], "Double")
+        standard = bytearray(device.to_bytes())
+        ptch_payload = bytes(standard[32:])
+        doubled_payload = b"{" + ptch_payload
+        standard[28:32] = len(doubled_payload).to_bytes(4, "little")
+        data = bytes(standard[:32]) + doubled_payload
+        path = tmp_path / "double_braced.amxd"
+        path.write_bytes(data)
+
+        loaded = read_amxd(str(path))
+
+        assert loaded["device_type"] == "audio_effect"
+        assert loaded["patcher"] == device.to_patcher()
+
+    def test_read_amxd_supports_relaxed_prefixed_ptch_payload(self, tmp_path):
+        device = AudioEffect("Relaxed Prefixed", 220, 100)
+        device.add_comment("label", [10, 10, 80, 16], "Relaxed")
+        standard = bytearray(device.to_bytes())
+        ptch_payload = bytes(standard[32:])
+        relaxed_payload = ptch_payload.replace(b"10.0", b"10.", 1)
+        prefixed_payload = b"{\xcc" + relaxed_payload
+        standard[28:32] = len(prefixed_payload).to_bytes(4, "little")
+        data = bytes(standard[:32]) + prefixed_payload
+        path = tmp_path / "relaxed_prefixed.amxd"
         path.write_bytes(data)
 
         loaded = read_amxd(str(path))
@@ -511,6 +562,150 @@ class TestSnapshotHelpers:
         assert state_bundle["params"]["pack_texts"] == ["pack 0 0"]
         assert state_bundle["params"]["unpack_texts"] == ["unpack 0 0"]
 
+    def test_detect_snapshot_motifs_finds_sample_buffer_toolchains(self):
+        device = AudioEffect("Sample Buffer Motifs", 360, 180)
+        device.add_box({
+            "box": {
+                "id": "drop",
+                "maxclass": "live.drop",
+                "varname": "SampleDrop",
+                "patching_rect": [20, 20, 80, 24],
+                "presentation_rect": [20, 20, 80, 24],
+                "presentation": 1,
+                "numinlets": 1,
+                "numoutlets": 1,
+            }
+        })
+        device.add_newobj("buffer", "buffer~ grains", numinlets=2, numoutlets=2, patching_rect=[120, 20, 90, 20])
+        device.add_newobj("info", "info~ grains", numinlets=1, numoutlets=9, patching_rect=[230, 20, 70, 20])
+        device.add_newobj("peek", "peek~ grains", numinlets=2, numoutlets=1, patching_rect=[120, 60, 70, 20])
+        device.add_newobj("metro", "metro 40", numinlets=2, numoutlets=1, patching_rect=[20, 60, 60, 20])
+        device.add_newobj("strippath", "strippath", numinlets=1, numoutlets=1, patching_rect=[20, 100, 60, 20])
+        device.add_line("drop", 0, "buffer", 0)
+        device.add_line("buffer", 0, "info", 0)
+        device.add_line("metro", 0, "peek", 0)
+        device.add_line("buffer", 0, "peek", 1)
+        device.add_line("drop", 0, "strippath", 0)
+
+        motifs = detect_snapshot_motifs(snapshot_from_device(device))
+        sample_buffer = next(entry for entry in motifs if entry["kind"] == "sample_buffer_toolchain")
+
+        assert sample_buffer["params"]["has_live_drop"] is True
+        assert sample_buffer["params"]["buffer_targets"] == ["grains"]
+        assert sample_buffer["params"]["drop_varnames"] == ["SampleDrop"]
+        assert sample_buffer["params"]["core_operators"] == ["buffer~", "info~", "peek~"]
+        assert sample_buffer["params"]["file_operators"] == ["strippath"]
+        assert sample_buffer["params"]["archetypes"] == [
+            "driven_visual_probe",
+            "sample_import",
+            "sample_metadata",
+            "waveform_probe",
+        ]
+
+    def test_detect_snapshot_motifs_merges_sample_buffer_components_by_shared_target(self):
+        device = AudioEffect("Named Buffer Motifs", 360, 180)
+        device.add_newobj("metro", "metro 30", numinlets=2, numoutlets=1, patching_rect=[20, 20, 60, 20])
+        device.add_newobj("uzi", "uzi 12 1", numinlets=2, numoutlets=3, patching_rect=[100, 20, 60, 20])
+        device.add_newobj("peek_a", "peek~ grains", numinlets=2, numoutlets=1, patching_rect=[180, 20, 70, 20])
+        device.add_newobj("peek_b", "peek~ grains", numinlets=2, numoutlets=1, patching_rect=[180, 50, 70, 20])
+        device.add_newobj("buffer", "buffer~ grains @samps 64", numinlets=2, numoutlets=2, patching_rect=[20, 80, 120, 20])
+        device.add_line("metro", 0, "uzi", 0)
+        device.add_line("uzi", 0, "peek_a", 0)
+        device.add_line("uzi", 1, "peek_b", 0)
+
+        motifs = detect_snapshot_motifs(snapshot_from_device(device))
+        sample_buffer = next(entry for entry in motifs if entry["kind"] == "sample_buffer_toolchain")
+
+        assert sample_buffer["params"]["buffer_targets"] == ["grains"]
+        assert sample_buffer["params"]["operator_counts"]["buffer~"] == 1
+        assert sample_buffer["params"]["operator_counts"]["peek~"] == 2
+        assert sample_buffer["params"]["operator_counts"]["uzi"] == 1
+        assert sample_buffer["params"]["archetypes"] == ["driven_visual_probe", "waveform_probe"]
+
+    def test_detect_snapshot_motifs_finds_gen_processing_cores(self):
+        device = AudioEffect("Gen Core Motifs", 360, 180)
+        device.add_newobj("route", "route capture", numinlets=1, numoutlets=2, patching_rect=[20, 20, 90, 20])
+        device.add_newobj("delay", "delay 10", numinlets=2, numoutlets=1, patching_rect=[130, 20, 60, 20])
+        device.add_newobj("click", "click~", numinlets=1, numoutlets=1, patching_rect=[210, 20, 50, 20])
+        device.add_newobj("gen", "gen~ @title Capture", numinlets=2, numoutlets=1, patching_rect=[120, 60, 100, 20])
+        device.add_newobj("buffer", "buffer~ grains", numinlets=2, numoutlets=2, patching_rect=[240, 60, 90, 20])
+        device.add_newobj("sub", "p CaptureDSP", numinlets=1, numoutlets=1, patching_rect=[20, 60, 80, 20])
+        device.add_line("route", 0, "delay", 0)
+        device.add_line("delay", 0, "click", 0)
+        device.add_line("click", 0, "gen", 0)
+        device.add_line("sub", 0, "gen", 1)
+        device.add_line("gen", 0, "buffer", 0)
+
+        motifs = detect_snapshot_motifs(snapshot_from_device(device))
+        gen_core = next(entry for entry in motifs if entry["kind"] == "gen_processing_core")
+
+        assert gen_core["params"]["core_operators"] == ["gen~"]
+        assert gen_core["params"]["buffer_targets"] == ["grains"]
+        assert gen_core["params"]["operator_counts"]["click~"] == 1
+        assert gen_core["params"]["operator_counts"]["route"] == 1
+        assert gen_core["params"]["operator_counts"]["p"] == 1
+        assert gen_core["params"]["archetypes"] == [
+            "buffered_gen_core",
+            "nested_gen_shell",
+            "routed_gen_core",
+            "triggered_gen_core",
+        ]
+
+    def test_extract_sample_buffer_and_gen_processing_candidates(self):
+        sample_device = AudioEffect("Sample Candidates", 360, 180)
+        sample_device.add_newobj("buffer", "buffer~ grains", numinlets=2, numoutlets=2, patching_rect=[20, 20, 90, 20])
+        sample_device.add_newobj("info", "info~ grains", numinlets=1, numoutlets=9, patching_rect=[130, 20, 70, 20])
+        sample_device.add_newobj("path_fix", "strippath", numinlets=1, numoutlets=1, patching_rect=[220, 20, 60, 20])
+        sample_device.add_line("buffer", 0, "info", 0)
+        sample_snapshot = snapshot_from_device(sample_device)
+        sample_candidates = extract_sample_buffer_candidates(sample_snapshot)
+        sample_knowledge = extract_snapshot_knowledge(sample_snapshot)
+
+        assert len(sample_candidates) == 1
+        assert sample_candidates[0]["candidate_name"] == "sample_file_handling_shell"
+        assert sample_candidates[0]["motif_kinds"] == ["sample_buffer_toolchain"]
+        assert sample_knowledge["summary"]["sample_buffer_candidate_count"] == 1
+        assert sample_knowledge["sample_buffer_candidates"][0]["candidate_name"] == "sample_file_handling_shell"
+
+        gen_device = AudioEffect("Gen Candidates", 360, 180)
+        gen_device.add_newobj("delay", "delay 10", numinlets=2, numoutlets=1, patching_rect=[20, 20, 60, 20])
+        gen_device.add_newobj("click", "click~", numinlets=1, numoutlets=1, patching_rect=[100, 20, 50, 20])
+        gen_device.add_newobj("gen", "gen~ @title Capture", numinlets=2, numoutlets=1, patching_rect=[170, 20, 100, 20])
+        gen_device.add_newobj("buffer", "buffer~ grains", numinlets=2, numoutlets=2, patching_rect=[290, 20, 90, 20])
+        gen_device.add_line("delay", 0, "click", 0)
+        gen_device.add_line("click", 0, "gen", 0)
+        gen_device.add_line("gen", 0, "buffer", 0)
+        gen_snapshot = snapshot_from_device(gen_device)
+        gen_candidates = extract_gen_processing_candidates(gen_snapshot)
+        gen_knowledge = extract_snapshot_knowledge(gen_snapshot)
+
+        assert len(gen_candidates) == 1
+        assert gen_candidates[0]["candidate_name"] == "buffered_gen_capture_shell"
+        assert gen_candidates[0]["motif_kinds"] == ["gen_processing_core"]
+        assert gen_knowledge["summary"]["gen_processing_candidate_count"] == 1
+        assert gen_knowledge["gen_processing_candidates"][0]["candidate_name"] == "buffered_gen_capture_shell"
+
+    def test_generate_semantic_python_groups_sample_and_gen_candidates(self):
+        device = AudioEffect("Semantic Granular Groups", 400, 220)
+        device.add_newobj("buffer", "buffer~ grains", numinlets=2, numoutlets=2, patching_rect=[20, 20, 90, 20])
+        device.add_newobj("peek", "peek~ grains", numinlets=2, numoutlets=1, patching_rect=[140, 20, 70, 20])
+        device.add_newobj("metro", "metro 30", numinlets=2, numoutlets=1, patching_rect=[230, 20, 60, 20])
+        device.add_line("metro", 0, "peek", 0)
+        device.add_newobj("delay", "delay 10", numinlets=2, numoutlets=1, patching_rect=[20, 80, 60, 20])
+        device.add_newobj("click", "click~", numinlets=1, numoutlets=1, patching_rect=[100, 80, 50, 20])
+        device.add_newobj("gen", "gen~ @title Capture", numinlets=2, numoutlets=1, patching_rect=[170, 80, 100, 20])
+        device.add_newobj("buffer_capture", "buffer~ captured", numinlets=2, numoutlets=2, patching_rect=[290, 80, 100, 20])
+        device.add_line("delay", 0, "click", 0)
+        device.add_line("click", 0, "gen", 0)
+        device.add_line("gen", 0, "buffer_capture", 0)
+
+        semantic_source = generate_semantic_python_from_snapshot(snapshot_from_device(device))
+
+        assert "SNAPSHOT_SAMPLE_BUFFER_CANDIDATES" in semantic_source
+        assert "SNAPSHOT_GEN_PROCESSING_CANDIDATES" in semantic_source
+        assert "# semantic group: sample_visualization_shell" in semantic_source
+        assert "# semantic group: buffered_gen_capture_shell" in semantic_source
+
     def test_extract_snapshot_knowledge_summarizes_controls_patterns_and_bridge(self):
         device = build_livemcp_bridge_demo()
         device.add_dial(
@@ -680,7 +875,10 @@ class TestSnapshotHelpers:
         device = AudioEffect("Embedded Shells", 320, 180)
         sub = Subpatcher("inner")
         sub.add_newobj("send", "s nested_bus", numinlets=1, numoutlets=0, patching_rect=[10, 10, 70, 20])
+        sub.add_newobj("recv", "r nested_bus", numinlets=0, numoutlets=1, patching_rect=[90, 10, 70, 20])
         device.add_subpatcher(sub, "inner_host", [20, 70, 120, 60])
+        device.add_newobj("host_send", "s outer_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        device.add_line("inner_host", 0, "host_send", 0)
         device.add_bpatcher("panel_host", [170, 70, 100, 40], "panel.maxpat", args="seed 9", embed=1)
 
         snapshot = snapshot_from_device(device)
@@ -688,15 +886,383 @@ class TestSnapshotHelpers:
         knowledge = extract_snapshot_knowledge(snapshot)
 
         assert len(candidates) == 2
-        assert {entry["helper_call"]["name"] for entry in candidates} == {"embedded_ui_shell"}
+        assert {entry["helper_call"]["name"] for entry in candidates} == {"embedded_ui_shell_v2"}
         assert {entry["params"]["host_kind"] for entry in candidates} == {"subpatcher", "bpatcher"}
         assert all(entry["exact"] for entry in candidates)
+        subpatcher_candidate = next(entry for entry in candidates if entry["params"]["host_kind"] == "subpatcher")
+        assert subpatcher_candidate["params"]["attached_box_count"] >= 1
+        assert subpatcher_candidate["params"]["connected_line_count"] == 1
         assert knowledge["summary"]["embedded_ui_shell_candidate_count"] == 2
         assert len(knowledge["embedded_ui_shell_candidates"]) == 2
         assert {entry["params"]["host_kind"] for entry in knowledge["embedded_ui_shell_candidates"]} == {
             "subpatcher",
             "bpatcher",
         }
+
+    def test_extract_factory_candidates_and_source_metadata(self, tmp_path):
+        api_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "API"
+        api_root.mkdir(parents=True)
+        api_device = AudioEffect("Max Api DeviceExplorer", 320, 180)
+        api_device.add_dsp(*live_thisdevice("dev"))
+        api_device.add_dsp(
+            *live_parameter_probe(
+                "probe",
+                path="live_set tracks 0 devices 0 parameters 0",
+                commands=["get value"],
+            )
+        )
+        api_path = api_root / "Max Api DeviceExplorer.amxd"
+        api_device.build(str(api_path))
+
+        api_snapshot = snapshot_from_amxd(str(api_path))
+        api_knowledge = extract_snapshot_knowledge(api_snapshot)
+        api_candidates = extract_first_party_api_rig_candidates(api_snapshot)
+
+        assert api_knowledge["source"]["source_lane"] == "factory"
+        assert api_knowledge["source"]["pack_name"] == "M4L Building Tools"
+        assert api_knowledge["source"]["pack_section"] == "API"
+        assert len(api_candidates) == 1
+        assert api_candidates[0]["params"]["api_family"] == "DeviceExplorer"
+        assert api_knowledge["summary"]["first_party_api_rig_candidate_count"] == 1
+
+        blocks_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        blocks_root.mkdir(parents=True)
+        block = AudioEffect("Max DelayLine", 320, 180)
+        block.add_dsp(*param_smooth("smooth"))
+        block.add_newobj("send_a", "s block_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        block.add_newobj("recv_a", "r block_bus", numinlets=0, numoutlets=1, patching_rect=[110, 20, 70, 20])
+        block.add_newobj("loadbang", "loadbang", numinlets=1, numoutlets=1, patching_rect=[20, 60, 60, 20])
+        block.add_newobj("defer", "deferlow", numinlets=1, numoutlets=1, patching_rect=[100, 60, 60, 20])
+        block.add_newobj("init_t", "t b b", numinlets=1, numoutlets=2, patching_rect=[180, 60, 40, 20])
+        block.add_line("loadbang", 0, "defer", 0)
+        block.add_line("defer", 0, "init_t", 0)
+        block_path = blocks_root / "Max DelayLine.amxd"
+        block.build(str(block_path))
+
+        block_snapshot = snapshot_from_amxd(str(block_path))
+        block_knowledge = extract_snapshot_knowledge(block_snapshot)
+
+        named_bus_candidates = extract_named_bus_router_candidates(block_snapshot)
+        init_candidates = extract_init_dispatch_chain_candidates(block_snapshot)
+        building_block_candidates = extract_building_block_candidates(block_snapshot)
+
+        assert block_knowledge["source"]["pack_section"] == "Building Blocks"
+        assert block_knowledge["source"]["pack_subsection"] == "Max Audio Effect"
+        assert len(named_bus_candidates) == 1
+        assert named_bus_candidates[0]["helper_call"]["name"] == "named_bus_router"
+        assert len(init_candidates) == 1
+        assert init_candidates[0]["helper_call"]["name"] == "init_dispatch_chain"
+        assert len(building_block_candidates) == 1
+        assert building_block_candidates[0]["params"]["block_name"] == "Max DelayLine"
+        assert block_knowledge["summary"]["named_bus_router_candidate_count"] == 1
+        assert block_knowledge["summary"]["init_dispatch_chain_candidate_count"] == 1
+        assert block_knowledge["summary"]["building_block_candidate_count"] == 1
+
+    def test_extract_first_party_abstraction_host_candidates_from_factory_path(self, tmp_path):
+        root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        root.mkdir(parents=True)
+        device = AudioEffect("Max GainDualMono", 320, 180)
+        device.add_newobj("gain_l", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[20, 70, 70, 20])
+        device.add_newobj("gain_r", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[140, 70, 70, 20])
+        device.add_dial("gain", "Gain", [72, 18, 44, 44], min_val=-70.0, max_val=6.0, initial=0.0, unitstyle=4)
+        device.add_comment("label", [66, 66, 60, 18], "Gain")
+        device.add_line("gain", 0, "gain_l", 1)
+        device.add_line("gain", 0, "gain_r", 1)
+        path = root / "Max GainDualMono.amxd"
+        device.build(str(path))
+
+        snapshot = snapshot_from_amxd(str(path))
+        candidates = extract_first_party_abstraction_host_candidates(snapshot)
+        family_candidates = extract_first_party_abstraction_family_candidates(snapshot)
+        knowledge = extract_snapshot_knowledge(snapshot)
+
+        assert len(candidates) == 1
+        candidate = candidates[0]
+        assert candidate["params"]["primary_abstraction_name"] == "M4L.gain1~"
+        assert candidate["params"]["abstraction_family"] == "gain_shell"
+        assert candidate["params"]["host_box_count"] == 2
+        assert candidate["params"]["attached_control_count"] >= 1
+        assert candidate["params"]["control_varnames"] == ["Gain"]
+        assert {"gain_l", "gain_r", "gain"} <= set(candidate["box_ids"])
+        assert len(family_candidates) == 1
+        assert family_candidates[0]["candidate_name"] == "gain_shell"
+        assert knowledge["summary"]["first_party_abstraction_host_candidate_count"] == 1
+        assert knowledge["summary"]["first_party_abstraction_family_candidate_count"] == 1
+        assert len(knowledge["first_party_abstraction_host_candidates"]) == 1
+        assert len(knowledge["first_party_abstraction_family_candidates"]) == 1
+
+    def test_extract_poly_shell_candidates_detects_poly_hosts(self):
+        device = AudioEffect("Poly Shell", 320, 180)
+        device.add_newobj("voices", "poly~ grain_voice 8", numinlets=3, numoutlets=2, patching_rect=[20, 20, 100, 20])
+        device.add_newobj("settings", "p Settings", numinlets=1, numoutlets=1, patching_rect=[20, 60, 80, 20])
+        device.add_newobj("send_poly", "s voice_bus", numinlets=1, numoutlets=0, patching_rect=[140, 20, 70, 20])
+        device.add_newobj("recv_poly", "r voice_bus", numinlets=0, numoutlets=1, patching_rect=[220, 20, 70, 20])
+        device.add_line("voices", 0, "send_poly", 0)
+        device.add_line("settings", 0, "voices", 1)
+
+        snapshot = snapshot_from_device(device)
+        candidates = extract_poly_shell_candidates(snapshot)
+        knowledge = extract_snapshot_knowledge(snapshot)
+
+        assert len(candidates) == 1
+        assert candidates[0]["helper_call"]["name"] == "poly_shell"
+        assert candidates[0]["params"]["attached_bus_names"] == ["voice_bus"]
+        assert "settings" in candidates[0]["box_ids"]
+        assert candidates[0]["params"]["direct_neighbor_count"] >= 2
+        assert knowledge["summary"]["poly_shell_candidate_count"] == 1
+
+    def test_extract_poly_shell_bank_candidates_groups_repeated_poly_hosts(self):
+        device = AudioEffect("Poly Shell Bank", 420, 260)
+        device.add_box({
+            "box": {
+                "id": "shared_mod",
+                "maxclass": "flonum",
+                "patching_rect": [190, 20, 50, 22],
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            }
+        })
+        for index in range(1, 4):
+            y = 40 + (index - 1) * 60
+            device.add_box({
+                "box": {
+                    "id": f"ui_{index}",
+                    "maxclass": "bpatcher",
+                    "name": "VoiceUi.maxpat",
+                    "patching_rect": [20, y, 120, 24],
+                    "numinlets": 4,
+                    "numoutlets": 4,
+                    "outlettype": ["", "", "", ""],
+                }
+            })
+            device.add_newobj(
+                f"poly_{index}",
+                "poly~ voice_editor",
+                numinlets=4,
+                numoutlets=4,
+                patching_rect=[170, y, 110, 20],
+            )
+            device.add_newobj(
+                f"send_{index}",
+                f"s voice{index}",
+                numinlets=1,
+                numoutlets=0,
+                patching_rect=[310, y, 60, 20],
+            )
+            device.add_line(f"ui_{index}", 0, f"poly_{index}", 0)
+            device.add_line(f"ui_{index}", 1, f"poly_{index}", 1)
+            device.add_line(f"poly_{index}", 0, f"ui_{index}", 0)
+            device.add_line(f"poly_{index}", 1, f"ui_{index}", 1)
+            device.add_line(f"poly_{index}", 2, f"send_{index}", 0)
+            device.add_line("shared_mod", 0, f"poly_{index}", 2)
+
+        snapshot = snapshot_from_device(device)
+        candidates = extract_poly_shell_bank_candidates(snapshot)
+        knowledge = extract_snapshot_knowledge(snapshot)
+
+        assert len(candidates) == 1
+        assert candidates[0]["helper_call"]["name"] == "poly_shell_bank"
+        assert candidates[0]["params"]["poly_shell_count"] == 3
+        assert candidates[0]["params"]["target"] == "voice_editor"
+        assert candidates[0]["params"]["indexed_bus_prefix"] == "voice"
+        assert candidates[0]["params"]["indexed_bus_indices"] == [1, 2, 3]
+        assert candidates[0]["params"]["bpatcher_names"] == ["VoiceUi.maxpat"]
+        assert "shared_mod" in candidates[0]["params"]["shared_box_ids"]
+        assert knowledge["summary"]["poly_shell_bank_candidate_count"] == 1
+
+        editor_candidates = extract_poly_editor_bank_candidates(snapshot)
+        assert len(editor_candidates) == 1
+        assert editor_candidates[0]["candidate_name"] == "poly_editor_bank"
+        assert editor_candidates[0]["params"]["voice_count"] == 3
+        assert editor_candidates[0]["params"]["editor_ui_names"] == ["VoiceUi.maxpat"]
+        assert knowledge["summary"]["poly_editor_bank_candidate_count"] == 1
+
+    def test_extract_behavior_hints_for_mapping_workflow(self):
+        device = Instrument("Mapped Random Control", 420, 260)
+        device.add_box({
+            "box": {
+                "id": "shared_mod",
+                "maxclass": "flonum",
+                "patching_rect": [190, 20, 50, 22],
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            }
+        })
+        for index in range(1, 4):
+            y = 40 + (index - 1) * 60
+            device.add_box({
+                "box": {
+                    "id": f"ui_{index}",
+                    "maxclass": "bpatcher",
+                    "name": "Abl.MapUi.RNDGEN.maxpat",
+                    "patching_rect": [20, y, 120, 24],
+                    "numinlets": 4,
+                    "numoutlets": 4,
+                    "outlettype": ["", "", "", ""],
+                }
+            })
+            device.add_newobj(
+                f"poly_{index}",
+                "poly~ Abl.Map.edit",
+                numinlets=4,
+                numoutlets=4,
+                patching_rect=[170, y, 110, 20],
+            )
+            device.add_newobj(
+                f"send_{index}",
+                f"s ---m{index}",
+                numinlets=1,
+                numoutlets=0,
+                patching_rect=[310, y, 60, 20],
+            )
+            device.add_line(f"ui_{index}", 0, f"poly_{index}", 0)
+            device.add_line(f"ui_{index}", 1, f"poly_{index}", 1)
+            device.add_line(f"poly_{index}", 0, f"ui_{index}", 0)
+            device.add_line(f"poly_{index}", 1, f"ui_{index}", 1)
+            device.add_line(f"poly_{index}", 2, f"send_{index}", 0)
+            device.add_line("shared_mod", 0, f"poly_{index}", 2)
+
+        midi_logic = Subpatcher("MIDILogic")
+        midi_logic.add_newobj("manualmode", "r ---manualmode", numinlets=0, numoutlets=1, patching_rect=[20, 20, 90, 20])
+        midi_logic.add_newobj("compare", "== 0", numinlets=2, numoutlets=1, patching_rect=[120, 20, 40, 20])
+        midi_logic.add_newobj("gate", "gate", numinlets=2, numoutlets=1, patching_rect=[180, 20, 40, 20])
+        midi_logic.add_newobj("parse", "midiparse", numinlets=1, numoutlets=1, patching_rect=[240, 20, 70, 20])
+        midi_logic.add_newobj("unpack", "unpack i i", numinlets=1, numoutlets=2, patching_rect=[320, 20, 70, 20])
+        midi_logic.add_newobj("strip", "stripnote", numinlets=2, numoutlets=2, patching_rect=[400, 20, 70, 20])
+        midi_logic.add_newobj("trigger", "t b", numinlets=1, numoutlets=1, patching_rect=[480, 20, 30, 20])
+        midi_logic.add_newobj("send", "s ---notebang", numinlets=1, numoutlets=0, patching_rect=[520, 20, 80, 20])
+        midi_logic.add_line("manualmode", 0, "compare", 0)
+        midi_logic.add_line("compare", 0, "gate", 0)
+        midi_logic.add_line("gate", 0, "parse", 0)
+        midi_logic.add_line("parse", 0, "unpack", 0)
+        midi_logic.add_line("unpack", 0, "strip", 0)
+        midi_logic.add_line("unpack", 1, "strip", 1)
+        midi_logic.add_line("strip", 1, "trigger", 0)
+        midi_logic.add_line("trigger", 0, "send", 0)
+        device.add_subpatcher(midi_logic, "midi_logic", [20, 220, 120, 50])
+
+        qm = Subpatcher("qm")
+        qm.add_newobj("start", "s ---qmap_start", numinlets=1, numoutlets=0, patching_rect=[20, 20, 90, 20])
+        qm.add_newobj("done", "r ---done_qmap", numinlets=0, numoutlets=1, patching_rect=[130, 20, 90, 20])
+        qm.add_newobj("qmap", "s ---qmap", numinlets=1, numoutlets=0, patching_rect=[240, 20, 70, 20])
+        qm.add_newobj("update", "s ---update_local", numinlets=1, numoutlets=0, patching_rect=[330, 20, 100, 20])
+        qm.add_newobj("clear", "r ---clearqmap", numinlets=0, numoutlets=1, patching_rect=[450, 20, 90, 20])
+        device.add_subpatcher(qm, "qm_logic", [160, 220, 120, 50])
+
+        ui = Subpatcher("UiScripting")
+        ui.add_box({
+            "box": {
+                "id": "move",
+                "maxclass": "message",
+                "text": "setUiPos $1 $2 $3 $4",
+                "patching_rect": [20, 20, 110, 20],
+                "numinlets": 2,
+                "numoutlets": 1,
+            }
+        })
+        ui.add_box({
+            "box": {
+                "id": "width",
+                "maxclass": "message",
+                "text": "setwidth $1",
+                "patching_rect": [150, 20, 80, 20],
+                "numinlets": 2,
+                "numoutlets": 1,
+            }
+        })
+        ui.add_box({
+            "box": {
+                "id": "script",
+                "maxclass": "message",
+                "text": "script sendbox global presentation_rect 17. $1 65. 169.",
+                "patching_rect": [250, 20, 220, 20],
+                "numinlets": 2,
+                "numoutlets": 1,
+            }
+        })
+        device.add_subpatcher(ui, "ui_logic", [300, 220, 120, 50])
+
+        snapshot = snapshot_from_device(device)
+        hints = extract_behavior_hints(snapshot)
+        knowledge = extract_snapshot_knowledge(snapshot)
+        hint_names = {entry["name"] for entry in hints}
+
+        assert "multi_lane_mapping_bank" in hint_names
+        assert "manual_or_midi_trigger_mode" in hint_names
+        assert "mapping_session_controller" in hint_names
+        assert "dynamic_panel_relayout" in hint_names
+        assert "mapped_random_control_device" in hint_names
+        assert knowledge["summary"]["behavior_hint_count"] == len(hints)
+
+    def test_extract_named_bus_router_candidates_include_attached_shell_neighbors(self):
+        device = AudioEffect("Named Bus Shell", 320, 180)
+        device.add_newobj("sender", "s voice_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        device.add_newobj("receiver", "r voice_bus", numinlets=0, numoutlets=1, patching_rect=[120, 20, 70, 20])
+        device.add_box({
+            "box": {
+                "id": "monitor",
+                "maxclass": "flonum",
+                "patching_rect": [220, 20, 50, 20],
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            }
+        })
+        device.add_line("receiver", 0, "monitor", 0)
+
+        candidates = extract_named_bus_router_candidates(snapshot_from_device(device))
+
+        assert len(candidates) == 1
+        assert candidates[0]["helper_call"]["name"] == "named_bus_router"
+        assert "monitor" in candidates[0]["box_ids"]
+        assert candidates[0]["params"]["attached_neighbor_count"] >= 1
+
+    def test_extract_presentation_widget_cluster_candidates_detect_factory_clusters(self, tmp_path):
+        root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Tools" / "Max Audio Effect"
+        root.mkdir(parents=True)
+        device = AudioEffect("Factory UI Cluster", 320, 180)
+        for box_id, maxclass, text, rect in [
+            ("dial_a", "live.dial", None, [20, 20, 44, 44]),
+            ("dial_b", "live.dial", None, [72, 20, 44, 44]),
+            ("label_a", "comment", "Rate", [20, 68, 40, 18]),
+            ("label_b", "comment", "Depth", [72, 68, 40, 18]),
+        ]:
+            box = {
+                "id": box_id,
+                "maxclass": maxclass,
+                "patching_rect": rect,
+                "presentation_rect": rect,
+                "presentation": 1,
+                "numinlets": 1,
+                "numoutlets": 1 if maxclass != "comment" else 0,
+            }
+            if text is not None:
+                box["text"] = text
+            device.add_box({"box": box})
+        device.add_box({
+            "box": {
+                "id": "far_toggle",
+                "maxclass": "live.toggle",
+                "patching_rect": [220, 120, 20, 20],
+                "presentation_rect": [220, 120, 20, 20],
+                "presentation": 1,
+                "numinlets": 1,
+                "numoutlets": 1,
+            }
+        })
+        path = root / "Factory UI Cluster.amxd"
+        device.build(str(path))
+
+        snapshot = snapshot_from_amxd(str(path))
+        candidates = extract_presentation_widget_cluster_candidates(snapshot)
+        knowledge = extract_snapshot_knowledge(snapshot)
+
+        assert len(candidates) == 1
+        assert set(candidates[0]["box_ids"]) >= {"dial_a", "dial_b", "label_a", "label_b"}
+        assert "far_toggle" not in candidates[0]["box_ids"]
+        assert knowledge["summary"]["presentation_widget_cluster_candidate_count"] == 1
 
     def test_extract_live_api_normalization_candidates_marks_manual_review(self):
         device = AudioEffect("Live API Manual Review", 320, 180)
@@ -1524,7 +2090,7 @@ class TestGeneratedPython:
         assert "controller_surface_shell" in source
         assert "sequencer_dispatch_shell" in source
         assert "*controller_surface_shell(" in source
-        assert "*sequencer_dispatch_shell(" in source
+        assert "*sequencer_dispatch_shell(" not in source
         assert "def _controller_surface_shell_" not in source
         assert "def _sequencer_dispatch_shell_" not in source
 
@@ -1571,7 +2137,7 @@ class TestGeneratedPython:
         assert written == len(expected)
         assert rebuilt == expected
         assert "*controller_surface_shell(" in source
-        assert "*sequencer_dispatch_shell(" in source
+        assert "*sequencer_dispatch_shell(" not in source
         assert "# Live API clusters left expanded for manual review:" not in source
 
     def test_optimized_python_groups_embedded_ui_shell_candidates(self, tmp_path):
@@ -1596,7 +2162,249 @@ class TestGeneratedPython:
         assert written == len(expected)
         assert rebuilt == expected
         assert "SNAPSHOT_EMBEDDED_UI_SHELL_CANDIDATES" in source
-        assert "*embedded_ui_shell(" in source
+        assert "*embedded_ui_shell_v2(" in source
+
+    def test_semantic_python_groups_first_party_exact_helpers(self, tmp_path):
+        device = AudioEffect("Factory Semantic Helpers", 360, 220)
+        device.add_newobj("send_a", "s shared_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        device.add_newobj("recv_a", "r shared_bus", numinlets=0, numoutlets=1, patching_rect=[110, 20, 70, 20])
+        device.add_newobj("loadbang", "loadbang", numinlets=1, numoutlets=1, patching_rect=[20, 60, 60, 20])
+        device.add_newobj("defer", "deferlow", numinlets=1, numoutlets=1, patching_rect=[100, 60, 60, 20])
+        device.add_newobj("init_t", "t b b", numinlets=1, numoutlets=2, patching_rect=[180, 60, 40, 20])
+        device.add_line("loadbang", 0, "defer", 0)
+        device.add_line("defer", 0, "init_t", 0)
+        device.add_newobj("voices", "poly~ grain_voice 8", numinlets=3, numoutlets=2, patching_rect=[20, 120, 100, 20])
+        device.add_newobj("send_poly", "s voice_bus", numinlets=1, numoutlets=0, patching_rect=[140, 120, 70, 20])
+        device.add_newobj("recv_poly", "r voice_bus", numinlets=0, numoutlets=1, patching_rect=[220, 120, 70, 20])
+        device.add_line("voices", 0, "send_poly", 0)
+
+        snapshot = snapshot_from_device(device)
+        source = generate_semantic_python_from_snapshot(snapshot)
+        namespace = {}
+
+        exec(source, namespace)
+
+        output = tmp_path / "factory_semantic_helpers.amxd"
+        written = namespace["build"](str(output))
+        rebuilt = output.read_bytes()
+        expected = device.to_bytes()
+
+        assert written == len(expected)
+        assert rebuilt == expected
+        assert "SNAPSHOT_NAMED_BUS_ROUTER_CANDIDATES" in source
+        assert "SNAPSHOT_INIT_DISPATCH_CHAIN_CANDIDATES" in source
+        assert "SNAPSHOT_POLY_SHELL_CANDIDATES" in source
+        assert "*named_bus_router(" in source
+        assert "*init_dispatch_chain(" in source
+        assert "*poly_shell(" in source
+
+    def test_optimized_python_prefers_poly_shell_bank_over_individual_shells(self):
+        device = AudioEffect("Poly Shell Bank", 420, 260)
+        device.add_box({
+            "box": {
+                "id": "shared_mod",
+                "maxclass": "flonum",
+                "patching_rect": [190, 20, 50, 22],
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            }
+        })
+        for index in range(1, 4):
+            y = 40 + (index - 1) * 60
+            device.add_box({
+                "box": {
+                    "id": f"ui_{index}",
+                    "maxclass": "bpatcher",
+                    "name": "VoiceUi.maxpat",
+                    "patching_rect": [20, y, 120, 24],
+                    "numinlets": 4,
+                    "numoutlets": 4,
+                    "outlettype": ["", "", "", ""],
+                }
+            })
+            device.add_newobj(
+                f"poly_{index}",
+                "poly~ voice_editor",
+                numinlets=4,
+                numoutlets=4,
+                patching_rect=[170, y, 110, 20],
+            )
+            device.add_newobj(
+                f"send_{index}",
+                f"s voice{index}",
+                numinlets=1,
+                numoutlets=0,
+                patching_rect=[310, y, 60, 20],
+            )
+            device.add_line(f"ui_{index}", 0, f"poly_{index}", 0)
+            device.add_line(f"ui_{index}", 1, f"poly_{index}", 1)
+            device.add_line(f"poly_{index}", 0, f"ui_{index}", 0)
+            device.add_line(f"poly_{index}", 1, f"ui_{index}", 1)
+            device.add_line(f"poly_{index}", 2, f"send_{index}", 0)
+            device.add_line("shared_mod", 0, f"poly_{index}", 2)
+
+        source = generate_optimized_python_from_snapshot(snapshot_from_device(device))
+
+        assert "SNAPSHOT_POLY_SHELL_BANK_CANDIDATES" in source
+        assert "# semantic target: poly_shell_bank" in source
+        assert "*poly_shell_bank(" in source
+        assert "\n        *poly_shell(" not in source
+
+    def test_semantic_python_prefers_poly_editor_bank_group_over_exact_bank(self):
+        device = AudioEffect("Poly Editor Bank", 420, 260)
+        device.add_box({
+            "box": {
+                "id": "shared_mod",
+                "maxclass": "flonum",
+                "patching_rect": [190, 20, 50, 22],
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            }
+        })
+        for index in range(1, 4):
+            y = 40 + (index - 1) * 60
+            device.add_box({
+                "box": {
+                    "id": f"ui_{index}",
+                    "maxclass": "bpatcher",
+                    "name": "VoiceUi.maxpat",
+                    "patching_rect": [20, y, 120, 24],
+                    "numinlets": 4,
+                    "numoutlets": 4,
+                    "outlettype": ["", "", "", ""],
+                }
+            })
+            device.add_newobj(
+                f"poly_{index}",
+                "poly~ voice_editor",
+                numinlets=4,
+                numoutlets=4,
+                patching_rect=[170, y, 110, 20],
+            )
+            device.add_newobj(
+                f"send_{index}",
+                f"s voice{index}",
+                numinlets=1,
+                numoutlets=0,
+                patching_rect=[310, y, 60, 20],
+            )
+            device.add_line(f"ui_{index}", 0, f"poly_{index}", 0)
+            device.add_line(f"ui_{index}", 1, f"poly_{index}", 1)
+            device.add_line(f"poly_{index}", 0, f"ui_{index}", 0)
+            device.add_line(f"poly_{index}", 1, f"ui_{index}", 1)
+            device.add_line(f"poly_{index}", 2, f"send_{index}", 0)
+            device.add_line("shared_mod", 0, f"poly_{index}", 2)
+
+        source = generate_semantic_python_from_snapshot(snapshot_from_device(device))
+
+        assert "SNAPSHOT_POLY_EDITOR_BANK_CANDIDATES" in source
+        assert "# semantic group: poly_editor_bank" in source
+        assert "# semantic target: poly_shell_bank" not in source
+
+    def test_semantic_python_groups_factory_presentation_widget_clusters(self, tmp_path):
+        root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Tools" / "Max Audio Effect"
+        root.mkdir(parents=True)
+        device = AudioEffect("Factory Presentation Cluster", 320, 180)
+        for box_id, maxclass, text, rect in [
+            ("dial_a", "live.dial", None, [20, 20, 44, 44]),
+            ("dial_b", "live.dial", None, [72, 20, 44, 44]),
+            ("label_a", "comment", "Rate", [20, 68, 40, 18]),
+            ("label_b", "comment", "Depth", [72, 68, 40, 18]),
+            ("toggle_a", "live.toggle", None, [124, 24, 20, 20]),
+        ]:
+            box = {
+                "id": box_id,
+                "maxclass": maxclass,
+                "patching_rect": rect,
+                "presentation_rect": rect,
+                "presentation": 1,
+                "numinlets": 1,
+                "numoutlets": 1 if maxclass != "comment" else 0,
+            }
+            if text is not None:
+                box["text"] = text
+            device.add_box({"box": box})
+        path = root / "Factory Presentation Cluster.amxd"
+        device.build(str(path))
+
+        snapshot = snapshot_from_amxd(str(path))
+        builder_source = generate_builder_python_from_snapshot(snapshot)
+        semantic_source = generate_semantic_python_from_snapshot(snapshot)
+
+        assert "SNAPSHOT_PRESENTATION_WIDGET_CLUSTER_CANDIDATES" in semantic_source
+        assert "# semantic group: presentation_widget_cluster" in semantic_source
+        assert semantic_source.count("device.add_box(") < builder_source.count("device.add_box(")
+
+    def test_semantic_python_groups_first_party_abstraction_hosts_before_building_block(self, tmp_path):
+        root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        root.mkdir(parents=True)
+        device = AudioEffect("Max GainDualMono", 320, 180)
+        device.add_newobj("gain_l", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[20, 70, 70, 20])
+        device.add_newobj("gain_r", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[140, 70, 70, 20])
+        device.add_dial("gain", "Gain", [72, 18, 44, 44], min_val=-70.0, max_val=6.0, initial=0.0, unitstyle=4)
+        device.add_comment("label", [66, 66, 60, 18], "Gain")
+        device.add_line("gain", 0, "gain_l", 1)
+        device.add_line("gain", 0, "gain_r", 1)
+        path = root / "Max GainDualMono.amxd"
+        device.build(str(path))
+
+        snapshot = snapshot_from_amxd(str(path))
+        builder_source = generate_builder_python_from_snapshot(snapshot)
+        semantic_source = generate_semantic_python_from_snapshot(snapshot)
+
+        assert "SNAPSHOT_FIRST_PARTY_ABSTRACTION_FAMILY_CANDIDATES" in semantic_source
+        assert "# semantic group: gain_shell" in semantic_source
+        assert "SNAPSHOT_FIRST_PARTY_ABSTRACTION_HOST_CANDIDATES" in semantic_source
+        assert "# semantic group: first_party_abstraction_host" not in semantic_source
+        if "# semantic group: building_block_candidate" in semantic_source:
+            assert semantic_source.index("# semantic group: gain_shell") < semantic_source.index(
+                "# semantic group: building_block_candidate"
+            )
+        assert semantic_source.count("device.add_dsp(") > builder_source.count("device.add_dsp(")
+
+    def test_semantic_python_groups_building_block_candidates_from_factory_path(self, tmp_path):
+        factory_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        factory_root.mkdir(parents=True)
+        device = AudioEffect("Max DelayLine", 320, 180)
+        device.add_comment("label", [20, 20, 100, 18], "Delay")
+        device.add_dial("delay", "Delay", [20, 50, 50, 90], min_val=0.0, max_val=2000.0, initial=400.0, unitstyle=2)
+        device.add_comment("hint", [90, 70, 120, 18], "Factory block")
+        path = factory_root / "Max DelayLine.amxd"
+        device.build(str(path))
+
+        source = generate_semantic_python_from_snapshot(snapshot_from_amxd(str(path)))
+
+        assert "# semantic group: building_block_candidate" in source
+        assert "SNAPSHOT_BUILDING_BLOCK_CANDIDATES" in source
+        assert source.count("device.add_box(") == 0
+        assert "device.add_dsp(" in source
+
+    def test_semantic_python_groups_first_party_api_rig_candidates_from_factory_path(self, tmp_path):
+        api_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "API"
+        api_root.mkdir(parents=True)
+        device = AudioEffect("Max Api DeviceExplorer", 320, 180)
+        device.add_comment("label", [20, 20, 140, 18], "API rig")
+        device.add_box({
+            "box": {
+                "id": "msg",
+                "maxclass": "message",
+                "text": "observe selection",
+                "patching_rect": [20, 50, 110, 20],
+                "numinlets": 2,
+                "numoutlets": 1,
+            }
+        })
+        path = api_root / "Max Api DeviceExplorer.amxd"
+        device.build(str(path))
+
+        source = generate_semantic_python_from_snapshot(snapshot_from_amxd(str(path)))
+
+        assert "# semantic group: first_party_api_rig" in source
+        assert "SNAPSHOT_FIRST_PARTY_API_RIG_CANDIDATES" in source
+        assert source.count("device.add_box(") == 0
+        assert "device.add_dsp(" in source
 
     def test_builder_python_semantically_rebuilds_jsui_device(self, tmp_path):
         device = AudioEffect("JSUI Reverse", 220, 100)

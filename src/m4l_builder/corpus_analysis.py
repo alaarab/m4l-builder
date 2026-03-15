@@ -9,7 +9,34 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict, Iterable, List
 
-from .reverse import extract_snapshot_knowledge, snapshot_from_amxd
+from .reverse import (
+    extract_behavior_hints,
+    extract_embedded_patcher_snapshots,
+    extract_gen_processing_candidates,
+    extract_poly_shell_bank_candidates,
+    extract_sample_buffer_candidates,
+    extract_snapshot_knowledge,
+    generate_builder_python_from_amxd,
+    generate_semantic_python_from_amxd,
+    snapshot_from_amxd,
+)
+
+SEMANTIC_HELPER_CALL_NAMES = (
+    "controller_surface_shell",
+    "sequencer_dispatch_shell",
+    "embedded_ui_shell",
+    "embedded_ui_shell_v2",
+    "named_bus_router",
+    "init_dispatch_chain",
+    "poly_shell",
+    "poly_shell_bank",
+    "live_thisdevice",
+    "live_parameter_probe",
+    "live_observer",
+    "live_state_observer",
+    "live_set_control",
+    "device_active_state",
+)
 
 
 def _object_name_from_box(box: dict) -> str | None:
@@ -57,12 +84,56 @@ def _motif_signature(motif: dict) -> str:
     return kind
 
 
+def classify_corpus_source_metadata(path: str) -> dict:
+    """Classify a corpus item into public/factory/site-lead lanes."""
+    absolute_path = os.path.abspath(path)
+    parts = Path(absolute_path).parts
+    source_lane = "public"
+    source_family = None
+    pack_name = None
+    pack_section = None
+    pack_subsection = None
+
+    if "Factory Packs" in parts:
+        index = parts.index("Factory Packs")
+        trailing = list(parts[index + 1:])
+        source_lane = "factory"
+        if trailing:
+            pack_name = trailing[0]
+            source_family = trailing[0]
+        if len(trailing) > 1:
+            pack_section = trailing[1]
+        if len(trailing) > 2:
+            pack_subsection = trailing[2]
+    elif "maxforlivedevices" in absolute_path.lower():
+        source_lane = "site_leads"
+        source_family = "maxforlivedevices"
+    else:
+        match = re.search(r"__([^/]+?)__[^/]+\.amxd$", absolute_path)
+        if match:
+            source_family = match.group(1)
+        else:
+            parent = Path(absolute_path).parent.name
+            if parent and parent != Path(absolute_path).name:
+                source_family = parent
+
+    return {
+        "source_lane": source_lane,
+        "source_family": source_family,
+        "pack_name": pack_name,
+        "pack_section": pack_section,
+        "pack_subsection": pack_subsection,
+    }
+
+
 def analyze_amxd_file(path: str) -> dict:
     """Analyze one .amxd file for corpus mining."""
     absolute_path = os.path.abspath(path)
+    source_metadata = classify_corpus_source_metadata(absolute_path)
     item = {
         "path": absolute_path,
         "name": os.path.basename(path),
+        **source_metadata,
     }
 
     try:
@@ -105,6 +176,22 @@ def analyze_amxd_file(path: str) -> dict:
         live_api_helper_opportunity_blockers: Dict[str, int] = {}
         controller_shell_candidate_counts: Dict[str, int] = {}
         embedded_ui_shell_candidate_counts: Dict[str, int] = {}
+        named_bus_router_candidate_counts: Dict[str, int] = {}
+        init_dispatch_chain_candidate_counts: Dict[str, int] = {}
+        state_bundle_router_candidate_counts: Dict[str, int] = {}
+        presentation_widget_cluster_candidate_counts: Dict[str, int] = {}
+        poly_shell_candidate_counts: Dict[str, int] = {}
+        poly_shell_bank_candidate_counts: Dict[str, int] = {}
+        poly_editor_bank_candidate_counts: Dict[str, int] = {}
+        behavior_hint_counts: Dict[str, int] = {}
+        sample_buffer_candidate_counts: Dict[str, int] = {}
+        gen_processing_candidate_counts: Dict[str, int] = {}
+        embedded_sample_buffer_candidate_counts: Dict[str, int] = {}
+        embedded_gen_processing_candidate_counts: Dict[str, int] = {}
+        first_party_api_rig_candidate_counts: Dict[str, int] = {}
+        first_party_abstraction_host_candidate_counts: Dict[str, int] = {}
+        first_party_abstraction_host_family_counts: Dict[str, int] = {}
+        building_block_candidate_counts: Dict[str, int] = {}
         for entry in knowledge.get("live_api_helper_opportunities", []):
             helper_name = entry.get("helper_name")
             if helper_name:
@@ -117,11 +204,68 @@ def analyze_amxd_file(path: str) -> dict:
                 controller_shell_candidate_counts[candidate_name] = (
                     controller_shell_candidate_counts.get(candidate_name, 0) + 1
                 )
+        for entry in knowledge.get("behavior_hints", []):
+            hint_name = entry.get("name")
+            if hint_name:
+                behavior_hint_counts[hint_name] = behavior_hint_counts.get(hint_name, 0) + 1
         for entry in knowledge.get("embedded_ui_shell_candidates", []):
             candidate_name = entry.get("candidate_name")
             if candidate_name:
                 embedded_ui_shell_candidate_counts[candidate_name] = (
                     embedded_ui_shell_candidate_counts.get(candidate_name, 0) + 1
+                )
+        for key, field in (
+            ("named_bus_router_candidates", named_bus_router_candidate_counts),
+            ("init_dispatch_chain_candidates", init_dispatch_chain_candidate_counts),
+            ("state_bundle_router_candidates", state_bundle_router_candidate_counts),
+            ("sample_buffer_candidates", sample_buffer_candidate_counts),
+            ("gen_processing_candidates", gen_processing_candidate_counts),
+            ("presentation_widget_cluster_candidates", presentation_widget_cluster_candidate_counts),
+            ("poly_shell_candidates", poly_shell_candidate_counts),
+            ("poly_shell_bank_candidates", poly_shell_bank_candidate_counts),
+            ("poly_editor_bank_candidates", poly_editor_bank_candidate_counts),
+            ("first_party_api_rig_candidates", first_party_api_rig_candidate_counts),
+        ):
+            for entry in knowledge.get(key, []):
+                candidate_name = entry.get("candidate_name")
+                if candidate_name:
+                    field[candidate_name] = field.get(candidate_name, 0) + 1
+        for nested in extract_embedded_patcher_snapshots(snapshot):
+            nested_snapshot = nested.get("snapshot", {})
+            for entry in extract_sample_buffer_candidates(nested_snapshot):
+                candidate_name = entry.get("candidate_name")
+                if candidate_name:
+                    embedded_sample_buffer_candidate_counts[candidate_name] = (
+                        embedded_sample_buffer_candidate_counts.get(candidate_name, 0) + 1
+                    )
+            for entry in extract_gen_processing_candidates(nested_snapshot):
+                candidate_name = entry.get("candidate_name")
+                if candidate_name:
+                    embedded_gen_processing_candidate_counts[candidate_name] = (
+                        embedded_gen_processing_candidate_counts.get(candidate_name, 0) + 1
+                    )
+        for entry in knowledge.get("first_party_abstraction_host_candidates", []):
+            candidate_name = (
+                entry.get("params", {}).get("primary_abstraction_name")
+                or entry.get("candidate_name")
+            )
+            if candidate_name:
+                first_party_abstraction_host_candidate_counts[candidate_name] = (
+                    first_party_abstraction_host_candidate_counts.get(candidate_name, 0) + 1
+                )
+            family_name = entry.get("params", {}).get("abstraction_family")
+            if family_name:
+                first_party_abstraction_host_family_counts[family_name] = (
+                    first_party_abstraction_host_family_counts.get(family_name, 0) + 1
+                )
+        for entry in knowledge.get("building_block_candidates", []):
+            candidate_name = (
+                entry.get("params", {}).get("block_name")
+                or entry.get("candidate_name")
+            )
+            if candidate_name:
+                building_block_candidate_counts[candidate_name] = (
+                    building_block_candidate_counts.get(candidate_name, 0) + 1
                 )
         live_api_path_target_counts: Dict[str, int] = {}
         live_api_property_counts: Dict[str, int] = {}
@@ -213,9 +357,55 @@ def analyze_amxd_file(path: str) -> dict:
             "controller_shell_candidate_count": sum(controller_shell_candidate_counts.values()),
             "controller_shell_candidate_kinds": sorted(controller_shell_candidate_counts),
             "controller_shell_candidate_counts": controller_shell_candidate_counts,
+            "behavior_hint_count": sum(behavior_hint_counts.values()),
+            "behavior_hint_kinds": sorted(behavior_hint_counts),
+            "behavior_hint_counts": behavior_hint_counts,
             "embedded_ui_shell_candidate_count": sum(embedded_ui_shell_candidate_counts.values()),
             "embedded_ui_shell_candidate_kinds": sorted(embedded_ui_shell_candidate_counts),
             "embedded_ui_shell_candidate_counts": embedded_ui_shell_candidate_counts,
+            "named_bus_router_candidate_count": sum(named_bus_router_candidate_counts.values()),
+            "named_bus_router_candidate_kinds": sorted(named_bus_router_candidate_counts),
+            "named_bus_router_candidate_counts": named_bus_router_candidate_counts,
+            "init_dispatch_chain_candidate_count": sum(init_dispatch_chain_candidate_counts.values()),
+            "init_dispatch_chain_candidate_kinds": sorted(init_dispatch_chain_candidate_counts),
+            "init_dispatch_chain_candidate_counts": init_dispatch_chain_candidate_counts,
+            "state_bundle_router_candidate_count": sum(state_bundle_router_candidate_counts.values()),
+            "state_bundle_router_candidate_kinds": sorted(state_bundle_router_candidate_counts),
+            "state_bundle_router_candidate_counts": state_bundle_router_candidate_counts,
+            "sample_buffer_candidate_count": sum(sample_buffer_candidate_counts.values()),
+            "sample_buffer_candidate_kinds": sorted(sample_buffer_candidate_counts),
+            "sample_buffer_candidate_counts": sample_buffer_candidate_counts,
+            "gen_processing_candidate_count": sum(gen_processing_candidate_counts.values()),
+            "gen_processing_candidate_kinds": sorted(gen_processing_candidate_counts),
+            "gen_processing_candidate_counts": gen_processing_candidate_counts,
+            "embedded_sample_buffer_candidate_count": sum(embedded_sample_buffer_candidate_counts.values()),
+            "embedded_sample_buffer_candidate_kinds": sorted(embedded_sample_buffer_candidate_counts),
+            "embedded_sample_buffer_candidate_counts": embedded_sample_buffer_candidate_counts,
+            "embedded_gen_processing_candidate_count": sum(embedded_gen_processing_candidate_counts.values()),
+            "embedded_gen_processing_candidate_kinds": sorted(embedded_gen_processing_candidate_counts),
+            "embedded_gen_processing_candidate_counts": embedded_gen_processing_candidate_counts,
+            "presentation_widget_cluster_candidate_count": sum(presentation_widget_cluster_candidate_counts.values()),
+            "presentation_widget_cluster_candidate_kinds": sorted(presentation_widget_cluster_candidate_counts),
+            "presentation_widget_cluster_candidate_counts": presentation_widget_cluster_candidate_counts,
+            "poly_shell_candidate_count": sum(poly_shell_candidate_counts.values()),
+            "poly_shell_candidate_kinds": sorted(poly_shell_candidate_counts),
+            "poly_shell_candidate_counts": poly_shell_candidate_counts,
+            "poly_shell_bank_candidate_count": sum(poly_shell_bank_candidate_counts.values()),
+            "poly_shell_bank_candidate_kinds": sorted(poly_shell_bank_candidate_counts),
+            "poly_shell_bank_candidate_counts": poly_shell_bank_candidate_counts,
+            "poly_editor_bank_candidate_count": sum(poly_editor_bank_candidate_counts.values()),
+            "poly_editor_bank_candidate_kinds": sorted(poly_editor_bank_candidate_counts),
+            "poly_editor_bank_candidate_counts": poly_editor_bank_candidate_counts,
+            "first_party_api_rig_candidate_count": sum(first_party_api_rig_candidate_counts.values()),
+            "first_party_api_rig_candidate_kinds": sorted(first_party_api_rig_candidate_counts),
+            "first_party_api_rig_candidate_counts": first_party_api_rig_candidate_counts,
+            "first_party_abstraction_host_candidate_count": sum(first_party_abstraction_host_candidate_counts.values()),
+            "first_party_abstraction_host_candidate_kinds": sorted(first_party_abstraction_host_candidate_counts),
+            "first_party_abstraction_host_candidate_counts": first_party_abstraction_host_candidate_counts,
+            "first_party_abstraction_host_family_counts": first_party_abstraction_host_family_counts,
+            "building_block_candidate_count": sum(building_block_candidate_counts.values()),
+            "building_block_candidate_kinds": sorted(building_block_candidate_counts),
+            "building_block_candidate_counts": building_block_candidate_counts,
             "maxclass_counts": analysis.get("maxclass_counts", {}),
             "object_name_counts": object_name_counts,
             "control_maxclass_counts": control_maxclass_counts,
@@ -308,6 +498,8 @@ def _reverse_candidate_score(item: dict) -> tuple[float, list[str]]:
         if name.startswith("state_bundle:")
     )
     live_api_opportunities = int(item.get("live_api_helper_opportunity_count", 0))
+    poly_shell_banks = int(item.get("poly_shell_bank_candidate_count", 0))
+    poly_editor_banks = int(item.get("poly_editor_bank_candidate_count", 0))
     missing_support = int(item.get("missing_support_files", 0))
     patterns = int(item.get("pattern_count", 0))
     recipes = int(item.get("recipe_count", 0))
@@ -334,6 +526,12 @@ def _reverse_candidate_score(item: dict) -> tuple[float, list[str]]:
     if live_api_opportunities:
         score += live_api_opportunities * 2.0
         reasons.append(f"{live_api_opportunities} unresolved Live API helpers")
+    if poly_shell_banks:
+        score += poly_shell_banks * 6.0
+        reasons.append(f"{poly_shell_banks} poly-shell bank candidates")
+    if poly_editor_banks:
+        score += poly_editor_banks * 8.0
+        reasons.append(f"{poly_editor_banks} poly-editor bank candidates")
     if patterns:
         score -= patterns * 0.5
     if recipes:
@@ -441,6 +639,9 @@ def _infer_family_semantic_targets(profile: dict) -> tuple[list[dict], list[str]
     stable_motif_entries = profile.get("stable_signals", {}).get("motif_signatures", [])
     stable_motif_names = _names_by_coverage(stable_motif_entries, 1.0)
     stable_object_names = _names_by_coverage(profile.get("stable_signals", {}).get("object_names", []), 1.0)
+    stable_poly_shell_banks = _names_by_coverage(profile.get("stable_signals", {}).get("poly_shell_banks", []), 1.0)
+    stable_poly_editor_banks = _names_by_coverage(profile.get("stable_signals", {}).get("poly_editor_banks", []), 1.0)
+    stable_behavior_hints = _names_by_coverage(profile.get("stable_signals", {}).get("behavior_hints", []), 1.0)
     variable_live_api = profile.get("variable_signals", {}).get("live_api_archetypes", [])
     stable_named_buses = profile.get("stable_signals", {}).get("named_bus_network_names", [])
     variable_named_buses = profile.get("variable_signals", {}).get("named_bus_network_names", [])
@@ -452,6 +653,41 @@ def _infer_family_semantic_targets(profile: dict) -> tuple[list[dict], list[str]
 
     targets: list[dict] = []
     next_work: list[str] = []
+
+    if "mapped_random_control_device" in stable_behavior_hints:
+        targets.append({
+            "name": "mapped_random_control_device",
+            "confidence": 0.97,
+            "evidence": [
+                "stable product-level behavior hint: mapped_random_control_device",
+            ],
+        })
+        next_work.append(
+            "Trace the hidden sidecar logic behind the stable mapped-random-control shell so future rebuilds can target behavior, not just structure."
+        )
+
+    if stable_poly_editor_banks:
+        targets.append({
+            "name": "poly_editor_bank",
+            "confidence": 0.96,
+            "evidence": [
+                f"stable editor-bank candidates: {', '.join(sorted(stable_poly_editor_banks))}",
+            ],
+        })
+        next_work.append(
+            "Generalize the repeated voice-editor-bank structure into reusable multi-voice abstractions and split stable editor banks from one-off repeated poly shells."
+        )
+    elif stable_poly_shell_banks:
+        targets.append({
+            "name": "poly_shell_bank",
+            "confidence": 0.88,
+            "evidence": [
+                f"stable exact poly-shell banks: {', '.join(sorted(stable_poly_shell_banks))}",
+            ],
+        })
+        next_work.append(
+            "Lift the stable repeated poly-shell bank into a richer semantic editor-bank layer instead of keeping only the exact helper surface."
+        )
 
     if (
         has_stable_route_dispatch
@@ -636,6 +872,9 @@ def build_reverse_candidate_family_profile(report: dict, family: str) -> dict | 
     live_api_archetype_totals, live_api_archetype_presence = _aggregate_presence_counts(items, "live_api_archetype_counts")
     named_bus_totals, named_bus_presence = _aggregate_presence_counts(items, "named_bus_network_names")
     embedded_host_totals, embedded_host_presence = _aggregate_presence_counts(items, "embedded_patcher_host_kind_counts")
+    behavior_hint_totals, behavior_hint_presence = _aggregate_presence_counts(items, "behavior_hint_counts")
+    poly_shell_bank_totals, poly_shell_bank_presence = _aggregate_presence_counts(items, "poly_shell_bank_candidate_counts")
+    poly_editor_bank_totals, poly_editor_bank_presence = _aggregate_presence_counts(items, "poly_editor_bank_candidate_counts")
 
     variants = _family_variant_summaries(items)
     profile = {
@@ -670,9 +909,27 @@ def build_reverse_candidate_family_profile(report: dict, family: str) -> dict | 
                 variant_count,
                 stable_only=True,
             ),
+            "behavior_hints": _coverage_frequency_entries(
+                behavior_hint_totals,
+                behavior_hint_presence,
+                variant_count,
+                stable_only=True,
+            ),
             "named_bus_network_names": _coverage_frequency_entries(
                 named_bus_totals,
                 named_bus_presence,
+                variant_count,
+                stable_only=True,
+            ),
+            "poly_shell_banks": _coverage_frequency_entries(
+                poly_shell_bank_totals,
+                poly_shell_bank_presence,
+                variant_count,
+                stable_only=True,
+            ),
+            "poly_editor_banks": _coverage_frequency_entries(
+                poly_editor_bank_totals,
+                poly_editor_bank_presence,
                 variant_count,
                 stable_only=True,
             ),
@@ -692,9 +949,27 @@ def build_reverse_candidate_family_profile(report: dict, family: str) -> dict | 
                 variant_count,
                 stable_only=False,
             ),
+            "behavior_hints": _coverage_frequency_entries(
+                behavior_hint_totals,
+                behavior_hint_presence,
+                variant_count,
+                stable_only=False,
+            ),
             "named_bus_network_names": _coverage_frequency_entries(
                 named_bus_totals,
                 named_bus_presence,
+                variant_count,
+                stable_only=False,
+            ),
+            "poly_shell_banks": _coverage_frequency_entries(
+                poly_shell_bank_totals,
+                poly_shell_bank_presence,
+                variant_count,
+                stable_only=False,
+            ),
+            "poly_editor_banks": _coverage_frequency_entries(
+                poly_editor_bank_totals,
+                poly_editor_bank_presence,
                 variant_count,
                 stable_only=False,
             ),
@@ -746,6 +1021,333 @@ def build_reverse_candidate_family_profiles(report: dict, *, limit: int = 20) ->
     return profiles[:limit]
 
 
+def build_source_lane_profiles(report: dict) -> list[dict]:
+    """Aggregate motif and abstraction signals by source lane."""
+    profiles = []
+    ok_items = [item for item in report.get("items", []) if item.get("status") == "ok"]
+    lane_names = sorted({item.get("source_lane") for item in ok_items if item.get("source_lane")})
+    for lane in lane_names:
+        items = [item for item in ok_items if item.get("source_lane") == lane]
+        pack_name_counts: dict[str, int] = {}
+        for item in items:
+            pack_name = item.get("pack_name")
+            if pack_name:
+                pack_name_counts[pack_name] = pack_name_counts.get(pack_name, 0) + 1
+        motif_totals, motif_presence = _aggregate_presence_counts(items, "motif_signature_counts")
+        helper_totals, helper_presence = _aggregate_presence_counts(items, "live_api_helper_counts")
+        controller_totals, controller_presence = _aggregate_presence_counts(items, "controller_shell_candidate_counts")
+        behavior_totals, behavior_presence = _aggregate_presence_counts(items, "behavior_hint_counts")
+        embedded_totals, embedded_presence = _aggregate_presence_counts(items, "embedded_ui_shell_candidate_counts")
+        sample_buffer_totals, sample_buffer_presence = _aggregate_presence_counts(items, "sample_buffer_candidate_counts")
+        gen_processing_totals, gen_processing_presence = _aggregate_presence_counts(items, "gen_processing_candidate_counts")
+        embedded_sample_buffer_totals, embedded_sample_buffer_presence = _aggregate_presence_counts(items, "embedded_sample_buffer_candidate_counts")
+        embedded_gen_processing_totals, embedded_gen_processing_presence = _aggregate_presence_counts(items, "embedded_gen_processing_candidate_counts")
+        presentation_cluster_totals, presentation_cluster_presence = _aggregate_presence_counts(items, "presentation_widget_cluster_candidate_counts")
+        poly_shell_bank_totals, poly_shell_bank_presence = _aggregate_presence_counts(items, "poly_shell_bank_candidate_counts")
+        poly_editor_bank_totals, poly_editor_bank_presence = _aggregate_presence_counts(items, "poly_editor_bank_candidate_counts")
+        first_party_api_totals, first_party_api_presence = _aggregate_presence_counts(items, "first_party_api_rig_candidate_counts")
+        first_party_abstraction_totals, first_party_abstraction_presence = _aggregate_presence_counts(items, "first_party_abstraction_host_candidate_counts")
+        first_party_abstraction_family_totals, first_party_abstraction_family_presence = _aggregate_presence_counts(items, "first_party_abstraction_host_family_counts")
+        block_totals, block_presence = _aggregate_presence_counts(items, "building_block_candidate_counts")
+        profiles.append({
+            "lane": lane,
+            "count": len(items),
+            "pack_names": _sorted_frequency(pack_name_counts),
+            "top_motif_signatures": _coverage_frequency_entries(motif_totals, motif_presence, len(items), stable_only=None)[:10],
+            "top_live_api_helpers": _coverage_frequency_entries(helper_totals, helper_presence, len(items), stable_only=None)[:10],
+            "top_controller_shells": _coverage_frequency_entries(controller_totals, controller_presence, len(items), stable_only=None)[:10],
+            "top_behavior_hints": _coverage_frequency_entries(behavior_totals, behavior_presence, len(items), stable_only=None)[:10],
+            "top_embedded_ui_shells": _coverage_frequency_entries(embedded_totals, embedded_presence, len(items), stable_only=None)[:10],
+            "top_sample_buffer_candidates": _coverage_frequency_entries(sample_buffer_totals, sample_buffer_presence, len(items), stable_only=None)[:10],
+            "top_gen_processing_candidates": _coverage_frequency_entries(gen_processing_totals, gen_processing_presence, len(items), stable_only=None)[:10],
+            "top_embedded_sample_buffer_candidates": _coverage_frequency_entries(embedded_sample_buffer_totals, embedded_sample_buffer_presence, len(items), stable_only=None)[:10],
+            "top_embedded_gen_processing_candidates": _coverage_frequency_entries(embedded_gen_processing_totals, embedded_gen_processing_presence, len(items), stable_only=None)[:10],
+            "top_presentation_widget_clusters": _coverage_frequency_entries(presentation_cluster_totals, presentation_cluster_presence, len(items), stable_only=None)[:10],
+            "top_poly_shell_banks": _coverage_frequency_entries(poly_shell_bank_totals, poly_shell_bank_presence, len(items), stable_only=None)[:10],
+            "top_poly_editor_banks": _coverage_frequency_entries(poly_editor_bank_totals, poly_editor_bank_presence, len(items), stable_only=None)[:10],
+            "top_first_party_api_rigs": _coverage_frequency_entries(first_party_api_totals, first_party_api_presence, len(items), stable_only=None)[:10],
+            "top_first_party_abstraction_hosts": _coverage_frequency_entries(first_party_abstraction_totals, first_party_abstraction_presence, len(items), stable_only=None)[:10],
+            "top_first_party_abstraction_families": _coverage_frequency_entries(first_party_abstraction_family_totals, first_party_abstraction_family_presence, len(items), stable_only=None)[:10],
+            "top_building_blocks": _coverage_frequency_entries(block_totals, block_presence, len(items), stable_only=None)[:10],
+            "avg_boxes": round(mean(item.get("box_count", 0) for item in items), 2) if items else 0.0,
+            "avg_lines": round(mean(item.get("line_count", 0) for item in items), 2) if items else 0.0,
+            "files_with_missing_support": sum(1 for item in items if item.get("missing_support_files", 0) > 0),
+        })
+    profiles.sort(key=lambda entry: (-entry["count"], entry["lane"]))
+    return profiles
+
+
+def source_lane_profiles_markdown(profiles: list[dict]) -> str:
+    """Render lane comparison profiles as markdown."""
+    lines = ["# AMXD Source Lane Profiles", ""]
+    if not profiles:
+        lines.extend(["- None", ""])
+        return "\n".join(lines)
+
+    def _entry_names(entries: list[dict], *, with_coverage: bool = False) -> str:
+        if not entries:
+            return "None"
+        if with_coverage:
+            return ", ".join(f"{entry['name']} ({entry['coverage']})" for entry in entries[:5])
+        return ", ".join(entry["name"] for entry in entries[:5])
+
+    for profile in profiles:
+        lines.extend([
+            f"## {profile['lane']}",
+            "",
+            f"- Files: `{profile['count']}`",
+            f"- Avg boxes / lines: `{profile['avg_boxes']}` / `{profile['avg_lines']}`",
+            f"- Files with missing support: `{profile['files_with_missing_support']}`",
+            f"- Pack names: `{_entry_names(profile.get('pack_names', []))}`",
+            f"- Top motifs: `{_entry_names(profile.get('top_motif_signatures', []), with_coverage=True)}`",
+            f"- Live API helpers: `{_entry_names(profile.get('top_live_api_helpers', []), with_coverage=True)}`",
+            f"- Controller shells: `{_entry_names(profile.get('top_controller_shells', []), with_coverage=True)}`",
+            f"- Behavior hints: `{_entry_names(profile.get('top_behavior_hints', []), with_coverage=True)}`",
+            f"- Embedded UI shells: `{_entry_names(profile.get('top_embedded_ui_shells', []), with_coverage=True)}`",
+            f"- Sample-buffer candidates: `{_entry_names(profile.get('top_sample_buffer_candidates', []), with_coverage=True)}`",
+            f"- Gen-processing candidates: `{_entry_names(profile.get('top_gen_processing_candidates', []), with_coverage=True)}`",
+            f"- Embedded sample-buffer candidates: `{_entry_names(profile.get('top_embedded_sample_buffer_candidates', []), with_coverage=True)}`",
+            f"- Embedded gen-processing candidates: `{_entry_names(profile.get('top_embedded_gen_processing_candidates', []), with_coverage=True)}`",
+            f"- Presentation widget clusters: `{_entry_names(profile.get('top_presentation_widget_clusters', []), with_coverage=True)}`",
+            f"- Poly-shell banks: `{_entry_names(profile.get('top_poly_shell_banks', []), with_coverage=True)}`",
+            f"- Poly-editor banks: `{_entry_names(profile.get('top_poly_editor_banks', []), with_coverage=True)}`",
+            f"- First-party API rigs: `{_entry_names(profile.get('top_first_party_api_rigs', []), with_coverage=True)}`",
+            f"- First-party abstraction hosts: `{_entry_names(profile.get('top_first_party_abstraction_hosts', []), with_coverage=True)}`",
+            f"- First-party abstraction families: `{_entry_names(profile.get('top_first_party_abstraction_families', []), with_coverage=True)}`",
+            f"- Building blocks: `{_entry_names(profile.get('top_building_blocks', []), with_coverage=True)}`",
+            "",
+        ])
+    return "\n".join(lines)
+
+
+def build_reference_device_dossier(path: str) -> dict:
+    """Build a semantic-lifting dossier for one reference AMXD."""
+    absolute_path = os.path.abspath(path)
+    try:
+        snapshot = snapshot_from_amxd(path)
+        knowledge = extract_snapshot_knowledge(snapshot)
+        builder_source = generate_builder_python_from_amxd(path)
+        semantic_source = generate_semantic_python_from_amxd(path)
+    except Exception as exc:
+        return {
+            "name": Path(path).name,
+            "path": absolute_path,
+            "error": f"{type(exc).__name__}: {exc}",
+            "recovered_classes": [],
+            "raw_add_box_count": 0,
+            "semantic_add_box_count": 0,
+            "semantic_add_box_delta": 0,
+            "raw_add_line_count": 0,
+            "semantic_add_line_count": 0,
+            "semantic_add_line_delta": 0,
+            "semantic_helper_call_count": 0,
+            "semantic_helper_calls": {},
+            "structural_lift_score": 0,
+            "fallback_zones": ["analysis_error"],
+        }
+
+    def _count_raw_add_box(source: str) -> int:
+        return source.count("device.add_box(")
+
+    def _count_raw_add_line(source: str) -> int:
+        return source.count("device.add_line(")
+
+    def _semantic_helper_call_counts(source: str) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for name in SEMANTIC_HELPER_CALL_NAMES:
+            count = source.count(f"{name}(")
+            if count:
+                counts[name] = count
+        return counts
+
+    raw_add_box_count = _count_raw_add_box(builder_source)
+    semantic_add_box_count = _count_raw_add_box(semantic_source)
+    raw_add_line_count = _count_raw_add_line(builder_source)
+    semantic_add_line_count = _count_raw_add_line(semantic_source)
+    semantic_helper_calls = _semantic_helper_call_counts(semantic_source)
+    semantic_helper_call_count = sum(semantic_helper_calls.values())
+    embedded_sample_buffer_candidates: Dict[str, int] = {}
+    embedded_gen_processing_candidates: Dict[str, int] = {}
+    for entry in extract_embedded_patcher_snapshots(snapshot):
+        nested_snapshot = entry.get("snapshot", {})
+        for candidate in extract_sample_buffer_candidates(nested_snapshot):
+            candidate_name = candidate.get("candidate_name")
+            if candidate_name:
+                embedded_sample_buffer_candidates[candidate_name] = (
+                    embedded_sample_buffer_candidates.get(candidate_name, 0) + 1
+                )
+        for candidate in extract_gen_processing_candidates(nested_snapshot):
+            candidate_name = candidate.get("candidate_name")
+            if candidate_name:
+                embedded_gen_processing_candidates[candidate_name] = (
+                    embedded_gen_processing_candidates.get(candidate_name, 0) + 1
+                )
+
+    recovered_classes = sorted({
+        *(entry.get("candidate_name") for entry in knowledge.get("controller_shell_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("embedded_ui_shell_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("named_bus_router_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("init_dispatch_chain_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("state_bundle_router_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("sample_buffer_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("gen_processing_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("presentation_widget_cluster_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("poly_shell_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("poly_shell_bank_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("poly_editor_bank_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("first_party_api_rig_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("first_party_abstraction_host_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("first_party_abstraction_family_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("building_block_candidates", [])),
+        *embedded_sample_buffer_candidates.keys(),
+        *embedded_gen_processing_candidates.keys(),
+    } - {None})
+    fallback_zones = []
+    if _count_raw_add_box(semantic_source):
+        fallback_zones.append("raw_box_fallback")
+    if knowledge.get("lossiness", {}).get("missing_support_files"):
+        fallback_zones.append("missing_support_files")
+    if knowledge.get("summary", {}).get("live_api_helper_opportunity_count", 0) > 0:
+        fallback_zones.append("live_api_manual_review")
+
+    return {
+        "name": Path(path).name,
+        "path": absolute_path,
+        "source": knowledge.get("source", {}),
+        "device_type": snapshot.get("device", {}).get("device_type"),
+        "box_count": snapshot.get("analysis", {}).get("box_count", 0),
+        "line_count": snapshot.get("analysis", {}).get("line_count", 0),
+        "recovered_classes": recovered_classes,
+        "behavior_hints": [entry.get("name") for entry in knowledge.get("behavior_hints", []) if entry.get("name")],
+        "raw_add_box_count": raw_add_box_count,
+        "semantic_add_box_count": semantic_add_box_count,
+        "semantic_add_box_delta": raw_add_box_count - semantic_add_box_count,
+        "raw_add_line_count": raw_add_line_count,
+        "semantic_add_line_count": semantic_add_line_count,
+        "semantic_add_line_delta": raw_add_line_count - semantic_add_line_count,
+        "semantic_helper_call_count": semantic_helper_call_count,
+        "semantic_helper_calls": semantic_helper_calls,
+        "structural_lift_score": (
+            (raw_add_box_count - semantic_add_box_count)
+            + (raw_add_line_count - semantic_add_line_count)
+            + semantic_helper_call_count
+        ),
+        "fallback_zones": fallback_zones,
+    }
+
+
+def build_reference_device_dossiers(paths: Iterable[str]) -> list[dict]:
+    """Build dossiers for a fixed reference-device proof set."""
+    dossiers = [build_reference_device_dossier(path) for path in paths]
+    dossiers.sort(key=lambda entry: entry["name"])
+    return dossiers
+
+
+def reference_device_dossiers_markdown(dossiers: list[dict]) -> str:
+    """Render reference-device dossiers as markdown."""
+    lines = ["# AMXD Reference Device Dossiers", ""]
+    if not dossiers:
+        lines.extend(["- None", ""])
+        return "\n".join(lines)
+    for dossier in dossiers:
+        if dossier.get("error"):
+            lines.extend([
+                f"## {dossier['name']}",
+                "",
+                f"- Path: `{dossier['path']}`",
+                f"- Error: `{dossier['error']}`",
+                f"- Fallback zones: `{', '.join(dossier['fallback_zones']) or 'None'}`",
+                "",
+            ])
+            continue
+        lines.extend([
+            f"## {dossier['name']}",
+            "",
+            f"- Path: `{dossier['path']}`",
+            f"- Device type: `{dossier['device_type']}`",
+            f"- Source lane: `{dossier.get('source', {}).get('source_lane')}`",
+            f"- Pack section: `{dossier.get('source', {}).get('pack_name')} / {dossier.get('source', {}).get('pack_section')}`",
+            f"- Boxes / lines: `{dossier['box_count']}` / `{dossier['line_count']}`",
+            f"- Recovered classes: `{', '.join(dossier['recovered_classes']) or 'None'}`",
+            f"- Behavior hints: `{', '.join(dossier.get('behavior_hints', [])) or 'None'}`",
+            f"- Raw add_box / add_line count: `{dossier['raw_add_box_count']}` / `{dossier['raw_add_line_count']}`",
+            f"- Semantic add_box / add_line count: `{dossier['semantic_add_box_count']}` / `{dossier['semantic_add_line_count']}`",
+            f"- Semantic helper calls: `{', '.join(f'{name} x{count}' for name, count in sorted(dossier['semantic_helper_calls'].items())) or 'None'}`",
+            f"- Semantic lift delta: `{dossier['semantic_add_box_delta']}`",
+            f"- Structural lift score: `{dossier['structural_lift_score']}`",
+            f"- Fallback zones: `{', '.join(dossier['fallback_zones']) or 'None'}`",
+            "",
+        ])
+    return "\n".join(lines)
+
+
+def build_corpus_comparison(reports_by_label: dict[str, dict]) -> dict:
+    """Build a compact comparison view across separately mined corpora."""
+    comparisons = []
+    for label, report in sorted(reports_by_label.items()):
+        summary = report.get("summary", {})
+        frequencies = report.get("frequencies", {})
+        comparisons.append({
+            "label": label,
+            "count": summary.get("count", 0),
+            "ok": summary.get("ok", 0),
+            "error": summary.get("error", 0),
+            "avg_boxes": summary.get("avg_box_count", 0.0),
+            "avg_lines": summary.get("avg_line_count", 0.0),
+            "top_motifs": frequencies.get("motif_signatures", [])[:5],
+            "top_live_api_helpers": frequencies.get("live_api_helpers", [])[:5],
+            "top_controller_shells": frequencies.get("controller_shell_candidates", [])[:5],
+            "top_behavior_hints": frequencies.get("behavior_hints", [])[:5],
+            "top_embedded_ui_shells": frequencies.get("embedded_ui_shell_candidates", [])[:5],
+            "top_sample_buffer_candidates": frequencies.get("sample_buffer_candidates", [])[:5],
+            "top_gen_processing_candidates": frequencies.get("gen_processing_candidates", [])[:5],
+            "top_embedded_sample_buffer_candidates": frequencies.get("embedded_sample_buffer_candidates", [])[:5],
+            "top_embedded_gen_processing_candidates": frequencies.get("embedded_gen_processing_candidates", [])[:5],
+            "top_presentation_widget_clusters": frequencies.get("presentation_widget_cluster_candidates", [])[:5],
+            "top_poly_shell_banks": frequencies.get("poly_shell_bank_candidates", [])[:5],
+            "top_poly_editor_banks": frequencies.get("poly_editor_bank_candidates", [])[:5],
+            "top_first_party_abstraction_hosts": frequencies.get("first_party_abstraction_host_candidates", [])[:5],
+            "top_first_party_abstraction_families": frequencies.get("first_party_abstraction_host_families", [])[:5],
+            "top_building_blocks": frequencies.get("building_block_candidates", [])[:5],
+            "top_pack_sections": frequencies.get("pack_sections", [])[:5],
+        })
+    return {"reports": comparisons}
+
+
+def corpus_comparison_markdown(comparison: dict) -> str:
+    """Render a multi-corpus comparison report as markdown."""
+    lines = ["# AMXD Corpus Comparison", ""]
+    reports = comparison.get("reports", [])
+    if not reports:
+        lines.extend(["- None", ""])
+        return "\n".join(lines)
+    for report in reports:
+        lines.extend([
+            f"## {report['label']}",
+            "",
+            f"- Files scanned / ok / error: `{report['count']}` / `{report['ok']}` / `{report['error']}`",
+            f"- Avg boxes / lines: `{report['avg_boxes']}` / `{report['avg_lines']}`",
+            f"- Top motifs: `{', '.join(entry['name'] for entry in report.get('top_motifs', [])) or 'None'}`",
+            f"- Live API helpers: `{', '.join(entry['name'] for entry in report.get('top_live_api_helpers', [])) or 'None'}`",
+            f"- Controller shells: `{', '.join(entry['name'] for entry in report.get('top_controller_shells', [])) or 'None'}`",
+            f"- Behavior hints: `{', '.join(entry['name'] for entry in report.get('top_behavior_hints', [])) or 'None'}`",
+            f"- Embedded UI shells: `{', '.join(entry['name'] for entry in report.get('top_embedded_ui_shells', [])) or 'None'}`",
+            f"- Sample-buffer candidates: `{', '.join(entry['name'] for entry in report.get('top_sample_buffer_candidates', [])) or 'None'}`",
+            f"- Gen-processing candidates: `{', '.join(entry['name'] for entry in report.get('top_gen_processing_candidates', [])) or 'None'}`",
+            f"- Embedded sample-buffer candidates: `{', '.join(entry['name'] for entry in report.get('top_embedded_sample_buffer_candidates', [])) or 'None'}`",
+            f"- Embedded gen-processing candidates: `{', '.join(entry['name'] for entry in report.get('top_embedded_gen_processing_candidates', [])) or 'None'}`",
+            f"- Presentation widget clusters: `{', '.join(entry['name'] for entry in report.get('top_presentation_widget_clusters', [])) or 'None'}`",
+            f"- Poly-shell banks: `{', '.join(entry['name'] for entry in report.get('top_poly_shell_banks', [])) or 'None'}`",
+            f"- Poly-editor banks: `{', '.join(entry['name'] for entry in report.get('top_poly_editor_banks', [])) or 'None'}`",
+            f"- First-party abstraction hosts: `{', '.join(entry['name'] for entry in report.get('top_first_party_abstraction_hosts', [])) or 'None'}`",
+            f"- First-party abstraction families: `{', '.join(entry['name'] for entry in report.get('top_first_party_abstraction_families', [])) or 'None'}`",
+            f"- Building blocks: `{', '.join(entry['name'] for entry in report.get('top_building_blocks', [])) or 'None'}`",
+            f"- Pack sections: `{', '.join(entry['name'] for entry in report.get('top_pack_sections', [])) or 'None'}`",
+            "",
+        ])
+    return "\n".join(lines)
+
+
 def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
     """Analyze every `.amxd` file in a directory and aggregate corpus metrics."""
     root = Path(path).expanduser().resolve()
@@ -790,7 +1392,23 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
     live_api_helper_opportunity_counts: Dict[str, int] = {}
     live_api_helper_opportunity_blockers: Dict[str, int] = {}
     controller_shell_candidate_counts: Dict[str, int] = {}
+    behavior_hint_counts: Dict[str, int] = {}
     embedded_ui_shell_candidate_counts: Dict[str, int] = {}
+    named_bus_router_candidate_counts: Dict[str, int] = {}
+    init_dispatch_chain_candidate_counts: Dict[str, int] = {}
+    state_bundle_router_candidate_counts: Dict[str, int] = {}
+    presentation_widget_cluster_candidate_counts: Dict[str, int] = {}
+    poly_shell_candidate_counts: Dict[str, int] = {}
+    poly_shell_bank_candidate_counts: Dict[str, int] = {}
+    poly_editor_bank_candidate_counts: Dict[str, int] = {}
+    sample_buffer_candidate_counts: Dict[str, int] = {}
+    gen_processing_candidate_counts: Dict[str, int] = {}
+    embedded_sample_buffer_candidate_counts: Dict[str, int] = {}
+    embedded_gen_processing_candidate_counts: Dict[str, int] = {}
+    first_party_api_rig_candidate_counts: Dict[str, int] = {}
+    first_party_abstraction_host_candidate_counts: Dict[str, int] = {}
+    first_party_abstraction_host_family_counts: Dict[str, int] = {}
+    building_block_candidate_counts: Dict[str, int] = {}
     embedded_live_api_path_target_counts: Dict[str, int] = {}
     embedded_live_api_property_counts: Dict[str, int] = {}
     embedded_live_api_get_target_counts: Dict[str, int] = {}
@@ -798,6 +1416,10 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
     embedded_live_api_call_target_counts: Dict[str, int] = {}
     embedded_live_api_archetype_counts: Dict[str, int] = {}
     missing_support_counts: Dict[str, int] = {}
+    source_lane_counts: Dict[str, int] = {}
+    source_family_counts: Dict[str, int] = {}
+    pack_name_counts: Dict[str, int] = {}
+    pack_section_counts: Dict[str, int] = {}
 
     for item in items:
         if item.get("status") != "ok":
@@ -809,6 +1431,19 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
 
         device_type = item.get("device_type", "unknown")
         device_type_counts[device_type] = device_type_counts.get(device_type, 0) + 1
+        source_lane = item.get("source_lane")
+        if source_lane:
+            source_lane_counts[source_lane] = source_lane_counts.get(source_lane, 0) + 1
+        source_family = item.get("source_family")
+        if source_family:
+            source_family_counts[source_family] = source_family_counts.get(source_family, 0) + 1
+        pack_name = item.get("pack_name")
+        if pack_name:
+            pack_name_counts[pack_name] = pack_name_counts.get(pack_name, 0) + 1
+        pack_section = item.get("pack_section")
+        if pack_name and pack_section:
+            section_name = f"{pack_name} / {pack_section}"
+            pack_section_counts[section_name] = pack_section_counts.get(section_name, 0) + 1
 
         for kind in item.get("pattern_kinds", []):
             pattern_counts[kind] = pattern_counts.get(kind, 0) + 1
@@ -862,8 +1497,40 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
             live_api_helper_opportunity_blockers[blocker] = live_api_helper_opportunity_blockers.get(blocker, 0) + int(count)
         for candidate_name, count in item.get("controller_shell_candidate_counts", {}).items():
             controller_shell_candidate_counts[candidate_name] = controller_shell_candidate_counts.get(candidate_name, 0) + int(count)
+        for hint_name, count in item.get("behavior_hint_counts", {}).items():
+            behavior_hint_counts[hint_name] = behavior_hint_counts.get(hint_name, 0) + int(count)
         for candidate_name, count in item.get("embedded_ui_shell_candidate_counts", {}).items():
             embedded_ui_shell_candidate_counts[candidate_name] = embedded_ui_shell_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("named_bus_router_candidate_counts", {}).items():
+            named_bus_router_candidate_counts[candidate_name] = named_bus_router_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("init_dispatch_chain_candidate_counts", {}).items():
+            init_dispatch_chain_candidate_counts[candidate_name] = init_dispatch_chain_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("state_bundle_router_candidate_counts", {}).items():
+            state_bundle_router_candidate_counts[candidate_name] = state_bundle_router_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("presentation_widget_cluster_candidate_counts", {}).items():
+            presentation_widget_cluster_candidate_counts[candidate_name] = presentation_widget_cluster_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("poly_shell_candidate_counts", {}).items():
+            poly_shell_candidate_counts[candidate_name] = poly_shell_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("poly_shell_bank_candidate_counts", {}).items():
+            poly_shell_bank_candidate_counts[candidate_name] = poly_shell_bank_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("poly_editor_bank_candidate_counts", {}).items():
+            poly_editor_bank_candidate_counts[candidate_name] = poly_editor_bank_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("sample_buffer_candidate_counts", {}).items():
+            sample_buffer_candidate_counts[candidate_name] = sample_buffer_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("gen_processing_candidate_counts", {}).items():
+            gen_processing_candidate_counts[candidate_name] = gen_processing_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("embedded_sample_buffer_candidate_counts", {}).items():
+            embedded_sample_buffer_candidate_counts[candidate_name] = embedded_sample_buffer_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("embedded_gen_processing_candidate_counts", {}).items():
+            embedded_gen_processing_candidate_counts[candidate_name] = embedded_gen_processing_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("first_party_api_rig_candidate_counts", {}).items():
+            first_party_api_rig_candidate_counts[candidate_name] = first_party_api_rig_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("first_party_abstraction_host_candidate_counts", {}).items():
+            first_party_abstraction_host_candidate_counts[candidate_name] = first_party_abstraction_host_candidate_counts.get(candidate_name, 0) + int(count)
+        for family_name, count in item.get("first_party_abstraction_host_family_counts", {}).items():
+            first_party_abstraction_host_family_counts[family_name] = first_party_abstraction_host_family_counts.get(family_name, 0) + int(count)
+        for candidate_name, count in item.get("building_block_candidate_counts", {}).items():
+            building_block_candidate_counts[candidate_name] = building_block_candidate_counts.get(candidate_name, 0) + int(count)
         for target, count in item.get("embedded_live_api_path_target_counts", {}).items():
             embedded_live_api_path_target_counts[target] = embedded_live_api_path_target_counts.get(target, 0) + int(count)
         for prop, count in item.get("embedded_live_api_property_counts", {}).items():
@@ -884,6 +1551,7 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
         "ok": len(ok_items),
         "error": len(items) - len(ok_items),
         "device_types": device_type_counts,
+        "source_lanes": source_lane_counts,
         "bridge_enabled_files": sum(1 for item in ok_items if item.get("bridge_enabled")),
         "files_with_patterns": sum(1 for item in ok_items if item.get("pattern_count", 0) > 0),
         "files_with_recipes": sum(1 for item in ok_items if item.get("recipe_count", 0) > 0),
@@ -893,7 +1561,22 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
         "files_with_live_api_helpers": sum(1 for item in ok_items if item.get("live_api_helper_count", 0) > 0),
         "files_with_live_api_helper_opportunities": sum(1 for item in ok_items if item.get("live_api_helper_opportunity_count", 0) > 0),
         "files_with_controller_shell_candidates": sum(1 for item in ok_items if item.get("controller_shell_candidate_count", 0) > 0),
+        "files_with_behavior_hints": sum(1 for item in ok_items if item.get("behavior_hint_count", 0) > 0),
         "files_with_embedded_ui_shell_candidates": sum(1 for item in ok_items if item.get("embedded_ui_shell_candidate_count", 0) > 0),
+        "files_with_named_bus_router_candidates": sum(1 for item in ok_items if item.get("named_bus_router_candidate_count", 0) > 0),
+        "files_with_init_dispatch_chain_candidates": sum(1 for item in ok_items if item.get("init_dispatch_chain_candidate_count", 0) > 0),
+        "files_with_state_bundle_router_candidates": sum(1 for item in ok_items if item.get("state_bundle_router_candidate_count", 0) > 0),
+        "files_with_presentation_widget_cluster_candidates": sum(1 for item in ok_items if item.get("presentation_widget_cluster_candidate_count", 0) > 0),
+        "files_with_poly_shell_candidates": sum(1 for item in ok_items if item.get("poly_shell_candidate_count", 0) > 0),
+        "files_with_poly_shell_bank_candidates": sum(1 for item in ok_items if item.get("poly_shell_bank_candidate_count", 0) > 0),
+        "files_with_poly_editor_bank_candidates": sum(1 for item in ok_items if item.get("poly_editor_bank_candidate_count", 0) > 0),
+        "files_with_sample_buffer_candidates": sum(1 for item in ok_items if item.get("sample_buffer_candidate_count", 0) > 0),
+        "files_with_gen_processing_candidates": sum(1 for item in ok_items if item.get("gen_processing_candidate_count", 0) > 0),
+        "files_with_embedded_sample_buffer_candidates": sum(1 for item in ok_items if item.get("embedded_sample_buffer_candidate_count", 0) > 0),
+        "files_with_embedded_gen_processing_candidates": sum(1 for item in ok_items if item.get("embedded_gen_processing_candidate_count", 0) > 0),
+        "files_with_first_party_api_rig_candidates": sum(1 for item in ok_items if item.get("first_party_api_rig_candidate_count", 0) > 0),
+        "files_with_first_party_abstraction_host_candidates": sum(1 for item in ok_items if item.get("first_party_abstraction_host_candidate_count", 0) > 0),
+        "files_with_building_block_candidates": sum(1 for item in ok_items if item.get("building_block_candidate_count", 0) > 0),
         "files_with_embedded_patchers": sum(1 for item in ok_items if item.get("embedded_patcher_count", 0) > 0),
         "files_with_embedded_patterns": sum(1 for item in ok_items if item.get("embedded_pattern_count", 0) > 0),
         "files_with_embedded_recipes": sum(1 for item in ok_items if item.get("embedded_recipe_count", 0) > 0),
@@ -943,7 +1626,23 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
             "live_api_helper_opportunities": _sorted_frequency(live_api_helper_opportunity_counts),
             "live_api_helper_opportunity_blockers": _sorted_frequency(live_api_helper_opportunity_blockers),
             "controller_shell_candidates": _sorted_frequency(controller_shell_candidate_counts),
+            "behavior_hints": _sorted_frequency(behavior_hint_counts),
             "embedded_ui_shell_candidates": _sorted_frequency(embedded_ui_shell_candidate_counts),
+            "named_bus_router_candidates": _sorted_frequency(named_bus_router_candidate_counts),
+            "init_dispatch_chain_candidates": _sorted_frequency(init_dispatch_chain_candidate_counts),
+            "state_bundle_router_candidates": _sorted_frequency(state_bundle_router_candidate_counts),
+            "presentation_widget_cluster_candidates": _sorted_frequency(presentation_widget_cluster_candidate_counts),
+            "poly_shell_candidates": _sorted_frequency(poly_shell_candidate_counts),
+            "poly_shell_bank_candidates": _sorted_frequency(poly_shell_bank_candidate_counts),
+            "poly_editor_bank_candidates": _sorted_frequency(poly_editor_bank_candidate_counts),
+            "sample_buffer_candidates": _sorted_frequency(sample_buffer_candidate_counts),
+            "gen_processing_candidates": _sorted_frequency(gen_processing_candidate_counts),
+            "embedded_sample_buffer_candidates": _sorted_frequency(embedded_sample_buffer_candidate_counts),
+            "embedded_gen_processing_candidates": _sorted_frequency(embedded_gen_processing_candidate_counts),
+            "first_party_api_rig_candidates": _sorted_frequency(first_party_api_rig_candidate_counts),
+            "first_party_abstraction_host_candidates": _sorted_frequency(first_party_abstraction_host_candidate_counts),
+            "first_party_abstraction_host_families": _sorted_frequency(first_party_abstraction_host_family_counts),
+            "building_block_candidates": _sorted_frequency(building_block_candidate_counts),
             "embedded_live_api_path_targets": _sorted_frequency(embedded_live_api_path_target_counts),
             "embedded_live_api_properties": _sorted_frequency(embedded_live_api_property_counts),
             "embedded_live_api_get_targets": _sorted_frequency(embedded_live_api_get_target_counts),
@@ -953,6 +1652,10 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
             "error_types": _sorted_frequency(error_type_counts),
             "errors": _sorted_frequency(error_counts),
             "missing_support_files": _sorted_frequency(missing_support_counts),
+            "source_lanes": _sorted_frequency(source_lane_counts),
+            "source_families": _sorted_frequency(source_family_counts),
+            "pack_names": _sorted_frequency(pack_name_counts),
+            "pack_sections": _sorted_frequency(pack_section_counts),
         },
         "largest_devices": {
             "by_boxes": _top_items(ok_items, "box_count"),
@@ -963,6 +1666,7 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
     report["reverse_candidates"] = rank_reverse_candidates(report)
     report["reverse_candidate_families"] = rank_reverse_candidate_families(report)
     report["reverse_candidate_family_profiles"] = build_reverse_candidate_family_profiles(report)
+    report["source_lane_profiles"] = build_source_lane_profiles(report)
     return report
 
 
@@ -979,6 +1683,7 @@ def corpus_report_markdown(report: dict) -> str:
         f"- Parsed successfully: `{summary.get('ok', 0)}`",
         f"- Parse errors: `{summary.get('error', 0)}`",
         f"- Device types: `{json.dumps(summary.get('device_types', {}), sort_keys=True)}`",
+        f"- Source lanes: `{json.dumps(summary.get('source_lanes', {}), sort_keys=True)}`",
         f"- Bridge-enabled files: `{summary.get('bridge_enabled_files', 0)}`",
         f"- Files with helper patterns: `{summary.get('files_with_patterns', 0)}`",
         f"- Files with recipe patterns: `{summary.get('files_with_recipes', 0)}`",
@@ -988,7 +1693,22 @@ def corpus_report_markdown(report: dict) -> str:
         f"- Files with semantic Live API helper recoveries: `{summary.get('files_with_live_api_helpers', 0)}`",
         f"- Files with Live API helper opportunities: `{summary.get('files_with_live_api_helper_opportunities', 0)}`",
         f"- Files with controller-shell candidates: `{summary.get('files_with_controller_shell_candidates', 0)}`",
+        f"- Files with behavior hints: `{summary.get('files_with_behavior_hints', 0)}`",
         f"- Files with embedded-ui shell candidates: `{summary.get('files_with_embedded_ui_shell_candidates', 0)}`",
+        f"- Files with named-bus router candidates: `{summary.get('files_with_named_bus_router_candidates', 0)}`",
+        f"- Files with init-dispatch candidates: `{summary.get('files_with_init_dispatch_chain_candidates', 0)}`",
+        f"- Files with state-bundle router candidates: `{summary.get('files_with_state_bundle_router_candidates', 0)}`",
+        f"- Files with presentation widget clusters: `{summary.get('files_with_presentation_widget_cluster_candidates', 0)}`",
+        f"- Files with poly-shell candidates: `{summary.get('files_with_poly_shell_candidates', 0)}`",
+        f"- Files with poly-shell bank candidates: `{summary.get('files_with_poly_shell_bank_candidates', 0)}`",
+        f"- Files with poly-editor bank candidates: `{summary.get('files_with_poly_editor_bank_candidates', 0)}`",
+        f"- Files with sample-buffer candidates: `{summary.get('files_with_sample_buffer_candidates', 0)}`",
+        f"- Files with gen-processing candidates: `{summary.get('files_with_gen_processing_candidates', 0)}`",
+        f"- Files with embedded sample-buffer candidates: `{summary.get('files_with_embedded_sample_buffer_candidates', 0)}`",
+        f"- Files with embedded gen-processing candidates: `{summary.get('files_with_embedded_gen_processing_candidates', 0)}`",
+        f"- Files with first-party API rig candidates: `{summary.get('files_with_first_party_api_rig_candidates', 0)}`",
+        f"- Files with first-party abstraction-host candidates: `{summary.get('files_with_first_party_abstraction_host_candidates', 0)}`",
+        f"- Files with building-block candidates: `{summary.get('files_with_building_block_candidates', 0)}`",
         f"- Files with embedded patchers: `{summary.get('files_with_embedded_patchers', 0)}`",
         f"- Files with embedded helper patterns: `{summary.get('files_with_embedded_patterns', 0)}`",
         f"- Files with embedded recipes: `{summary.get('files_with_embedded_recipes', 0)}`",
@@ -1038,13 +1758,33 @@ def corpus_report_markdown(report: dict) -> str:
     add_frequency_section("Top Live API Helper Opportunities", frequencies.get("live_api_helper_opportunities", []))
     add_frequency_section("Top Live API Helper Opportunity Blockers", frequencies.get("live_api_helper_opportunity_blockers", []))
     add_frequency_section("Top Controller Shell Candidates", frequencies.get("controller_shell_candidates", []))
+    add_frequency_section("Top Behavior Hints", frequencies.get("behavior_hints", []))
     add_frequency_section("Top Embedded UI Shell Candidates", frequencies.get("embedded_ui_shell_candidates", []))
+    add_frequency_section("Top Named Bus Router Candidates", frequencies.get("named_bus_router_candidates", []))
+    add_frequency_section("Top Init Dispatch Candidates", frequencies.get("init_dispatch_chain_candidates", []))
+    add_frequency_section("Top State Bundle Router Candidates", frequencies.get("state_bundle_router_candidates", []))
+    add_frequency_section("Top Presentation Widget Cluster Candidates", frequencies.get("presentation_widget_cluster_candidates", []))
+    add_frequency_section("Top Poly Shell Candidates", frequencies.get("poly_shell_candidates", []))
+    add_frequency_section("Top Poly Shell Bank Candidates", frequencies.get("poly_shell_bank_candidates", []))
+    add_frequency_section("Top Poly Editor Bank Candidates", frequencies.get("poly_editor_bank_candidates", []))
+    add_frequency_section("Top Sample Buffer Candidates", frequencies.get("sample_buffer_candidates", []))
+    add_frequency_section("Top Gen Processing Candidates", frequencies.get("gen_processing_candidates", []))
+    add_frequency_section("Top Embedded Sample Buffer Candidates", frequencies.get("embedded_sample_buffer_candidates", []))
+    add_frequency_section("Top Embedded Gen Processing Candidates", frequencies.get("embedded_gen_processing_candidates", []))
+    add_frequency_section("Top First-Party API Rig Candidates", frequencies.get("first_party_api_rig_candidates", []))
+    add_frequency_section("Top First-Party Abstraction Host Candidates", frequencies.get("first_party_abstraction_host_candidates", []))
+    add_frequency_section("Top First-Party Abstraction Host Families", frequencies.get("first_party_abstraction_host_families", []))
+    add_frequency_section("Top Building Block Candidates", frequencies.get("building_block_candidates", []))
     add_frequency_section("Top Embedded Live API Path Targets", frequencies.get("embedded_live_api_path_targets", []))
     add_frequency_section("Top Embedded Live API Properties", frequencies.get("embedded_live_api_properties", []))
     add_frequency_section("Top Embedded Live API Get Targets", frequencies.get("embedded_live_api_get_targets", []))
     add_frequency_section("Top Embedded Live API Set Targets", frequencies.get("embedded_live_api_set_targets", []))
     add_frequency_section("Top Embedded Live API Call Targets", frequencies.get("embedded_live_api_call_targets", []))
     add_frequency_section("Top Embedded Live API Archetypes", frequencies.get("embedded_live_api_archetypes", []))
+    add_frequency_section("Top Source Lanes", frequencies.get("source_lanes", []))
+    add_frequency_section("Top Source Families", frequencies.get("source_families", []))
+    add_frequency_section("Top Pack Names", frequencies.get("pack_names", []))
+    add_frequency_section("Top Pack Sections", frequencies.get("pack_sections", []))
     add_frequency_section("Top Missing Sidecars", frequencies.get("missing_support_files", []))
     add_frequency_section("Top Error Types", frequencies.get("error_types", []))
     add_frequency_section("Top Errors", frequencies.get("errors", []), limit=12)
@@ -1117,6 +1857,21 @@ def corpus_report_markdown(report: dict) -> str:
         lines.append("- None")
     lines.append("")
 
+    lines.append("## Source Lane Profiles")
+    lines.append("")
+    source_lane_profiles = report.get("source_lane_profiles", [])
+    if source_lane_profiles:
+        for entry in source_lane_profiles:
+            motifs = ", ".join(motif["name"] for motif in entry.get("top_motif_signatures", [])[:3]) or "None"
+            lines.append(
+                f"- `{entry['lane']}`: `{entry['count']}` file(s),"
+                f" avg boxes `{entry['avg_boxes']}`, avg lines `{entry['avg_lines']}`,"
+                f" motifs `{motifs}`"
+            )
+    else:
+        lines.append("- None")
+    lines.append("")
+
     return "\n".join(lines)
 
 
@@ -1184,8 +1939,14 @@ def family_profile_markdown(profile: dict) -> str:
     add_section("Variable Object Names", variable.get("object_names", []))
     add_section("Stable Live API Archetypes", stable.get("live_api_archetypes", []))
     add_section("Variable Live API Archetypes", variable.get("live_api_archetypes", []))
+    add_section("Stable Behavior Hints", stable.get("behavior_hints", []))
+    add_section("Variable Behavior Hints", variable.get("behavior_hints", []))
     add_section("Stable Named Bus Networks", stable.get("named_bus_network_names", []))
     add_section("Variable Named Bus Networks", variable.get("named_bus_network_names", []))
+    add_section("Stable Poly Shell Banks", stable.get("poly_shell_banks", []))
+    add_section("Variable Poly Shell Banks", variable.get("poly_shell_banks", []))
+    add_section("Stable Poly Editor Banks", stable.get("poly_editor_banks", []))
+    add_section("Variable Poly Editor Banks", variable.get("poly_editor_banks", []))
     add_section("Stable Embedded Host Kinds", stable.get("embedded_host_kinds", []))
     add_section("Variable Embedded Host Kinds", variable.get("embedded_host_kinds", []))
 
@@ -1225,12 +1986,20 @@ def write_family_profile(profile: dict, path: str) -> int:
 
 
 __all__ = [
+    "classify_corpus_source_metadata",
     "analyze_amxd_file",
     "analyze_amxd_corpus",
     "rank_reverse_candidates",
     "rank_reverse_candidate_families",
     "build_reverse_candidate_family_profile",
     "build_reverse_candidate_family_profiles",
+    "build_source_lane_profiles",
+    "source_lane_profiles_markdown",
+    "build_reference_device_dossier",
+    "build_reference_device_dossiers",
+    "reference_device_dossiers_markdown",
+    "build_corpus_comparison",
+    "corpus_comparison_markdown",
     "corpus_report_markdown",
     "family_profile_markdown",
     "write_corpus_report",

@@ -8,6 +8,7 @@ import os
 import pprint
 import re
 import struct
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .constants import AMXD_TYPE, AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
@@ -157,6 +158,75 @@ EMBEDDED_PATCHER_OPERATORS = {
     "poly~",
     "gen~",
     "pfft~",
+}
+SAMPLE_BUFFER_CORE_OPERATORS = {
+    "buffer~",
+    "info~",
+    "peek~",
+    "poke~",
+    "play~",
+    "record~",
+    "groove~",
+    "waveform~",
+    "polybuffer~",
+}
+SAMPLE_BUFFER_HELPER_OPERATORS = {
+    "b",
+    "date",
+    "defer",
+    "deferlow",
+    "delay",
+    "del",
+    "gate",
+    "i",
+    "info~",
+    "join",
+    "metro",
+    "pack",
+    "prepend",
+    "regexp",
+    "relativepath",
+    "route",
+    "sel",
+    "sprintf",
+    "strippath",
+    "t",
+    "trigger",
+    "unpack",
+    "uzi",
+    "zl",
+    "zl.compare",
+    "zl.join",
+    "zl.reg",
+    "zl.slice",
+}
+GEN_PROCESSING_CORE_OPERATORS = {
+    "gen~",
+    "mc.gen~",
+}
+GEN_PROCESSING_HELPER_OPERATORS = {
+    "buffer~",
+    "click~",
+    "defer",
+    "deferlow",
+    "delay",
+    "del",
+    "gate",
+    "i",
+    "in",
+    "info~",
+    "metro",
+    "out",
+    "p",
+    "pack",
+    "peek~",
+    "prepend",
+    "route",
+    "sel",
+    "t",
+    "trigger",
+    "unpack",
+    "uzi",
 }
 DEFAULT_AUDIO_IO_BOXES = {
     "obj-plugin": {
@@ -403,6 +473,27 @@ def _box_operator(box: dict) -> Optional[str]:
     return text.split()[0]
 
 
+def _box_text_args(box: dict) -> Optional[str]:
+    text = str(box.get("text", "")).strip()
+    if not text:
+        return None
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2:
+        return None
+    args = parts[1].strip()
+    return args or None
+
+
+def _buffer_target_name(box: dict) -> Optional[str]:
+    args = _box_text_args(box)
+    if not args:
+        return None
+    first = args.split()[0].strip()
+    if not first or first.startswith("@"):
+        return None
+    return first
+
+
 def _embedded_patcher_kind_and_target(box: dict) -> tuple[Optional[str], Optional[str]]:
     if box.get("maxclass") == "bpatcher":
         return "bpatcher", box.get("name")
@@ -423,11 +514,87 @@ def _embedded_patcher_kind_and_target(box: dict) -> tuple[Optional[str], Optiona
     return host_kind, target
 
 
+def _snapshot_source_path(snapshot: dict) -> Optional[str]:
+    source = snapshot.get("source", {})
+    path = source.get("path")
+    if not path:
+        return None
+    return os.path.abspath(str(path))
+
+
+def _factory_pack_context(snapshot: dict) -> dict[str, Optional[str]]:
+    source_path = _snapshot_source_path(snapshot)
+    context = {
+        "source_path": source_path,
+        "source_lane": "public",
+        "pack_name": None,
+        "pack_section": None,
+        "pack_subsection": None,
+        "pack_section_path": None,
+    }
+    if not source_path:
+        return context
+
+    parts = Path(source_path).parts
+    if "Factory Packs" not in parts:
+        return context
+
+    index = parts.index("Factory Packs")
+    trailing = list(parts[index + 1:])
+    if not trailing:
+        return context
+
+    context["source_lane"] = "factory"
+    context["pack_name"] = trailing[0]
+    if len(trailing) > 1:
+        context["pack_section"] = trailing[1]
+    if len(trailing) > 2:
+        context["pack_subsection"] = trailing[2]
+    if len(trailing) > 1:
+        context["pack_section_path"] = " / ".join(trailing[: min(3, len(trailing) - 1)])
+    return context
+
+
+def _connected_box_ids(snapshot: dict, seed_box_ids: set[str]) -> set[str]:
+    connected = set()
+    for wrapped in snapshot.get("lines", []):
+        patchline = wrapped.get("patchline", {})
+        source_id = patchline.get("source", [None, 0])[0]
+        destination_id = patchline.get("destination", [None, 0])[0]
+        if source_id in seed_box_ids and destination_id:
+            connected.add(destination_id)
+        if destination_id in seed_box_ids and source_id:
+            connected.add(source_id)
+    return connected - set(seed_box_ids)
+
+
 def _rect_matches(box: dict, expected: list[float]) -> bool:
     rect = box.get("patching_rect")
     if rect is None or len(rect) != len(expected):
         return False
     return all(float(actual) == float(target) for actual, target in zip(rect, expected))
+
+
+def _presentation_rect(box: dict) -> Optional[list[float]]:
+    rect = box.get("presentation_rect")
+    if rect is None or len(rect) != 4:
+        return None
+    return [float(value) for value in rect]
+
+
+def _rects_touch(a: list[float], b: list[float], *, padding: float = 18.0) -> bool:
+    ax1, ay1, aw, ah = a
+    bx1, by1, bw, bh = b
+    ax2 = ax1 + aw
+    ay2 = ay1 + ah
+    bx2 = bx1 + bw
+    by2 = by1 + bh
+    return not (
+        (ax2 + padding) < bx1
+        or (bx2 + padding) < ax1
+        or (ay2 + padding) < by1
+        or (by2 + padding) < ay1
+    )
 
 
 def _text_float(text: str, prefix: str) -> Optional[float]:
@@ -538,13 +705,27 @@ def _operator_components(
     box_indices: dict,
     predicate,
 ) -> tuple[list[list[str]], dict[str, str], dict[str, set[str]]]:
+    return _relevant_box_components(
+        snapshot,
+        boxes_by_id,
+        box_indices,
+        lambda box: _box_operator(box) if predicate(_box_operator(box) or "") else None,
+    )
+
+
+def _relevant_box_components(
+    snapshot: dict,
+    boxes_by_id: dict,
+    box_indices: dict,
+    label_for_box,
+) -> tuple[list[list[str]], dict[str, str], dict[str, set[str]]]:
     relevant_ids = set()
-    operators_by_id: dict[str, str] = {}
+    labels_by_id: dict[str, str] = {}
     for box_id, box in boxes_by_id.items():
-        operator = _box_operator(box)
-        if operator and predicate(operator):
+        label = label_for_box(box)
+        if label:
             relevant_ids.add(box_id)
-            operators_by_id[box_id] = operator
+            labels_by_id[box_id] = label
 
     adjacency = {box_id: set() for box_id in relevant_ids}
     full_adjacency = {box_id: set() for box_id in boxes_by_id}
@@ -576,7 +757,7 @@ def _operator_components(
             stack.extend(adjacency[current] - component)
         seen.update(component)
         components.append(sorted(component, key=lambda item: box_indices.get(item, 10 ** 9)))
-    return components, operators_by_id, full_adjacency
+    return components, labels_by_id, full_adjacency
 
 
 def _adjacent_message_texts(component: list[str], full_adjacency: dict[str, set[str]], boxes_by_id: dict) -> list[str]:
@@ -2946,6 +3127,196 @@ def _detect_live_api_component_motifs(snapshot: dict, boxes_by_id: dict, box_ind
     return motifs
 
 
+def _sample_buffer_component_label(box: dict) -> Optional[str]:
+    operator = _box_operator(box)
+    if operator in SAMPLE_BUFFER_CORE_OPERATORS or operator in SAMPLE_BUFFER_HELPER_OPERATORS:
+        return operator
+    if box.get("maxclass") == "live.drop":
+        return "live.drop"
+    return None
+
+
+def _gen_processing_component_label(box: dict) -> Optional[str]:
+    operator = _box_operator(box)
+    if operator in GEN_PROCESSING_CORE_OPERATORS or operator in GEN_PROCESSING_HELPER_OPERATORS:
+        return operator
+    return None
+
+
+def _detect_sample_buffer_toolchain_motifs(snapshot: dict, boxes_by_id: dict, box_indices: dict) -> list[dict]:
+    components, labels_by_id, full_adjacency = _relevant_box_components(
+        snapshot,
+        boxes_by_id,
+        box_indices,
+        _sample_buffer_component_label,
+    )
+    merged_components = []
+    component_targets = []
+    for component in components:
+        buffer_targets = {
+            _buffer_target_name(boxes_by_id[box_id])
+            for box_id in component
+            if labels_by_id[box_id] in SAMPLE_BUFFER_CORE_OPERATORS
+        }
+        component_targets.append({target for target in buffer_targets if target})
+
+    used_components = set()
+    for index, component in enumerate(components):
+        if index in used_components:
+            continue
+        merged_ids = set(component)
+        merged_targets = set(component_targets[index])
+        used_components.add(index)
+        changed = True
+        while changed:
+            changed = False
+            for other_index, other_component in enumerate(components):
+                if other_index in used_components:
+                    continue
+                other_targets = component_targets[other_index]
+                if not merged_targets or not other_targets or not (merged_targets & other_targets):
+                    continue
+                merged_ids.update(other_component)
+                merged_targets.update(other_targets)
+                used_components.add(other_index)
+                changed = True
+        merged_components.append(sorted(merged_ids, key=lambda item: box_indices.get(item, 10 ** 9)))
+
+    motifs = []
+    file_ops = {"date", "opendialog", "regexp", "relativepath", "sprintf", "strippath"}
+    for component in merged_components:
+        label_counts: dict[str, int] = {}
+        buffer_targets = []
+        drop_varnames = []
+        for box_id in component:
+            label = labels_by_id[box_id]
+            label_counts[label] = label_counts.get(label, 0) + 1
+            box = boxes_by_id[box_id]
+            if label == "buffer~":
+                target = _buffer_target_name(box)
+                if target:
+                    buffer_targets.append(target)
+            elif label in {"info~", "peek~", "poke~", "play~", "record~", "groove~", "waveform~", "polybuffer~"}:
+                target = _buffer_target_name(box)
+                if target:
+                    buffer_targets.append(target)
+            elif label == "live.drop" and box.get("varname"):
+                drop_varnames.append(str(box.get("varname")))
+
+        core_count = sum(label_counts.get(operator, 0) for operator in SAMPLE_BUFFER_CORE_OPERATORS)
+        has_live_drop = bool(label_counts.get("live.drop"))
+        if not label_counts.get("buffer~"):
+            continue
+        if core_count + int(has_live_drop) < 2:
+            continue
+
+        archetypes = []
+        if has_live_drop or any(label_counts.get(name) for name in file_ops):
+            archetypes.append("sample_import")
+        if label_counts.get("info~"):
+            archetypes.append("sample_metadata")
+        if label_counts.get("peek~") or label_counts.get("waveform~"):
+            archetypes.append("waveform_probe")
+        if label_counts.get("poke~") or label_counts.get("record~"):
+            archetypes.append("buffer_write")
+        if label_counts.get("groove~") or label_counts.get("play~"):
+            archetypes.append("buffer_playback")
+        if label_counts.get("metro") or label_counts.get("uzi"):
+            archetypes.append("driven_visual_probe")
+        if not archetypes:
+            archetypes.append("buffer_utility")
+
+        motifs.append(_motif_match(
+            kind="sample_buffer_toolchain",
+            box_ids=component,
+            first_box_index=min(box_indices.get(box_id, 10 ** 9) for box_id in component),
+            params={
+                "operator_counts": {
+                    name: label_counts[name]
+                    for name in sorted(label_counts)
+                },
+                "core_operators": [
+                    name
+                    for name in sorted(SAMPLE_BUFFER_CORE_OPERATORS)
+                    if label_counts.get(name)
+                ],
+                "has_live_drop": has_live_drop,
+                "buffer_targets": sorted(set(buffer_targets)),
+                "drop_varnames": sorted(set(drop_varnames)),
+                "file_operators": [
+                    name
+                    for name in sorted(file_ops)
+                    if label_counts.get(name)
+                ],
+                "adjacent_message_texts": _adjacent_message_texts(component, full_adjacency, boxes_by_id),
+                "archetypes": sorted(set(archetypes)),
+            },
+        ))
+    return motifs
+
+
+def _detect_gen_processing_core_motifs(snapshot: dict, boxes_by_id: dict, box_indices: dict) -> list[dict]:
+    components, labels_by_id, full_adjacency = _relevant_box_components(
+        snapshot,
+        boxes_by_id,
+        box_indices,
+        _gen_processing_component_label,
+    )
+    motifs = []
+    for component in components:
+        label_counts: dict[str, int] = {}
+        buffer_targets = []
+        for box_id in component:
+            label = labels_by_id[box_id]
+            label_counts[label] = label_counts.get(label, 0) + 1
+            if label == "buffer~":
+                target = _buffer_target_name(boxes_by_id[box_id])
+                if target:
+                    buffer_targets.append(target)
+
+        gen_count = sum(label_counts.get(operator, 0) for operator in GEN_PROCESSING_CORE_OPERATORS)
+        helper_count = sum(
+            count
+            for name, count in label_counts.items()
+            if name not in GEN_PROCESSING_CORE_OPERATORS
+        )
+        if not gen_count or not helper_count:
+            continue
+
+        archetypes = []
+        if label_counts.get("buffer~"):
+            archetypes.append("buffered_gen_core")
+        if label_counts.get("click~") or label_counts.get("delay") or label_counts.get("del"):
+            archetypes.append("triggered_gen_core")
+        if label_counts.get("route") or label_counts.get("gate") or label_counts.get("sel"):
+            archetypes.append("routed_gen_core")
+        if label_counts.get("p"):
+            archetypes.append("nested_gen_shell")
+        if not archetypes:
+            archetypes.append("gen_utility")
+
+        motifs.append(_motif_match(
+            kind="gen_processing_core",
+            box_ids=component,
+            first_box_index=min(box_indices.get(box_id, 10 ** 9) for box_id in component),
+            params={
+                "operator_counts": {
+                    name: label_counts[name]
+                    for name in sorted(label_counts)
+                },
+                "core_operators": [
+                    name
+                    for name in sorted(GEN_PROCESSING_CORE_OPERATORS)
+                    if label_counts.get(name)
+                ],
+                "buffer_targets": sorted(set(buffer_targets)),
+                "adjacent_message_texts": _adjacent_message_texts(component, full_adjacency, boxes_by_id),
+                "archetypes": sorted(set(archetypes)),
+            },
+        ))
+    return motifs
+
+
 def _detect_embedded_patcher_motifs(boxes_by_id: dict, box_indices: dict) -> list[dict]:
     motifs = []
     for box_id, box in boxes_by_id.items():
@@ -2974,6 +3345,8 @@ def detect_snapshot_motifs(snapshot: dict) -> list[dict]:
     motifs.extend(_detect_scheduler_chain_motifs(snapshot, boxes_by_id, box_indices))
     motifs.extend(_detect_state_bundle_motifs(snapshot, boxes_by_id, box_indices))
     motifs.extend(_detect_live_api_component_motifs(snapshot, boxes_by_id, box_indices))
+    motifs.extend(_detect_sample_buffer_toolchain_motifs(snapshot, boxes_by_id, box_indices))
+    motifs.extend(_detect_gen_processing_core_motifs(snapshot, boxes_by_id, box_indices))
     motifs.extend(_detect_embedded_patcher_motifs(boxes_by_id, box_indices))
     motifs.sort(key=lambda item: (item["first_box_index"], item["kind"], item["box_ids"]))
     return motifs
@@ -4034,7 +4407,16 @@ def extract_controller_shell_candidates(snapshot: dict) -> list[dict]:
 def extract_embedded_ui_shell_candidates(snapshot: dict) -> list[dict]:
     """Return exact-safe embedded-host shell candidates from a snapshot."""
     boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    motifs = analysis.get("motifs", [])
     candidates = []
+    relevant_motif_kinds = {
+        "named_bus",
+        "controller_dispatch",
+        "scheduler_chain",
+        "state_bundle",
+        "live_api_component",
+    }
 
     for wrapped in snapshot.get("boxes", []):
         box = wrapped.get("box", {})
@@ -4045,6 +4427,7 @@ def extract_embedded_ui_shell_candidates(snapshot: dict) -> list[dict]:
         if host_kind not in {"subpatcher", "bpatcher"}:
             continue
 
+        connected_box_ids = _connected_box_ids(snapshot, {box_id})
         connected_line_count = 0
         for line in snapshot.get("lines", []):
             patchline = line.get("patchline", {})
@@ -4052,6 +4435,46 @@ def extract_embedded_ui_shell_candidates(snapshot: dict) -> list[dict]:
             dest_id = patchline.get("destination", [None, 0])[0]
             if source_id == box_id or dest_id == box_id:
                 connected_line_count += 1
+
+        candidate_box_ids = {box_id}
+        direct_shell_box_ids = set()
+        for neighbor_id in connected_box_ids:
+            neighbor = boxes_by_id.get(neighbor_id)
+            operator = _box_operator(neighbor or {})
+            if (
+                (neighbor or {}).get("maxclass") == "message"
+                or operator in BUS_OPERATOR_SPECS
+                or operator in CONTROLLER_DISPATCH_OPERATORS
+                or operator in SCHEDULER_OPERATORS
+                or _matches_state_bundle_operator(operator or "")
+                or operator in LIVE_API_CORE_OPERATORS
+                or operator in LIVE_API_HELPER_OPERATORS
+            ):
+                direct_shell_box_ids.add(neighbor_id)
+        candidate_box_ids.update(direct_shell_box_ids)
+
+        attached_motifs = []
+        for motif in motifs:
+            if motif.get("kind") not in relevant_motif_kinds:
+                continue
+            motif_box_ids = set(motif.get("box_ids", []))
+            if not motif_box_ids or not (motif_box_ids & connected_box_ids):
+                continue
+            attached_motifs.append(motif)
+            candidate_box_ids.update(motif_box_ids)
+
+        line_keys = _line_keys_for_box_ids(snapshot, candidate_box_ids)
+        attached_bus_names = sorted({
+            motif.get("params", {}).get("name")
+            for motif in attached_motifs
+            if motif.get("kind") == "named_bus" and motif.get("params", {}).get("name")
+        })
+        attached_motif_kinds = sorted({motif.get("kind") for motif in attached_motifs})
+        attached_control_line_count = sum(
+            1
+            for line_key in line_keys
+            if box_id in {line_key[0], line_key[2]}
+        )
 
         has_nested_patcher = isinstance(box.get("patcher"), dict)
         evidence = [f"embedded host: {host_kind}"]
@@ -4061,38 +4484,919 @@ def extract_embedded_ui_shell_candidates(snapshot: dict) -> list[dict]:
             evidence.append("embedded patcher payload present")
         if connected_line_count:
             evidence.append(f"connected to top-level patcher with {connected_line_count} line(s)")
+        if attached_bus_names:
+            evidence.append(f"attached buses: {', '.join(attached_bus_names)}")
+        if attached_motif_kinds:
+            evidence.append(f"attached motifs: {', '.join(attached_motif_kinds)}")
 
         candidate = {
-            "candidate_name": "embedded_ui_shell",
-            "box_ids": [box_id],
-            "line_keys": [],
-            "motif_kinds": ["embedded_patcher"],
+            "candidate_name": "embedded_ui_shell_v2",
+            "box_ids": sorted(candidate_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            "line_keys": line_keys,
+            "motif_kinds": ["embedded_patcher"] + attached_motif_kinds,
             "params": {
                 "host_kind": host_kind,
                 "target": target,
                 "has_nested_patcher": has_nested_patcher,
                 "connected_line_count": connected_line_count,
+                "attached_box_count": max(0, len(candidate_box_ids) - 1),
+                "attached_bus_names": attached_bus_names,
+                "attached_motif_kinds": attached_motif_kinds,
+                "attached_control_line_count": attached_control_line_count,
             },
             "evidence": evidence,
             "normalization_level": "exact",
             "first_box_index": box_indices.get(box_id, 0),
-            "helper_name": "embedded_ui_shell",
+            "helper_name": "embedded_ui_shell_v2",
             "exact": True,
         }
-        candidate["helper_call"] = {
-            "name": "embedded_ui_shell",
-            "positional": [],
-            "kwargs": {
-                "boxes": [copy.deepcopy(wrapped)],
-                "lines": [],
-            },
-            "consume_box_ids": [box_id],
-            "line_keys": [],
-        }
+        candidate["helper_call"] = _controller_shell_helper_call(snapshot, candidate)
         candidates.append(candidate)
 
     candidates.sort(key=lambda item: (item["first_box_index"], item["params"].get("host_kind", "")))
     return candidates
+
+
+def extract_named_bus_router_candidates(snapshot: dict) -> list[dict]:
+    """Return exact named-bus router candidates from named-bus motifs."""
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    motifs = analysis.get("motifs", [])
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    networks = {
+        (entry.get("name"), bool(entry.get("signal"))): entry
+        for entry in _named_bus_networks(
+            motifs,
+            analysis.get("embedded_patcher_summaries", []),
+        )
+    }
+    candidates = []
+
+    for motif in motifs:
+        if motif.get("kind") != "named_bus":
+            continue
+        params = motif.get("params", {})
+        candidate_box_ids = set(motif.get("box_ids", []))
+        if not candidate_box_ids:
+            continue
+        attached_neighbor_ids = []
+        for neighbor_id in sorted(
+            _connected_box_ids(snapshot, candidate_box_ids),
+            key=lambda item: box_indices.get(item, 10 ** 9),
+        ):
+            if neighbor_id in DEFAULT_AUDIO_IO_BOXES:
+                continue
+            neighbor = boxes_by_id.get(neighbor_id)
+            operator = _box_operator(neighbor or {})
+            if (
+                (neighbor or {}).get("patcher")
+                or (neighbor or {}).get("maxclass") in UI_MAXCLASSES
+                or (neighbor or {}).get("maxclass") in {"message", "comment", "number", "flonum"}
+                or operator in CONTROLLER_DISPATCH_OPERATORS
+            ):
+                candidate_box_ids.add(neighbor_id)
+                attached_neighbor_ids.append(neighbor_id)
+        box_ids = sorted(candidate_box_ids, key=lambda item: box_indices.get(item, 10 ** 9))
+        network = networks.get((params.get("name"), bool(params.get("signal"))), {})
+        candidate = {
+            "candidate_name": "named_bus_router",
+            "box_ids": box_ids,
+            "line_keys": _line_keys_for_box_ids(snapshot, set(box_ids)),
+            "motif_kinds": ["named_bus"],
+            "params": {
+                "name": params.get("name"),
+                "signal": bool(params.get("signal")),
+                "sender_count": int(params.get("sender_count", 0)),
+                "receiver_count": int(params.get("receiver_count", 0)),
+                "forms": copy.deepcopy(params.get("forms", [])),
+                "cross_scope": bool(network.get("cross_scope")),
+                "scope_count": int(network.get("scope_count", 0)),
+                "attached_neighbor_ids": copy.deepcopy(attached_neighbor_ids),
+                "attached_neighbor_count": len(attached_neighbor_ids),
+            },
+            "evidence": [
+                f"named bus: {params.get('name')}",
+                f"forms: {', '.join(params.get('forms', [])) or 'unknown'}",
+            ],
+            "normalization_level": "exact",
+            "first_box_index": motif.get("first_box_index", 0),
+            "helper_name": "named_bus_router",
+            "exact": True,
+        }
+        candidate["helper_call"] = _controller_shell_helper_call(snapshot, candidate)
+        candidates.append(candidate)
+
+    candidates.sort(key=lambda item: (item["first_box_index"], item["params"].get("name") or ""))
+    return candidates
+
+
+def extract_init_dispatch_chain_candidates(snapshot: dict) -> list[dict]:
+    """Return exact init/scheduler dispatch candidates from scheduler motifs."""
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    motifs = analysis.get("motifs", [])
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    candidates = []
+
+    for motif in motifs:
+        if motif.get("kind") != "scheduler_chain":
+            continue
+        archetypes = set(motif.get("params", {}).get("archetypes", []))
+        if not ({"init_chain", "deferred_init", "init_fanout"} & archetypes):
+            continue
+        candidate_box_ids = set(motif.get("box_ids", []))
+        for neighbor_id in _connected_box_ids(snapshot, candidate_box_ids):
+            neighbor = boxes_by_id.get(neighbor_id)
+            operator = _box_operator(neighbor or {})
+            if (neighbor or {}).get("maxclass") == "message" or operator in CONTROLLER_DISPATCH_OPERATORS:
+                candidate_box_ids.add(neighbor_id)
+        candidate = {
+            "candidate_name": "init_dispatch_chain",
+            "box_ids": sorted(candidate_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            "line_keys": _line_keys_for_box_ids(snapshot, candidate_box_ids),
+            "motif_kinds": ["scheduler_chain"],
+            "params": {
+                "archetypes": sorted(archetypes),
+                "trigger_shapes": copy.deepcopy(motif.get("params", {}).get("trigger_shapes", [])),
+                "timing_texts": copy.deepcopy(motif.get("params", {}).get("timing_texts", [])),
+                "load_messages": copy.deepcopy(motif.get("params", {}).get("load_messages", [])),
+                "adjacent_message_texts": copy.deepcopy(motif.get("params", {}).get("adjacent_message_texts", [])),
+                "downstream_targets": sorted({
+                    _box_operator(boxes_by_id[box_id]) or boxes_by_id[box_id].get("maxclass")
+                    for box_id in candidate_box_ids
+                    if box_id in boxes_by_id and box_id not in motif.get("box_ids", [])
+                }),
+            },
+            "evidence": [
+                f"scheduler archetypes: {', '.join(sorted(archetypes))}",
+                "loadbang/deferlow/trigger init scaffold",
+            ],
+            "normalization_level": "exact",
+            "first_box_index": motif.get("first_box_index", 0),
+            "helper_name": "init_dispatch_chain",
+            "exact": True,
+        }
+        candidate["helper_call"] = _controller_shell_helper_call(snapshot, candidate)
+        candidates.append(candidate)
+
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
+def extract_state_bundle_router_candidates(snapshot: dict) -> list[dict]:
+    """Return semantic grouped state-bundle router candidates."""
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    motifs = analysis.get("motifs", [])
+    candidates = []
+    for motif in motifs:
+        if motif.get("kind") != "state_bundle":
+            continue
+        candidate = {
+            "candidate_name": "state_bundle_router",
+            "box_ids": copy.deepcopy(motif.get("box_ids", [])),
+            "line_keys": _line_keys_for_box_ids(snapshot, set(motif.get("box_ids", []))),
+            "motif_kinds": ["state_bundle"],
+            "params": copy.deepcopy(motif.get("params", {})),
+            "evidence": [
+                "pack/pak/unpack state shuttle",
+            ],
+            "normalization_level": "semantic_pattern",
+            "first_box_index": motif.get("first_box_index", 0),
+            "helper_name": None,
+            "exact": False,
+        }
+        candidates.append(candidate)
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
+def _motif_semantic_candidate(
+    snapshot: dict,
+    motif: dict,
+    *,
+    candidate_name: str,
+    evidence: list[str],
+) -> dict:
+    return {
+        "candidate_name": candidate_name,
+        "box_ids": copy.deepcopy(motif.get("box_ids", [])),
+        "line_keys": _line_keys_for_box_ids(snapshot, set(motif.get("box_ids", []))),
+        "motif_kinds": [motif.get("kind")],
+        "params": copy.deepcopy(motif.get("params", {})),
+        "evidence": evidence,
+        "normalization_level": "semantic_pattern",
+        "first_box_index": motif.get("first_box_index", 0),
+        "helper_name": None,
+        "exact": False,
+    }
+
+
+def extract_sample_buffer_candidates(snapshot: dict) -> list[dict]:
+    """Return semantic sample-buffer candidates derived from generic motifs."""
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    candidates = []
+    for motif in analysis.get("motifs", []):
+        if motif.get("kind") != "sample_buffer_toolchain":
+            continue
+        archetypes = set(motif.get("params", {}).get("archetypes", []))
+        if {"sample_import", "sample_metadata"} & archetypes:
+            candidate_name = "sample_file_handling_shell"
+        elif "waveform_probe" in archetypes:
+            candidate_name = "sample_visualization_shell"
+        elif "buffer_playback" in archetypes:
+            candidate_name = "sample_playback_shell"
+        else:
+            candidate_name = "sample_buffer_toolchain"
+        evidence = ["sample-buffer processing shell"]
+        if archetypes:
+            evidence.append("archetypes: %s" % ", ".join(sorted(archetypes)))
+        buffer_targets = motif.get("params", {}).get("buffer_targets", [])
+        if buffer_targets:
+            evidence.append("buffer targets: %s" % ", ".join(buffer_targets))
+        candidates.append(
+            _motif_semantic_candidate(
+                snapshot,
+                motif,
+                candidate_name=candidate_name,
+                evidence=evidence,
+            )
+        )
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
+def extract_gen_processing_candidates(snapshot: dict) -> list[dict]:
+    """Return semantic gen~ candidates derived from generic motifs."""
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    candidates = []
+    for motif in analysis.get("motifs", []):
+        if motif.get("kind") != "gen_processing_core":
+            continue
+        archetypes = set(motif.get("params", {}).get("archetypes", []))
+        if {"buffered_gen_core", "triggered_gen_core"} <= archetypes:
+            candidate_name = "buffered_gen_capture_shell"
+        elif "buffered_gen_core" in archetypes:
+            candidate_name = "buffered_gen_processing_shell"
+        else:
+            candidate_name = "gen_processing_core"
+        evidence = ["gen~ processing shell"]
+        if archetypes:
+            evidence.append("archetypes: %s" % ", ".join(sorted(archetypes)))
+        buffer_targets = motif.get("params", {}).get("buffer_targets", [])
+        if buffer_targets:
+            evidence.append("buffer targets: %s" % ", ".join(buffer_targets))
+        candidates.append(
+            _motif_semantic_candidate(
+                snapshot,
+                motif,
+                candidate_name=candidate_name,
+                evidence=evidence,
+            )
+        )
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
+def extract_presentation_widget_cluster_candidates(snapshot: dict) -> list[dict]:
+    """Return semantic grouped top-level presentation widget clusters for first-party devices."""
+    context = _factory_pack_context(snapshot)
+    if context.get("source_lane") != "factory":
+        return []
+
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    eligible_box_ids = []
+    for wrapped in snapshot.get("boxes", []):
+        box = wrapped.get("box", {})
+        box_id = box.get("id")
+        rect = _presentation_rect(box)
+        if not box_id or not rect or box_id in DEFAULT_AUDIO_IO_BOXES:
+            continue
+        maxclass = box.get("maxclass")
+        if (
+            maxclass in UI_MAXCLASSES
+            or maxclass in {"comment", "message", "number", "flonum", "toggle", "button", "waveform~"}
+        ):
+            eligible_box_ids.append(box_id)
+
+    if len(eligible_box_ids) < 4:
+        return []
+
+    adjacency = {box_id: set() for box_id in eligible_box_ids}
+    eligible_set = set(eligible_box_ids)
+    for box_id in eligible_box_ids:
+        rect = _presentation_rect(boxes_by_id.get(box_id, {}))
+        if rect is None:
+            continue
+        for other_id in eligible_box_ids:
+            if other_id <= box_id:
+                continue
+            other_rect = _presentation_rect(boxes_by_id.get(other_id, {}))
+            if other_rect is None:
+                continue
+            if _rects_touch(rect, other_rect):
+                adjacency[box_id].add(other_id)
+                adjacency[other_id].add(box_id)
+    for wrapped in snapshot.get("lines", []):
+        patchline = wrapped.get("patchline", {})
+        source_id = patchline.get("source", [None, 0])[0]
+        destination_id = patchline.get("destination", [None, 0])[0]
+        if source_id in eligible_set and destination_id in eligible_set:
+            adjacency[source_id].add(destination_id)
+            adjacency[destination_id].add(source_id)
+
+    clusters = []
+    seen = set()
+    for seed_id in eligible_box_ids:
+        if seed_id in seen:
+            continue
+        stack = [seed_id]
+        component = []
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            component.append(current)
+            stack.extend(neighbor for neighbor in adjacency[current] if neighbor not in seen)
+        if len(component) < 4:
+            continue
+        component.sort(key=lambda item: box_indices.get(item, 10 ** 9))
+        rects = [
+            _presentation_rect(boxes_by_id[box_id])
+            for box_id in component
+            if _presentation_rect(boxes_by_id[box_id]) is not None
+        ]
+        if not rects:
+            continue
+        min_x = min(rect[0] for rect in rects)
+        min_y = min(rect[1] for rect in rects)
+        max_x = max(rect[0] + rect[2] for rect in rects)
+        max_y = max(rect[1] + rect[3] for rect in rects)
+        maxclasses = sorted({
+            str(boxes_by_id[box_id].get("maxclass") or "unknown")
+            for box_id in component
+        })
+        candidate = {
+            "candidate_name": "presentation_widget_cluster",
+            "box_ids": component,
+            "line_keys": _line_keys_for_box_ids(snapshot, set(component)),
+            "motif_kinds": ["presentation_widget_cluster"],
+            "params": {
+                "presentation_bounds": [min_x, min_y, max_x - min_x, max_y - min_y],
+                "widget_count": len(component),
+                "maxclasses": maxclasses,
+            },
+            "evidence": [
+                "first-party presentation widget cluster",
+                f"presentation bounds: [{min_x:.1f}, {min_y:.1f}, {max_x - min_x:.1f}, {max_y - min_y:.1f}]",
+            ],
+            "normalization_level": "semantic_pattern",
+            "first_box_index": box_indices.get(component[0], 0),
+            "helper_name": None,
+            "exact": False,
+        }
+        clusters.append(candidate)
+
+    clusters.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return clusters
+
+
+def extract_poly_shell_candidates(snapshot: dict) -> list[dict]:
+    """Return exact `poly~` host shell candidates."""
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    motifs = analysis.get("motifs", [])
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    candidates = []
+
+    for motif in motifs:
+        if motif.get("kind") != "embedded_patcher":
+            continue
+        params = motif.get("params", {})
+        if params.get("host_kind") != "poly":
+            continue
+        host_box_id = motif.get("box_ids", [None])[0]
+        if not host_box_id:
+            continue
+        connected_box_ids = _connected_box_ids(snapshot, {host_box_id})
+        candidate_box_ids = {host_box_id}
+        direct_neighbor_ids = []
+        attached_bus_names = []
+        attached_motif_kinds = []
+        for neighbor_id in sorted(connected_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)):
+            if neighbor_id in DEFAULT_AUDIO_IO_BOXES:
+                continue
+            candidate_box_ids.add(neighbor_id)
+            direct_neighbor_ids.append(neighbor_id)
+        for attached in motifs:
+            if attached.get("kind") not in {
+                "named_bus",
+                "controller_dispatch",
+                "scheduler_chain",
+                "state_bundle",
+            }:
+                continue
+            attached_ids = set(attached.get("box_ids", []))
+            if not attached_ids or not (attached_ids & connected_box_ids):
+                continue
+            candidate_box_ids.update(attached_ids)
+            attached_motif_kinds.append(attached.get("kind"))
+            if attached.get("kind") == "named_bus" and attached.get("params", {}).get("name"):
+                attached_bus_names.append(attached["params"]["name"])
+        for neighbor_id in connected_box_ids:
+            neighbor = boxes_by_id.get(neighbor_id)
+            operator = _box_operator(neighbor or {})
+            if (neighbor or {}).get("maxclass") == "message" or operator in LIVE_API_HELPER_OPERATORS:
+                candidate_box_ids.add(neighbor_id)
+
+        candidate = {
+            "candidate_name": "poly_shell",
+            "box_ids": sorted(candidate_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            "line_keys": _line_keys_for_box_ids(snapshot, candidate_box_ids),
+            "motif_kinds": ["embedded_patcher"] + sorted(set(attached_motif_kinds)),
+            "params": {
+                "target": params.get("target"),
+                "direct_neighbor_ids": copy.deepcopy(direct_neighbor_ids),
+                "direct_neighbor_count": len(direct_neighbor_ids),
+                "attached_bus_names": sorted(set(attached_bus_names)),
+                "attached_motif_kinds": sorted(set(attached_motif_kinds)),
+                "connected_line_count": sum(
+                    1
+                    for wrapped in snapshot.get("lines", [])
+                    if host_box_id in {
+                        wrapped.get("patchline", {}).get("source", [None, 0])[0],
+                        wrapped.get("patchline", {}).get("destination", [None, 0])[0],
+                    }
+                ),
+            },
+            "evidence": [
+                "poly~ host shell",
+                "attached control and routing layer",
+            ],
+            "normalization_level": "exact",
+            "first_box_index": motif.get("first_box_index", 0),
+            "helper_name": "poly_shell",
+            "exact": True,
+        }
+        candidate["helper_call"] = _controller_shell_helper_call(snapshot, candidate)
+        candidates.append(candidate)
+
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
+def _candidate_helper_boxes(candidate: dict) -> list[dict]:
+    return copy.deepcopy(candidate.get("helper_call", {}).get("kwargs", {}).get("boxes", []))
+
+
+def _candidate_named_bus_texts(candidate: dict) -> list[str]:
+    names = []
+    for wrapped in _candidate_helper_boxes(candidate):
+        box = wrapped.get("box", {})
+        text = str(box.get("text") or "").strip()
+        if not text:
+            continue
+        if text.startswith("s ") or text.startswith("r "):
+            names.append(text.split(" ", 1)[1].strip())
+    return names
+
+
+def _candidate_bpatcher_names(candidate: dict) -> list[str]:
+    names = []
+    for wrapped in _candidate_helper_boxes(candidate):
+        box = wrapped.get("box", {})
+        if box.get("maxclass") != "bpatcher":
+            continue
+        name = str(box.get("name") or "").strip()
+        if name:
+            names.append(name)
+    return sorted(set(names))
+
+
+def _indexed_name_signatures(names: list[str]) -> dict[str, list[int]]:
+    signatures: dict[str, list[int]] = {}
+    for name in names:
+        match = re.match(r"^(.*?)(\d+)$", name)
+        if not match:
+            continue
+        prefix, suffix = match.groups()
+        signatures.setdefault(prefix, []).append(int(suffix))
+    for prefix in signatures:
+        signatures[prefix] = sorted(set(signatures[prefix]))
+    return signatures
+
+
+def extract_poly_shell_bank_candidates(snapshot: dict) -> list[dict]:
+    """Return exact grouped banks of repeated `poly~` editor shells."""
+    poly_candidates = extract_poly_shell_candidates(snapshot)
+    if len(poly_candidates) < 3:
+        return []
+
+    grouped: dict[tuple[str, tuple[str, ...]], list[dict]] = {}
+    for candidate in poly_candidates:
+        params = candidate.get("params", {})
+        signature = (
+            str(params.get("target") or ""),
+            tuple(_candidate_bpatcher_names(candidate)),
+        )
+        grouped.setdefault(signature, []).append(candidate)
+
+    bank_candidates = []
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    for (target, bpatcher_names), members in grouped.items():
+        if len(members) < 3:
+            continue
+        member_box_ids = sorted({
+            box_id
+            for member in members
+            for box_id in member.get("box_ids", [])
+        }, key=lambda item: box_indices.get(item, 10 ** 9))
+        if not member_box_ids:
+            continue
+        member_line_keys = sorted({
+            tuple(line_key)
+            for member in members
+            for line_key in member.get("line_keys", [])
+        })
+        bus_names = sorted({
+            name
+            for member in members
+            for name in _candidate_named_bus_texts(member)
+        })
+        indexed_signatures = _indexed_name_signatures(bus_names)
+        indexed_bus_prefix = None
+        indexed_bus_indices: list[int] = []
+        if indexed_signatures:
+            indexed_bus_prefix, indexed_bus_indices = max(
+                indexed_signatures.items(),
+                key=lambda item: (len(item[1]), item[0]),
+            )
+        shared_box_ids = sorted({
+            box_id
+            for box_id in member_box_ids
+            if sum(1 for member in members if box_id in set(member.get("box_ids", []))) > 1
+        }, key=lambda item: box_indices.get(item, 10 ** 9))
+        candidate = {
+            "candidate_name": "poly_shell_bank",
+            "box_ids": member_box_ids,
+            "line_keys": member_line_keys,
+            "motif_kinds": ["embedded_patcher"],
+            "params": {
+                "target": target or None,
+                "poly_shell_count": len(members),
+                "bpatcher_names": list(bpatcher_names),
+                "bus_names": bus_names,
+                "indexed_bus_prefix": indexed_bus_prefix,
+                "indexed_bus_indices": indexed_bus_indices,
+                "shared_box_ids": shared_box_ids,
+                "member_first_box_indices": [
+                    member.get("first_box_index", 0)
+                    for member in members
+                ],
+            },
+            "evidence": [
+                "repeated poly~ host shells",
+                f"shell count: {len(members)}",
+            ] + ([f"target: {target}"] if target else []) + (
+                [f"bpatchers: {', '.join(bpatcher_names)}"] if bpatcher_names else []
+            ) + (
+                [f"indexed bus family: {indexed_bus_prefix}[{', '.join(str(index) for index in indexed_bus_indices)}]"]
+                if indexed_bus_prefix and indexed_bus_indices else []
+            ),
+            "normalization_level": "exact",
+            "first_box_index": min(member.get("first_box_index", 10 ** 9) for member in members),
+            "helper_name": "poly_shell_bank",
+            "exact": True,
+        }
+        candidate["helper_call"] = _controller_shell_helper_call(snapshot, candidate)
+        bank_candidates.append(candidate)
+
+    bank_candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return bank_candidates
+
+
+def extract_poly_editor_bank_candidates(snapshot: dict) -> list[dict]:
+    """Return semantic editor-bank candidates derived from repeated `poly~` shells."""
+    candidates = []
+    for bank_candidate in extract_poly_shell_bank_candidates(snapshot):
+        params = bank_candidate.get("params", {})
+        bpatcher_names = params.get("bpatcher_names", [])
+        if not bpatcher_names:
+            continue
+        candidate = copy.deepcopy(bank_candidate)
+        candidate["candidate_name"] = "poly_editor_bank"
+        candidate["motif_kinds"] = ["embedded_patcher", "poly_shell_bank"]
+        candidate["normalization_level"] = "semantic_pattern"
+        candidate["helper_name"] = None
+        candidate["exact"] = False
+        candidate["params"] = {
+            "target": params.get("target"),
+            "voice_count": params.get("poly_shell_count"),
+            "editor_ui_names": copy.deepcopy(bpatcher_names),
+            "bus_names": copy.deepcopy(params.get("bus_names", [])),
+            "indexed_bus_prefix": params.get("indexed_bus_prefix"),
+            "indexed_bus_indices": copy.deepcopy(params.get("indexed_bus_indices", [])),
+            "shared_box_ids": copy.deepcopy(params.get("shared_box_ids", [])),
+        }
+        candidate["evidence"] = [
+            "repeated poly~ editor bank",
+            f"voice count: {params.get('poly_shell_count')}",
+        ] + (
+            [f"target: {params.get('target')}"] if params.get("target") else []
+        ) + (
+            [f"editor UIs: {', '.join(bpatcher_names)}"]
+        ) + (
+            [f"indexed bus family: {params.get('indexed_bus_prefix')}[{', '.join(str(index) for index in params.get('indexed_bus_indices', []))}]"]
+            if params.get("indexed_bus_prefix") and params.get("indexed_bus_indices") else []
+        )
+        candidate.pop("helper_call", None)
+        candidates.append(candidate)
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
+def extract_first_party_api_rig_candidates(snapshot: dict) -> list[dict]:
+    """Return grouped API rig candidates for first-party Building Tools devices."""
+    context = _factory_pack_context(snapshot)
+    if context.get("pack_name") != "M4L Building Tools" or context.get("pack_section") != "API":
+        return []
+
+    analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    motifs = analysis.get("motifs", [])
+    relevant = [entry for entry in motifs if entry.get("kind") == "live_api_component"]
+    box_ids = sorted({
+        box_id
+        for entry in relevant
+        for box_id in entry.get("box_ids", [])
+    }, key=lambda item: box_indices.get(item, 10 ** 9))
+    if not box_ids:
+        box_ids = [
+            box_id
+            for box_id in boxes_by_id
+            if box_id not in DEFAULT_AUDIO_IO_BOXES
+        ]
+    if not box_ids:
+        return []
+
+    file_stem = Path(context.get("source_path") or snapshot.get("device", {}).get("name", "")).stem
+    api_family = file_stem.replace("Max Api ", "", 1).split()[0] if file_stem.startswith("Max Api ") else file_stem
+    return [{
+        "candidate_name": "first_party_api_rig",
+        "box_ids": box_ids,
+        "line_keys": _line_keys_for_box_ids(snapshot, set(box_ids)),
+        "motif_kinds": ["live_api_component"] if relevant else copy.deepcopy(analysis.get("motif_kinds", [])),
+        "params": {
+            "api_family": api_family,
+            "pack_name": context.get("pack_name"),
+            "pack_section": context.get("pack_section"),
+            "pack_subsection": context.get("pack_subsection"),
+            "fallback_to_full_device": not bool(relevant),
+        },
+        "evidence": [
+            "first-party M4L Building Tools API device",
+            f"API family: {api_family}",
+        ] + ([] if relevant else ["no root-level Live API motif; grouped full device shell"]),
+        "normalization_level": "semantic_pattern",
+        "first_box_index": min(box_indices.get(box_id, 10 ** 9) for box_id in box_ids),
+        "helper_name": None,
+        "exact": False,
+    }]
+
+
+def _first_party_abstraction_family(abstraction_names: list[str]) -> str | None:
+    names = set(abstraction_names)
+    if names & {"M4L.gain1~", "M4L.gain2~"}:
+        return "gain_shell"
+    if names & {"M4L.bal1~", "M4L.bal2~"}:
+        return "balance_shell"
+    if names & {"M4L.pan1~", "M4L.pan2~"}:
+        return "pan_shell"
+    if "M4L.envfol~" in names:
+        return "envelope_follower_shell"
+    if "M4L.vdelay~" in names:
+        return "variable_delay_shell"
+    if "M4L.cross1~" in names:
+        return "mid_side_shell"
+    if any(name.startswith("M4L.api.") for name in names):
+        return "api_internal_shell"
+    return None
+
+
+def extract_first_party_abstraction_host_candidates(snapshot: dict) -> list[dict]:
+    """Return grouped first-party `M4L.*` abstraction host candidates."""
+    context = _factory_pack_context(snapshot)
+    if context.get("source_lane") != "factory":
+        return []
+
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    host_ids = {
+        box_id
+        for box_id, box in boxes_by_id.items()
+        if box.get("maxclass") == "newobj"
+        and str(_box_operator(box) or "").startswith("M4L.")
+    }
+    if not host_ids:
+        return []
+
+    relevant_neighbor_maxclasses = UI_MAXCLASSES | {
+        "comment",
+        "message",
+        "number",
+        "flonum",
+        "toggle",
+        "button",
+        "scope~",
+        "waveform~",
+    }
+    candidates = []
+    visited_host_ids: set[str] = set()
+
+    for host_id in sorted(host_ids, key=lambda item: box_indices.get(item, 10 ** 9)):
+        if host_id in visited_host_ids:
+            continue
+
+        component_box_ids = {host_id}
+        pending_host_ids = [host_id]
+        component_host_ids = set()
+
+        while pending_host_ids:
+            current_host_id = pending_host_ids.pop()
+            if current_host_id in component_host_ids:
+                continue
+            component_host_ids.add(current_host_id)
+            visited_host_ids.add(current_host_id)
+            component_box_ids.add(current_host_id)
+            connected_ids = _connected_box_ids(snapshot, {current_host_id})
+            for neighbor_id in sorted(connected_ids, key=lambda item: box_indices.get(item, 10 ** 9)):
+                if neighbor_id in DEFAULT_AUDIO_IO_BOXES:
+                    continue
+                neighbor = boxes_by_id.get(neighbor_id)
+                operator = _box_operator(neighbor or {})
+                neighbor_maxclass = (neighbor or {}).get("maxclass")
+                if neighbor_id in host_ids:
+                    component_box_ids.add(neighbor_id)
+                    if neighbor_id not in component_host_ids:
+                        pending_host_ids.append(neighbor_id)
+                    continue
+                if (
+                    (neighbor or {}).get("patcher")
+                    or neighbor_maxclass in relevant_neighbor_maxclasses
+                    or operator in CONTROLLER_DISPATCH_OPERATORS
+                    or operator in SCHEDULER_OPERATORS
+                    or operator in LIVE_API_CORE_OPERATORS
+                    or operator in LIVE_API_HELPER_OPERATORS
+                ):
+                    component_box_ids.add(neighbor_id)
+                    for second_neighbor_id in _connected_box_ids(snapshot, {neighbor_id}):
+                        if second_neighbor_id in host_ids and second_neighbor_id not in component_host_ids:
+                            component_box_ids.add(second_neighbor_id)
+                            pending_host_ids.append(second_neighbor_id)
+
+        component_box_ids = sorted(component_box_ids, key=lambda item: box_indices.get(item, 10 ** 9))
+        if not component_box_ids:
+            continue
+
+        abstraction_names = sorted({
+            str(_box_operator(boxes_by_id[box_id]) or "")
+            for box_id in component_host_ids
+            if box_id in boxes_by_id
+        })
+        if not abstraction_names:
+            continue
+        abstraction_family = _first_party_abstraction_family(abstraction_names)
+
+        attached_box_ids = [box_id for box_id in component_box_ids if box_id not in component_host_ids]
+        attached_controls = [
+            box_id
+            for box_id in attached_box_ids
+            if boxes_by_id.get(box_id, {}).get("maxclass") in UI_MAXCLASSES
+        ]
+        control_varnames = sorted({
+            str(boxes_by_id.get(box_id, {}).get("varname") or "")
+            for box_id in attached_controls
+            if boxes_by_id.get(box_id, {}).get("varname")
+        })
+        control_maxclasses = sorted({
+            str(boxes_by_id.get(box_id, {}).get("maxclass") or "unknown")
+            for box_id in attached_controls
+        })
+        attached_comments = [
+            box_id
+            for box_id in attached_box_ids
+            if boxes_by_id.get(box_id, {}).get("maxclass") == "comment"
+        ]
+        comment_texts = [
+            str(boxes_by_id.get(box_id, {}).get("text") or "").strip()
+            for box_id in attached_comments
+            if str(boxes_by_id.get(box_id, {}).get("text") or "").strip()
+        ][:5]
+        attached_controller_ops = sorted({
+            _box_operator(boxes_by_id[box_id])
+            for box_id in attached_box_ids
+            if _box_operator(boxes_by_id.get(box_id, {})) in CONTROLLER_DISPATCH_OPERATORS | SCHEDULER_OPERATORS
+        })
+        evidence = [
+            "first-party abstraction host cluster",
+            f"abstractions: {', '.join(abstraction_names)}",
+        ]
+        if abstraction_family:
+            evidence.append(f"family: {abstraction_family}")
+        if attached_controls:
+            evidence.append(f"attached controls: {len(attached_controls)}")
+        if attached_controller_ops:
+            evidence.append(f"attached controller ops: {', '.join(attached_controller_ops)}")
+
+        candidates.append({
+            "candidate_name": "first_party_abstraction_host",
+            "box_ids": component_box_ids,
+            "line_keys": _line_keys_for_box_ids(snapshot, set(component_box_ids)),
+            "motif_kinds": ["first_party_abstraction_host"],
+            "params": {
+                "abstraction_names": abstraction_names,
+                "primary_abstraction_name": abstraction_names[0],
+                "abstraction_family": abstraction_family,
+                "host_box_count": len(component_host_ids),
+                "attached_box_count": len(attached_box_ids),
+                "attached_control_count": len(attached_controls),
+                "control_varnames": control_varnames,
+                "control_maxclasses": control_maxclasses,
+                "attached_comment_count": len(attached_comments),
+                "comment_texts": comment_texts,
+                "attached_controller_ops": attached_controller_ops,
+                "pack_name": context.get("pack_name"),
+                "pack_section": context.get("pack_section"),
+                "pack_subsection": context.get("pack_subsection"),
+            },
+            "evidence": evidence,
+            "normalization_level": "semantic_pattern",
+            "first_box_index": min(box_indices.get(box_id, 10 ** 9) for box_id in component_box_ids),
+            "helper_name": None,
+            "exact": False,
+        })
+
+    candidates.sort(
+        key=lambda item: (
+            item["first_box_index"],
+            item["params"].get("primary_abstraction_name") or "",
+        )
+    )
+    return candidates
+
+
+def extract_first_party_abstraction_family_candidates(snapshot: dict) -> list[dict]:
+    """Return semantic family candidates derived from first-party abstraction hosts."""
+    candidates = []
+    for host_candidate in extract_first_party_abstraction_host_candidates(snapshot):
+        family_name = host_candidate.get("params", {}).get("abstraction_family")
+        if not family_name:
+            continue
+        candidate = copy.deepcopy(host_candidate)
+        candidate["candidate_name"] = family_name
+        candidate["motif_kinds"] = ["first_party_abstraction_family"]
+        candidate["normalization_level"] = "semantic_pattern"
+        candidate["helper_name"] = None
+        candidate["exact"] = False
+        evidence = copy.deepcopy(candidate.get("evidence", []))
+        if all(not str(item).startswith("family: ") for item in evidence):
+            evidence.append(f"family: {family_name}")
+        candidate["evidence"] = evidence
+        candidates.append(candidate)
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
+def extract_building_block_candidates(snapshot: dict) -> list[dict]:
+    """Return grouped building-block candidates for first-party Building Tools devices."""
+    context = _factory_pack_context(snapshot)
+    if context.get("pack_name") != "M4L Building Tools" or context.get("pack_section") != "Building Blocks":
+        return []
+
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    box_ids = [
+        box_id
+        for box_id in boxes_by_id
+        if box_id not in DEFAULT_AUDIO_IO_BOXES
+    ]
+    if not box_ids:
+        return []
+
+    return [{
+        "candidate_name": "building_block_candidate",
+        "box_ids": sorted(box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+        "line_keys": _line_keys_for_box_ids(snapshot, set(box_ids)),
+        "motif_kinds": copy.deepcopy((snapshot.get("analysis") or analyze_snapshot(snapshot)).get("motif_kinds", [])),
+        "params": {
+            "block_name": Path(context.get("source_path") or snapshot.get("device", {}).get("name", "")).stem,
+            "pack_name": context.get("pack_name"),
+            "pack_section": context.get("pack_section"),
+            "pack_subsection": context.get("pack_subsection"),
+        },
+        "evidence": [
+            "first-party M4L Building Tools building block",
+        ],
+        "normalization_level": "semantic_pattern",
+        "first_box_index": min(box_indices.get(box_id, 10 ** 9) for box_id in box_ids),
+        "helper_name": None,
+        "exact": False,
+    }]
 
 
 def _collect_embedded_patcher_summaries_from_box(box: dict, depth: int = 1) -> list[dict]:
@@ -4470,6 +5774,152 @@ def _named_bus_networks(root_motifs: list[dict], embedded_patchers: list[dict]) 
     return networks
 
 
+def _snapshot_object_texts(snapshot: dict) -> list[str]:
+    texts = []
+    for wrapped in snapshot.get("boxes", []):
+        box = wrapped.get("box", {})
+        text = str(box.get("text") or "").strip()
+        name = str(box.get("name") or "").strip()
+        varname = str(box.get("varname") or "").strip()
+        if text:
+            texts.append(text)
+        if name:
+            texts.append(name)
+        if varname:
+            texts.append(varname)
+    return texts
+
+
+def _embedded_target_snapshots(snapshot: dict) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for entry in extract_embedded_patcher_snapshots(snapshot):
+        target = str(entry.get("target") or "").strip()
+        if not target:
+            continue
+        grouped.setdefault(target, []).append(entry.get("snapshot", {}))
+    return grouped
+
+
+def _snapshot_contains_all_texts(snapshot: dict, required: list[str]) -> bool:
+    texts = _snapshot_object_texts(snapshot)
+    return all(any(text == candidate for candidate in texts) for text in required)
+
+
+def extract_behavior_hints(snapshot: dict) -> list[dict]:
+    """Return product-level behavioral hints inferred from structure."""
+    hints = []
+    embedded_by_target = _embedded_target_snapshots(snapshot)
+    poly_editor_banks = extract_poly_editor_bank_candidates(snapshot)
+
+    for candidate in poly_editor_banks:
+        params = candidate.get("params", {})
+        hints.append({
+            "name": "multi_lane_mapping_bank",
+            "confidence": 0.88,
+            "params": {
+                "target": params.get("target"),
+                "voice_count": params.get("voice_count"),
+                "editor_ui_names": copy.deepcopy(params.get("editor_ui_names", [])),
+                "indexed_bus_prefix": params.get("indexed_bus_prefix"),
+                "indexed_bus_indices": copy.deepcopy(params.get("indexed_bus_indices", [])),
+            },
+            "evidence": [
+                "repeated poly editor bank",
+                *(candidate.get("evidence", []) or []),
+            ],
+        })
+
+    midi_logic_snapshots = embedded_by_target.get("MIDILogic", [])
+    if any(
+        _snapshot_contains_all_texts(
+            nested,
+            ["r ---manualmode", "gate", "midiparse", "stripnote", "s ---notebang"],
+        )
+        for nested in midi_logic_snapshots
+    ):
+        hints.append({
+            "name": "manual_or_midi_trigger_mode",
+            "confidence": 0.9,
+            "params": {
+                "source": "MIDILogic",
+                "manual_mode_bus": "---manualmode",
+                "trigger_bus": "---notebang",
+            },
+            "evidence": [
+                "manual mode gates MIDI note parsing",
+                "MIDILogic emits note-trigger bangs",
+            ],
+        })
+
+    qm_snapshots = embedded_by_target.get("qm", [])
+    if any(
+        _snapshot_contains_all_texts(
+            nested,
+            ["s ---qmap_start", "r ---done_qmap", "s ---qmap", "s ---update_local"],
+        )
+        for nested in qm_snapshots
+    ):
+        hints.append({
+            "name": "mapping_session_controller",
+            "confidence": 0.92,
+            "params": {
+                "source": "qm",
+                "start_bus": "---qmap_start",
+                "done_bus": "---done_qmap",
+                "update_bus": "---update_local",
+            },
+            "evidence": [
+                "qm subpatch drives q-map start/finish/update state",
+                "mapping session can be cleared and reset separately from note triggers",
+            ],
+        })
+
+    ui_scripting_snapshots = embedded_by_target.get("UiScripting", [])
+    if any(
+        _snapshot_contains_all_texts(
+            nested,
+            ["setUiPos $1 $2 $3 $4", "setwidth $1"],
+        )
+        and any(
+            text.startswith("script sendbox global presentation_rect")
+            for text in _snapshot_object_texts(nested)
+        )
+        for nested in ui_scripting_snapshots
+    ):
+        hints.append({
+            "name": "dynamic_panel_relayout",
+            "confidence": 0.84,
+            "params": {
+                "source": "UiScripting",
+            },
+            "evidence": [
+                "UI scripting adjusts presentation geometry dynamically",
+                "layout changes are part of interaction flow, not static skinning",
+            ],
+        })
+
+    hint_names = {hint["name"] for hint in hints}
+    if {"multi_lane_mapping_bank", "manual_or_midi_trigger_mode", "mapping_session_controller"} <= hint_names:
+        mapping_bank = next(
+            (hint for hint in hints if hint["name"] == "multi_lane_mapping_bank"),
+            {},
+        )
+        hints.append({
+            "name": "mapped_random_control_device",
+            "confidence": 0.93,
+            "params": {
+                "voice_count": mapping_bank.get("params", {}).get("voice_count"),
+                "editor_target": mapping_bank.get("params", {}).get("target"),
+            },
+            "evidence": [
+                "device combines a repeated mapping-editor bank with explicit trigger-mode switching and q-map session control",
+            ],
+        })
+
+    hints.sort(key=lambda item: (-float(item.get("confidence", 0.0)), item.get("name", "")))
+    return hints
+
+
 def extract_snapshot_knowledge(snapshot: dict) -> dict:
     """Extract a structured knowledge manifest from a normalized snapshot."""
     analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
@@ -4570,6 +6020,20 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
     live_api_normalization_candidates = extract_live_api_normalization_candidates(snapshot)
     controller_shell_candidates = extract_controller_shell_candidates(snapshot)
     embedded_ui_shell_candidates = extract_embedded_ui_shell_candidates(snapshot)
+    named_bus_router_candidates = extract_named_bus_router_candidates(snapshot)
+    init_dispatch_chain_candidates = extract_init_dispatch_chain_candidates(snapshot)
+    state_bundle_router_candidates = extract_state_bundle_router_candidates(snapshot)
+    sample_buffer_candidates = extract_sample_buffer_candidates(snapshot)
+    gen_processing_candidates = extract_gen_processing_candidates(snapshot)
+    presentation_widget_cluster_candidates = extract_presentation_widget_cluster_candidates(snapshot)
+    poly_shell_candidates = extract_poly_shell_candidates(snapshot)
+    poly_shell_bank_candidates = extract_poly_shell_bank_candidates(snapshot)
+    poly_editor_bank_candidates = extract_poly_editor_bank_candidates(snapshot)
+    behavior_hints = extract_behavior_hints(snapshot)
+    first_party_api_rig_candidates = extract_first_party_api_rig_candidates(snapshot)
+    first_party_abstraction_host_candidates = extract_first_party_abstraction_host_candidates(snapshot)
+    first_party_abstraction_family_candidates = extract_first_party_abstraction_family_candidates(snapshot)
+    building_block_candidates = extract_building_block_candidates(snapshot)
     live_api_helpers = [
         copy.deepcopy(entry)
         for entry in live_api_normalization_candidates
@@ -4647,8 +6111,19 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
     if lossiness["bridge_reconstructed"]:
         lossiness["notes"].append("Snapshot originated from a LiveMCP bridge payload, not a raw .amxd file.")
 
+    source_context = _factory_pack_context(snapshot)
+
     return {
         "device": copy.deepcopy(snapshot.get("device", {})),
+        "source": {
+            "kind": snapshot.get("source", {}).get("kind"),
+            "path": _snapshot_source_path(snapshot),
+            "source_lane": source_context.get("source_lane"),
+            "pack_name": source_context.get("pack_name"),
+            "pack_section": source_context.get("pack_section"),
+            "pack_subsection": source_context.get("pack_subsection"),
+            "pack_section_path": source_context.get("pack_section_path"),
+        },
         "summary": {
             "control_count": len(controls),
             "display_count": len(displays),
@@ -4671,6 +6146,20 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
             "live_api_normalization_candidate_count": len(live_api_normalization_candidates),
             "controller_shell_candidate_count": len(controller_shell_candidates),
             "embedded_ui_shell_candidate_count": len(embedded_ui_shell_candidates),
+            "named_bus_router_candidate_count": len(named_bus_router_candidates),
+            "init_dispatch_chain_candidate_count": len(init_dispatch_chain_candidates),
+            "state_bundle_router_candidate_count": len(state_bundle_router_candidates),
+            "sample_buffer_candidate_count": len(sample_buffer_candidates),
+            "gen_processing_candidate_count": len(gen_processing_candidates),
+            "presentation_widget_cluster_candidate_count": len(presentation_widget_cluster_candidates),
+            "poly_shell_candidate_count": len(poly_shell_candidates),
+            "poly_shell_bank_candidate_count": len(poly_shell_bank_candidates),
+            "poly_editor_bank_candidate_count": len(poly_editor_bank_candidates),
+            "behavior_hint_count": len(behavior_hints),
+            "first_party_api_rig_candidate_count": len(first_party_api_rig_candidates),
+            "first_party_abstraction_host_candidate_count": len(first_party_abstraction_host_candidates),
+            "first_party_abstraction_family_candidate_count": len(first_party_abstraction_family_candidates),
+            "building_block_candidate_count": len(building_block_candidates),
             "embedded_patcher_count": len(embedded_patchers),
             "embedded_pattern_count": sum(entry.get("pattern_count", 0) for entry in embedded_patchers),
             "embedded_recipe_count": sum(entry.get("recipe_count", 0) for entry in embedded_patchers),
@@ -4697,6 +6186,20 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
         "live_api_normalization_candidates": live_api_normalization_candidates,
         "controller_shell_candidates": controller_shell_candidates,
         "embedded_ui_shell_candidates": embedded_ui_shell_candidates,
+        "named_bus_router_candidates": named_bus_router_candidates,
+        "init_dispatch_chain_candidates": init_dispatch_chain_candidates,
+        "state_bundle_router_candidates": state_bundle_router_candidates,
+        "sample_buffer_candidates": sample_buffer_candidates,
+        "gen_processing_candidates": gen_processing_candidates,
+        "presentation_widget_cluster_candidates": presentation_widget_cluster_candidates,
+        "poly_shell_candidates": poly_shell_candidates,
+        "poly_shell_bank_candidates": poly_shell_bank_candidates,
+        "poly_editor_bank_candidates": poly_editor_bank_candidates,
+        "behavior_hints": behavior_hints,
+        "first_party_api_rig_candidates": first_party_api_rig_candidates,
+        "first_party_abstraction_host_candidates": first_party_abstraction_host_candidates,
+        "first_party_abstraction_family_candidates": first_party_abstraction_family_candidates,
+        "building_block_candidates": building_block_candidates,
         "embedded_patchers": embedded_patchers,
         "sidecars": sidecars,
         "audio_routing": {
@@ -4788,38 +6291,75 @@ def _read_amxd_chunks(data: bytes) -> dict[bytes, bytes]:
 
 
 def _decode_patcher_chunk(payload: bytes) -> dict:
+    relaxed_decimal = re.compile(r"(?<![0-9A-Za-z_])(-?\d+)\.(?=[,\]\}\s])")
+
+    def _scan_json_bounds(start: int) -> tuple[int, int] | None:
+        json_end = None
+        depth = 0
+        in_string = False
+        escaping = False
+        for index, byte in enumerate(payload[start:], start=start):
+            if in_string:
+                if escaping:
+                    escaping = False
+                elif byte == 0x5C:  # backslash
+                    escaping = True
+                elif byte == 0x22:  # quote
+                    in_string = False
+                continue
+
+            if byte == 0x22:  # quote
+                in_string = True
+            elif byte == 0x7B:  # {
+                depth += 1
+            elif byte == 0x7D:  # }
+                depth -= 1
+                if depth == 0:
+                    json_end = index + 1
+                    break
+        if json_end is None:
+            return None
+        return start, json_end
+
     json_start = payload.find(b"{")
     if json_start < 0:
         raise ValueError("ptch chunk did not contain a JSON object")
-    json_end = None
-    depth = 0
-    in_string = False
-    escaping = False
-    for index, byte in enumerate(payload[json_start:], start=json_start):
-        if in_string:
-            if escaping:
-                escaping = False
-            elif byte == 0x5C:  # backslash
-                escaping = True
-            elif byte == 0x22:  # quote
-                in_string = False
+
+    candidate_starts = []
+    for index, byte in enumerate(payload[:128]):
+        if byte == 0x7B and index not in candidate_starts:
+            candidate_starts.append(index)
+    if json_start not in candidate_starts:
+        candidate_starts.insert(0, json_start)
+
+    for start in candidate_starts:
+        bounds = _scan_json_bounds(start)
+        if not bounds:
             continue
+        json_bytes = payload[bounds[0]:bounds[1]]
+        try:
+            decoded = json.loads(json_bytes)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(decoded, dict) and "patcher" in decoded:
+            return decoded
 
-        if byte == 0x22:  # quote
-            in_string = True
-        elif byte == 0x7B:  # {
-            depth += 1
-        elif byte == 0x7D:  # }
-            depth -= 1
-            if depth == 0:
-                json_end = index + 1
-                break
+    for start in candidate_starts:
+        raw = payload[start:]
+        for encoding in ("utf-8", "latin1"):
+            try:
+                text = raw.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+            relaxed_text = relaxed_decimal.sub(r"\1.0", text)
+            try:
+                decoded, _ = json.JSONDecoder().raw_decode(relaxed_text)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(decoded, dict) and "patcher" in decoded:
+                return decoded
 
-    if json_end is None:
-        raise ValueError("ptch chunk JSON object did not terminate cleanly")
-
-    json_bytes = payload[json_start:json_end]
-    return json.loads(json_bytes)
+    raise ValueError("ptch chunk JSON object did not terminate cleanly")
 
 
 def read_amxd(path: str) -> dict:
@@ -5831,6 +7371,42 @@ def _select_embedded_ui_shell_codegen_candidates(
     return selected
 
 
+def _select_first_party_helper_codegen_candidates(
+    snapshot: dict,
+    *,
+    consumed_box_ids: set[str],
+    consumed_line_keys: set[tuple],
+    prefer_semantic_group_box_ids: set[str] | None = None,
+) -> list[dict]:
+    selected = []
+    local_consumed_box_ids = set(consumed_box_ids)
+    local_consumed_line_keys = set(consumed_line_keys)
+    prefer_semantic_group_box_ids = prefer_semantic_group_box_ids or set()
+    for extractor in (
+        extract_poly_shell_bank_candidates,
+        extract_poly_shell_candidates,
+        extract_init_dispatch_chain_candidates,
+        extract_named_bus_router_candidates,
+    ):
+        for candidate in extractor(snapshot):
+            candidate_box_ids = candidate.get("consume_box_ids") or candidate.get("box_ids", [])
+            candidate_line_keys = candidate.get("line_keys") or candidate.get("helper_call", {}).get("line_keys", [])
+            if (
+                candidate.get("candidate_name") in {"poly_shell_bank", "poly_shell"}
+                and prefer_semantic_group_box_ids
+                and set(candidate_box_ids).issubset(prefer_semantic_group_box_ids)
+            ):
+                continue
+            if any(box_id in local_consumed_box_ids for box_id in candidate_box_ids):
+                continue
+            if any(line_key in local_consumed_line_keys for line_key in candidate_line_keys):
+                continue
+            selected.append(candidate)
+            local_consumed_box_ids.update(candidate_box_ids)
+            local_consumed_line_keys.update(candidate_line_keys)
+    return sorted(selected, key=lambda item: (item["first_box_index"], item["candidate_name"]))
+
+
 def _wrapped_boxes_for_candidate(
     snapshot: dict,
     candidate: dict,
@@ -5916,7 +7492,7 @@ def _controller_shell_helper_statements(
     return lines
 
 
-def _embedded_ui_shell_helper_statements(candidate: dict) -> list[str]:
+def _candidate_helper_statements(candidate: dict) -> list[str]:
     helper = copy.deepcopy(candidate.get("helper_call") or {})
     helper_name = helper.get("name") or candidate.get("candidate_name")
     lines = [f"    # semantic target: {helper_name}"]
@@ -5932,6 +7508,105 @@ def _embedded_ui_shell_helper_statements(candidate: dict) -> list[str]:
     return lines
 
 
+def _embedded_ui_shell_helper_statements(candidate: dict) -> list[str]:
+    return _candidate_helper_statements(candidate)
+
+
+def _trim_candidate_to_unconsumed(
+    snapshot: dict,
+    candidate: dict,
+    *,
+    consumed_box_ids: set[str],
+    consumed_line_keys: set[tuple],
+    skip_default_audio_ids: set[str],
+) -> dict | None:
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    remaining_box_ids = [
+        box_id
+        for box_id in candidate.get("box_ids", [])
+        if box_id not in consumed_box_ids and box_id not in skip_default_audio_ids
+    ]
+    if not remaining_box_ids:
+        return None
+
+    remaining_box_id_set = set(remaining_box_ids)
+    remaining_line_keys = [
+        line_key
+        for line_key in candidate.get("line_keys", [])
+        if line_key not in consumed_line_keys
+        and line_key[0] in remaining_box_id_set
+        and line_key[2] in remaining_box_id_set
+    ]
+    trimmed = copy.deepcopy(candidate)
+    trimmed["box_ids"] = remaining_box_ids
+    trimmed["line_keys"] = remaining_line_keys
+    trimmed["first_box_index"] = min(box_indices.get(box_id, 10 ** 9) for box_id in remaining_box_ids)
+    trimmed["consume_box_ids"] = copy.deepcopy(remaining_box_ids)
+    return trimmed
+
+
+def _select_semantic_group_candidates(
+    snapshot: dict,
+    *,
+    consumed_box_ids: set[str],
+    consumed_line_keys: set[tuple],
+    skip_default_audio_ids: set[str],
+) -> list[dict]:
+    selected = []
+    local_consumed_box_ids = set(consumed_box_ids)
+    local_consumed_line_keys = set(consumed_line_keys)
+    for extractor in (
+        extract_poly_editor_bank_candidates,
+        extract_first_party_api_rig_candidates,
+        extract_first_party_abstraction_family_candidates,
+        extract_first_party_abstraction_host_candidates,
+        extract_gen_processing_candidates,
+        extract_sample_buffer_candidates,
+        extract_presentation_widget_cluster_candidates,
+        extract_building_block_candidates,
+        extract_state_bundle_router_candidates,
+    ):
+        for candidate in extractor(snapshot):
+            trimmed = _trim_candidate_to_unconsumed(
+                snapshot,
+                candidate,
+                consumed_box_ids=local_consumed_box_ids,
+                consumed_line_keys=local_consumed_line_keys,
+                skip_default_audio_ids=skip_default_audio_ids,
+            )
+            if not trimmed:
+                continue
+            selected.append(trimmed)
+            local_consumed_box_ids.update(trimmed.get("box_ids", []))
+            local_consumed_line_keys.update(trimmed.get("line_keys", []))
+    return sorted(selected, key=lambda item: (item["first_box_index"], item["candidate_name"]))
+
+
+def _semantic_group_candidate_statements(
+    snapshot: dict,
+    candidate: dict,
+    *,
+    skip_default_audio_ids: set[str],
+) -> list[str]:
+    boxes = _wrapped_boxes_for_candidate(
+        snapshot,
+        candidate,
+        skip_default_audio_ids=skip_default_audio_ids,
+    )
+    lines = _wrapped_lines_for_candidate(snapshot, candidate)
+    helper_name = candidate.get("candidate_name")
+    statement_lines = [f"    # semantic group: {helper_name}"]
+    for evidence in candidate.get("evidence", []):
+        statement_lines.append(f"    # {evidence}")
+    statement_lines.extend([
+        "    device.add_dsp(",
+        f"        {_python_literal(boxes)},",
+        f"        {_python_literal(lines)},",
+        "    )",
+    ])
+    return statement_lines
+
+
 def _structured_generator_source(
     snapshot: dict,
     *,
@@ -5940,6 +7615,7 @@ def _structured_generator_source(
     include_manual_review_notes: bool,
     include_controller_shell_candidates: bool,
     include_embedded_ui_shell_candidates: bool,
+    include_semantic_group_candidates: bool = False,
 ) -> str:
     analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
     fidelity = snapshot.get("fidelity", {})
@@ -5947,9 +7623,29 @@ def _structured_generator_source(
     recipes = analysis.get("recipes", [])
     support_files_by_name = _support_files_by_name(snapshot)
     semantic_jsui_filenames = _semantic_jsui_filenames(snapshot, support_files_by_name)
+    skip_default_audio_ids = set()
+    if analysis.get("uses_default_audio_io", False):
+        skip_default_audio_ids = set(DEFAULT_AUDIO_IO_BOXES)
     live_api_candidates_all = extract_live_api_normalization_candidates(snapshot)
     controller_shell_candidates_all = extract_controller_shell_candidates(snapshot)
     embedded_ui_shell_candidates_all = extract_embedded_ui_shell_candidates(snapshot)
+    named_bus_router_candidates_all = extract_named_bus_router_candidates(snapshot)
+    init_dispatch_chain_candidates_all = extract_init_dispatch_chain_candidates(snapshot)
+    poly_shell_candidates_all = extract_poly_shell_candidates(snapshot)
+    poly_shell_bank_candidates_all = extract_poly_shell_bank_candidates(snapshot)
+    poly_editor_bank_candidates_all = extract_poly_editor_bank_candidates(snapshot)
+    state_bundle_router_candidates_all = extract_state_bundle_router_candidates(snapshot)
+    sample_buffer_candidates_all = extract_sample_buffer_candidates(snapshot)
+    gen_processing_candidates_all = extract_gen_processing_candidates(snapshot)
+    presentation_widget_cluster_candidates_all = extract_presentation_widget_cluster_candidates(snapshot)
+    first_party_api_rig_candidates_all = extract_first_party_api_rig_candidates(snapshot)
+    first_party_abstraction_host_candidates_all = extract_first_party_abstraction_host_candidates(snapshot)
+    first_party_abstraction_family_candidates_all = extract_first_party_abstraction_family_candidates(snapshot)
+    building_block_candidates_all = extract_building_block_candidates(snapshot)
+    semantic_group_preference_box_ids: set[str] = set()
+    if include_semantic_group_candidates:
+        for candidate in extract_poly_editor_bank_candidates(snapshot):
+            semantic_group_preference_box_ids.update(candidate.get("box_ids", []))
 
     imports = ["Device", "AudioEffect", "Instrument", "MidiEffect"]
     optimized_recipes = [recipe for recipe in recipes if recipe.get("recipeizable")]
@@ -5965,6 +7661,20 @@ def _structured_generator_source(
         consumed_box_ids.update(recipe["box_ids"])
         consumed_line_keys.update(recipe["line_keys"])
         recipes_by_index.setdefault(recipe["first_box_index"], []).append(recipe)
+
+    first_party_helper_candidates = _select_first_party_helper_codegen_candidates(
+        snapshot,
+        consumed_box_ids=consumed_box_ids,
+        consumed_line_keys=consumed_line_keys,
+        prefer_semantic_group_box_ids=semantic_group_preference_box_ids,
+    )
+    for candidate in first_party_helper_candidates:
+        helper_name = candidate.get("helper_call", {}).get("name") or candidate.get("candidate_name")
+        if helper_name and helper_name not in imports:
+            imports.append(helper_name)
+    for candidate in first_party_helper_candidates:
+        consumed_box_ids.update(candidate.get("consume_box_ids") or candidate.get("box_ids", []))
+        consumed_line_keys.update(candidate.get("line_keys") or candidate.get("helper_call", {}).get("line_keys", []))
 
     optimized_patterns = []
     for pattern in patterns:
@@ -6021,9 +7731,29 @@ def _structured_generator_source(
         helper_name = candidate.get("helper_call", {}).get("name")
         if helper_name and helper_name not in imports:
             imports.append(helper_name)
+    for candidate in live_api_candidates:
+        consumed_box_ids.update(candidate.get("consume_box_ids") or candidate.get("box_ids", []))
+        consumed_line_keys.update(candidate.get("line_keys") or candidate.get("helper_call", {}).get("line_keys", []))
+
+    semantic_group_candidates = []
+    if include_semantic_group_candidates:
+        semantic_group_candidates = _select_semantic_group_candidates(
+            snapshot,
+            consumed_box_ids=consumed_box_ids,
+            consumed_line_keys=consumed_line_keys,
+            skip_default_audio_ids=skip_default_audio_ids,
+        )
+        for candidate in semantic_group_candidates:
+            consumed_box_ids.update(candidate.get("box_ids", []))
+            consumed_line_keys.update(candidate.get("line_keys", []))
 
     matched_box_ids = set()
     matched_line_keys = set()
+    first_party_helpers_by_index: dict[int, list[dict]] = {}
+    for candidate in first_party_helper_candidates:
+        matched_box_ids.update(candidate.get("consume_box_ids") or candidate.get("box_ids", []))
+        matched_line_keys.update(candidate.get("line_keys") or candidate.get("helper_call", {}).get("line_keys", []))
+        first_party_helpers_by_index.setdefault(candidate["first_box_index"], []).append(candidate)
     controller_shells_by_index: dict[int, list[dict]] = {}
     for candidate in controller_shell_candidates:
         matched_box_ids.update(candidate.get("consume_box_ids") or candidate.get("box_ids", []))
@@ -6041,6 +7771,11 @@ def _structured_generator_source(
         matched_box_ids.update(candidate_box_ids)
         matched_line_keys.update(candidate_line_keys)
         live_api_helpers_by_index.setdefault(candidate["first_box_index"], []).append(candidate)
+    semantic_groups_by_index: dict[int, list[dict]] = {}
+    for candidate in semantic_group_candidates:
+        matched_box_ids.update(candidate.get("box_ids", []))
+        matched_line_keys.update(candidate.get("line_keys", []))
+        semantic_groups_by_index.setdefault(candidate["first_box_index"], []).append(candidate)
 
     patterns_by_index: dict[int, list[dict]] = {}
     for pattern in optimized_patterns:
@@ -6071,12 +7806,34 @@ def _structured_generator_source(
         "",
         "SNAPSHOT_EMBEDDED_UI_SHELL_CANDIDATES = %s" % _python_literal(embedded_ui_shell_candidates_all),
         "",
+        "SNAPSHOT_NAMED_BUS_ROUTER_CANDIDATES = %s" % _python_literal(named_bus_router_candidates_all),
+        "",
+        "SNAPSHOT_INIT_DISPATCH_CHAIN_CANDIDATES = %s" % _python_literal(init_dispatch_chain_candidates_all),
+        "",
+        "SNAPSHOT_POLY_SHELL_CANDIDATES = %s" % _python_literal(poly_shell_candidates_all),
+        "",
+        "SNAPSHOT_POLY_SHELL_BANK_CANDIDATES = %s" % _python_literal(poly_shell_bank_candidates_all),
+        "",
+        "SNAPSHOT_POLY_EDITOR_BANK_CANDIDATES = %s" % _python_literal(poly_editor_bank_candidates_all),
+        "",
+        "SNAPSHOT_STATE_BUNDLE_ROUTER_CANDIDATES = %s" % _python_literal(state_bundle_router_candidates_all),
+        "",
+        "SNAPSHOT_SAMPLE_BUFFER_CANDIDATES = %s" % _python_literal(sample_buffer_candidates_all),
+        "",
+        "SNAPSHOT_GEN_PROCESSING_CANDIDATES = %s" % _python_literal(gen_processing_candidates_all),
+        "",
+        "SNAPSHOT_PRESENTATION_WIDGET_CLUSTER_CANDIDATES = %s" % _python_literal(presentation_widget_cluster_candidates_all),
+        "",
+        "SNAPSHOT_FIRST_PARTY_API_RIG_CANDIDATES = %s" % _python_literal(first_party_api_rig_candidates_all),
+        "",
+        "SNAPSHOT_FIRST_PARTY_ABSTRACTION_HOST_CANDIDATES = %s" % _python_literal(first_party_abstraction_host_candidates_all),
+        "",
+        "SNAPSHOT_FIRST_PARTY_ABSTRACTION_FAMILY_CANDIDATES = %s" % _python_literal(first_party_abstraction_family_candidates_all),
+        "",
+        "SNAPSHOT_BUILDING_BLOCK_CANDIDATES = %s" % _python_literal(building_block_candidates_all),
+        "",
         "",
     ]
-
-    skip_default_audio_ids = set()
-    if analysis.get("uses_default_audio_io", False):
-        skip_default_audio_ids = set(DEFAULT_AUDIO_IO_BOXES)
 
     lines.extend([
         "def build_device():",
@@ -6098,6 +7855,8 @@ def _structured_generator_source(
     lines.extend(_support_file_statements(snapshot, skipped_names=semantic_jsui_filenames))
 
     for index, wrapped in enumerate(snapshot.get("boxes", [])):
+        for candidate in first_party_helpers_by_index.get(index, []):
+            lines.extend(_candidate_helper_statements(candidate))
         for recipe in recipes_by_index.get(index, []):
             recipe_call = recipe["recipe"]
             lines.append(
@@ -6124,6 +7883,14 @@ def _structured_generator_source(
                     helper["name"],
                     helper.get("positional", []),
                     helper.get("kwargs", {}),
+                )
+            )
+        for candidate in semantic_groups_by_index.get(index, []):
+            lines.extend(
+                _semantic_group_candidate_statements(
+                    snapshot,
+                    candidate,
+                    skip_default_audio_ids=skip_default_audio_ids,
                 )
             )
         for pattern in patterns_by_index.get(index, []):
@@ -6202,6 +7969,7 @@ def generate_semantic_python_from_snapshot(snapshot: dict) -> str:
         include_manual_review_notes=True,
         include_controller_shell_candidates=True,
         include_embedded_ui_shell_candidates=True,
+        include_semantic_group_candidates=True,
     )
 
 
@@ -6277,6 +8045,21 @@ __all__ = [
     "extract_embedded_patcher_snapshots",
     "extract_controller_shell_candidates",
     "extract_embedded_ui_shell_candidates",
+    "extract_named_bus_router_candidates",
+    "extract_init_dispatch_chain_candidates",
+    "extract_state_bundle_router_candidates",
+    "extract_sample_buffer_candidates",
+    "extract_gen_processing_candidates",
+    "extract_presentation_widget_cluster_candidates",
+    "extract_poly_shell_candidates",
+    "extract_poly_shell_bank_candidates",
+    "extract_poly_editor_bank_candidates",
+    "extract_behavior_hints",
+    "extract_first_party_api_rig_candidates",
+    "extract_first_party_abstraction_host_candidates",
+    "extract_first_party_abstraction_family_candidates",
+    "extract_building_block_candidates",
+    "extract_live_api_normalization_candidates",
     "detect_snapshot_patterns",
     "detect_snapshot_recipes",
     "detect_snapshot_motifs",

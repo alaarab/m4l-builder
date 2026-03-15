@@ -55,6 +55,20 @@ What you get today:
 - a first analysis pass with UI, parameter, bridge, and audio-I/O detection
 - detected generic Max motifs such as named send/receive buses, Live API
   control clusters, and embedded patcher hosts
+- detected advanced sample/granular motifs such as
+  `sample_buffer_toolchain` (`buffer~`, `info~`, `peek~`, `live.drop`, and
+  related file/visualization shells) and `gen_processing_core`
+  (`gen~` plus attached trigger/buffer/routing structure), which is especially
+  useful for decoding embedded-heavy factory devices such as Granulator III
+- semantic grouping derived from those motifs, so extracted embedded
+  subpatchers can surface as `sample_file_handling_shell`,
+  `sample_visualization_shell`, `sample_playback_shell`, or
+  `buffered_gen_capture_shell` instead of opaque raw-box islands
+- product-level behavior hints extracted from structural evidence, such as
+  `multi_lane_mapping_bank`, `manual_or_midi_trigger_mode`,
+  `mapping_session_controller`, and the combined
+  `mapped_random_control_device` summary for mapping-heavy devices like
+  `[dnksaus] Rnd Gen v2.2`
 - Live API motif semantics and archetypes such as `parameter_probe`,
   `tempo_observer`, `transport_state_observer`, `device_active_state`, and
   `track_management`
@@ -167,9 +181,34 @@ exact Live API helper candidates. `extract_embedded_ui_shell_candidates(snapshot
 also surfaces exact-safe embedded host shells for root `subpatcher` and
 `bpatcher` boxes. The optimized and semantic codegen paths now consume those
 candidates too, rewriting recognized shells into reusable
-`controller_surface_shell(...)`, `sequencer_dispatch_shell(...)`, and
-`embedded_ui_shell(...)` helper calls instead of leaving every shell object
-flattened at the top level.
+`controller_surface_shell(...)`, `sequencer_dispatch_shell(...)`,
+`embedded_ui_shell_v2(...)`, `named_bus_router(...)`,
+`init_dispatch_chain(...)`, `poly_shell(...)`, and `poly_shell_bank(...)`
+helper calls instead of leaving every shell object flattened at the top level.
+First-party-only
+structures such as `first_party_api_rig`,
+`first_party_abstraction_host`, and `building_block_candidate` stay as
+semantic groupings until the corpus proves they deserve promotion into the
+public helper surface. The factory lane now also distinguishes repeated
+internal `M4L.*` abstraction-host clusters from whole-device building-block
+fallbacks, which makes Building Tools devices easier to mine without promoting
+every first-party block into the public package API. On the current factory
+corpus, the strongest abstraction families are `balance_shell`,
+`gain_shell`, `api_internal_shell`, `envelope_follower_shell`, and
+`pan_shell`, so the next semantic rewrites can focus on a few repeated
+first-party patterns instead of the full Building Tools catalog. Semantic
+codegen now emits those family labels directly for recovered first-party
+abstraction groups, which makes proof devices like `Max BalanceStereo`,
+`Max GainStereo`, `Max PanStereo`, and `Max EnvFollower` read as semantic
+families rather than a single generic abstraction-host placeholder.
+For embedded-heavy granular devices, the semantic path also groups detected
+sample-buffer and `gen~` cores even when they are not yet promoted to public
+helpers, which is enough to break a device like Granulator III into labeled
+subsystems instead of one flat rebuild. For dense multi-voice instruments, the
+optimized path can now collapse repeated `poly~` editor shells into one
+`poly_shell_bank(...)` helper, and the semantic path can lift that same
+structure into a higher-level `poly_editor_bank` grouping; `[dnksaus] Rnd Gen
+v2.2` is the current proof device for that lane.
 
 For ad hoc local mining, there is also a helper script in the repo:
 
@@ -202,12 +241,56 @@ uv run python tools/build_corpus_fixture.py /path/to/amxd-corpus /tmp/amxd-fixtu
 
 The fixture selector also supports family-level targeting, for example
 `family:zs-Knobbler3`, so you can materialize only one public-device lane at a
-time.
+time. It also supports lane/pack targeting such as `lane:factory`,
+`pack:M4L Building Tools`, and `pack_section:M4L Building Tools / API`.
 
 There is also a focused family-report helper in the repo:
 
 ```bash
 uv run python tools/build_family_report.py /path/to/amxd-corpus zs-Knobbler3
+```
+
+For source-lane comparison, the corpus report now includes
+`source_lane_profiles`:
+
+```python
+from m4l_builder import analyze_amxd_corpus, source_lane_profiles_markdown
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+markdown = source_lane_profiles_markdown(report["source_lane_profiles"])
+```
+
+If your public and factory corpora live in separate roots, compare them with
+separate reports:
+
+```python
+from m4l_builder import analyze_amxd_corpus, build_corpus_comparison, corpus_comparison_markdown
+
+comparison = build_corpus_comparison({
+    "public": analyze_amxd_corpus("/path/to/public-corpus"),
+    "factory": analyze_amxd_corpus("/path/to/factory-packs"),
+})
+markdown = corpus_comparison_markdown(comparison)
+```
+
+And for fixed proof sets, use reference-device dossiers to track raw fallback,
+helper recovery, and structural lift:
+
+```python
+from m4l_builder import build_reference_device_dossiers
+
+dossiers = build_reference_device_dossiers([
+    "/path/to/Max DelayLine.amxd",
+    "/path/to/Poly Vocoder.amxd",
+])
+```
+
+Repo helpers:
+
+```bash
+uv run python tools/build_source_lane_report.py /path/to/amxd-corpus /tmp/lane-report.md
+uv run python tools/build_corpus_comparison_report.py /tmp/comparison.md public=/path/to/public-corpus factory=/path/to/factory-packs
+uv run python tools/build_reference_dossiers.py /tmp/reference-dossiers.md /path/to/Max\ DelayLine.amxd
 ```
 
 ## Important limitation

@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Sequence
 
-from .corpus_analysis import analyze_amxd_corpus
+from .corpus_analysis import analyze_amxd_corpus, classify_corpus_source_metadata
 from .reverse import (
     extract_snapshot_knowledge,
     generate_builder_python_from_amxd,
@@ -65,6 +65,21 @@ def _family_key(name: str) -> str:
 def _manifest_categories(item: dict, relative_path: str) -> list[str]:
     categories: set[str] = {f"status:{item.get('status', 'unknown')}"}
     categories.add(f"family:{_family_key(item.get('name') or relative_path)}")
+    source_lane = item.get("source_lane")
+    if source_lane:
+        categories.add(f"source_lane:{source_lane}")
+    source_family = item.get("source_family")
+    if source_family:
+        categories.add(f"source_family:{source_family}")
+    pack_name = item.get("pack_name")
+    if pack_name:
+        categories.add(f"pack_name:{pack_name}")
+    pack_section = item.get("pack_section")
+    if pack_name and pack_section:
+        categories.add(f"pack_section:{pack_name} / {pack_section}")
+    pack_subsection = item.get("pack_subsection")
+    if pack_name and pack_section and pack_subsection:
+        categories.add(f"pack_subsection:{pack_name} / {pack_section} / {pack_subsection}")
     if relative_path and "/" in relative_path:
         categories.add(f"source_dir:{relative_path.split('/', 1)[0]}")
 
@@ -217,11 +232,13 @@ def build_corpus_manifest(
         item_path = Path(item["path"]).expanduser().resolve()
         relative_path = _relative_path(item_path, root)
         stat = item_path.stat() if item_path.exists() else None
+        source_metadata = classify_corpus_source_metadata(str(item_path))
         entry = {
             "name": item.get("name") or item_path.name,
             "path": str(item_path),
             "relative_path": relative_path,
             "status": item.get("status", "unknown"),
+            **source_metadata,
             "sha256": _sha256_file(item_path) if item_path.exists() else None,
             "size_bytes": stat.st_size if stat is not None else 0,
             "mtime": stat.st_mtime if stat is not None else 0.0,
@@ -312,6 +329,19 @@ def select_corpus_manifest_entries(
     elif selection.startswith("family:"):
         family = selection.split(":", 1)[1]
         selected = [entry for entry in entries if f"family:{family}" in entry.get("categories", [])]
+    elif selection.startswith("lane:"):
+        lane = selection.split(":", 1)[1]
+        selected = [entry for entry in entries if entry.get("source_lane") == lane]
+    elif selection.startswith("pack:"):
+        pack_name = selection.split(":", 1)[1]
+        selected = [entry for entry in entries if entry.get("pack_name") == pack_name]
+    elif selection.startswith("pack_section:"):
+        pack_section = selection.split(":", 1)[1]
+        selected = [
+            entry
+            for entry in entries
+            if f"{entry.get('pack_name')} / {entry.get('pack_section')}" == pack_section
+        ]
     elif selection.startswith("category:"):
         tag = selection.split(":", 1)[1]
         selected = [entry for entry in entries if tag in entry.get("categories", [])]
@@ -384,6 +414,11 @@ def run_corpus_fixture(
             "path": entry.get("path"),
             "relative_path": entry.get("relative_path"),
             "status": entry.get("status"),
+            "source_lane": entry.get("source_lane"),
+            "source_family": entry.get("source_family"),
+            "pack_name": entry.get("pack_name"),
+            "pack_section": entry.get("pack_section"),
+            "pack_subsection": entry.get("pack_subsection"),
             "fixture_status": "pending",
             "fixture_dir": str(item_dir),
             "categories": list(entry.get("categories", [])),

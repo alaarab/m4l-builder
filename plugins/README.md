@@ -15,3 +15,11 @@ Current policy:
 
 The wrappers in `examples/` now prefer the external `Max4LivePlugins` repo
 first, then fall back to this local mirror if the external repo is unavailable.
+
+For UI-focused flagship work inside this mirror, use the shared docs in
+`docs/`:
+
+- `docs/ableton_ui_playbook.md`
+- `docs/ableton_ui_review_checklist.md`
+- `docs/ableton_ui_90_day_sprint.md`
+- `docs/dual_surface_shell_guidance.md`

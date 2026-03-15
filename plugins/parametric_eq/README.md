@@ -192,6 +192,19 @@ Known direction:
 - it does not yet implement dynamic EQ, M/S EQ, or the richer selected-band
   control rail that the backlog now calls for
 
+## UI Sprint Alignment
+
+- Primary Ableton reference: `EQ Eight`
+- Shared standards:
+  - [`docs/ableton_ui_playbook.md`](../../docs/ableton_ui_playbook.md)
+  - [`docs/ableton_ui_review_checklist.md`](../../docs/ableton_ui_review_checklist.md)
+- Current sprint focus:
+  - selected-band rail as the canonical editor
+  - graph-first editing with less card-first fallback
+  - tighter graph, focus, and parameter anti-drift behavior
+- Planned validation note:
+  - [`docs/ui_validation/week_03_parametric_eq.md`](../../docs/ui_validation/week_03_parametric_eq.md)
+
 ## Validation
 
 Automated validation should catch:
@@ -209,6 +222,7 @@ In-Live validation should catch:
 - focus-band synchronization
 - coefficient smoothing behavior during fast sweeps
 - whether the UI still feels graph-first instead of card-first
+- whether the selected-band rail now feels canonical instead of auxiliary
 
 ## References
 

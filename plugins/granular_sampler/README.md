@@ -140,6 +140,11 @@ Expanded editor:
 This is the clearest candidate in the repo for the queued dual-surface shell
 task in Cortex.
 
+Reference shell spec:
+
+- [`ui_shell_spec.md`](./ui_shell_spec.md)
+- [`docs/dual_surface_shell_guidance.md`](../../docs/dual_surface_shell_guidance.md)
+
 ## Builder Dependencies / Framework Gaps
 
 This lane depends on:
@@ -159,6 +164,20 @@ The current queue already contains related pieces:
 So this product should consolidate those ideas into a single flagship lane
 instead of keeping them fragmented.
 
+## UI Sprint Alignment
+
+- Primary Ableton reference: `Simpler`
+- Shared standards:
+  - [`docs/ableton_ui_playbook.md`](../../docs/ableton_ui_playbook.md)
+  - [`docs/dual_surface_shell_guidance.md`](../../docs/dual_surface_shell_guidance.md)
+  - [`docs/ableton_ui_review_checklist.md`](../../docs/ableton_ui_review_checklist.md)
+- Current sprint focus:
+  - compact playable identity vs expanded waveform editor
+  - one canonical waveform-driven region editor
+  - clear cross-surface state sharing
+- Planned validation note:
+  - [`docs/ui_validation/week_11_framework_reaudit.md`](../../docs/ui_validation/week_11_framework_reaudit.md)
+
 ## Validation
 
 Automated validation should catch:
@@ -174,6 +193,8 @@ In-Live validation should catch:
 - whether compact mode remains useful after editor features are added
 - whether grain density and spray are musical over a practical range
 - whether loop and region edits stay synchronized with playback
+- whether compact and expanded surfaces feel like one instrument instead of two
+  unrelated views
 
 ## Future Work
 

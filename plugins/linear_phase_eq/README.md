@@ -257,6 +257,20 @@ Known direction:
 - this is not the device to reach for when fast, low-latency mix moves matter
   more than phase behavior
 
+## UI Sprint Alignment
+
+- Primary Ableton references: `EQ Eight`, `Spectrum`
+- Shared standards:
+  - [`docs/ableton_ui_playbook.md`](../../docs/ableton_ui_playbook.md)
+  - [`docs/ableton_ui_review_checklist.md`](../../docs/ableton_ui_review_checklist.md)
+- Current sprint focus:
+  - contextual selected-band column instead of the compact strip as the final
+    editor
+  - stronger graph, chip, and selected-band sync
+  - clearer quality, latency, analyzer, and listen state
+- Planned validation note:
+  - [`docs/ui_validation/week_05_linear_phase_eq.md`](../../docs/ui_validation/week_05_linear_phase_eq.md)
+
 ## Validation
 
 Automated validation already checks important structural details:
@@ -276,6 +290,8 @@ In-Live validation should confirm:
 - `LISTEN` behaves like a useful audition workflow rather than a fake toggle
 - analyzer visibility is useful behind the graph, not just technically present
 - latency readout matches the actual `pfft~` overlap-delay behavior
+- the selected-band editor reads as precision-first rather than utility-strip
+  editing
 
 ## References
 

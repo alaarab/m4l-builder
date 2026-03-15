@@ -7,6 +7,7 @@ import m4l_builder.corpus_fixture as corpus_fixture_module
 from m4l_builder import (
     AudioEffect,
     build_corpus_manifest,
+    classify_corpus_source_metadata,
     load_corpus_manifest,
     param_smooth,
     run_corpus_fixture,
@@ -54,6 +55,27 @@ class TestCorpusFixture:
 
         assert loaded["sample_sets"]["stable"] == manifest["sample_sets"]["stable"]
 
+    def test_build_corpus_manifest_tracks_factory_lane_metadata(self, tmp_path):
+        factory_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "API"
+        factory_root.mkdir(parents=True)
+        fx = AudioEffect("Factory API", 220, 100)
+        fx.add_dsp(*param_smooth("mod"))
+        output = factory_root / "Max Api DeviceExplorer.amxd"
+        fx.build(str(output))
+
+        manifest = build_corpus_manifest(str(tmp_path), stable_sample_size=1)
+        entry = next(
+            item for item in manifest["entries"] if item["relative_path"].endswith("Max Api DeviceExplorer.amxd")
+        )
+
+        assert entry["source_lane"] == "factory"
+        assert entry["source_family"] == "M4L Building Tools"
+        assert entry["pack_name"] == "M4L Building Tools"
+        assert entry["pack_section"] == "API"
+        assert "source_lane:factory" in entry["categories"]
+        assert "pack_name:M4L Building Tools" in entry["categories"]
+        assert "pack_section:M4L Building Tools / API" in entry["categories"]
+
     def test_select_corpus_manifest_entries_supports_sample_sets_and_categories(self, tmp_path):
         patterned = AudioEffect("Patterned", 220, 100)
         patterned.add_dsp(*param_smooth("mod"))
@@ -75,6 +97,35 @@ class TestCorpusFixture:
 
         ok_entries = select_corpus_manifest_entries(manifest, selection="ok")
         assert len(ok_entries) == 2
+
+    def test_select_corpus_manifest_entries_supports_lane_and_pack_filters(self, tmp_path):
+        public_fx = AudioEffect("Public", 220, 100)
+        public_fx.build(str(tmp_path / "Public.amxd"))
+
+        factory_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        factory_root.mkdir(parents=True)
+        factory_fx = AudioEffect("Factory", 220, 100)
+        factory_fx.build(str(factory_root / "Max DelayLine.amxd"))
+
+        manifest = build_corpus_manifest(str(tmp_path), stable_sample_size=1)
+
+        factory_entries = select_corpus_manifest_entries(manifest, selection="lane:factory")
+        assert [entry["relative_path"] for entry in factory_entries] == [
+            "Factory Packs/M4L Building Tools/Building Blocks/Max Audio Effect/Max DelayLine.amxd"
+        ]
+
+        pack_entries = select_corpus_manifest_entries(manifest, selection="pack:M4L Building Tools")
+        assert [entry["relative_path"] for entry in pack_entries] == [
+            "Factory Packs/M4L Building Tools/Building Blocks/Max Audio Effect/Max DelayLine.amxd"
+        ]
+
+        section_entries = select_corpus_manifest_entries(
+            manifest,
+            selection="pack_section:M4L Building Tools / Building Blocks",
+        )
+        assert [entry["relative_path"] for entry in section_entries] == [
+            "Factory Packs/M4L Building Tools/Building Blocks/Max Audio Effect/Max DelayLine.amxd"
+        ]
 
     def test_run_corpus_fixture_writes_snapshot_knowledge_and_scripts(self, tmp_path):
         fx = AudioEffect("Fixture FX", 220, 100)
@@ -130,3 +181,17 @@ class TestCorpusFixture:
         assert "builder" in item["mode_errors"]
         assert Path(item["artifacts"]["snapshot"]).exists()
         assert "builder" not in item["artifacts"]
+
+    def test_classify_corpus_source_metadata_detects_factory_and_site_leads(self):
+        factory = classify_corpus_source_metadata(
+            "/tmp/Factory Packs/M4L Building Tools/API/Max Api DeviceExplorer.amxd"
+        )
+        assert factory["source_lane"] == "factory"
+        assert factory["pack_name"] == "M4L Building Tools"
+        assert factory["pack_section"] == "API"
+
+        site_lead = classify_corpus_source_metadata(
+            "/tmp/maxforlivedevices/free/SomeDevice.amxd"
+        )
+        assert site_lead["source_lane"] == "site_leads"
+        assert site_lead["source_family"] == "maxforlivedevices"

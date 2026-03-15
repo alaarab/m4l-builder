@@ -83,15 +83,28 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 `analyze_snapshot(snapshot)` -- First-pass structural analysis for a normalized snapshot
 `extract_embedded_patcher_snapshots(snapshot)` -- Extract nested embedded patchers as reusable snapshots
 `extract_controller_shell_candidates(snapshot)` -- Extract controller-shell normalization candidates such as controller-surface and sequencer-dispatch shells
-`extract_embedded_ui_shell_candidates(snapshot)` -- Extract exact-safe embedded host shell candidates for root subpatcher and `bpatcher` boxes
+`extract_embedded_ui_shell_candidates(snapshot)` -- Extract exact-safe embedded host shell candidates for root subpatcher and `bpatcher` boxes, including attached routing/control/init structure
+`extract_named_bus_router_candidates(snapshot)` -- Extract exact named-bus router candidates, including cross-scope metadata when available
+`extract_init_dispatch_chain_candidates(snapshot)` -- Extract exact init/scheduler dispatch chains driven by `loadbang`, `deferlow`, `t`, `sel`, `gate`, `route`, and message scaffolds
+`extract_state_bundle_router_candidates(snapshot)` -- Extract semantic pack/unpack/zl state-shuttle candidates
+`extract_sample_buffer_candidates(snapshot)` -- Extract semantic sample-buffer shells such as file-handling, waveform-visualization, and playback clusters from generic motifs
+`extract_gen_processing_candidates(snapshot)` -- Extract semantic `gen~` processing shells such as buffered capture cores from generic motifs
+`extract_poly_shell_candidates(snapshot)` -- Extract exact `poly~` host shells with attached routing/control layers
+`extract_poly_shell_bank_candidates(snapshot)` -- Extract exact grouped banks of repeated `poly~` editor shells that share the same target and host UI
+`extract_poly_editor_bank_candidates(snapshot)` -- Extract semantic multi-voice editor-bank candidates layered on top of repeated `poly~` shell banks
+`extract_behavior_hints(snapshot)` -- Extract product-level behavior hints such as mapping-bank, trigger-mode, and mapping-session summaries inferred from structure
+`extract_first_party_api_rig_candidates(snapshot)` -- Extract semantic first-party API rigs from `M4L Building Tools / API`
+`extract_first_party_abstraction_host_candidates(snapshot)` -- Extract semantic factory-only `M4L.*` abstraction host clusters, including inferred abstraction families like `balance_shell`, `gain_shell`, `pan_shell`, and `envelope_follower_shell`, before whole-device building-block fallback
+`extract_first_party_abstraction_family_candidates(snapshot)` -- Derive family-level semantic candidates such as `balance_shell`, `gain_shell`, `pan_shell`, and `envelope_follower_shell` from first-party abstraction hosts for cleaner semantic codegen
+`extract_building_block_candidates(snapshot)` -- Extract semantic building-block candidates from `M4L Building Tools / Building Blocks`
 `detect_snapshot_patterns(snapshot)` -- Detect known helper-level DSP structures
 `detect_snapshot_recipes(snapshot)` -- Detect higher-level staged recipes
-`detect_snapshot_motifs(snapshot)` -- Detect generic Max motifs like named buses, controller dispatch/scheduler/state-bundle clusters, Live API clusters, and embedded patchers
+`detect_snapshot_motifs(snapshot)` -- Detect generic Max motifs like named buses, controller dispatch/scheduler/state-bundle clusters, Live API clusters, sample-buffer/granular cores, and embedded patchers
 `extract_parameter_specs(snapshot)` -- Pull normalized parameter/control specs from a snapshot
-`extract_snapshot_knowledge(snapshot)` -- Build a prompt-ready manifest of controls, displays, patterns, recipes, motifs, named-bus networks, embedded patchers, Live API archetypes, bridge state, and lossiness
+`extract_snapshot_knowledge(snapshot)` -- Build a prompt-ready manifest of controls, displays, patterns, recipes, motifs, behavior hints, named-bus networks, embedded patchers, Live API archetypes, bridge state, and lossiness
 `generate_python_from_snapshot(snapshot)` -- Fidelity-first exact rebuild script
 `generate_builder_python_from_snapshot(snapshot)` -- Builder-style rebuild script with semantic `add_*` calls where recognized
-`generate_optimized_python_from_snapshot(snapshot)` -- Exact-safe helper/recipe rebuild with canonical Live API, controller-shell, and embedded-ui-shell helper collapsing when safe
+`generate_optimized_python_from_snapshot(snapshot)` -- Exact-safe helper/recipe rebuild with canonical Live API, controller-shell, embedded-ui-shell, and repeated `poly~` bank helper collapsing when safe
 `generate_semantic_python_from_snapshot(snapshot)` -- Rewrite-oriented semantic rebuild that also normalizes safe non-canonical Live API helper opportunities
 `analyze_amxd_file(path)` -- Analyze one .amxd file for corpus mining
 `analyze_amxd_corpus(path, recursive=True)` -- Mine a directory of .amxd files into aggregate metrics, motifs, and object/control distributions
@@ -99,6 +112,13 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 `rank_reverse_candidate_families(report, limit=20)` -- Collapse versioned variants into device families so the next reverse targets are easier to prioritize
 `build_reverse_candidate_family_profile(report, family)` -- Build a detailed stable-vs-variable profile for one normalized device family, including inferred semantic targets and next-work suggestions
 `build_reverse_candidate_family_profiles(report, limit=20)` -- Aggregate motif/object signals across ranked families so variant-heavy device lines can be mined as one lane
+`build_source_lane_profiles(report)` -- Aggregate motif and abstraction signals by source lane (`public`, `factory`, `site_leads`)
+`source_lane_profiles_markdown(profiles)` -- Render those lane profiles as markdown
+`build_reference_device_dossier(path)` -- Build a semantic-lifting dossier for one fixed proof device, including raw `add_box(...)` reduction, semantic helper-call counts, and a combined structural-lift score
+`build_reference_device_dossiers(paths)` -- Build dossiers for a whole fixed proof set
+`reference_device_dossiers_markdown(dossiers)` -- Render those dossiers as markdown
+`build_corpus_comparison(reports_by_label)` -- Compare separately mined corpora such as `public` vs `factory`
+`corpus_comparison_markdown(comparison)` -- Render that cross-corpus comparison as markdown
 `corpus_report_markdown(report)` -- Render a markdown report from `analyze_amxd_corpus(...)`
 `family_profile_markdown(profile)` -- Render a markdown report from `build_reverse_candidate_family_profile(...)`
 `write_corpus_report(report, path)` -- Write that markdown report to disk
@@ -106,7 +126,7 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 `build_corpus_manifest(path, recursive=True, stable_sample_size=12)` -- Build a deterministic manifest with hashes, categories, dependency notes, and a stable sample subset for a local corpus
 `load_corpus_manifest(path)` -- Read a corpus manifest JSON file
 `write_corpus_manifest(manifest, path)` -- Write a corpus manifest JSON file
-`select_corpus_manifest_entries(manifest, selection=\"stable\", limit=None)` -- Select manifest entries by sample set, family tag, or category tag
+`select_corpus_manifest_entries(manifest, selection=\"stable\", limit=None)` -- Select manifest entries by sample set, family tag, lane, pack, pack section, or category tag
 `run_corpus_fixture(corpus_or_manifest, output_dir, ...)` -- Materialize local reverse/codegen artifacts (`snapshot.json`, `knowledge.json`, exact/builder/optimized/semantic scripts) for a selected subset
 `write_corpus_fixture_results(results, path)` -- Write fixture-run results to disk
 

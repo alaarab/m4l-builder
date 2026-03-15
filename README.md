@@ -139,6 +139,31 @@ with device.row(10, 10, spacing=8, height=70) as r:
     r.add_dial("d3", "Param3", width=50)
 ```
 
+## Flagship UI workflow
+
+For Ableton-style flagship device work, the repo now includes a shared UI
+practice and review set:
+
+- [docs/ableton_ui_playbook.md](docs/ableton_ui_playbook.md): shared UI rules
+  for primary surfaces, contextual editing, compact behavior, and analyzer
+  semantics
+- [docs/ableton_ui_review_checklist.md](docs/ableton_ui_review_checklist.md):
+  weekly scoring rubric
+- [docs/ableton_ui_90_day_sprint.md](docs/ableton_ui_90_day_sprint.md): the
+  execution guide for the 12-week Ableton UI sprint
+- [docs/ableton_ui_baseline_audit.md](docs/ableton_ui_baseline_audit.md):
+  starting assessment of the current flagship lanes
+- [docs/ableton_ui_tracker.md](docs/ableton_ui_tracker.md): week-by-week sprint
+  status and artifact tracking
+- [docs/ableton_ui_scoreboard.md](docs/ableton_ui_scoreboard.md): conservative
+  baseline scoring for current flagship lanes
+- [docs/ableton_ui_reference_matrix.md](docs/ableton_ui_reference_matrix.md):
+  reference-device order and repo translation map
+- [docs/ui_validation/README.md](docs/ui_validation/README.md): validation-note
+  workflow for in-Live review
+
+This sits on top of the existing plugin design docs in `plugins/*/README.md`.
+
 ### Subpatchers
 
 Nested patchers for organizing signal chains:
@@ -209,6 +234,16 @@ It now also detects non-LiveAPI controller structures that dominate public
 devices: dispatcher clusters (`route` / `sel` / `gate` / `switch` with trigger
 fan-out), scheduler chains (`loadbang`, `deferlow`, timed dispatch), and
 state-bundle/list utilities (`pack`, `pak`, `unpack`, `zl*`).
+For deeper devices, the motif layer now also detects advanced sample/granular
+pipelines such as `sample_buffer_toolchain` (for `buffer~`, `info~`, `peek~`,
+`live.drop`, and related file/visualization shells) and
+`gen_processing_core` (for `gen~` plus attached buffer/trigger/routing
+structure), which makes devices like Granulator III much less opaque at the
+embedded-patcher level.
+Those motifs also feed semantic grouping now: extracted subpatchers can be
+lifted as `sample_file_handling_shell`, `sample_visualization_shell`,
+`sample_playback_shell`, or `buffered_gen_capture_shell` instead of staying as
+anonymous raw object clusters.
 Live API motifs now also classify small controller archetypes such as
 `parameter_probe`, `tempo_observer`, `transport_state_observer`,
 `device_active_state`, and `track_management`, which makes public-device mining
@@ -286,10 +321,80 @@ Both `generate_optimized_python_from_snapshot(...)` and
 `generate_semantic_python_from_snapshot(...)` now use those candidates to call
 reusable package helpers in the emitted script instead of leaving every shell
 box flattened into the top-level build sequence.
+The factory-first reverse lane also promotes exact shell helpers such as
+`embedded_ui_shell_v2(...)`, `named_bus_router(...)`,
+`init_dispatch_chain(...)`, `poly_shell(...)`, and `poly_shell_bank(...)`,
+while keeping
+first-party-only structures such as `first_party_api_rig`,
+`first_party_abstraction_host`, and `building_block_candidate` as semantic
+groupings until they prove reusable. Factory-lane mining also tracks repeated
+internal `M4L.*` abstraction hosts like `M4L.bal2~` and `M4L.gain1~`, so
+first-party building blocks can be decomposed into abstraction-backed clusters
+before they fall back to whole-device grouping. On the current Ableton factory
+pack corpus, the strongest abstraction families are `balance_shell`,
+`gain_shell`, `api_internal_shell`, `envelope_follower_shell`, and
+`pan_shell`, which gives the next reverse work a much clearer target than
+treating every Building Tools device as a one-off block. Semantic output now
+uses those family labels directly on recovered first-party abstraction groups,
+so devices like `Max BalanceStereo`, `Max GainStereo`, and `Max PanStereo` read
+as `balance_shell`, `gain_shell`, and `pan_shell` instead of one generic
+factory-host bucket.
+
+The reverse lane can also now collapse repeated `poly~` editor shells into a
+single `poly_shell_bank(...)` helper when a device exposes the same voice-edit
+host repeatedly with numbered bus wiring. On the semantic side, those exact
+banks can be lifted one step further into a `poly_editor_bank` grouping. That
+pattern now lands on devices like `[dnksaus] Rnd Gen v2.2`, where the old
+output emitted nine separate `poly_shell(...)` calls and the new output emits
+one grouped bank in optimized mode and one `poly_editor_bank` semantic group in
+semantic mode.
+
+The knowledge manifest can also now expose behavior-level hints from that same
+structure. For devices like `Rnd Gen`, the reverse layer can infer summaries
+such as `multi_lane_mapping_bank`, `manual_or_midi_trigger_mode`,
+`mapping_session_controller`, and the combined `mapped_random_control_device`
+hint even when the deepest sidecar logic is still missing.
 
 The knowledge manifest also now includes `named_bus_networks`, which groups
 same-name send/receive fabrics across the root patcher and any embedded
 subpatchers that expose their internals.
+
+The corpus report also now carries `source_lane_profiles`, so factory packs,
+public internet corpora, and site-lead discovery lanes can be compared without
+manually splitting the dataset first:
+
+```python
+from m4l_builder import analyze_amxd_corpus, source_lane_profiles_markdown
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+markdown = source_lane_profiles_markdown(report["source_lane_profiles"])
+```
+
+If you keep public and factory corpora in separate roots, compare them
+directly:
+
+```python
+from m4l_builder import analyze_amxd_corpus, build_corpus_comparison, corpus_comparison_markdown
+
+comparison = build_corpus_comparison({
+    "public": analyze_amxd_corpus("/path/to/public-corpus"),
+    "factory": analyze_amxd_corpus("/path/to/factory-packs"),
+})
+markdown = corpus_comparison_markdown(comparison)
+```
+
+And for a fixed proof set, you can build reference-device dossiers that measure
+raw `add_box(...)` fallback, helper-call recovery, and overall structural lift
+across semantic generation:
+
+```python
+from m4l_builder import build_reference_device_dossiers
+
+dossiers = build_reference_device_dossiers([
+    "/path/to/Max DelayLine.amxd",
+    "/path/to/Poly Vocoder.amxd",
+])
+```
 
 For local research batches, the repo also ships a helper script:
 
@@ -326,12 +431,23 @@ uv run python tools/build_corpus_fixture.py /path/to/amxd-corpus /tmp/amxd-fixtu
 ```
 
 Selections can target whole families as well as sample sets, for example
-`--selection family:zs-Knobbler3`.
+`--selection family:zs-Knobbler3`. They can also target the new lane/pack
+metadata, for example `--selection lane:factory`,
+`--selection pack:M4L Building Tools`, or
+`--selection pack_section:M4L Building Tools / API`.
 
 For a focused family dossier, the repo also ships:
 
 ```bash
 uv run python tools/build_family_report.py /path/to/amxd-corpus zs-Knobbler3
+```
+
+There are also dedicated helpers for lane comparison and fixed proof sets:
+
+```bash
+uv run python tools/build_source_lane_report.py /path/to/amxd-corpus /tmp/lane-report.md
+uv run python tools/build_corpus_comparison_report.py /tmp/comparison.md public=/path/to/public-corpus factory=/path/to/factory-packs
+uv run python tools/build_reference_dossiers.py /tmp/reference-dossiers.md /path/to/Max\ DelayLine.amxd
 ```
 
 ### LiveMCP bridge embedding

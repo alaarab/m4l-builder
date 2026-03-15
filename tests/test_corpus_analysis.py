@@ -5,9 +5,15 @@ from m4l_builder import (
     MidiEffect,
     Subpatcher,
     analyze_amxd_corpus,
+    build_corpus_comparison,
+    build_reference_device_dossier,
+    build_reference_device_dossiers,
     build_reverse_candidate_family_profile,
     build_livemcp_bridge_demo,
     build_reverse_candidate_family_profiles,
+    build_source_lane_profiles,
+    classify_corpus_source_metadata,
+    corpus_comparison_markdown,
     corpus_report_markdown,
     family_profile_markdown,
     live_parameter_probe,
@@ -16,6 +22,8 @@ from m4l_builder import (
     param_smooth,
     rank_reverse_candidates,
     rank_reverse_candidate_families,
+    reference_device_dossiers_markdown,
+    source_lane_profiles_markdown,
     write_family_profile,
     write_corpus_report,
 )
@@ -146,7 +154,7 @@ class TestCorpusAnalysis:
         assert any(entry["name"] == "live_observer" for entry in report["frequencies"]["live_api_helper_opportunities"])
         assert any(entry["name"] == "noncanonical_box_attrs_or_layout" for entry in report["frequencies"]["live_api_helper_opportunity_blockers"])
         assert any(entry["name"] == "controller_surface_shell" for entry in report["frequencies"]["controller_shell_candidates"])
-        assert any(entry["name"] == "embedded_ui_shell" for entry in report["frequencies"]["embedded_ui_shell_candidates"])
+        assert any(entry["name"] == "embedded_ui_shell_v2" for entry in report["frequencies"]["embedded_ui_shell_candidates"])
         assert any(entry["name"] == "live_set" for entry in report["frequencies"]["embedded_live_api_path_targets"])
         assert any(entry["name"] == "tempo" for entry in report["frequencies"]["embedded_live_api_properties"])
         assert any(entry["name"] == "tempo_observer" for entry in report["frequencies"]["embedded_live_api_archetypes"])
@@ -186,6 +194,15 @@ class TestCorpusAnalysis:
         assert "Top Embedded Live API Path Targets" in markdown
         assert "Top Embedded Live API Properties" in markdown
         assert "Top Embedded Live API Archetypes" in markdown
+        assert "Top Named Bus Router Candidates" in markdown
+        assert "Top Init Dispatch Candidates" in markdown
+        assert "Top State Bundle Router Candidates" in markdown
+        assert "Top Poly Shell Candidates" in markdown
+        assert "Top First-Party API Rig Candidates" in markdown
+        assert "Top Building Block Candidates" in markdown
+        assert "Top Source Lanes" in markdown
+        assert "Top Pack Names" in markdown
+        assert "Top Pack Sections" in markdown
         assert "Top Error Types" in markdown
         assert "Largest Devices By Boxes" in markdown
 
@@ -255,6 +272,295 @@ class TestCorpusAnalysis:
         assert report["summary"]["files_with_cross_scope_named_bus_networks"] == 1
         assert any(entry["name"] == "shared_bus" for entry in report["frequencies"]["named_bus_network_names"])
         assert any(entry["name"] == "shared_bus" for entry in report["frequencies"]["cross_scope_named_bus_network_names"])
+
+    def test_analyze_amxd_corpus_tracks_factory_lane_metadata_and_first_party_candidates(self, tmp_path):
+        api_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "API"
+        api_root.mkdir(parents=True)
+        api_device = AudioEffect("Max Api DeviceExplorer", 320, 180)
+        api_device.add_dsp(*live_thisdevice("dev"))
+        api_device.add_dsp(
+            *live_parameter_probe(
+                "probe",
+                path="live_set tracks 0 devices 0 parameters 0",
+                commands=["get value"],
+            )
+        )
+        api_device.build(str(api_root / "Max Api DeviceExplorer.amxd"))
+
+        blocks_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        blocks_root.mkdir(parents=True)
+        block = AudioEffect("Max DelayLine", 320, 180)
+        block.add_dsp(*param_smooth("smooth"))
+        block.add_newobj("send_a", "s block_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        block.add_newobj("recv_a", "r block_bus", numinlets=0, numoutlets=1, patching_rect=[110, 20, 70, 20])
+        block.add_newobj("loadbang", "loadbang", numinlets=1, numoutlets=1, patching_rect=[20, 60, 60, 20])
+        block.add_newobj("defer", "deferlow", numinlets=1, numoutlets=1, patching_rect=[100, 60, 60, 20])
+        block.add_newobj("init_t", "t b b", numinlets=1, numoutlets=2, patching_rect=[180, 60, 40, 20])
+        block.add_line("loadbang", 0, "defer", 0)
+        block.add_line("defer", 0, "init_t", 0)
+        block.build(str(blocks_root / "Max DelayLine.amxd"))
+
+        report = analyze_amxd_corpus(str(tmp_path))
+
+        assert report["summary"]["source_lanes"]["factory"] == 2
+        assert any(entry["name"] == "factory" for entry in report["frequencies"]["source_lanes"])
+        assert any(entry["name"] == "M4L Building Tools" for entry in report["frequencies"]["pack_names"])
+        assert any(
+            entry["name"] == "M4L Building Tools / API"
+            for entry in report["frequencies"]["pack_sections"]
+        )
+        assert any(
+            entry["name"] == "first_party_api_rig"
+            for entry in report["frequencies"]["first_party_api_rig_candidates"]
+        )
+        assert any(
+            entry["name"] == "Max DelayLine"
+            for entry in report["frequencies"]["building_block_candidates"]
+        )
+        assert any(
+            entry["name"] == "named_bus_router"
+            for entry in report["frequencies"]["named_bus_router_candidates"]
+        )
+        assert any(
+            entry["name"] == "init_dispatch_chain"
+            for entry in report["frequencies"]["init_dispatch_chain_candidates"]
+        )
+
+        api_item = next(item for item in report["items"] if item["name"] == "Max Api DeviceExplorer.amxd")
+        assert api_item["source_lane"] == "factory"
+        assert api_item["pack_name"] == "M4L Building Tools"
+        assert api_item["pack_section"] == "API"
+        assert api_item["first_party_api_rig_candidate_count"] == 1
+
+    def test_classify_corpus_source_metadata_detects_factory_paths(self):
+        metadata = classify_corpus_source_metadata(
+            "/tmp/Factory Packs/M4L Building Tools/Building Blocks/Max Audio Effect/Max DelayLine.amxd"
+        )
+
+        assert metadata["source_lane"] == "factory"
+        assert metadata["pack_name"] == "M4L Building Tools"
+        assert metadata["pack_section"] == "Building Blocks"
+        assert metadata["pack_subsection"] == "Max Audio Effect"
+
+    def test_build_source_lane_profiles_summarizes_factory_vs_public(self, tmp_path):
+        public_fx = AudioEffect("Public FX", 220, 100)
+        public_fx.add_dsp(*param_smooth("mod"))
+        public_fx.build(str(tmp_path / "Public FX.amxd"))
+
+        factory_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        factory_root.mkdir(parents=True)
+        factory_fx = AudioEffect("Max DelayLine", 220, 100)
+        factory_fx.add_newobj("send_a", "s block_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        factory_fx.add_newobj("recv_a", "r block_bus", numinlets=0, numoutlets=1, patching_rect=[110, 20, 70, 20])
+        factory_fx.add_newobj("gain_l", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[20, 60, 70, 20])
+        factory_fx.add_newobj("gain_r", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[110, 60, 70, 20])
+        factory_fx.add_dial("gain", "Gain", [66, 10, 44, 44], min_val=-70.0, max_val=6.0, initial=0.0, unitstyle=4)
+        factory_fx.add_line("gain", 0, "gain_l", 1)
+        factory_fx.add_line("gain", 0, "gain_r", 1)
+        factory_fx.build(str(factory_root / "Max DelayLine.amxd"))
+
+        report = analyze_amxd_corpus(str(tmp_path))
+        profiles = build_source_lane_profiles(report)
+        markdown = source_lane_profiles_markdown(profiles)
+
+        assert {entry["lane"] for entry in profiles} == {"factory", "public"}
+        factory_profile = next(entry for entry in profiles if entry["lane"] == "factory")
+        assert factory_profile["count"] == 1
+        assert any(entry["name"] == "M4L.gain1~" for entry in factory_profile["top_first_party_abstraction_hosts"])
+        assert any(entry["name"] == "gain_shell" for entry in factory_profile["top_first_party_abstraction_families"])
+        assert "AMXD Source Lane Profiles" in markdown
+        assert "## factory" in markdown
+
+    def test_analyze_amxd_corpus_tracks_presentation_widget_clusters(self, tmp_path):
+        root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Tools" / "Max Audio Effect"
+        root.mkdir(parents=True)
+        device = AudioEffect("Factory Presentation Cluster", 320, 180)
+        for box_id, maxclass, text, rect in [
+            ("dial_a", "live.dial", None, [20, 20, 44, 44]),
+            ("dial_b", "live.dial", None, [72, 20, 44, 44]),
+            ("label_a", "comment", "Rate", [20, 68, 40, 18]),
+            ("label_b", "comment", "Depth", [72, 68, 40, 18]),
+            ("toggle_a", "live.toggle", None, [124, 24, 20, 20]),
+        ]:
+            box = {
+                "id": box_id,
+                "maxclass": maxclass,
+                "patching_rect": rect,
+                "presentation_rect": rect,
+                "presentation": 1,
+                "numinlets": 1,
+                "numoutlets": 1 if maxclass != "comment" else 0,
+            }
+            if text is not None:
+                box["text"] = text
+            device.add_box({"box": box})
+        device.build(str(root / "Factory Presentation Cluster.amxd"))
+
+        report = analyze_amxd_corpus(str(tmp_path / "Factory Packs"))
+
+        assert report["summary"]["files_with_presentation_widget_cluster_candidates"] == 1
+        assert any(
+            entry["name"] == "presentation_widget_cluster"
+            for entry in report["frequencies"]["presentation_widget_cluster_candidates"]
+        )
+
+    def test_analyze_amxd_corpus_tracks_first_party_abstraction_hosts(self, tmp_path):
+        root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        root.mkdir(parents=True)
+        device = AudioEffect("Max GainDualMono", 320, 180)
+        device.add_newobj("gain_l", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[20, 70, 70, 20])
+        device.add_newobj("gain_r", "M4L.gain1~", numinlets=2, numoutlets=1, patching_rect=[140, 70, 70, 20])
+        device.add_dial("gain", "Gain", [72, 18, 44, 44], min_val=-70.0, max_val=6.0, initial=0.0, unitstyle=4)
+        device.add_comment("label", [66, 66, 60, 18], "Gain")
+        device.add_line("gain", 0, "gain_l", 1)
+        device.add_line("gain", 0, "gain_r", 1)
+        device.build(str(root / "Max GainDualMono.amxd"))
+
+        report = analyze_amxd_corpus(str(tmp_path / "Factory Packs"))
+
+        assert report["summary"]["files_with_first_party_abstraction_host_candidates"] == 1
+        assert any(
+            entry["name"] == "M4L.gain1~"
+            for entry in report["frequencies"]["first_party_abstraction_host_candidates"]
+        )
+        assert any(
+            entry["name"] == "gain_shell"
+            for entry in report["frequencies"]["first_party_abstraction_host_families"]
+        )
+
+    def test_analyze_amxd_corpus_tracks_poly_shell_banks(self, tmp_path):
+        device = AudioEffect("Rnd Style Voice Bank", 420, 260)
+        device.add_box({
+            "box": {
+                "id": "shared_mod",
+                "maxclass": "flonum",
+                "patching_rect": [190, 20, 50, 22],
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            }
+        })
+        for index in range(1, 4):
+            y = 40 + (index - 1) * 60
+            device.add_box({
+                "box": {
+                    "id": f"ui_{index}",
+                    "maxclass": "bpatcher",
+                    "name": "VoiceUi.maxpat",
+                    "patching_rect": [20, y, 120, 24],
+                    "numinlets": 4,
+                    "numoutlets": 4,
+                    "outlettype": ["", "", "", ""],
+                }
+            })
+            device.add_newobj(
+                f"poly_{index}",
+                "poly~ voice_editor",
+                numinlets=4,
+                numoutlets=4,
+                patching_rect=[170, y, 110, 20],
+            )
+            device.add_newobj(
+                f"send_{index}",
+                f"s voice{index}",
+                numinlets=1,
+                numoutlets=0,
+                patching_rect=[310, y, 60, 20],
+            )
+            device.add_line(f"ui_{index}", 0, f"poly_{index}", 0)
+            device.add_line(f"ui_{index}", 1, f"poly_{index}", 1)
+            device.add_line(f"poly_{index}", 0, f"ui_{index}", 0)
+            device.add_line(f"poly_{index}", 1, f"ui_{index}", 1)
+            device.add_line(f"poly_{index}", 2, f"send_{index}", 0)
+            device.add_line("shared_mod", 0, f"poly_{index}", 2)
+        device.build(str(tmp_path / "Rnd Style Voice Bank.amxd"))
+
+        report = analyze_amxd_corpus(str(tmp_path))
+
+        assert report["summary"]["files_with_poly_shell_candidates"] == 1
+        assert report["summary"]["files_with_poly_shell_bank_candidates"] == 1
+        assert report["summary"]["files_with_poly_editor_bank_candidates"] == 1
+        assert report["summary"]["files_with_behavior_hints"] == 1
+        assert any(
+            entry["name"] == "poly_shell_bank"
+            for entry in report["frequencies"]["poly_shell_bank_candidates"]
+        )
+        assert any(
+            entry["name"] == "poly_editor_bank"
+            for entry in report["frequencies"]["poly_editor_bank_candidates"]
+        )
+        assert any(
+            entry["name"] == "multi_lane_mapping_bank"
+            for entry in report["frequencies"]["behavior_hints"]
+        )
+
+    def test_build_reference_device_dossier_reports_semantic_lift(self, tmp_path):
+        factory_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        factory_root.mkdir(parents=True)
+        device = AudioEffect("Max DelayLine", 320, 180)
+        device.add_newobj("send_a", "s shared_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        device.add_newobj("recv_a", "r shared_bus", numinlets=0, numoutlets=1, patching_rect=[110, 20, 70, 20])
+        device.add_newobj("loadbang", "loadbang", numinlets=1, numoutlets=1, patching_rect=[20, 60, 60, 20])
+        device.add_newobj("defer", "deferlow", numinlets=1, numoutlets=1, patching_rect=[100, 60, 60, 20])
+        device.add_newobj("init_t", "t b b", numinlets=1, numoutlets=2, patching_rect=[180, 60, 40, 20])
+        device.add_line("loadbang", 0, "defer", 0)
+        device.add_line("defer", 0, "init_t", 0)
+        path = factory_root / "Max DelayLine.amxd"
+        device.build(str(path))
+
+        dossier = build_reference_device_dossier(str(path))
+        dossiers = build_reference_device_dossiers([str(path)])
+        markdown = reference_device_dossiers_markdown(dossiers)
+
+        assert dossier["source"]["source_lane"] == "factory"
+        assert "named_bus_router" in dossier["recovered_classes"]
+        assert "init_dispatch_chain" in dossier["recovered_classes"]
+        assert dossier["semantic_add_box_count"] <= dossier["raw_add_box_count"]
+        assert dossier["semantic_helper_call_count"] >= 2
+        assert dossier["semantic_helper_calls"]["named_bus_router"] >= 1
+        assert dossier["semantic_helper_calls"]["init_dispatch_chain"] >= 1
+        assert dossier["structural_lift_score"] >= dossier["semantic_helper_call_count"]
+        assert "AMXD Reference Device Dossiers" in markdown
+        assert "Max DelayLine.amxd" in markdown
+        assert "Structural lift score" in markdown
+
+    def test_build_reference_device_dossier_records_errors_without_aborting(self, tmp_path):
+        broken = tmp_path / "broken.amxd"
+        broken.write_text("not an amxd", encoding="utf-8")
+
+        dossier = build_reference_device_dossier(str(broken))
+        markdown = reference_device_dossiers_markdown([dossier])
+
+        assert "error" in dossier
+        assert "analysis_error" in dossier["fallback_zones"]
+        assert dossier["semantic_helper_call_count"] == 0
+        assert dossier["structural_lift_score"] == 0
+        assert "Error:" in markdown
+
+    def test_build_corpus_comparison_summarizes_separate_roots(self, tmp_path):
+        public_root = tmp_path / "public"
+        public_root.mkdir()
+        public_fx = AudioEffect("Public FX", 220, 100)
+        public_fx.add_dsp(*param_smooth("mod"))
+        public_fx.build(str(public_root / "Public FX.amxd"))
+
+        factory_root = tmp_path / "Factory Packs" / "M4L Building Tools" / "Building Blocks" / "Max Audio Effect"
+        factory_root.mkdir(parents=True)
+        factory_fx = AudioEffect("Max DelayLine", 220, 100)
+        factory_fx.add_newobj("send_a", "s shared_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 70, 20])
+        factory_fx.add_newobj("recv_a", "r shared_bus", numinlets=0, numoutlets=1, patching_rect=[110, 20, 70, 20])
+        factory_fx.build(str(factory_root / "Max DelayLine.amxd"))
+
+        comparison = build_corpus_comparison({
+            "public": analyze_amxd_corpus(str(public_root)),
+            "factory": analyze_amxd_corpus(str(tmp_path / "Factory Packs")),
+        })
+        markdown = corpus_comparison_markdown(comparison)
+
+        assert {entry["label"] for entry in comparison["reports"]} == {"factory", "public"}
+        assert "# AMXD Corpus Comparison" in markdown
+        assert "## factory" in markdown
+        assert "## public" in markdown
 
     def test_rank_reverse_candidates_prefers_motif_rich_embedded_devices(self, tmp_path):
         rich = AudioEffect("Rich Device", 320, 180)
