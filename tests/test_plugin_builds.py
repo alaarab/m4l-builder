@@ -127,14 +127,28 @@ class TestParametricEqBuild:
             ):
                 assert boxes[f"{prefix}{i}"]["parameter_enable"] == 1
 
-        assert "selected_core_rail" in boxes
+        assert "band_nav" in boxes
+        assert "selected_core_rail" not in boxes
         assert boxes["eq_display"]["maxclass"] == "v8ui"
+        assert boxes["band_nav"]["presentation_rect"] == [
+            module.CORE_X + 4,
+            module.CORE_Y + 18,
+            module.CORE_W - 8,
+            module.CORE_H - 24,
+        ]
         assert boxes["selected_band_column"]["presentation_rect"] == [
             module.EDITOR_X + 8,
             module.EDITOR_Y + 8,
             module.EDITOR_W - 16,
             module.EDITOR_H - 16,
         ]
+        for suffix in (
+            "freq_store_b0",
+            "gain_recalc_trig_b0",
+            "gain_dbtoa_ctrl_b0",
+            "q_recalc_trig_b0",
+        ):
+            assert suffix in boxes
 
     def test_starts_with_visible_bands_and_explicit_selected_band_store(self):
         module = _load_build_module("plugins/parametric_eq/build.py")

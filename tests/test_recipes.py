@@ -15,6 +15,7 @@ from m4l_builder.recipes import (
     poly_midi_gate,
     transport_sync_lfo_recipe,
     midi_learn_macro_assignment,
+    parametric_eq_band_backend,
 )
 
 
@@ -65,6 +66,95 @@ class TestGainControlledStage:
         r2 = gain_controlled_stage(device, "vol2", [60, 10, 40, 40])
         assert r1["dial"] != r2["dial"]
         assert r1["gain"] != r2["gain"]
+
+
+class TestParametricEqBandBackend:
+    def _make_device(self):
+        device = AudioEffect("test", width=200, height=100)
+        device.add_newobj("lb_init", "loadbang", numinlets=1, numoutlets=1, outlettype=["bang"], patching_rect=[0, 0, 40, 20])
+        for box_id in (
+            "freq_b0",
+            "gain_b0",
+            "q_b0",
+            "type_b0",
+            "on_b0",
+            "motion_b0",
+            "dynamic_b0",
+            "dynamic_amt_b0",
+            "motion_rate_b0",
+            "motion_depth_b0",
+            "motion_direction_b0",
+            "pak_b0",
+        ):
+            device.add_newobj(box_id, "number", numinlets=2, numoutlets=1, outlettype=[""], patching_rect=[0, 0, 40, 20])
+        return device
+
+    def test_returns_expected_keys(self):
+        device = self._make_device()
+        result = parametric_eq_band_backend(
+            device,
+            0,
+            loadbang_id="lb_init",
+            default_freq=1000.0,
+            default_type_name="peaknotch",
+            filter_types=["peaknotch", "lowshelf", "highshelf", "lowpass", "highpass", "bandstop", "bandpass", "allpass"],
+            default_motion_rate=0.5,
+        )
+        assert "coeff" in result
+        assert "biquad_l" in result
+        assert "biquad_r" in result
+        assert "gain_recalc" in result
+        assert "q_recalc" in result
+
+    def test_adds_expected_objects(self):
+        device = self._make_device()
+        parametric_eq_band_backend(
+            device,
+            0,
+            loadbang_id="lb_init",
+            default_freq=1000.0,
+            default_type_name="peaknotch",
+            filter_types=["peaknotch", "lowshelf", "highshelf", "lowpass", "highpass", "bandstop", "bandpass", "allpass"],
+            default_motion_rate=0.5,
+        )
+        ids = _box_ids(device)
+        for expected_id in (
+            "fc_b0",
+            "msg_resamp_b0",
+            "bq_b0_l",
+            "bq_b0_r",
+            "freq_store_b0",
+            "gain_recalc_trig_b0",
+            "gain_dbtoa_ctrl_b0",
+            "q_recalc_trig_b0",
+            "type_sel_b0",
+            "msg_type_0_b0",
+            "on_sel_b0",
+            "msg_off_b0",
+        ):
+            assert expected_id in ids
+
+    def test_wires_retrigger_and_motion_paths(self):
+        device = self._make_device()
+        parametric_eq_band_backend(
+            device,
+            0,
+            loadbang_id="lb_init",
+            default_freq=1000.0,
+            default_type_name="peaknotch",
+            filter_types=["peaknotch", "lowshelf", "highshelf", "lowpass", "highpass", "bandstop", "bandpass", "allpass"],
+            default_motion_rate=0.5,
+        )
+        pairs = _line_pairs(device)
+        assert ("lb_init", "msg_resamp_b0") in pairs
+        assert ("msg_resamp_b0", "fc_b0") in pairs
+        assert ("gain_b0", "gain_recalc_trig_b0") in pairs
+        assert ("gain_recalc_trig_b0", "freq_store_b0") in pairs
+        assert ("gain_dbtoa_ctrl_b0", "fc_b0") in pairs
+        assert ("q_b0", "q_recalc_trig_b0") in pairs
+        assert ("q_recalc_trig_b0", "freq_store_b0") in pairs
+        assert ("motion_depth_expr_b0", "motion_depth_mul_b0") in pairs
+        assert ("motion_gain_depth_expr_b0", "motion_gain_mul_b0") in pairs
 
 
 class TestDryWetStage:

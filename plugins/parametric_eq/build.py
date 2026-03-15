@@ -4,12 +4,15 @@ Hero device showcasing the eq_curve jsui engine with interactive draggable
 nodes. 8 fully parametric bands using filtercoeff~ + biquad~ for true
 parametric EQ quality. Supports Peak/LShelf/HShelf/LP/HP/Notch/BP/AP types.
 
-Layout (780×408):
-  Top bar: focus band selector, analyzer toggle, display range selector
+Layout (760×188 visible surface):
+  Left rail: compact band navigator for fast selection
   Hero graph: interactive EQ curve with integrated post-output analyzer,
               draggable band nodes, mouse wheel Q, shift+drag fine-tune,
               cmd+drag lock gain/Q axis, hover HUD
-  Bottom: 8 band cards (Freq/Gain/Q/type/on) + output card + L/R meters
+  Right editor: contextual selected-band column
+  Utility column: analyzer mode, display range, output gain, bypass, L/R meters
+  Hidden canonical controls: per-band parameter widgets and focus tab kept
+                             offscreen for parameter identity and routing
 
 DSP signal flow (filtercoeff~ + biquad~ per band):
   Each band: filtercoeff~ type -> biquad~ in series
@@ -52,8 +55,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from m4l_builder import AudioEffect, Theme
+from m4l_builder.eq_shells import (
+    add_band_message_routers,
+    add_selected_band_focus_shell,
+    add_selected_band_proxy_shell,
+)
 from m4l_builder.engines.eq_band_column import eq_band_column_js
 from m4l_builder.engines.eq_curve import eq_curve_js, EQ_CURVE_INLETS, EQ_CURVE_OUTLETS
+from m4l_builder.recipes import parametric_eq_band_backend
 
 
 def mix(color_a, color_b, amount):
@@ -70,6 +79,123 @@ def alpha(color, value):
 def js_color(color):
     """Format an RGBA list for jsui engine kwargs."""
     return ", ".join(str(round(component, 4)) for component in color)
+
+
+def band_nav_js() -> str:
+    """Return jsui code for the compact vertical band navigator."""
+    return """\
+mgraphics.init();
+mgraphics.relative_coords = 0;
+mgraphics.autofill = 0;
+
+inlets = 1;
+outlets = 1;
+
+var num_bands = 8;
+var selected = -1;
+var enabled = [1, 1, 1, 1, 0, 0, 0, 0];
+var colors = [
+    [0.90, 0.35, 0.35, 1.0],
+    [0.90, 0.65, 0.25, 1.0],
+    [0.85, 0.85, 0.30, 1.0],
+    [0.35, 0.80, 0.45, 1.0],
+    [0.35, 0.75, 0.85, 1.0],
+    [0.40, 0.55, 0.90, 1.0],
+    [0.65, 0.45, 0.85, 1.0],
+    [0.85, 0.45, 0.65, 1.0]
+];
+
+function clamp(v, lo, hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+function item_layout() {
+    var w = mgraphics.size[0];
+    var h = mgraphics.size[1];
+    var gap = 3;
+    var inset = 3;
+    var item_h = Math.floor((h - inset * 2 - gap * (num_bands - 1)) / num_bands);
+    var rects = [];
+    var y = inset;
+    var i;
+    for (i = 0; i < num_bands; i++) {
+        rects.push([4, y, w - 8, item_h]);
+        y += item_h + gap;
+    }
+    return rects;
+}
+
+function set_num_bands(v) {
+    num_bands = clamp(Math.floor(v), 1, 8);
+    mgraphics.redraw();
+}
+
+function set_band(idx, freq, gain, q, type, is_enabled) {
+    idx = Math.floor(idx);
+    if (idx < 0 || idx >= 8) return;
+    enabled[idx] = is_enabled ? 1 : 0;
+    mgraphics.redraw();
+}
+
+function set_selected(idx) {
+    idx = Math.floor(idx);
+    selected = idx;
+    mgraphics.redraw();
+}
+
+function paint() {
+    var rects = item_layout();
+    var i, r, c, fill_alpha, stroke_alpha, text_alpha;
+
+    mgraphics.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+    mgraphics.paint();
+
+    for (i = 0; i < num_bands; i++) {
+        r = rects[i];
+        c = colors[i];
+        fill_alpha = selected === i ? 0.92 : (enabled[i] ? 0.22 : 0.05);
+        stroke_alpha = selected === i ? 0.98 : (enabled[i] ? 0.82 : 0.18);
+        text_alpha = selected === i ? 0.96 : (enabled[i] ? 0.76 : 0.34);
+
+        mgraphics.set_source_rgba(c[0], c[1], c[2], fill_alpha);
+        mgraphics.rectangle_rounded(r[0], r[1], r[2], r[3], 4, 4);
+        mgraphics.fill_preserve();
+
+        mgraphics.set_source_rgba(c[0], c[1], c[2], stroke_alpha);
+        mgraphics.set_line_width(selected === i ? 1.8 : 1.0);
+        mgraphics.stroke();
+
+        mgraphics.set_source_rgba(c[0], c[1], c[2], enabled[i] ? 0.94 : 0.22);
+        mgraphics.rectangle(r[0] + 2, r[1] + 2, 3, r[3] - 4);
+        mgraphics.fill();
+
+        mgraphics.select_font_face("Arial Bold");
+        mgraphics.set_font_size(8.2);
+        mgraphics.set_source_rgba(
+            selected === i ? 0.08 : 0.93,
+            selected === i ? 0.09 : 0.94,
+            selected === i ? 0.11 : 0.96,
+            text_alpha
+        );
+        mgraphics.move_to(r[0] + 11, r[1] + r[3] * 0.68);
+        mgraphics.show_text("B" + (i + 1));
+    }
+}
+
+function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+    var rects = item_layout();
+    var i, r;
+    for (i = 0; i < num_bands; i++) {
+        r = rects[i];
+        if (x >= r[0] && x <= (r[0] + r[2]) && y >= r[1] && y <= (r[1] + r[3])) {
+            outlet(0, i);
+            return;
+        }
+    }
+}
+"""
 
 
 UI_THEME = Theme.custom(
@@ -191,7 +317,7 @@ FILTERCOEFF_TYPES = ["peaknotch", "lowshelf", "highshelf", "lowpass", "highpass"
 TYPE_OPTIONS = ["Peak", "LShelf", "HShelf", "LP", "HP", "Notch", "BP", "AP"]
 EQ_DISPLAY_FILENAME = "peq_display_v7.js"
 SELECTED_EDITOR_FILENAME = "peq_selected_band_editor_v3.js"
-SELECTED_CORE_FILENAME = "peq_selected_core_rail_v1.js"
+BAND_NAV_FILENAME = "peq_band_nav_v1.js"
 
 # ---------------------------------------------------------------------------
 # UI — Background, hero frame, and top bar
@@ -221,7 +347,7 @@ device.add_panel("global_frame", [GLOBAL_X, GLOBAL_Y, GLOBAL_W, GLOBAL_H],
 device.add_panel("bands_bg", [14, CARD_Y - 2, 544, CARD_H + 4],
                  bgcolor=SURFACE, border=1,
                  bordercolor=RAIL_BORDER, rounded=8)
-device.add_comment("core_title", [CORE_X + 8, CORE_Y + 8, CORE_W - 16, 10], "SEL",
+device.add_comment("core_title", [CORE_X + 8, CORE_Y + 8, CORE_W - 16, 10], "BANDS",
                    textcolor=TEXT_DIM, fontsize=6.6, fontname=theme.fontname_bold, justification=1)
 device.add_comment("detail_title", [DETAIL_X + 10, DETAIL_Y + 8, 94, 12], "SELECTED BAND",
                    textcolor=TEXT_DIM, fontsize=7.6, fontname=theme.fontname_bold)
@@ -301,42 +427,13 @@ device.add_v8ui(
 )
 
 device.add_jsui(
-    "selected_core_rail",
+    "band_nav",
     [CORE_X + 4, CORE_Y + 18, CORE_W - 8, CORE_H - 24],
-    js_code=eq_band_column_js(
-        title="",
-        subtitle="",
-        type_names=TYPE_OPTIONS,
-        gain_enabled_types=[0, 1, 2],
-        slope_enabled_types=[],
-        show_slope=False,
-        show_solo=False,
-        show_motion=False,
-        show_dynamic=False,
-        show_type_controls=False,
-        show_toggle_stack=False,
-        show_header=False,
-        show_frame=False,
-        force_regular_layout=True,
-        bg_color=js_color(alpha(BG, 0.0)),
-        panel_color=js_color(SURFACE_ALT),
-        border_color=js_color(RAIL_BORDER),
-        text_color=js_color(TEXT),
-        text_dim_color=js_color(TEXT_DIM),
-        accent_color=js_color(ACCENT),
-        motion_accent_color=js_color(RAIL_MOTION),
-        knob_fill_color=js_color(RAIL_KNOB_FILL),
-        knob_track_color=js_color(RAIL_KNOB_TRACK),
-        disabled_color=js_color(RAIL_DISABLED),
-        enable_color=js_color(ACCENT),
-        solo_color=js_color(DYNAMIC_COLOR),
-        font_name=theme.fontname,
-        font_bold_name=theme.fontname_bold,
-    ),
+    js_code=band_nav_js(),
     numinlets=1,
     numoutlets=1,
-    outlettype=[""],
-    js_filename=SELECTED_CORE_FILENAME,
+    outlettype=["int"],
+    js_filename=BAND_NAV_FILENAME,
     bgcolor=alpha(BG, 0.0),
     border=0,
     background=0,
@@ -609,50 +706,22 @@ device.add_box({
 device.add_line("lb_init", 0, "msg_num_bands", 0)
 device.add_line("lb_init", 0, "dspstate_eq", 0)
 device.add_line("msg_num_bands", 0, "eq_display", 0)
-device.add_line("msg_num_bands", 0, "selected_core_rail", 0)
+device.add_line("msg_num_bands", 0, "band_nav", 0)
 device.add_line("msg_num_bands", 0, "selected_band_column", 0)
 device.add_line("dspstate_eq", 1, "eq_display", 1)
 
 # Focus band defaults + syncing between graph and focus tab
-device.add_box({
-    "box": {
-        "id": "msg_focus_default",
-        "maxclass": "message",
-        "text": "0",
-        "numinlets": 2,
-        "numoutlets": 1,
-        "outlettype": [""],
-        "patching_rect": [10, 250, 40, 20],
-    }
-})
-device.add_newobj("focus_init_delay", "del 1",
-                  numinlets=2, numoutlets=1,
-                  outlettype=["bang"],
-                  patching_rect=[56, 250, 44, 20])
-device.add_newobj("selected_band_store", "int -1",
-                  numinlets=2, numoutlets=1,
-                  outlettype=["int"],
-                  patching_rect=[104, 250, 48, 20])
-device.add_newobj("prepend_focus", "prepend set_selected",
-                  numinlets=1, numoutlets=1,
-                  outlettype=[""],
-                  patching_rect=[60, 250, 120, 20])
-device.add_newobj("route_graph_events", "route selected_band add_band delete_band",
-                  numinlets=1, numoutlets=4,
-                  outlettype=["", "", "", ""],
-                  patching_rect=[190, 250, 220, 20])
-
-device.add_line("lb_init", 0, "focus_init_delay", 0)
-device.add_line("focus_init_delay", 0, "msg_focus_default", 0)
-device.add_line("msg_focus_default", 0, "selected_band_store", 0)
-device.add_line("selected_band_store", 0, "prepend_focus", 0)
-device.add_line("prepend_focus", 0, "eq_display", 0)
-device.add_line("prepend_focus", 0, "selected_core_rail", 0)
-device.add_line("prepend_focus", 0, "selected_band_column", 0)
-device.add_line("focus_tab", 0, "selected_band_store", 0)
-device.add_line("eq_display", 0, "route_graph_events", 0)
-device.add_line("route_graph_events", 0, "focus_tab", 0)
-device.add_line("route_graph_events", 0, "selected_band_store", 0)
+add_selected_band_focus_shell(
+    device,
+    loadbang_id="lb_init",
+    focus_control_id="focus_tab",
+    graph_source_id="eq_display",
+    nav_source_id="band_nav",
+    focus_target_ids=["eq_display", "band_nav", "selected_band_column"],
+    default_band=0,
+    patch_x=10,
+    patch_y=250,
+)
 
 # Analyzer mode defaults + routing
 device.add_box({
@@ -1038,7 +1107,7 @@ for i in range(NUM_BANDS):
     # pak -> prepend -> eq_display
     device.add_line(f"pak_b{i}", 0, f"prepend_b{i}", 0)
     device.add_line(f"prepend_b{i}", 0, "eq_display", 0)
-    device.add_line(f"prepend_b{i}", 0, "selected_core_rail", 0)
+    device.add_line(f"prepend_b{i}", 0, "band_nav", 0)
     device.add_line(f"prepend_b{i}", 0, "selected_band_column", 0)
 
 # ---------------------------------------------------------------------------
@@ -1064,283 +1133,15 @@ for i in range(NUM_BANDS):
 
 for i in range(NUM_BANDS):
     default_freq, default_type = BAND_DEFAULTS[i]
-    default_motion_rate = MOTION_RATE_DEFAULTS[i]
-    default_motion_direction = MOTION_DIRECTION_DEFAULTS[i]
-    fc_type = FILTERCOEFF_TYPES[default_type]
-
-    # One filtercoeff~ per band (shared L+R — coefficients are the same)
-    device.add_newobj(
-        f"fc_b{i}",
-        f"filtercoeff~ {fc_type}",
-        numinlets=3, numoutlets=5,
-        outlettype=["signal", "signal", "signal", "signal", "signal"],
-        patching_rect=[100 + i * 60, 350, 80, 20]
+    parametric_eq_band_backend(
+        device,
+        i,
+        loadbang_id="lb_init",
+        default_freq=default_freq,
+        default_type_name=FILTERCOEFF_TYPES[default_type],
+        filter_types=FILTERCOEFF_TYPES,
+        default_motion_rate=MOTION_RATE_DEFAULTS[i],
     )
-
-    # "resamp 1" message for smooth coefficient updates
-    device.add_box({
-        "box": {
-            "id": f"msg_resamp_b{i}",
-            "maxclass": "message",
-            "text": "resamp 1",
-            "numinlets": 2,
-            "numoutlets": 1,
-            "outlettype": [""],
-            "patching_rect": [100 + i * 60, 320, 60, 20],
-        }
-    })
-    device.add_line("lb_init", 0, f"msg_resamp_b{i}", 0)
-    device.add_line(f"msg_resamp_b{i}", 0, f"fc_b{i}", 0)
-
-    # Two biquad~ per band (one per channel)
-    for ch in ["l", "r"]:
-        y_off = 0 if ch == "l" else 200
-        device.add_newobj(
-            f"bq_b{i}_{ch}",
-            "biquad~",
-            numinlets=6, numoutlets=1,
-            outlettype=["signal"],
-            patching_rect=[100 + i * 60, 400 + y_off, 50, 20]
-        )
-
-        # Connect filtercoeff~ outlets 0-4 -> biquad~ inlets 1-5
-        for c in range(5):
-            device.add_line(f"fc_b{i}", c, f"bq_b{i}_{ch}", c + 1)
-
-    # ------------------------------------------------------------------
-    # Parameter smoothing — pack f {default} 20 -> line~
-    # Prevents clicks when filtercoeff~ coefficients change abruptly.
-    # pack packs [value, 20] so line~ ramps to new value over 20 ms.
-    # ------------------------------------------------------------------
-
-    # Freq smoothing
-    device.add_newobj(
-        f"pk_freq_b{i}",
-        f"pack f {default_freq} 20",
-        numinlets=2, numoutlets=1,
-        outlettype=[""],
-        patching_rect=[1100, 350 + i * 30, 80, 20]
-    )
-    device.add_newobj(
-        f"ln_freq_b{i}",
-        "line~",
-        numinlets=2, numoutlets=2,
-        outlettype=["signal", "bang"],
-        patching_rect=[1190, 350 + i * 30, 40, 20]
-    )
-    device.add_line(f"pk_freq_b{i}", 0, f"ln_freq_b{i}", 0)
-
-    # Motion: cycle~ -> direction-weighted frequency ratio -> multiply base freq
-    device.add_newobj(
-        f"motion_lfo_b{i}",
-        f"cycle~ {default_motion_rate}",
-        numinlets=2, numoutlets=1,
-        outlettype=["signal"],
-        patching_rect=[1240, 350 + i * 30, 58, 20]
-    )
-    device.add_newobj(
-        f"motion_depth_mul_b{i}",
-        "expr~ pow(2., $v1 * $f2)",
-        numinlets=2, numoutlets=1,
-        outlettype=["signal"],
-        patching_rect=[1306, 350 + i * 30, 48, 20]
-    )
-    device.add_newobj(
-        f"motion_freq_mul_b{i}",
-        "*~ 1.",
-        numinlets=2, numoutlets=1,
-        outlettype=["signal"],
-        patching_rect=[1362, 350 + i * 30, 48, 20]
-    )
-    device.add_newobj(
-        f"motion_depth_expr_b{i}",
-        "expr ($f2 > 0.5) ? (($f1 / 100.) * 1.25 * cos($f3 * 0.0174533)) : 0.",
-        numinlets=3, numoutlets=1,
-        outlettype=[""],
-        patching_rect=[1418, 350 + i * 30, 120, 20]
-    )
-    device.add_line(f"ln_freq_b{i}", 0, f"motion_freq_mul_b{i}", 0)
-    device.add_line(f"motion_lfo_b{i}", 0, f"motion_depth_mul_b{i}", 0)
-    device.add_line(f"motion_depth_mul_b{i}", 0, f"motion_freq_mul_b{i}", 1)
-    device.add_line(f"motion_freq_mul_b{i}", 0, f"fc_b{i}", 0)
-
-    # Gain smoothing in dB, then direction-weighted gain motion, then dB -> linear
-    device.add_newobj(
-        f"pk_gain_db_b{i}",
-        "pack f 0. 20",
-        numinlets=2, numoutlets=1,
-        outlettype=[""],
-        patching_rect=[1100, 390 + i * 30, 80, 20]
-    )
-    device.add_newobj(
-        f"ln_gain_db_b{i}",
-        "line~",
-        numinlets=2, numoutlets=2,
-        outlettype=["signal", "bang"],
-        patching_rect=[1190, 390 + i * 30, 40, 20]
-    )
-    device.add_newobj(
-        f"motion_gain_depth_expr_b{i}",
-        "expr ($f2 > 0.5) ? (($f1 / 100.) * 12. * sin($f3 * 0.0174533)) : 0.",
-        numinlets=3, numoutlets=1,
-        outlettype=[""],
-        patching_rect=[1240, 390 + i * 30, 120, 20]
-    )
-    device.add_newobj(
-        f"motion_gain_mul_b{i}",
-        "*~ 0.",
-        numinlets=2, numoutlets=1,
-        outlettype=["signal"],
-        patching_rect=[1368, 390 + i * 30, 44, 20]
-    )
-    device.add_newobj(
-        f"motion_gain_sum_b{i}",
-        "+~ 0.",
-        numinlets=2, numoutlets=1,
-        outlettype=["signal"],
-        patching_rect=[1420, 390 + i * 30, 44, 20]
-    )
-    device.add_newobj(
-        f"gain_dbtoa_sig_b{i}",
-        "expr~ pow(10., $v1 * 0.05)",
-        numinlets=1, numoutlets=1,
-        outlettype=["signal"],
-        patching_rect=[1472, 390 + i * 30, 92, 20]
-    )
-    device.add_line(f"pk_gain_db_b{i}", 0, f"ln_gain_db_b{i}", 0)
-    device.add_line(f"ln_gain_db_b{i}", 0, f"motion_gain_sum_b{i}", 0)
-    device.add_line(f"motion_lfo_b{i}", 0, f"motion_gain_mul_b{i}", 0)
-    device.add_line(f"motion_gain_mul_b{i}", 0, f"motion_gain_sum_b{i}", 1)
-    device.add_line(f"motion_gain_sum_b{i}", 0, f"gain_dbtoa_sig_b{i}", 0)
-    device.add_line(f"gain_dbtoa_sig_b{i}", 0, f"fc_b{i}", 1)
-
-    # Q smoothing
-    device.add_newobj(
-        f"pk_q_b{i}",
-        "pack f 1. 20",
-        numinlets=2, numoutlets=1,
-        outlettype=[""],
-        patching_rect=[1100, 430 + i * 30, 80, 20]
-    )
-    device.add_newobj(
-        f"ln_q_b{i}",
-        "line~",
-        numinlets=2, numoutlets=2,
-        outlettype=["signal", "bang"],
-        patching_rect=[1190, 430 + i * 30, 40, 20]
-    )
-    device.add_line(f"pk_q_b{i}", 0, f"ln_q_b{i}", 0)
-    device.add_line(f"ln_q_b{i}", 0, f"fc_b{i}", 2)
-
-    # Type switching: menu index -> filtercoeff~ type message
-    # Route the type menu output to select the right type name
-    device.add_newobj(
-        f"type_sel_b{i}",
-        "select 0 1 2 3 4 5 6 7",
-        numinlets=1, numoutlets=9,
-        outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang", "bang", ""],
-        patching_rect=[700, 350 + i * 30, 140, 20]
-    )
-
-    # Message boxes for each filter type
-    for ti, tname in enumerate(FILTERCOEFF_TYPES):
-        device.add_box({
-            "box": {
-                "id": f"msg_type_{ti}_b{i}",
-                "maxclass": "message",
-                "text": tname,
-                "numinlets": 2,
-                "numoutlets": 1,
-                "outlettype": [""],
-                "patching_rect": [700 + ti * 65, 380 + i * 30, 60, 20],
-            }
-        })
-        # select outlet -> type message -> filtercoeff~
-        device.add_line(f"type_sel_b{i}", ti, f"msg_type_{ti}_b{i}", 0)
-        device.add_line(f"msg_type_{ti}_b{i}", 0, f"fc_b{i}", 0)
-
-    # Enable/disable: when OFF, send "off" to filtercoeff~ (passthrough)
-    # when ON, send the current type back
-    # Use a gate: on_toggle -> gate -> type message replay
-    # Simpler: use select 0 1 on the toggle output
-    device.add_newobj(
-        f"on_sel_b{i}",
-        "select 0 1",
-        numinlets=1, numoutlets=3,
-        outlettype=["bang", "bang", ""],
-        patching_rect=[900, 350 + i * 30, 60, 20]
-    )
-    # When OFF (0): send "off" to filtercoeff~
-    device.add_box({
-        "box": {
-            "id": f"msg_off_b{i}",
-            "maxclass": "message",
-            "text": "off",
-            "numinlets": 2,
-            "numoutlets": 1,
-            "outlettype": [""],
-            "patching_rect": [900, 380 + i * 30, 30, 20],
-        }
-    })
-    # When ON (1): resend current type via a trigger chain
-    # We'll bang the type menu to re-output its current value
-    device.add_newobj(
-        f"on_bang_b{i}",
-        "t b",
-        numinlets=1, numoutlets=1,
-        outlettype=["bang"],
-        patching_rect=[940, 380 + i * 30, 30, 20]
-    )
-
-    device.add_line(f"on_sel_b{i}", 0, f"msg_off_b{i}", 0)     # OFF -> "off" msg
-    device.add_line(f"msg_off_b{i}", 0, f"fc_b{i}", 0)          # "off" -> filtercoeff~
-    device.add_line(f"on_sel_b{i}", 1, f"on_bang_b{i}", 0)      # ON -> bang
-    device.add_line(f"on_bang_b{i}", 0, f"type_b{i}", 0)        # bang -> type menu re-output
-
-# ---------------------------------------------------------------------------
-# DSP — Parameter routing
-# Each parameter goes to BOTH the DSP chain AND the pak for jsui update.
-# Smoothing sits between the dial/dbtoa and the filtercoeff~ inlets.
-# ---------------------------------------------------------------------------
-for i in range(NUM_BANDS):
-    # freq -> pak inlet 1 AND smoothing chain -> filtercoeff~ inlet 0
-    device.add_line(f"freq_b{i}", 0, f"pak_b{i}", 1)
-    device.add_line(f"freq_b{i}", 0, f"pk_freq_b{i}", 0)
-    # pk_freq_b{i} -> ln_freq_b{i} -> fc_b{i} 0  (already wired above)
-
-    # gain -> pak inlet 2 AND dbtoa -> gain smoothing -> filtercoeff~ inlet 1
-    device.add_line(f"gain_b{i}", 0, f"pak_b{i}", 2)
-    device.add_line(f"gain_b{i}", 0, f"pk_gain_db_b{i}", 0)
-    # pk_gain_db_b{i} -> ln_gain_db_b{i} -> motion_gain_sum_b{i}
-    # -> gain_dbtoa_sig_b{i} -> fc_b{i} 1  (already wired above)
-
-    # q -> pak inlet 3 AND smoothing chain -> filtercoeff~ inlet 2
-    device.add_line(f"q_b{i}", 0, f"pak_b{i}", 3)
-    device.add_line(f"q_b{i}", 0, f"pk_q_b{i}", 0)
-    # pk_q_b{i} -> ln_q_b{i} -> fc_b{i} 2  (already wired above)
-
-    # type -> pak inlet 4 AND type_sel for filtercoeff~ type switching
-    device.add_line(f"type_b{i}", 0, f"pak_b{i}", 4)
-    device.add_line(f"type_b{i}", 0, f"type_sel_b{i}", 0)
-
-    # on -> pak inlet 5 AND on_sel for enable/disable
-    device.add_line(f"on_b{i}", 0, f"pak_b{i}", 5)
-    device.add_line(f"on_b{i}", 0, f"on_sel_b{i}", 0)
-    device.add_line(f"motion_b{i}", 0, f"pak_b{i}", 6)
-    device.add_line(f"dynamic_b{i}", 0, f"pak_b{i}", 7)
-    device.add_line(f"dynamic_amt_b{i}", 0, f"pak_b{i}", 8)
-    device.add_line(f"motion_rate_b{i}", 0, f"pak_b{i}", 9)
-    device.add_line(f"motion_depth_b{i}", 0, f"pak_b{i}", 10)
-    device.add_line(f"motion_direction_b{i}", 0, f"pak_b{i}", 11)
-    device.add_line(f"motion_rate_b{i}", 0, f"motion_lfo_b{i}", 0)
-    device.add_line(f"motion_depth_b{i}", 0, f"motion_depth_expr_b{i}", 0)
-    device.add_line(f"motion_b{i}", 0, f"motion_depth_expr_b{i}", 1)
-    device.add_line(f"motion_direction_b{i}", 0, f"motion_depth_expr_b{i}", 2)
-    device.add_line(f"motion_depth_expr_b{i}", 0, f"motion_depth_mul_b{i}", 1)
-    device.add_line(f"motion_depth_b{i}", 0, f"motion_gain_depth_expr_b{i}", 0)
-    device.add_line(f"motion_b{i}", 0, f"motion_gain_depth_expr_b{i}", 1)
-    device.add_line(f"motion_direction_b{i}", 0, f"motion_gain_depth_expr_b{i}", 2)
-    device.add_line(f"motion_gain_depth_expr_b{i}", 0, f"motion_gain_mul_b{i}", 1)
 
 # ---------------------------------------------------------------------------
 # DSP — Audio signal cascade: plugin~ -> biquad~_b0 -> biquad~_b1 -> ... -> out
@@ -1519,254 +1320,151 @@ device.add_line("analyzer_gate", 0, "peq_spectroscope", 1)
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# DSP — jsui drag output -> update freq/gain/Q dials (bidirectional)
-# eq_display outlet 0: "selected_band N" — sync focus tab selection
-# eq_display outlet 1: "band_freq N freq" — route to freq_bi dial
-# eq_display outlet 2: "band_gain N gain" — route to gain_bi dial
-# eq_display outlet 3: "band_q N q" — route to q_bi dial
-#
-# Route chain: outlet -> route band_freq -> route 0 1 2 3 4 5 6 7 -> dial
+# DSP — graph and selected-band editor routing shells
 # ---------------------------------------------------------------------------
-# Freq routing from jsui drag
-device.add_newobj("route_freq", "route band_freq",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[10, 780, 100, 20])
-device.add_newobj("route_freq_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[10, 805, 200, 20])
-device.add_line("eq_display", 1, "route_freq", 0)
-device.add_line("selected_core_rail", 0, "route_freq", 0)
-device.add_line("selected_band_column", 0, "route_freq", 0)
-device.add_line("route_freq", 0, "route_freq_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_freq_idx", i, f"freq_b{i}", 0)
-    device.add_line("route_freq_idx", i, f"pak_b{i}", 1)
-
-# Gain routing from jsui drag
-device.add_newobj("route_gain", "route band_gain",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[220, 780, 100, 20])
-device.add_newobj("route_gain_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[220, 805, 200, 20])
-device.add_line("eq_display", 2, "route_gain", 0)
-device.add_line("selected_core_rail", 0, "route_gain", 0)
-device.add_line("selected_band_column", 0, "route_gain", 0)
-device.add_line("route_gain", 0, "route_gain_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_gain_idx", i, f"gain_b{i}", 0)
-    device.add_line("route_gain_idx", i, f"pak_b{i}", 2)
-
-# Q routing from jsui mouse wheel
-device.add_newobj("route_q", "route band_q",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[430, 780, 80, 20])
-device.add_newobj("route_q_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[430, 805, 200, 20])
-device.add_line("eq_display", 3, "route_q", 0)
-device.add_line("selected_core_rail", 0, "route_q", 0)
-device.add_line("selected_band_column", 0, "route_q", 0)
-device.add_line("route_q", 0, "route_q_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_q_idx", i, f"q_b{i}", 0)
-    device.add_line("route_q_idx", i, f"pak_b{i}", 3)
-
-device.add_newobj("route_type", "route band_type",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[640, 780, 90, 20])
-device.add_newobj("route_type_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[640, 805, 200, 20])
-device.add_line("eq_display", 0, "route_type", 0)
-device.add_line("selected_band_column", 0, "route_type", 0)
-device.add_line("route_type", 0, "route_type_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_type_idx", i, f"type_b{i}", 0)
-    device.add_line("route_type_idx", i, f"pak_b{i}", 4)
-
-device.add_newobj("route_enable", "route band_enable",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[850, 780, 104, 20])
-device.add_newobj("route_enable_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[850, 805, 200, 20])
-device.add_line("eq_display", 0, "route_enable", 0)
-device.add_line("selected_band_column", 0, "route_enable", 0)
-device.add_line("route_enable", 0, "route_enable_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_enable_idx", i, f"on_b{i}", 0)
-    device.add_line("route_enable_idx", i, f"pak_b{i}", 5)
-
-device.add_newobj("route_motion", "route band_motion",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[1060, 780, 104, 20])
-device.add_newobj("route_motion_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[1060, 805, 200, 20])
-device.add_line("eq_display", 0, "route_motion", 0)
-device.add_line("selected_band_column", 0, "route_motion", 0)
-device.add_line("route_motion", 0, "route_motion_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_motion_idx", i, f"motion_b{i}", 0)
-    device.add_line("route_motion_idx", i, f"pak_b{i}", 6)
-
-device.add_newobj("route_dynamic", "route band_dynamic",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[1270, 780, 114, 20])
-device.add_newobj("route_dynamic_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[1270, 805, 200, 20])
-device.add_line("eq_display", 0, "route_dynamic", 0)
-device.add_line("selected_band_column", 0, "route_dynamic", 0)
-device.add_line("route_dynamic", 0, "route_dynamic_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_dynamic_idx", i, f"dynamic_b{i}", 0)
-    device.add_line("route_dynamic_idx", i, f"pak_b{i}", 7)
-
-device.add_newobj("route_dynamic_amount", "route band_dynamic_amount",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[1490, 780, 144, 20])
-device.add_newobj("route_dynamic_amount_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[1490, 805, 200, 20])
-device.add_line("eq_display", 0, "route_dynamic_amount", 0)
-device.add_line("route_dynamic_amount", 0, "route_dynamic_amount_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_dynamic_amount_idx", i, f"dynamic_amt_b{i}", 0)
-    device.add_line("route_dynamic_amount_idx", i, f"pak_b{i}", 8)
-
-device.add_newobj("route_motion_rate", "route band_motion_rate",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[1710, 780, 132, 20])
-device.add_newobj("route_motion_rate_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[1710, 805, 200, 20])
-device.add_line("eq_display", 0, "route_motion_rate", 0)
-device.add_line("selected_band_column", 0, "route_motion_rate", 0)
-device.add_line("route_motion_rate", 0, "route_motion_rate_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_motion_rate_idx", i, f"motion_rate_b{i}", 0)
-    device.add_line("route_motion_rate_idx", i, f"pak_b{i}", 9)
-
-device.add_newobj("route_motion_depth", "route band_motion_depth",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[1930, 780, 140, 20])
-device.add_newobj("route_motion_depth_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[1930, 805, 200, 20])
-device.add_line("eq_display", 0, "route_motion_depth", 0)
-device.add_line("selected_band_column", 0, "route_motion_depth", 0)
-device.add_line("route_motion_depth", 0, "route_motion_depth_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_motion_depth_idx", i, f"motion_depth_b{i}", 0)
-    device.add_line("route_motion_depth_idx", i, f"pak_b{i}", 10)
-
-device.add_newobj("route_motion_direction", "route band_motion_direction",
-                  numinlets=1, numoutlets=2,
-                  outlettype=["", ""],
-                  patching_rect=[2140, 780, 140, 20])
-device.add_newobj("route_motion_direction_idx", "route 0 1 2 3 4 5 6 7",
-                  numinlets=1, numoutlets=9,
-                  outlettype=["", "", "", "", "", "", "", "", ""],
-                  patching_rect=[2140, 805, 200, 20])
-device.add_line("eq_display", 0, "route_motion_direction", 0)
-device.add_line("selected_band_column", 0, "route_motion_direction", 0)
-device.add_line("route_motion_direction", 0, "route_motion_direction_idx", 0)
-for i in range(NUM_BANDS):
-    device.add_line("route_motion_direction_idx", i, f"motion_direction_b{i}", 0)
-    device.add_line("route_motion_direction_idx", i, f"pak_b{i}", 11)
+add_band_message_routers(
+    device,
+    num_bands=NUM_BANDS,
+    route_specs=[
+        {
+            "name": "freq",
+            "message": "band_freq",
+            "sources": [("eq_display", 1), ("selected_band_column", 0)],
+            "targets": [{"prefix": "freq_b"}, {"prefix": "pak_b", "inlet": 1}],
+            "patch_x": 10,
+            "patch_y": 780,
+            "route_width": 100,
+        },
+        {
+            "name": "gain",
+            "message": "band_gain",
+            "sources": [("eq_display", 2), ("selected_band_column", 0)],
+            "targets": [{"prefix": "gain_b"}, {"prefix": "pak_b", "inlet": 2}],
+            "patch_x": 220,
+            "patch_y": 780,
+            "route_width": 100,
+        },
+        {
+            "name": "q",
+            "message": "band_q",
+            "sources": [("eq_display", 3), ("selected_band_column", 0)],
+            "targets": [{"prefix": "q_b"}, {"prefix": "pak_b", "inlet": 3}],
+            "patch_x": 430,
+            "patch_y": 780,
+            "route_width": 80,
+        },
+        {
+            "name": "type",
+            "message": "band_type",
+            "sources": [("eq_display", 0), ("selected_band_column", 0)],
+            "targets": [{"prefix": "type_b"}, {"prefix": "pak_b", "inlet": 4}],
+            "patch_x": 640,
+            "patch_y": 780,
+            "route_width": 90,
+        },
+        {
+            "name": "enable",
+            "message": "band_enable",
+            "sources": [("eq_display", 0), ("selected_band_column", 0)],
+            "targets": [{"prefix": "on_b"}, {"prefix": "pak_b", "inlet": 5}],
+            "patch_x": 850,
+            "patch_y": 780,
+            "route_width": 104,
+        },
+        {
+            "name": "motion",
+            "message": "band_motion",
+            "sources": [("eq_display", 0), ("selected_band_column", 0)],
+            "targets": [{"prefix": "motion_b"}, {"prefix": "pak_b", "inlet": 6}],
+            "patch_x": 1060,
+            "patch_y": 780,
+            "route_width": 104,
+        },
+        {
+            "name": "dynamic",
+            "message": "band_dynamic",
+            "sources": [("eq_display", 0), ("selected_band_column", 0)],
+            "targets": [{"prefix": "dynamic_b"}, {"prefix": "pak_b", "inlet": 7}],
+            "patch_x": 1270,
+            "patch_y": 780,
+            "route_width": 114,
+        },
+        {
+            "name": "dynamic_amount",
+            "message": "band_dynamic_amount",
+            "sources": [("eq_display", 0)],
+            "targets": [{"prefix": "dynamic_amt_b"}, {"prefix": "pak_b", "inlet": 8}],
+            "patch_x": 1490,
+            "patch_y": 780,
+            "route_width": 144,
+        },
+        {
+            "name": "motion_rate",
+            "message": "band_motion_rate",
+            "sources": [("eq_display", 0), ("selected_band_column", 0)],
+            "targets": [{"prefix": "motion_rate_b"}, {"prefix": "pak_b", "inlet": 9}],
+            "patch_x": 1710,
+            "patch_y": 780,
+            "route_width": 132,
+        },
+        {
+            "name": "motion_depth",
+            "message": "band_motion_depth",
+            "sources": [("eq_display", 0), ("selected_band_column", 0)],
+            "targets": [{"prefix": "motion_depth_b"}, {"prefix": "pak_b", "inlet": 10}],
+            "patch_x": 1930,
+            "patch_y": 780,
+            "route_width": 140,
+        },
+        {
+            "name": "motion_direction",
+            "message": "band_motion_direction",
+            "sources": [("eq_display", 0), ("selected_band_column", 0)],
+            "targets": [{"prefix": "motion_direction_b"}, {"prefix": "pak_b", "inlet": 11}],
+            "patch_x": 2140,
+            "patch_y": 780,
+            "route_width": 140,
+        },
+    ],
+)
 
 # ---------------------------------------------------------------------------
 # Selected-band proxy UI sync and routing
 # ---------------------------------------------------------------------------
-device.add_newobj(
-    "route_selected_ui",
-    "route selected_label selected_status selected_freq selected_gain selected_q selected_type selected_enable selected_motion selected_dynamic selected_dynamic_amount selected_motion_rate selected_motion_depth selected_motion_direction",
-    numinlets=1, numoutlets=14,
-    outlettype=[""] * 14,
-    patching_rect=[2380, 780, 560, 20]
+add_selected_band_proxy_shell(
+    device,
+    num_bands=NUM_BANDS,
+    source_id="selected_band_column",
+    selected_band_store_id="selected_band_store",
+    route_fields=[
+        {"route_name": "selected_label", "prepend_id": "set_selected_label", "target_id": "selected_band_label", "patch_x": 2380},
+        {"route_name": "selected_status", "prepend_id": "set_selected_status", "target_id": "selected_band_status", "patch_x": 2460},
+        {"route_name": "selected_freq", "prepend_id": "set_selected_freq", "target_id": "selected_freq", "patch_x": 2540},
+        {"route_name": "selected_gain", "prepend_id": "set_selected_gain", "target_id": "selected_gain", "patch_x": 2620},
+        {"route_name": "selected_q", "prepend_id": "set_selected_q", "target_id": "selected_q", "patch_x": 2700},
+        {"route_name": "selected_type", "prepend_id": "set_selected_type", "target_id": "selected_type", "patch_x": 2780},
+        {"route_name": "selected_enable", "prepend_id": "set_selected_enable", "target_id": "selected_enable", "patch_x": 2860},
+        {"route_name": "selected_motion", "prepend_id": "set_selected_motion", "target_id": "selected_motion", "patch_x": 2940},
+        {"route_name": "selected_dynamic", "prepend_id": "set_selected_dynamic", "target_id": "selected_dynamic", "patch_x": 3020},
+        {"route_name": "selected_dynamic_amount", "prepend_id": "set_selected_dynamic_amt", "target_id": "selected_dynamic_amt", "patch_x": 3100},
+        {"route_name": "selected_motion_rate", "prepend_id": "set_selected_motion_rate", "target_id": "selected_motion_rate", "patch_x": 3180},
+        {"route_name": "selected_motion_depth", "prepend_id": "set_selected_motion_depth", "target_id": "selected_motion_depth", "patch_x": 3260},
+        {"route_name": "selected_motion_direction", "prepend_id": "set_selected_motion_direction", "target_id": "selected_motion_direction", "patch_x": 3340},
+    ],
+    control_routes=[
+        {"control_id": "selected_freq", "pack_text": "pack f i", "target_prefix": "freq_b", "patch_y": 832},
+        {"control_id": "selected_gain", "pack_text": "pack f i", "target_prefix": "gain_b", "patch_y": 858},
+        {"control_id": "selected_q", "pack_text": "pack f i", "target_prefix": "q_b", "patch_y": 884},
+        {"control_id": "selected_type", "pack_text": "pack i i", "target_prefix": "type_b", "patch_y": 910},
+        {"control_id": "selected_enable", "pack_text": "pack i i", "target_prefix": "on_b", "patch_y": 936},
+        {"control_id": "selected_motion", "pack_text": "pack i i", "target_prefix": "motion_b", "patch_y": 962},
+        {"control_id": "selected_dynamic", "pack_text": "pack i i", "target_prefix": "dynamic_b", "patch_y": 988},
+        {"control_id": "selected_dynamic_amt", "pack_text": "pack f i", "target_prefix": "dynamic_amt_b", "patch_y": 1014},
+        {"control_id": "selected_motion_rate", "pack_text": "pack f i", "target_prefix": "motion_rate_b", "patch_y": 1040},
+        {"control_id": "selected_motion_depth", "pack_text": "pack f i", "target_prefix": "motion_depth_b", "patch_y": 1066},
+        {"control_id": "selected_motion_direction", "pack_text": "pack f i", "target_prefix": "motion_direction_b", "patch_y": 1092},
+    ],
 )
-device.add_line("selected_band_column", 0, "route_selected_ui", 0)
-
-for route_index, prepend_id, target_id, patch_x in [
-    (0, "set_selected_label", "selected_band_label", 2380),
-    (1, "set_selected_status", "selected_band_status", 2460),
-    (2, "set_selected_freq", "selected_freq", 2540),
-    (3, "set_selected_gain", "selected_gain", 2620),
-    (4, "set_selected_q", "selected_q", 2700),
-    (5, "set_selected_type", "selected_type", 2780),
-    (6, "set_selected_enable", "selected_enable", 2860),
-    (7, "set_selected_motion", "selected_motion", 2940),
-    (8, "set_selected_dynamic", "selected_dynamic", 3020),
-    (9, "set_selected_dynamic_amt", "selected_dynamic_amt", 3100),
-    (10, "set_selected_motion_rate", "selected_motion_rate", 3180),
-    (11, "set_selected_motion_depth", "selected_motion_depth", 3260),
-    (12, "set_selected_motion_direction", "selected_motion_direction", 3340),
-]:
-    device.add_newobj(prepend_id, "prepend set", numinlets=1, numoutlets=1,
-                      outlettype=[""], patching_rect=[patch_x, 806, 72, 20])
-    device.add_line("route_selected_ui", route_index, prepend_id, 0)
-    device.add_line(prepend_id, 0, target_id, 0)
-
-for control_id, pack_text, target_prefix, patch_y in [
-    ("selected_freq", "pack f i", "freq_b", 832),
-    ("selected_gain", "pack f i", "gain_b", 858),
-    ("selected_q", "pack f i", "q_b", 884),
-    ("selected_type", "pack i i", "type_b", 910),
-    ("selected_enable", "pack i i", "on_b", 936),
-    ("selected_motion", "pack i i", "motion_b", 962),
-    ("selected_dynamic", "pack i i", "dynamic_b", 988),
-    ("selected_dynamic_amt", "pack f i", "dynamic_amt_b", 1014),
-    ("selected_motion_rate", "pack f i", "motion_rate_b", 1040),
-    ("selected_motion_depth", "pack f i", "motion_depth_b", 1066),
-    ("selected_motion_direction", "pack f i", "motion_direction_b", 1092),
-]:
-    pack_id = f"{control_id}_pack"
-    swap_id = f"{control_id}_swap"
-    route_id = f"{control_id}_route_idx"
-    device.add_newobj(pack_id, pack_text, numinlets=2, numoutlets=1,
-                      outlettype=[""], patching_rect=[2380, patch_y, 72, 20])
-    device.add_box({
-        "box": {
-            "id": swap_id,
-            "maxclass": "message",
-            "text": "$2 $1",
-            "numinlets": 2,
-            "numoutlets": 1,
-            "outlettype": [""],
-            "patching_rect": [2460, patch_y, 46, 20],
-        }
-    })
-    device.add_newobj(route_id, "route 0 1 2 3 4 5 6 7", numinlets=1, numoutlets=9,
-                      outlettype=["", "", "", "", "", "", "", "", ""],
-                      patching_rect=[2514, patch_y, 200, 20])
-    device.add_line(control_id, 0, pack_id, 0)
-    device.add_line("selected_band_store", 0, pack_id, 1)
-    device.add_line(pack_id, 0, swap_id, 0)
-    device.add_line(swap_id, 0, route_id, 0)
-    for i in range(NUM_BANDS):
-        device.add_line(route_id, i, f"{target_prefix}{i}", 0)
 
 # ---------------------------------------------------------------------------
 # Parameter banks — Live/Push grouping
