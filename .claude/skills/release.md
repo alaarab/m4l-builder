@@ -1,1 +1,1 @@
-/Users/squidbot/.cortex/global/skills/release.md
+/Users/squidbot/.phren/global/skills/release.md

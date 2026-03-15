@@ -138,7 +138,7 @@ Expanded editor:
 - deeper grain distribution controls
 
 This is the clearest candidate in the repo for the queued dual-surface shell
-task in Cortex.
+task in Phren.
 
 Reference shell spec:
 

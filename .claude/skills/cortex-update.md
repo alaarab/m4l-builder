@@ -1,1 +1,0 @@
-/Users/squidbot/.cortex/global/skills/cortex-update.md

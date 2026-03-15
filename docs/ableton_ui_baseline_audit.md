@@ -166,4 +166,4 @@ Progress means:
   parameter-construction work
 - score the next EQ changes with the shared checklist
 - require a validation note for each major sprint in `docs/ui_validation/`
-- record non-obvious UI lessons in Cortex as they appear
+- record non-obvious UI lessons in Phren as they appear

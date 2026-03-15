@@ -1,0 +1,1 @@
+/Users/squidbot/.phren/global/skills/phren-discover.md

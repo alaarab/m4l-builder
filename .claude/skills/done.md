@@ -1,1 +1,1 @@
-/Users/squidbot/.cortex/m4l-builder/.claude/skills/done.md
+/Users/squidbot/.phren/m4l-builder/.claude/skills/done.md

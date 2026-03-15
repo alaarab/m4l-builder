@@ -1,1 +1,1 @@
-/Users/squidbot/.cortex/global/skills/creative.md
+/Users/squidbot/.phren/global/skills/creative.md

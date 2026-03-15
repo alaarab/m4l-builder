@@ -148,7 +148,7 @@ Graph behavior:
 This lane depends on:
 
 - the ongoing parametric EQ selected-band work
-- the analyzer backend task already queued in Cortex
+- the analyzer backend task already queued in Phren
 - stronger parameter metadata and visibility controls
 - a clean jsui contract for graph + state synchronization
 

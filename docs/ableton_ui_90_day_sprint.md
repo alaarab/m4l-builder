@@ -42,7 +42,7 @@ Every week:
 - `2 hrs` reference teardown
 - `5-7 hrs` build work
 - `2 hrs` in-Live validation
-- `1-2 hrs` synthesis into docs and Cortex
+- `1-2 hrs` synthesis into docs and Phren
 
 Do not skip the synthesis step. The point is reusable judgment, not only local
 device changes.
@@ -238,7 +238,7 @@ Each major sprint must finish with:
 - one teardown note
 - one validation note
 - one rubric score
-- one Cortex finding if a non-obvious UI lesson was learned
+- one Phren finding if a non-obvious UI lesson was learned
 
 ## Checkpoints
 

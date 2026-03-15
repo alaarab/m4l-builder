@@ -287,7 +287,7 @@ Every major UI sprint must leave these artifacts behind:
   `docs/ableton_ui_teardown_template.md`
 - one validation note created from
   `docs/ableton_ui_validation_template.md`
-- updated findings in Cortex when a non-obvious pattern becomes clear
+- updated findings in Phren when a non-obvious pattern becomes clear
 
 Use `docs/ableton_ui_review_checklist.md` as the common weekly gate.
 

@@ -1,1 +1,1 @@
-/Users/squidbot/.cortex/global/skills/pipeline.md
+/Users/squidbot/.phren/global/skills/pipeline.md

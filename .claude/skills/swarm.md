@@ -1,1 +1,1 @@
-/Users/squidbot/.cortex/global/skills/swarm.md
+/Users/squidbot/.phren/global/skills/swarm.md

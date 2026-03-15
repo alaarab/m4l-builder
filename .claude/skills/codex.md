@@ -1,1 +1,1 @@
-/Users/squidbot/.cortex/global/skills/codex.md
+/Users/squidbot/.phren/global/skills/codex.md

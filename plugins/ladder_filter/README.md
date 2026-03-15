@@ -142,7 +142,7 @@ Recommended interaction priorities:
 
 This lane depends on or benefits from:
 
-- the direct-manipulation visualization task already queued in Cortex
+- the direct-manipulation visualization task already queued in Phren
 - better parameter metadata for long/short names and units
 - a dedicated ladder-style DSP helper beyond the current clean filter blocks
 - explicit self-oscillation protection / clip-safety handling

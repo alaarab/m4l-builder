@@ -1,1 +1,1 @@
-/Users/squidbot/.cortex/global/skills/backlog.md
+/Users/squidbot/.phren/global/skills/backlog.md
