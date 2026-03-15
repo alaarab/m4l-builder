@@ -1,1 +1,1 @@
-~/.cortex/m4l-builder/.claude/skills/verify.md
+~/.phren/m4l-builder/.claude/skills/verify.md

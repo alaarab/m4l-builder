@@ -1,1 +1,1 @@
-~/.cortex/global/skills/codex.md
+~/.phren/global/skills/codex.md

@@ -1,1 +1,1 @@
-~/.cortex/global/skills/pipeline.md
+~/.phren/global/skills/pipeline.md

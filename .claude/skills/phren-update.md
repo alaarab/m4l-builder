@@ -1,0 +1,1 @@
+~/.phren/global/skills/phren-update.md

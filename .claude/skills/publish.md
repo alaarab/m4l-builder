@@ -1,1 +1,1 @@
-~/.cortex/m4l-builder/.claude/skills/publish.md
+~/.phren/m4l-builder/.claude/skills/publish.md

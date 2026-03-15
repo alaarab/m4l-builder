@@ -1,1 +1,1 @@
-~/.cortex/global/skills/swarm.md
+~/.phren/global/skills/swarm.md

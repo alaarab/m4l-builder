@@ -1,1 +1,1 @@
-~/.cortex/global/skills/backlog.md
+~/.phren/global/skills/backlog.md

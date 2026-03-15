@@ -1,1 +1,0 @@
-~/.cortex/global/skills/cortex-update.md

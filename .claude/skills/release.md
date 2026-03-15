@@ -1,1 +1,1 @@
-~/.cortex/global/skills/release.md
+~/.phren/global/skills/release.md

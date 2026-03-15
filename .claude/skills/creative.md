@@ -1,1 +1,1 @@
-~/.cortex/global/skills/creative.md
+~/.phren/global/skills/creative.md

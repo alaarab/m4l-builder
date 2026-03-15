@@ -275,7 +275,7 @@ Restart Ableton or refresh the browser to see new devices. Instrument and MIDI E
 7. **Binary artifacts**:Do not commit .amxd files (they are build outputs)
 8. **Theme injection**:Pass theme to the device constructor; all UI inherits colors automatically
 9. **CHANGELOG exists**:`CHANGELOG.md` is at project root, covering v0.1.0 through v0.4.0
-10. **AGENTS.md is a symlink**:Points to `~/Sites/cortex/m4l-builder/AGENTS.md`; hatchling excludes it via `[tool.hatch.build] exclude`
+10. **AGENTS.md is repo-local**:Tracked at the repo root; hatchling excludes it via `[tool.hatch.build] exclude`
 
 ## Recommended Tools
 
