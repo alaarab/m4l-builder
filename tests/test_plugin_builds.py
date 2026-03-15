@@ -130,18 +130,72 @@ class TestParametricEqBuild:
         assert "band_nav" in boxes
         assert "selected_core_rail" not in boxes
         assert boxes["eq_display"]["maxclass"] == "v8ui"
-        assert boxes["band_nav"]["presentation_rect"] == [
-            module.CORE_X + 4,
-            module.CORE_Y + 18,
-            module.CORE_W - 8,
-            module.CORE_H - 24,
-        ]
+        assert boxes["band_nav"]["presentation_rect"] == [module.HIDDEN_X, 148, 1, 1]
         assert boxes["selected_band_column"]["presentation_rect"] == [
-            module.EDITOR_X + 8,
-            module.EDITOR_Y + 8,
-            module.EDITOR_W - 16,
-            module.EDITOR_H - 16,
+            module.HIDDEN_X,
+            148,
+            1,
+            1,
         ]
+        assert boxes["selected_freq"]["presentation_rect"] == [
+            module.CORE_X + 4,
+            module.CORE_Y + 10,
+            module.CORE_W - 8,
+            22,
+        ]
+        assert boxes["selected_gain"]["presentation_rect"] == [
+            module.CORE_X + 4,
+            module.CORE_Y + 33,
+            module.CORE_W - 8,
+            22,
+        ]
+        assert boxes["selected_q"]["presentation_rect"] == [
+            module.CORE_X + 4,
+            module.CORE_Y + 56,
+            module.CORE_W - 8,
+            22,
+        ]
+        assert boxes["selected_type_label"]["presentation_rect"] == [
+            module.CORE_X + 6,
+            module.CORE_Y + 87,
+            module.CORE_W - 12,
+            7,
+        ]
+        assert boxes["selected_type_chip_bg"]["presentation_rect"] == [
+            module.CORE_X + 7,
+            module.CORE_Y + 86,
+            module.CORE_W - 14,
+            8,
+        ]
+        assert boxes["selected_band_label"]["presentation_rect"] == [
+            module.CORE_X + 7,
+            module.CORE_Y + 95,
+            module.CORE_W - 14,
+            8,
+        ]
+        assert boxes["selected_band_chip_bg"]["presentation_rect"] == [
+            module.CORE_X + 11,
+            module.CORE_Y + 95,
+            module.CORE_W - 22,
+            8,
+        ]
+        assert boxes["selected_band_name_sel"]["text"] == "select -1 0 1 2 3 4 5 6 7"
+        assert boxes["msg_selected_band_label_0"]["text"] == "-"
+        assert boxes["msg_selected_band_label_1"]["text"] == "1"
+        assert boxes["msg_selected_band_label_8"]["text"] == "8"
+        assert boxes["selected_type_name_route"]["text"] == "route selected_type"
+        assert boxes["selected_type_name_sel"]["text"] == "select 0 1 2 3 4 5 6 7"
+        assert boxes["selected_type_clear_sel"]["text"] == "select -1"
+        assert boxes["selected_type_clear_delay"]["text"] == "del 1"
+        assert boxes["msg_selected_type_label_clear"]["text"] == "-"
+        assert boxes["msg_selected_type_label_0"]["text"] == "PK"
+        assert boxes["msg_selected_type_label_7"]["text"] == "AP"
+        assert boxes["analyzer_mode_tab"]["maxclass"] == "live.tab"
+        assert boxes["range_tab"]["maxclass"] == "live.tab"
+        assert boxes["bypass_toggle"]["text"] == "ON"
+        assert boxes["bypass_toggle"]["texton"] == "OFF"
+        assert module.GRAPH_W > module.CORE_W * 6
+        assert module.GLOBAL_W <= 60
         for suffix in (
             "freq_store_b0",
             "gain_recalc_trig_b0",

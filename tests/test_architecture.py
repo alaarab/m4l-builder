@@ -228,12 +228,18 @@ class TestProfilesAndAssets:
 
 class TestNamespaces:
     def test_package_exposes_namespaces(self):
+        assert m4l.authoring.AudioEffect is m4l.AudioEffect
         assert m4l.builder.AudioEffect is m4l.AudioEffect
         assert m4l.builder.core.AudioEffect is m4l.AudioEffect
         assert m4l.builder.ui.dial is m4l.dial
         assert m4l.builder.dsp.gain_stage is m4l.gain_stage
+        assert m4l.live.live_object_path is m4l.live_object_path
         assert m4l.builder.live.live_object_path is not None
         assert m4l.builder.recipes.gain_controlled_stage is m4l.gain_controlled_stage
+        assert m4l.reverse_snapshot.snapshot_from_amxd is m4l.snapshot_from_amxd
+        assert m4l.reverse_patterns.detect_snapshot_patterns is m4l.detect_snapshot_patterns
+        assert m4l.reverse_analysis.analyze_snapshot is m4l.analyze_snapshot
+        assert m4l.reverse_codegen.generate_python_from_amxd is m4l.generate_python_from_amxd
         assert m4l.reverse.generate_python_from_amxd is not None
         assert m4l.analysis.analyze_amxd_file is not None
         assert m4l.bridge.enable_livemcp_bridge is not None

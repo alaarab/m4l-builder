@@ -9,22 +9,23 @@
 
 ## Sprint Goal
 
-Validate that the selected-band column is the canonical contextual editor, the
-left rail is only navigation, and the graph remains the unquestioned primary
-editing surface.
+Validate that the compact selected-band mini-column follows graph selection,
+the graph remains the unquestioned primary editing surface, and the compact
+right-side switch stack stays secondary.
 
 ## Planned Focus
 
 - graph-first editing speed
-- selected-band clarity
-- left-side navigator usefulness without editor duplication
+- selected-band mini-column clarity
+- left strip compactness without turning into a second editor
+- right-side switch stack staying compact and secondary
 - focus-band anti-drift
 - analyzer staying secondary to the EQ curve
 
 ## Planned Scenarios
 
 - one fast node move
-- one left-rail band selection change
+- one graph-based band selection change
 - one precise Q adjustment
 - one exploratory analyzer-backed edit
 - one check that graph, focus, and parameter state never drift

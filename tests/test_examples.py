@@ -49,6 +49,7 @@ EXAMPLE_SCRIPTS = [
     "midi_chord.py",
     "midi_pitch_quantize.py",
     "granular_looper.py",
+    "super_slicer.py",
     "fdn_reverb.py",
     "transport_lfo_demo.py",
     "expressive_synth.py",
@@ -76,6 +77,7 @@ MIDI_EFFECT_SCRIPTS = {
 }
 INSTRUMENT_SCRIPTS = {
     "drone_synth.py", "wavetable_synth.py", "granular_looper.py",
+    "super_slicer.py",
     "expressive_synth.py", "poly_synth.py", "analog_supersaw.py",
 }
 
@@ -310,3 +312,13 @@ class TestExampleBuilds:
         assert os.path.exists(os.path.join(output_dir, BRIDGE_RUNTIME_FILENAME))
         assert os.path.exists(os.path.join(output_dir, BRIDGE_SERVER_FILENAME))
         assert os.path.exists(os.path.join(output_dir, BRIDGE_SCHEMA_FILENAME))
+
+    def test_super_slicer_uses_notein_for_note_velocity_gate(self):
+        script = "super_slicer.py"
+        if script not in self.outputs:
+            pytest.skip(f"{script} did not produce output")
+        _, patcher = _parse_amxd(self.outputs[script])
+        texts = _get_box_texts(patcher)
+
+        assert "notein" in texts
+        assert "midiparse" not in texts

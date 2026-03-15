@@ -5,12 +5,11 @@ nodes. 8 fully parametric bands using filtercoeff~ + biquad~ for true
 parametric EQ quality. Supports Peak/LShelf/HShelf/LP/HP/Notch/BP/AP types.
 
 Layout (760×188 visible surface):
-  Left rail: compact band navigator for fast selection
+  Left strip: compact selected-band mini-column using native Live controls
   Hero graph: interactive EQ curve with integrated post-output analyzer,
               draggable band nodes, mouse wheel Q, shift+drag fine-tune,
               cmd+drag lock gain/Q axis, hover HUD
-  Right editor: contextual selected-band column
-  Utility column: analyzer mode, display range, output gain, bypass, L/R meters
+  Right strip: minimal global switches for analyzer, range, and bypass
   Hidden canonical controls: per-band parameter widgets and focus tab kept
                              offscreen for parameter identity and routing
 
@@ -230,9 +229,11 @@ SECTION = list(theme.section)
 TEXT = list(theme.text)
 TEXT_DIM = list(theme.text_dim)
 ACCENT = list(theme.accent)
+CONTROL_ACCENT = [0.35, 0.86, 0.96, 1.0]
 ACCENT_SOFT = mix(theme.surface, theme.accent, 0.22)
 CONTROL_BG = [0.22, 0.22, 0.23, 1.0]
 CONTROL_BORDER = [0.41, 0.41, 0.43, 1.0]
+CONTROL_SURFACE = [0.66, 0.66, 0.68, 1.0]
 GRAPH_FRAME_BG = list(SURFACE)
 GRAPH_BG = [0.07, 0.10, 0.15, 1.0]
 GRAPH_BORDER = [0.27, 0.27, 0.29, 1.0]
@@ -253,23 +254,23 @@ TEXT_ON_DARK = [0.14, 0.14, 0.15, 1.0]
 HIDDEN_X = 900
 CORE_X = 14
 CORE_Y = 14
-CORE_W = 70
+CORE_W = 56
 CORE_H = 156
-GRAPH_X = 92
+GRAPH_X = 72
 GRAPH_Y = 14
-GRAPH_W = 356
+GRAPH_W = 602
 GRAPH_H = 156
 DETAIL_X = HIDDEN_X
 DETAIL_Y = 148
 DETAIL_WIDTH = 1
 DETAIL_H = 1
-EDITOR_X = 456
-EDITOR_Y = 14
-EDITOR_W = 152
-EDITOR_H = 156
-GLOBAL_X = 616
+EDITOR_X = HIDDEN_X
+EDITOR_Y = 148
+EDITOR_W = 1
+EDITOR_H = 1
+GLOBAL_X = 676
 GLOBAL_Y = 14
-GLOBAL_W = 120
+GLOBAL_W = 60
 GLOBAL_H = 156
 CARD_Y = 900
 CARD_W = 64
@@ -325,30 +326,30 @@ BAND_NAV_FILENAME = "peq_band_nav_v1.js"
 device.add_panel("bg", [0, 0, 760, 188], bgcolor=BG)
 device.add_panel("hero_frame", [10, 8, 740, 172],
                  bgcolor=SURFACE, border=1,
-                 bordercolor=CONTROL_BORDER, rounded=8)
+                 bordercolor=CONTROL_BORDER, rounded=0)
 device.add_panel("core_frame", [CORE_X, CORE_Y, CORE_W, CORE_H],
                  bgcolor=SURFACE_ALT, border=1,
-                 bordercolor=RAIL_BORDER, rounded=8)
+                 bordercolor=RAIL_BORDER, rounded=0)
 device.add_panel("graph_frame", [GRAPH_X - 2, GRAPH_Y - 2, GRAPH_W + 4, GRAPH_H + 4],
                  bgcolor=GRAPH_FRAME_BG, border=1,
-                 bordercolor=GRAPH_BORDER, rounded=8)
+                 bordercolor=GRAPH_BORDER, rounded=0)
 device.add_panel("graph_plot_bg", [GRAPH_X, GRAPH_Y, GRAPH_W, GRAPH_H],
                  bgcolor=GRAPH_BG, border=1,
-                 bordercolor=GRAPH_BORDER, rounded=6)
+                 bordercolor=GRAPH_BORDER, rounded=0)
 device.add_panel("detail_frame", [DETAIL_X, DETAIL_Y, DETAIL_WIDTH, DETAIL_H],
                  bgcolor=SURFACE_ALT, border=1,
-                 bordercolor=RAIL_BORDER, rounded=8)
+                 bordercolor=RAIL_BORDER, rounded=3)
 device.add_panel("editor_frame", [EDITOR_X, EDITOR_Y, EDITOR_W, EDITOR_H],
                  bgcolor=SURFACE_ALT, border=1,
-                 bordercolor=RAIL_BORDER, rounded=8)
+                 bordercolor=RAIL_BORDER, rounded=3)
 device.add_panel("global_frame", [GLOBAL_X, GLOBAL_Y, GLOBAL_W, GLOBAL_H],
                  bgcolor=SURFACE_ALT, border=1,
-                 bordercolor=RAIL_BORDER, rounded=8)
+                 bordercolor=RAIL_BORDER, rounded=0)
 device.add_panel("bands_bg", [14, CARD_Y - 2, 544, CARD_H + 4],
                  bgcolor=SURFACE, border=1,
-                 bordercolor=RAIL_BORDER, rounded=8)
-device.add_comment("core_title", [CORE_X + 8, CORE_Y + 8, CORE_W - 16, 10], "BANDS",
-                   textcolor=TEXT_DIM, fontsize=6.6, fontname=theme.fontname_bold, justification=1)
+                 bordercolor=RAIL_BORDER, rounded=3)
+device.add_comment("core_title", [HIDDEN_X, 148, 1, 1], "BAND",
+                   textcolor=TEXT_DIM, fontsize=7.2, fontname=theme.fontname_bold, justification=1)
 device.add_comment("detail_title", [DETAIL_X + 10, DETAIL_Y + 8, 94, 12], "SELECTED BAND",
                    textcolor=TEXT_DIM, fontsize=7.6, fontname=theme.fontname_bold)
 device.add_tab("focus_tab", "Focus Band", [900, 148, 1, 1],
@@ -358,22 +359,24 @@ device.add_tab("focus_tab", "Focus Band", [900, 148, 1, 1],
                rounded=4, spacing_x=1.0, fontsize=8.0)
 device.add_comment("mod_title", [HIDDEN_X, 148, 1, 1], "BAND MOD",
                    textcolor=TEXT_DIM, fontsize=7.6, fontname=theme.fontname_bold)
-device.add_comment("global_title", [GLOBAL_X + 10, GLOBAL_Y + 8, 54, 12], "GLOBAL",
+device.add_comment("global_title", [HIDDEN_X, 148, 1, 1], "VIEW",
                    textcolor=TEXT_DIM, fontsize=7.6, fontname=theme.fontname_bold)
-device.add_comment("global_analyzer_title", [GLOBAL_X + 8, GLOBAL_Y + 24, 40, 8], "ANALYZER",
-                   textcolor=TEXT_DIM, fontsize=6.2)
-device.add_comment("global_range_title", [GLOBAL_X + 66, GLOBAL_Y + 24, 28, 8], "RANGE",
-                   textcolor=TEXT_DIM, fontsize=6.2)
-device.add_tab("analyzer_mode_tab", "Analyzer Mode", [GLOBAL_X + 8, GLOBAL_Y + 32, 56, 18],
+device.add_comment("global_analyzer_title", [GLOBAL_X + 3, GLOBAL_Y + 20, GLOBAL_W - 6, 8], "ANALYZE",
+                   textcolor=TEXT_DIM, fontsize=5.0, justification=1)
+device.add_comment("global_range_title", [GLOBAL_X + 3, GLOBAL_Y + 47, GLOBAL_W - 6, 8], "SCALE",
+                   textcolor=TEXT_DIM, fontsize=5.0, justification=1)
+device.add_tab("analyzer_mode_tab", "Analyzer Mode", [GLOBAL_X + 3, GLOBAL_Y + 26, GLOBAL_W - 6, 15],
                options=["OFF", "PRE", "POST"],
-               bgcolor=CONTROL_BG, bgoncolor=ACCENT,
+               bgcolor=CONTROL_BG, bgoncolor=CONTROL_ACCENT,
                textcolor=TEXT_DIM, textoncolor=TEXT_ON_DARK,
-               rounded=4, spacing_x=1.0, fontsize=8.0)
-device.add_tab("range_tab", "Display Range", [GLOBAL_X + 64, GLOBAL_Y + 32, 48, 18],
+               rounded=2, spacing_x=0.6, fontsize=5.9)
+device.add_tab("range_tab", "Display Range", [GLOBAL_X + 3, GLOBAL_Y + 53, GLOBAL_W - 6, 15],
                options=["15", "18", "24", "30"],
-               bgcolor=CONTROL_BG, bgoncolor=ACCENT,
+               bgcolor=CONTROL_BG, bgoncolor=CONTROL_ACCENT,
                textcolor=TEXT_DIM, textoncolor=TEXT_ON_DARK,
-               rounded=4, spacing_x=1.0, fontsize=8.0)
+               rounded=2, spacing_x=0.6, fontsize=5.9)
+device.add_comment("global_bypass_title", [GLOBAL_X + 3, GLOBAL_Y + 73, GLOBAL_W - 6, 8], "ACTIVE",
+                   textcolor=TEXT_DIM, fontsize=5.0, justification=1)
 
 # ---------------------------------------------------------------------------
 # UI — EQ curve interactive display
@@ -428,7 +431,7 @@ device.add_v8ui(
 
 device.add_jsui(
     "band_nav",
-    [CORE_X + 4, CORE_Y + 18, CORE_W - 8, CORE_H - 24],
+    [HIDDEN_X, 148, 1, 1],
     js_code=band_nav_js(),
     numinlets=1,
     numoutlets=1,
@@ -442,7 +445,7 @@ device.add_jsui(
 
 device.add_jsui(
     "selected_band_column",
-    [EDITOR_X + 8, EDITOR_Y + 8, EDITOR_W - 16, EDITOR_H - 16],
+    [HIDDEN_X, 148, 1, 1],
     js_code=eq_band_column_js(
         title="SELECTED BAND",
         subtitle="Click a node to edit it",
@@ -494,33 +497,43 @@ device.add_live_text("bypass_compact", "Bypass Compact", [900, 148, 50, 16],
                      rounded=4, fontsize=7.2, shortname="BypassVis",
                      parameter_enable=0)
 
-device.add_comment("selected_band_label", [DETAIL_X + 10, DETAIL_Y + 22, DETAIL_WIDTH - 20, 12], "NO BAND",
-                   textcolor=TEXT, fontsize=8.8, fontname=theme.fontname_bold)
-device.add_comment("selected_band_status", [DETAIL_X + 10, DETAIL_Y + 36, DETAIL_WIDTH - 20, 10], "Click a node",
-                   textcolor=TEXT_DIM, fontsize=7.0)
-device.add_comment("selected_type_caption", [DETAIL_X + 10, DETAIL_Y + 50, 28, 8], "TYPE",
+device.add_panel("selected_type_chip_bg", [CORE_X + 7, CORE_Y + 86, CORE_W - 14, 8],
+                 bgcolor=CONTROL_BG, border=1,
+                 bordercolor=CONTROL_BORDER, rounded=0)
+device.add_comment("selected_type_label", [CORE_X + 6, CORE_Y + 87, CORE_W - 12, 7], "PK",
+                   textcolor=TEXT_DIM, fontsize=5.2, fontname=theme.fontname_bold, justification=1)
+device.add_panel("selected_band_chip_bg", [CORE_X + 11, CORE_Y + 95, CORE_W - 22, 8],
+                 bgcolor=CONTROL_BG, border=1,
+                 bordercolor=CONTROL_ACCENT, rounded=0)
+device.add_comment("selected_band_label", [CORE_X + 7, CORE_Y + 95, CORE_W - 14, 8], "-",
+                   textcolor=CONTROL_ACCENT, fontsize=5.6, fontname=theme.fontname_bold, justification=1)
+device.add_comment("selected_band_status", [HIDDEN_X, 148, 1, 1], "Click a node",
+                   textcolor=TEXT_DIM, fontsize=7.0, justification=1)
+device.add_comment("selected_type_caption", [HIDDEN_X, 148, 1, 1], "TYPE",
                    textcolor=TEXT_DIM, fontsize=6.4)
-device.add_menu("selected_type", "Selected Type", [DETAIL_X + 10, DETAIL_Y + 58, DETAIL_WIDTH - 20, 18],
+device.add_menu("selected_type", "Selected Type", [HIDDEN_X, 148, 1, 1],
                 options=TYPE_OPTIONS, fontsize=8.2, parameter_enable=0,
                 bgcolor=CONTROL_BG, bgoncolor=ACCENT,
                 textcolor=TEXT_DIM, textoncolor=TEXT_ON_DARK)
-device.add_comment("selected_freq_caption", [DETAIL_X + 10, DETAIL_Y + 82, 28, 8], "FREQ",
-                   textcolor=TEXT_DIM, fontsize=6.4)
-device.add_comment("selected_gain_caption", [DETAIL_X + 84, DETAIL_Y + 82, 28, 8], "GAIN",
-                   textcolor=TEXT_DIM, fontsize=6.4)
-device.add_number_box("selected_freq", "Selected Freq", [DETAIL_X + 10, DETAIL_Y + 90, 66, 18],
-                      min_val=10.0, max_val=22000.0, initial=BAND_DEFAULTS[0][0],
-                      unitstyle=3, fontsize=8.2, parameter_enable=0)
-device.add_number_box("selected_gain", "Selected Gain", [DETAIL_X + 84, DETAIL_Y + 90, 66, 18],
-                      min_val=-30.0, max_val=30.0, initial=0.0,
-                      unitstyle=4, fontsize=8.2, parameter_enable=0)
-device.add_comment("selected_q_caption", [DETAIL_X + 10, DETAIL_Y + 114, 18, 8], "Q",
-                   textcolor=TEXT_DIM, fontsize=6.4)
+device.add_dial("selected_freq", "Freq", [CORE_X + 4, CORE_Y + 10, CORE_W - 8, 22],
+                min_val=10.0, max_val=22000.0, initial=BAND_DEFAULTS[0][0],
+                unitstyle=3, parameter_exponent=3.0,
+                appearance=1, activedialcolor=CONTROL_ACCENT, showname=1, shownumber=1,
+                fontsize=6.5,
+                parameter_enable=0)
+device.add_dial("selected_gain", "Gain", [CORE_X + 4, CORE_Y + 33, CORE_W - 8, 22],
+                min_val=-30.0, max_val=30.0, initial=0.0,
+                unitstyle=4, appearance=1, activedialcolor=CONTROL_ACCENT,
+                showname=1, shownumber=1, fontsize=6.5, parameter_enable=0)
+device.add_dial("selected_q", "Q", [CORE_X + 4, CORE_Y + 56, CORE_W - 8, 22],
+                min_val=0.1, max_val=30.0, initial=1.0,
+                unitstyle=1, appearance=1, activedialcolor=CONTROL_ACCENT,
+                showname=1, shownumber=1, fontsize=6.5, parameter_enable=0)
+device.add_comment("selected_hint", [HIDDEN_X, 148, 1, 1],
+                   "Right-click node for menu.",
+                   textcolor=TEXT_DIM, fontsize=6.0, justification=1)
 device.add_comment("selected_dynamic_amt_caption", [DETAIL_X + 84, DETAIL_Y + 114, 50, 8], "DYN AMT",
                    textcolor=TEXT_DIM, fontsize=6.4)
-device.add_number_box("selected_q", "Selected Q", [DETAIL_X + 10, DETAIL_Y + 122, 66, 18],
-                      min_val=0.1, max_val=30.0, initial=1.0,
-                      unitstyle=1, fontsize=8.2, parameter_enable=0)
 device.add_number_box("selected_dynamic_amt", "Selected Dynamic Amt", [DETAIL_X + 84, DETAIL_Y + 122, 66, 18],
                       min_val=-18.0, max_val=18.0, initial=0.0,
                       unitstyle=4, fontsize=8.0, parameter_enable=0)
@@ -661,21 +674,21 @@ for i, bx in enumerate(BAND_X):
 device.add_panel("output_card", [900, 900, 1, 1],
                  bgcolor=SURFACE_ALT, border=1,
                  bordercolor=[ACCENT[0], ACCENT[1], ACCENT[2], 0.85], rounded=6)
-device.add_comment("lbl_out", [GLOBAL_X + 10, GLOBAL_Y + 60, 40, 8], "OUTPUT",
+device.add_comment("lbl_out", [HIDDEN_X, 148, 1, 1], "OUTPUT",
                    textcolor=TEXT_DIM, fontsize=6.4)
-device.add_number_box("out_gain", "Out Gain", [GLOBAL_X + 8, GLOBAL_Y + 68, 56, 18],
+device.add_number_box("out_gain", "Out Gain", [HIDDEN_X, 148, 1, 1],
                       min_val=-24.0, max_val=24.0, initial=0.0,
                       unitstyle=4, fontsize=8.0)
-device.add_live_text("bypass_toggle", "Bypass", [GLOBAL_X + 66, GLOBAL_Y + 68, 46, 18],
-                     text_on="BYP", text_off="ACT",
+device.add_live_text("bypass_toggle", "Bypass", [GLOBAL_X + 3, GLOBAL_Y + 79, GLOBAL_W - 6, 15],
+                     text_on="OFF", text_off="ON",
                      bgcolor=CONTROL_BG, bgoncolor=BYPASS_COLOR,
                      textcolor=TEXT_DIM, textoncolor=TEXT_ON_DARK,
-                     rounded=4, fontsize=7.4, shortname="Bypass")
-device.add_comment("lbl_meters", [GLOBAL_X + 90, GLOBAL_Y + 114, 22, 8], "LR",
+                     rounded=2, fontsize=5.9, shortname="Bypass")
+device.add_comment("lbl_meters", [HIDDEN_X, 148, 1, 1], "LR",
                    textcolor=TEXT_DIM, fontsize=6.0, justification=1)
-device.add_meter("meter_l", [GLOBAL_X + 94, GLOBAL_Y + 82, 8, 30],
+device.add_meter("meter_l", [HIDDEN_X, 148, 1, 1],
                  patching_rect=[1600, 0, 8, 80])
-device.add_meter("meter_r", [GLOBAL_X + 106, GLOBAL_Y + 82, 8, 30],
+device.add_meter("meter_r", [HIDDEN_X, 148, 1, 1],
                  patching_rect=[1620, 0, 8, 80])
 
 # ---------------------------------------------------------------------------
@@ -722,6 +735,99 @@ add_selected_band_focus_shell(
     patch_x=10,
     patch_y=250,
 )
+
+# Visible selected-band label follows the active graph/node selection.
+device.add_newobj(
+    "selected_band_name_sel", "select -1 0 1 2 3 4 5 6 7",
+    numinlets=1, numoutlets=10,
+    outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang", "bang", "bang", ""],
+    patching_rect=[10, 276, 220, 20],
+)
+device.add_newobj(
+    "prepend_selected_band_label", "prepend set",
+    numinlets=1, numoutlets=1,
+    outlettype=[""],
+    patching_rect=[236, 276, 80, 20],
+)
+for idx, label in enumerate(["-", "1", "2", "3", "4", "5", "6", "7", "8"]):
+    device.add_box({
+        "box": {
+            "id": f"msg_selected_band_label_{idx}",
+            "maxclass": "message",
+            "text": label,
+            "numinlets": 2,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [10 + idx * 36, 302, 44, 20],
+        }
+    })
+    device.add_line("selected_band_name_sel", idx, f"msg_selected_band_label_{idx}", 0)
+    device.add_line(f"msg_selected_band_label_{idx}", 0, "prepend_selected_band_label", 0)
+device.add_line("selected_band_store", 0, "selected_band_name_sel", 0)
+device.add_line("prepend_selected_band_label", 0, "selected_band_label", 0)
+
+device.add_newobj(
+    "selected_type_name_route", "route selected_type",
+    numinlets=1, numoutlets=2,
+    outlettype=["", ""],
+    patching_rect=[324, 276, 108, 20],
+)
+device.add_newobj(
+    "selected_type_name_sel", "select 0 1 2 3 4 5 6 7",
+    numinlets=1, numoutlets=9,
+    outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang", "bang", ""],
+    patching_rect=[438, 276, 196, 20],
+)
+device.add_newobj(
+    "prepend_selected_type_label", "prepend set",
+    numinlets=1, numoutlets=1,
+    outlettype=[""],
+    patching_rect=[640, 276, 80, 20],
+)
+device.add_newobj(
+    "selected_type_clear_sel", "select -1",
+    numinlets=1, numoutlets=2,
+    outlettype=["bang", ""],
+    patching_rect=[726, 276, 54, 20],
+)
+device.add_newobj(
+    "selected_type_clear_delay", "del 1",
+    numinlets=2, numoutlets=1,
+    outlettype=["bang"],
+    patching_rect=[786, 276, 40, 20],
+)
+device.add_box({
+    "box": {
+        "id": "msg_selected_type_label_clear",
+        "maxclass": "message",
+        "text": "-",
+        "numinlets": 2,
+        "numoutlets": 1,
+        "outlettype": [""],
+        "patching_rect": [832, 276, 30, 20],
+    }
+})
+for idx, label in enumerate(["PK", "LS", "HS", "LP", "HP", "NT", "BP", "AP"]):
+    device.add_box({
+        "box": {
+            "id": f"msg_selected_type_label_{idx}",
+            "maxclass": "message",
+            "text": label,
+            "numinlets": 2,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [324 + idx * 36, 302, 34, 20],
+        }
+    })
+    device.add_line("selected_type_name_sel", idx, f"msg_selected_type_label_{idx}", 0)
+    device.add_line(f"msg_selected_type_label_{idx}", 0, "prepend_selected_type_label", 0)
+device.add_line("selected_band_column", 0, "selected_type_name_route", 0)
+device.add_line("selected_type_name_route", 0, "selected_type_name_sel", 0)
+device.add_line("selected_band_store", 0, "selected_type_clear_sel", 0)
+device.add_line("selected_type_clear_sel", 0, "selected_type_clear_delay", 0)
+device.add_line("selected_type_clear_delay", 0, "msg_selected_type_label_clear", 0)
+device.add_line("msg_selected_type_label_clear", 0, "prepend_selected_type_label", 0)
+device.add_line("prepend_selected_type_label", 0, "selected_type_label", 0)
 
 # Analyzer mode defaults + routing
 device.add_box({
@@ -1437,7 +1543,6 @@ add_selected_band_proxy_shell(
     source_id="selected_band_column",
     selected_band_store_id="selected_band_store",
     route_fields=[
-        {"route_name": "selected_label", "prepend_id": "set_selected_label", "target_id": "selected_band_label", "patch_x": 2380},
         {"route_name": "selected_status", "prepend_id": "set_selected_status", "target_id": "selected_band_status", "patch_x": 2460},
         {"route_name": "selected_freq", "prepend_id": "set_selected_freq", "target_id": "selected_freq", "patch_x": 2540},
         {"route_name": "selected_gain", "prepend_id": "set_selected_gain", "target_id": "selected_gain", "patch_x": 2620},
