@@ -100,6 +100,7 @@ TEXT_SOFT = [0.62, 0.62, 0.64, 1.0]
 ANALYZER = [0.24, 0.84, 0.98, 1.0]
 CURVE = [0.95, 0.97, 1.0, 1.0]
 ACCENT_SOFT = [0.22, 0.22, 0.23, 1.0]
+GRAPH_PLOT_BG = [0.07, 0.10, 0.15, 1.0]
 
 BAND_COLORS = [
     [0.92, 0.36, 0.34, 1.0],
@@ -1089,8 +1090,11 @@ device.add_panel("hero_frame", [10, 8, 740, 172], bgcolor=SURFACE,
 device.add_panel("core_frame", [CORE_X, CORE_Y, CORE_W, CORE_H], bgcolor=PANEL_BG,
                  border=1, bordercolor=BORDER, rounded=8)
 device.add_panel("graph_frame", [GRAPH_X - 2, GRAPH_Y - 2, GRAPH_W + 4, GRAPH_H + 4],
-                 bgcolor=[0.09, 0.09, 0.10, 1.0], border=1,
+                 bgcolor=PANEL_BG_ALT, border=1,
                  bordercolor=BORDER, rounded=8)
+device.add_panel("graph_plot_bg", [GRAPH_X, GRAPH_Y, GRAPH_W, GRAPH_H],
+                 bgcolor=GRAPH_PLOT_BG, border=1,
+                 bordercolor=BORDER, rounded=6)
 device.add_panel("chips_frame", [CHIPS_X - 2, CHIPS_Y - 2, CHIPS_W + 4, CHIPS_H + 4], bgcolor=PANEL_BG_ALT,
                  border=1, bordercolor=BORDER, rounded=6)
 device.add_panel("selected_frame", [EDITOR_X, EDITOR_Y, EDITOR_W, EDITOR_H], bgcolor=PANEL_BG,

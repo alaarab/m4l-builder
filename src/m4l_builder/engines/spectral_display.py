@@ -12,11 +12,20 @@ Outlets:
     (none -- display only)
 """
 
+from ._graph_colors import (
+    DEFAULT_GRAPH_PLOT_BORDER_COLOR,
+    DEFAULT_GRAPH_PLOT_COLOR,
+    resolve_graph_panel_color,
+)
+
 SPECTRAL_DISPLAY_INLETS = 2
 SPECTRAL_DISPLAY_OUTLETS = 0
 
 
-def spectral_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
+def spectral_display_js(*,
+                         bg_color=DEFAULT_GRAPH_PLOT_COLOR,
+                         panel_color=None,
+                         plot_border_color=DEFAULT_GRAPH_PLOT_BORDER_COLOR,
                          bar_color="0.35, 0.60, 0.90, 0.8",
                          threshold_color="0.9, 0.5, 0.2, 0.9"):
     """Return JavaScript source for a spectral bin display (Max jsui).
@@ -26,13 +35,17 @@ def spectral_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
     reduced opacity.
 
     Args:
-        bg_color: Background color (RGBA string).
+        bg_color: Plot background color (RGBA string).
+        panel_color: Outer panel color. Defaults to Ableton-style grey unless
+            bg_color is transparent, in which case the shell stays transparent.
+        plot_border_color: Outline color for the plot region.
         bar_color: Bar color (RGBA string).
         threshold_color: Threshold line color (RGBA string).
 
     Returns:
         JavaScript source code string (ES5 compatible).
     """
+    panel_color = resolve_graph_panel_color(bg_color, panel_color)
     bc = [s.strip() for s in bar_color.split(",")]
     bar_dim = bc[0] + ", " + bc[1] + ", " + bc[2] + ", 0.25"
     bar_cap = bc[0] + ", " + bc[1] + ", " + bc[2] + ", 1.0"
@@ -87,10 +100,16 @@ def spectral_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
         "    var area_h = h - 2 * PADDING;\n"
         "    var n = bins.length;\n"
         "\n"
-        "    // Background\n"
-        f"    mgraphics.set_source_rgba({bg_color});\n"
+        "    // Outer shell + plot surface\n"
+        f"    mgraphics.set_source_rgba({panel_color});\n"
         "    mgraphics.rectangle(0, 0, w, h);\n"
         "    mgraphics.fill();\n"
+        f"    mgraphics.set_source_rgba({bg_color});\n"
+        "    mgraphics.rectangle(area_x, area_y, area_w, area_h);\n"
+        "    mgraphics.fill_preserve();\n"
+        f"    mgraphics.set_source_rgba({plot_border_color});\n"
+        "    mgraphics.set_line_width(1.0);\n"
+        "    mgraphics.stroke();\n"
         "\n"
         "    // Draw each bin as a vertical bar\n"
         "    if (n > 0) {\n"

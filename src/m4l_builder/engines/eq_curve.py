@@ -54,13 +54,21 @@ Mouse interaction:
 
 from string import Template
 
+from ._graph_colors import (
+    DEFAULT_GRAPH_PLOT_BORDER_COLOR,
+    DEFAULT_GRAPH_PLOT_COLOR,
+    resolve_graph_panel_color,
+)
+
 EQ_CURVE_INLETS = 3
 EQ_CURVE_OUTLETS = 4
 
 
 def eq_curve_js(
     *,
-    bg_color="0.07, 0.07, 0.08, 1.0",
+    bg_color=DEFAULT_GRAPH_PLOT_COLOR,
+    panel_color=None,
+    plot_border_color=DEFAULT_GRAPH_PLOT_BORDER_COLOR,
     composite_color="0.85, 0.88, 0.92, 1.0",
     fill_color="0.45, 0.75, 0.65, 0.12",
     analyzer_fill_color="0.24, 0.78, 0.92, 0.12",
@@ -71,8 +79,11 @@ def eq_curve_js(
     zero_line_color="0.3, 0.3, 0.32, 0.8",
 ):
     """Return JavaScript source for an interactive parametric EQ display."""
+    panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
         bg_color=bg_color,
+        panel_color=panel_color,
+        plot_border_color=plot_border_color,
         composite_color=composite_color,
         fill_color=fill_color,
         analyzer_fill_color=analyzer_fill_color,
@@ -97,6 +108,8 @@ outlets = 4;
 
 // ── Configurable colors ──────────────────────────────────────────────
 var BG_COLOR       = [$bg_color];
+var PANEL_CLR      = [$panel_color];
+var PLOT_BORDER_CLR = [$plot_border_color];
 var COMPOSITE_CLR  = [$composite_color];
 var FILL_CLR       = [$fill_color];
 var ANALYZER_FILL_CLR = [$analyzer_fill_color];
@@ -766,13 +779,24 @@ var freq_table = [];
 })();
 
 // ── Drawing ──────────────────────────────────────────────────────────
+function draw_plot_background() {
+    mgraphics.set_source_rgba(PANEL_CLR);
+    mgraphics.rectangle(0, 0, mgraphics.size[0], mgraphics.size[1]);
+    mgraphics.fill();
+
+    mgraphics.set_source_rgba(BG_COLOR);
+    mgraphics.rectangle(plot_left(), plot_top(), plot_w(), plot_h());
+    mgraphics.fill_preserve();
+    mgraphics.set_source_rgba(PLOT_BORDER_CLR);
+    mgraphics.set_line_width(1.0);
+    mgraphics.stroke();
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
 
-    mgraphics.set_source_rgba(BG_COLOR);
-    mgraphics.rectangle(0, 0, w, h);
-    mgraphics.fill();
+    draw_plot_background();
 
     draw_grid();
     draw_analyzer();

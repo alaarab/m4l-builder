@@ -69,7 +69,6 @@ device.add_jsui("filter_display", [10, 8, 360, 118],
                 js_code=filter_curve_js(
                     line_color="0.45, 0.75, 0.65, 1.0",
                     fill_color="0.45, 0.75, 0.65, 0.15",
-                    bg_color="0.05, 0.05, 0.06, 1.0",
                     grid_color="0.2, 0.2, 0.22, 0.5",
                     text_color="0.5, 0.5, 0.52, 1.0",
                     cursor_color="0.8, 0.8, 0.8, 0.4",

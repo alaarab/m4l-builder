@@ -107,7 +107,8 @@ ACCENT = list(theme.accent)
 ACCENT_SOFT = mix(theme.surface, theme.accent, 0.22)
 CONTROL_BG = [0.22, 0.22, 0.23, 1.0]
 CONTROL_BORDER = [0.41, 0.41, 0.43, 1.0]
-GRAPH_BG = [0.09, 0.09, 0.10, 1.0]
+GRAPH_FRAME_BG = list(SURFACE)
+GRAPH_BG = [0.07, 0.10, 0.15, 1.0]
 GRAPH_BORDER = [0.27, 0.27, 0.29, 1.0]
 GRAPH_COMPOSITE = mix(TEXT, ACCENT, 0.16)
 GRAPH_FILL = alpha(ACCENT, 0.10)
@@ -203,8 +204,11 @@ device.add_panel("core_frame", [CORE_X, CORE_Y, CORE_W, CORE_H],
                  bgcolor=SURFACE_ALT, border=1,
                  bordercolor=RAIL_BORDER, rounded=8)
 device.add_panel("graph_frame", [GRAPH_X - 2, GRAPH_Y - 2, GRAPH_W + 4, GRAPH_H + 4],
-                 bgcolor=GRAPH_BG, border=1,
+                 bgcolor=GRAPH_FRAME_BG, border=1,
                  bordercolor=GRAPH_BORDER, rounded=8)
+device.add_panel("graph_plot_bg", [GRAPH_X, GRAPH_Y, GRAPH_W, GRAPH_H],
+                 bgcolor=GRAPH_BG, border=1,
+                 bordercolor=GRAPH_BORDER, rounded=6)
 device.add_panel("detail_frame", [DETAIL_X, DETAIL_Y, DETAIL_WIDTH, DETAIL_H],
                  bgcolor=SURFACE_ALT, border=1,
                  bordercolor=RAIL_BORDER, rounded=8)

@@ -74,6 +74,42 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 
 `Device.from_amxd(path)` -- Class method. Parse a .amxd file into a Device (AudioEffect, Instrument, or MidiEffect based on type code). Works on `AudioEffect.from_amxd()` too.
 
+### Reverse engineering and corpus mining
+
+`read_amxd(path)` -- Read an .amxd container and return its patcher plus inferred metadata
+`snapshot_from_device(device)` -- Capture a normalized snapshot from an in-memory Device
+`snapshot_from_amxd(path)` -- Capture a normalized snapshot from an .amxd plus nearby sidecars
+`snapshot_from_bridge_payload(...)` -- Capture a normalized snapshot from LiveMCP Max bridge payloads
+`analyze_snapshot(snapshot)` -- First-pass structural analysis for a normalized snapshot
+`extract_embedded_patcher_snapshots(snapshot)` -- Extract nested embedded patchers as reusable snapshots
+`extract_controller_shell_candidates(snapshot)` -- Extract controller-shell normalization candidates such as controller-surface and sequencer-dispatch shells
+`extract_embedded_ui_shell_candidates(snapshot)` -- Extract exact-safe embedded host shell candidates for root subpatcher and `bpatcher` boxes
+`detect_snapshot_patterns(snapshot)` -- Detect known helper-level DSP structures
+`detect_snapshot_recipes(snapshot)` -- Detect higher-level staged recipes
+`detect_snapshot_motifs(snapshot)` -- Detect generic Max motifs like named buses, controller dispatch/scheduler/state-bundle clusters, Live API clusters, and embedded patchers
+`extract_parameter_specs(snapshot)` -- Pull normalized parameter/control specs from a snapshot
+`extract_snapshot_knowledge(snapshot)` -- Build a prompt-ready manifest of controls, displays, patterns, recipes, motifs, named-bus networks, embedded patchers, Live API archetypes, bridge state, and lossiness
+`generate_python_from_snapshot(snapshot)` -- Fidelity-first exact rebuild script
+`generate_builder_python_from_snapshot(snapshot)` -- Builder-style rebuild script with semantic `add_*` calls where recognized
+`generate_optimized_python_from_snapshot(snapshot)` -- Exact-safe helper/recipe rebuild with canonical Live API, controller-shell, and embedded-ui-shell helper collapsing when safe
+`generate_semantic_python_from_snapshot(snapshot)` -- Rewrite-oriented semantic rebuild that also normalizes safe non-canonical Live API helper opportunities
+`analyze_amxd_file(path)` -- Analyze one .amxd file for corpus mining
+`analyze_amxd_corpus(path, recursive=True)` -- Mine a directory of .amxd files into aggregate metrics, motifs, and object/control distributions
+`rank_reverse_candidates(report, limit=20)` -- Rank parsed corpus items by expected reverse-engineering payoff using motifs, embedded patchers, and unresolved helper opportunities
+`rank_reverse_candidate_families(report, limit=20)` -- Collapse versioned variants into device families so the next reverse targets are easier to prioritize
+`build_reverse_candidate_family_profile(report, family)` -- Build a detailed stable-vs-variable profile for one normalized device family, including inferred semantic targets and next-work suggestions
+`build_reverse_candidate_family_profiles(report, limit=20)` -- Aggregate motif/object signals across ranked families so variant-heavy device lines can be mined as one lane
+`corpus_report_markdown(report)` -- Render a markdown report from `analyze_amxd_corpus(...)`
+`family_profile_markdown(profile)` -- Render a markdown report from `build_reverse_candidate_family_profile(...)`
+`write_corpus_report(report, path)` -- Write that markdown report to disk
+`write_family_profile(profile, path)` -- Write the family markdown report to disk
+`build_corpus_manifest(path, recursive=True, stable_sample_size=12)` -- Build a deterministic manifest with hashes, categories, dependency notes, and a stable sample subset for a local corpus
+`load_corpus_manifest(path)` -- Read a corpus manifest JSON file
+`write_corpus_manifest(manifest, path)` -- Write a corpus manifest JSON file
+`select_corpus_manifest_entries(manifest, selection=\"stable\", limit=None)` -- Select manifest entries by sample set, family tag, or category tag
+`run_corpus_fixture(corpus_or_manifest, output_dir, ...)` -- Materialize local reverse/codegen artifacts (`snapshot.json`, `knowledge.json`, exact/builder/optimized/semantic scripts) for a selected subset
+`write_corpus_fixture_results(results, path)` -- Write fixture-run results to disk
+
 ### Layout shortcuts
 
 `device.row(x, y, *, spacing=8, height=None, width=None)` -- Returns a Row context manager
@@ -304,8 +340,16 @@ Access via device shortcuts: `device.row(...)`, `device.column(...)`, `device.gr
 Max for Live Live API integration.
 
 `live_object_path(id_prefix, path="live_set")` -- live.path + live.object pair for getting/setting properties. Returns `(boxes, lines)`.
-`live_observer(id_prefix, path="live_set", prop="tempo")` -- Watch a Live property and output on change. Returns `(boxes, lines)`.
+`live_parameter_probe(id_prefix, path="live_set", *, commands=None, get_props=None, call_commands=None, route_selectors=None, trigger_text=None)` -- parameter-probe helper for either `live.path + live.object` or object-only `live.object` clusters, with optional `route ...` fan-out and optional `t ...` trigger wrapper. Returns `(boxes, lines)`.
+`live_observer(id_prefix, path="live_set", prop="tempo")` -- Watch a Live property and output on change. Returns `(boxes, lines)`. Supports both `live.path -> live.object -> live.observer` and direct `live.path -> live.observer` forms via `via_object=False`, with optional `bind_via_message=True` for a separate `property <prop>` message box.
+`live_state_observer(id_prefix, path="live_set", prop="scale_mode")` -- Initialized discrete-state observer helper for the common external-device controller chain `live.thisdevice -> t b b -> live.path/property -> live.observer -> t i i -> sel 0`. Returns `(boxes, lines)`.
 `live_set_control(id_prefix, path="live_set", prop="tempo")` -- Send set messages to a Live property. Returns `(boxes, lines)`.
+`live_thisdevice(id_prefix)` -- `live.thisdevice` reference box. Returns `(boxes, lines)`.
+`device_active_state(id_prefix, *, from_device_outlet=None)` -- `prepend active` + `live.thisdevice` pair for device active-state control. By default it emits the toggle-style `prepend active -> live.thisdevice` line, but it can also preserve external-device `live.thisdevice -> prepend active` variants by setting `from_device_outlet`. Returns `(boxes, lines)`.
+
+All Live API helpers also accept explicit box IDs and patching rect overrides so
+reverse-generated code can preserve original geometry and wiring targets while
+still using semantic helper calls.
 
 ---
 

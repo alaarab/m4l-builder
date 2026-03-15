@@ -163,6 +163,195 @@ device.add_dial("new_knob", "NewParam", [10, 10, 50, 70])
 device.build("path/to/modified.amxd")
 ```
 
+### Reverse engineering snapshots
+
+You can also capture a low-level snapshot from an `.amxd` and emit a starter
+Python rebuild script:
+
+```python
+from m4l_builder import (
+    snapshot_from_amxd,
+    extract_snapshot_knowledge,
+    generate_python_from_snapshot,
+    generate_builder_python_from_snapshot,
+    generate_optimized_python_from_snapshot,
+    generate_semantic_python_from_snapshot,
+)
+
+snapshot = snapshot_from_amxd("path/to/device.amxd")
+knowledge = extract_snapshot_knowledge(snapshot)
+exact_source = generate_python_from_snapshot(snapshot)
+builder_source = generate_builder_python_from_snapshot(snapshot)
+optimized_source = generate_optimized_python_from_snapshot(snapshot)
+semantic_source = generate_semantic_python_from_snapshot(snapshot)
+```
+
+This is fidelity-first: the exact generator preserves the patcher structure and
+recovered sidecars, the builder generator emits nicer `add_*` style code when
+the snapshot is recognized, the optimized generator can collapse known
+`m4l-builder` DSP blocks back into helper calls like `param_smooth(...)` or
+`delay_line(...)`, `transport_lfo(...)`, and similar helpers, and larger
+recognized stages back into recipe calls like `gain_controlled_stage(...)`,
+`dry_wet_stage(...)`, `tempo_synced_delay(...)`, `midi_note_gate(...)`, or
+`transport_sync_lfo_recipe(...)`. The semantic generator sits one level above
+that exact-safe path: it can also normalize safe non-canonical Live API
+clusters into helper calls while leaving manual-review cases expanded.
+The builder path also rebuilds common UI/support-file
+objects semantically, including `jsui`, `v8ui`, `bpatcher`, `fpic`,
+`multislider`, `textbutton`, `umenu`, `radiogroup`, `live.step`, `live.grid`,
+`kslider`, and related display widgets, while the optimized path only collapses
+to helper/recipe calls when the recognized structure is safe to regenerate.
+The reverse analysis also exposes generic Max motifs from external devices, such
+as named send/receive buses, Live API control clusters, and embedded patcher
+hosts, so corpus mining is useful even when a device was not built with
+`m4l-builder`.
+It now also detects non-LiveAPI controller structures that dominate public
+devices: dispatcher clusters (`route` / `sel` / `gate` / `switch` with trigger
+fan-out), scheduler chains (`loadbang`, `deferlow`, timed dispatch), and
+state-bundle/list utilities (`pack`, `pak`, `unpack`, `zl*`).
+Live API motifs now also classify small controller archetypes such as
+`parameter_probe`, `tempo_observer`, `transport_state_observer`,
+`device_active_state`, and `track_management`, which makes public-device mining
+much more actionable than raw operator counts alone.
+The optimized rebuild path now collapses canonical `live.path` /
+`live.object` / `live.observer` / `live.thisdevice` structures back into
+semantic helpers like `live_object_path(...)`, `live_parameter_probe(...)`,
+`live_observer(...)`, `live_state_observer(...)`, `live_set_control(...)`,
+`live_thisdevice(...)`, and `device_active_state(...)` when the emitted helper
+boxes match the source
+exactly. `live_observer(...)` now also supports the direct
+`live.path -> live.observer` topology used by many external devices, plus
+property-message binding in both topologies for semantic rewrites.
+`live_parameter_probe(...)` now also supports object-only parameter probes with
+optional `route` fan-out and `t ...` trigger wrappers, which lets the reverse
+path recover common external-device `live.object -> route` probe clusters
+instead of leaving them as opaque raw boxes.
+`device_active_state(...)` now preserves both the normal
+`prepend active -> live.thisdevice` toggle path and external variants that feed
+`live.thisdevice` outlet state back into `prepend active`, which moved another
+external controller motif out of manual-review territory.
+`live_state_observer(...)` captures the initialized direct-observer controller
+shape used by external devices such as MoireArp: `live.thisdevice -> t b b ->
+live.path/property -> live.observer -> t i i -> sel 0`.
+See [docs/reverse_engineering.md](docs/reverse_engineering.md).
+
+If you already captured a live bridge-enabled device through LiveMCP, you can
+also normalize that data with `snapshot_from_bridge_payload(...)` and feed it
+into the same pipeline.
+
+You can also mine a whole directory of external `.amxd` files into a structured
+corpus report:
+
+```python
+from m4l_builder import analyze_amxd_corpus, corpus_report_markdown
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+markdown = corpus_report_markdown(report)
+```
+
+That report now includes helper/recipe hits, semantic Live API helper
+recoveries, non-exact Live API helper opportunities plus blocker reasons,
+generic motif frequencies, object-name frequencies, control-class
+distributions, display-role counts across the corpus, and a ranked
+`reverse_candidates` list that surfaces which external devices are currently the
+best targets for further semantic work. The report also includes
+`reverse_candidate_families`, which collapses versioned variants into device
+families so the queue is not dominated by duplicate builds of the same patch,
+plus `reverse_candidate_family_profiles`, which aggregate motif/object signals
+across those variants.
+
+If you want to focus one semantic lane at a time, build a detailed family
+profile with stable-vs-variable signals:
+
+```python
+from m4l_builder import analyze_amxd_corpus, build_reverse_candidate_family_profile
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+profile = build_reverse_candidate_family_profile(report, "zs-Knobbler3")
+```
+
+That family profile separates stable motif/object/archetype signals from
+variant-only noise, which makes it much easier to decide what should become a
+new helper or normalization rule.
+
+Family profiles also infer `semantic_targets` and `next_work_items` from those
+stable signals, so the reverse queue can move from “interesting family” to
+“normalize this shell next” without re-reading the raw motif tables each time.
+
+At the snapshot level, `extract_controller_shell_candidates(...)` now surfaces
+controller-oriented semantic targets such as `controller_surface_shell` and
+`sequencer_dispatch_shell`, while `extract_embedded_ui_shell_candidates(...)`
+surfaces exact embedded-host shells for subpatcher and `bpatcher` boxes.
+Both `generate_optimized_python_from_snapshot(...)` and
+`generate_semantic_python_from_snapshot(...)` now use those candidates to call
+reusable package helpers in the emitted script instead of leaving every shell
+box flattened into the top-level build sequence.
+
+The knowledge manifest also now includes `named_bus_networks`, which groups
+same-name send/receive fabrics across the root patcher and any embedded
+subpatchers that expose their internals.
+
+For local research batches, the repo also ships a helper script:
+
+```bash
+uv run python tools/mine_amxd_corpus.py /path/to/amxd-corpus
+```
+
+To turn a local corpus into a reusable reverse-engineering fixture set, build a
+manifest plus per-device snapshot/codegen artifacts:
+
+```python
+from m4l_builder import build_corpus_manifest, run_corpus_fixture
+
+manifest = build_corpus_manifest("/path/to/amxd-corpus", stable_sample_size=12)
+results = run_corpus_fixture(manifest, "/tmp/amxd-fixture", selection="stable")
+```
+
+That fixture writes, for each selected device:
+
+- `snapshot.json`
+- `knowledge.json`
+- fidelity-first `exact.py`
+- builder-style `builder.py`
+- exact-safe `optimized.py`
+- rewrite-oriented `semantic.py`
+
+If one generation mode fails on a particular external device, the fixture run
+keeps going and records the per-mode error instead of aborting the whole batch.
+
+There is also a repo helper script for this:
+
+```bash
+uv run python tools/build_corpus_fixture.py /path/to/amxd-corpus /tmp/amxd-fixture
+```
+
+Selections can target whole families as well as sample sets, for example
+`--selection family:zs-Knobbler3`.
+
+For a focused family dossier, the repo also ships:
+
+```bash
+uv run python tools/build_family_report.py /path/to/amxd-corpus zs-Knobbler3
+```
+
+### LiveMCP bridge embedding
+
+If you want a device to expose its own native Max editing bridge to LiveMCP,
+embed the bridge directly into that device:
+
+```python
+from m4l_builder import AudioEffect, enable_livemcp_bridge, device_output_path
+
+device = AudioEffect("Bridge Ready", width=420, height=180)
+enable_livemcp_bridge(device, include_ui=True)
+device.build(device_output_path("Bridge Ready"))
+```
+
+That device will write the `.amxd` plus the bridge sidecars next to it during
+`build()`. The bridge is local-only and device-local: it gives LiveMCP access to
+that device's patcher, not to arbitrary third-party Max devices in the set. See
+[docs/livemcp_max_bridge.md](docs/livemcp_max_bridge.md) for the full contract.
+
 ## Examples
 
 40+ examples in `examples/`. A few highlights:
@@ -175,6 +364,7 @@ device.build("path/to/modified.amxd")
 | `parametric_eq.py` | JSUI custom EQ curve display |
 | `poly_synth.py` | Polyphonic synth with wavetable |
 | `midi_arpeggiator.py` | MIDI arpeggiator |
+| `livemcp_bridge_demo.py` | Compact reference device with embedded LiveMCP bridge |
 | `from_amxd_demo.py` | Round-trip: build, read back, modify |
 
 ```bash

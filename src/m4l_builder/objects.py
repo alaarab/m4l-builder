@@ -20,11 +20,11 @@ def newobj(id: str, text: str, *, numinlets: int, numoutlets: int,
     return {"box": box}
 
 
-def patchline(source_id: str, source_outlet: int, dest_id: str, dest_inlet: int) -> dict:
+def patchline(source_id: str, source_outlet: int, dest_id: str, dest_inlet: int, **kwargs) -> dict:
     """Create a patchline connection dict with a "patchline" key."""
-    return {
-        "patchline": {
-            "source": [source_id, source_outlet],
-            "destination": [dest_id, dest_inlet],
-        }
+    patchline_dict = {
+        "source": [source_id, source_outlet],
+        "destination": [dest_id, dest_inlet],
     }
+    patchline_dict.update(kwargs)
+    return {"patchline": patchline_dict}
