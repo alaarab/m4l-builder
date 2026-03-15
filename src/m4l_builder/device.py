@@ -3,22 +3,26 @@
 import json
 import os
 import struct
+import warnings
 
 from .constants import DEVICE_TYPE_CODES
 from .container import write_amxd, build_amxd
 from .dsp import stereo_io
+from .graph import GraphContainer
 from .layout import Row, Column, Grid
-from .objects import newobj, patchline
+from .parameters import ParameterSpec
 from .patcher import build_patcher
+from .profiles import DEFAULT_PATCHER_PROFILE
 from .ui import (panel, dial, tab, toggle, comment, scope, meter, menu,
                  number_box, slider, button, live_text, fpic, live_gain,
                  multislider, jsui, v8ui, adsrui, live_drop, bpatcher, swatch,
                  textedit, live_step, live_grid, live_line, live_arrows,
                  rslider, kslider, textbutton, umenu, radiogroup, nodes,
                  matrixctrl, ubutton, nslider)
+from .validation import BuildValidationError, format_validation_issues
 
 
-class Device:
+class Device(GraphContainer):
     """Base class for M4L devices.
 
     Provides a builder-style API for adding objects, UI elements, and
@@ -26,34 +30,60 @@ class Device:
     """
 
     def __init__(self, name: str, width: float, height: float,
-                 device_type: str = "audio_effect", theme=None):
+                 device_type: str = "audio_effect", theme=None, profile=None):
+        super().__init__()
         self.name = name
         self.width = width
         self.height = height
         self.device_type = device_type
         self.theme = theme
-        self.boxes = []
-        self.lines = []
+        self.profile = profile or DEFAULT_PATCHER_PROFILE
         self._js_files = {}  # {filename: js_code_string}
         self._param_banks = {}  # {varname: (bank, position)}
         self._param_bank_names = {}  # {bank: name}
         self._support_files = {}  # {filename: {"content": str, "type": str}}
 
-    def add_box(self, box_dict: dict) -> str:
-        """Add a raw box dict and return its object ID."""
-        self.boxes.append(box_dict)
-        return box_dict["box"]["id"]
+    def register_parameter(self, spec, *, box_id: str = None):
+        """Register parameter specs and keep bank metadata synchronized."""
+        stored = super().register_parameter(spec, box_id=box_id)
+        if stored.name in self._param_banks:
+            bank, position = self._param_banks[stored.name]
+            stored.bank = bank
+            stored.position = position
+            stored.bank_name = self._param_bank_names.get(bank, stored.bank_name)
+        elif stored.bank is not None and stored.position is not None:
+            self._param_banks[stored.name] = (stored.bank, stored.position)
+            if stored.bank_name is not None:
+                self._param_bank_names[stored.bank] = stored.bank_name
+        return stored
 
-    def add_line(self, source_id: str, source_outlet: int,
-                 dest_id: str, dest_inlet: int):
-        self.lines.append(patchline(source_id, source_outlet, dest_id, dest_inlet))
-
-    def add_dsp(self, boxes: list, lines: list):
-        """Add all boxes and lines from a DSP block tuple to this device."""
-        for box in boxes:
-            self.add_box(box)
-        for line in lines:
-            self.lines.append(line)
+    def register_asset(
+        self,
+        filename: str,
+        content,
+        *,
+        asset_type: str = "TEXT",
+        category: str = "support",
+        encoding: str = "utf-8",
+    ):
+        """Register a sidecar asset and keep legacy mirrors synchronized."""
+        stored = super().register_asset(
+            filename,
+            content,
+            asset_type=asset_type,
+            category=category,
+            encoding=encoding,
+        )
+        if category == "js":
+            self._js_files[filename] = content
+            self._support_files.pop(filename, None)
+        else:
+            self._support_files[filename] = {
+                "content": content,
+                "type": asset_type,
+            }
+            self._js_files.pop(filename, None)
+        return stored
 
     def _inject_theme(self, kwargs, mapping):
         """Inject theme defaults for keys not already in kwargs.
@@ -68,6 +98,21 @@ class Device:
                 if val is not None:
                     kwargs[kwarg_key] = val
 
+    def _parameter_arg_spec(self, varname, kwargs):
+        """Extract a first-class parameter spec from wrapper args when present."""
+        parameter = kwargs.get("parameter")
+        if isinstance(parameter, ParameterSpec):
+            return parameter
+        if isinstance(varname, ParameterSpec):
+            return varname
+        return None
+
+    def _register_parameter_arg(self, box_ref, varname, kwargs):
+        """Re-register explicit ParameterSpecs so bank metadata survives wrapper calls."""
+        spec = self._parameter_arg_spec(varname, kwargs)
+        if spec is not None:
+            self.register_parameter(spec, box_id=str(box_ref))
+
     def add_panel(self, id: str, rect: list, **kwargs) -> str:
         self._inject_theme(kwargs, {
             "bgcolor": "bg",
@@ -79,7 +124,9 @@ class Device:
             "activedialcolor": "dial_color",
             "activeneedlecolor": "needle_color",
         })
-        return self.add_box(dial(id, varname, rect, **kwargs))
+        ref = self.add_box(dial(id, varname, rect, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_tab(self, id: str, varname: str, rect: list, options: list, **kwargs) -> str:
         self._inject_theme(kwargs, {
@@ -88,13 +135,17 @@ class Device:
             "textcolor": "tab_text",
             "textoncolor": "tab_text_on",
         })
-        return self.add_box(tab(id, varname, rect, options=options, **kwargs))
+        ref = self.add_box(tab(id, varname, rect, options=options, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_toggle(self, id: str, varname: str, rect: list, **kwargs) -> str:
         self._inject_theme(kwargs, {
             "activebgoncolor": "accent",
         })
-        return self.add_box(toggle(id, varname, rect, **kwargs))
+        ref = self.add_box(toggle(id, varname, rect, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_comment(self, id: str, rect: list, text: str, **kwargs) -> str:
         self._inject_theme(kwargs, {
@@ -120,25 +171,37 @@ class Device:
         return self.add_box(meter(id, rect, **kwargs))
 
     def add_menu(self, id: str, varname: str, rect: list, options: list, **kwargs) -> str:
-        return self.add_box(menu(id, varname, rect, options=options, **kwargs))
+        ref = self.add_box(menu(id, varname, rect, options=options, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_number_box(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        return self.add_box(number_box(id, varname, rect, **kwargs))
+        ref = self.add_box(number_box(id, varname, rect, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_slider(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        return self.add_box(slider(id, varname, rect, **kwargs))
+        ref = self.add_box(slider(id, varname, rect, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_button(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        return self.add_box(button(id, varname, rect, **kwargs))
+        ref = self.add_box(button(id, varname, rect, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_live_text(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        return self.add_box(live_text(id, varname, rect, **kwargs))
+        ref = self.add_box(live_text(id, varname, rect, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_fpic(self, id: str, rect: list, **kwargs) -> str:
         return self.add_box(fpic(id, rect, **kwargs))
 
     def add_live_gain(self, id: str, varname: str, rect: list, **kwargs) -> str:
-        return self.add_box(live_gain(id, varname, rect, **kwargs))
+        ref = self.add_box(live_gain(id, varname, rect, **kwargs))
+        self._register_parameter_arg(ref, varname, kwargs)
+        return ref
 
     def add_multislider(self, id: str, rect: list, **kwargs) -> str:
         return self.add_box(multislider(id, rect, **kwargs))
@@ -162,7 +225,7 @@ class Device:
         """
         if js_filename is None:
             js_filename = f"{id}.js"
-        self._js_files[js_filename] = js_code
+        self.register_asset(js_filename, js_code, asset_type="TEXT", category="js")
         return self.add_box(jsui(id, rect, js_filename=js_filename,
                                  numinlets=numinlets, numoutlets=numoutlets,
                                  **kwargs))
@@ -173,7 +236,7 @@ class Device:
         """Add a v8ui with embedded JavaScript code for pointer-aware custom UI."""
         if js_filename is None:
             js_filename = f"{id}.js"
-        self._js_files[js_filename] = js_code
+        self.register_asset(js_filename, js_code, asset_type="TEXT", category="js")
         return self.add_box(v8ui(id, rect, js_filename=js_filename,
                                  numinlets=numinlets, numoutlets=numoutlets,
                                  **kwargs))
@@ -181,10 +244,7 @@ class Device:
     def add_support_file(self, filename: str, content: str,
                          file_type: str = "TEXT") -> str:
         """Register an auxiliary file to write alongside the .amxd build."""
-        self._support_files[filename] = {
-            "content": content,
-            "type": file_type,
-        }
+        self.register_asset(filename, content, asset_type=file_type, category="support")
         return filename
 
     def add_adsrui(self, id: str, rect: list, **kwargs) -> str:
@@ -241,10 +301,10 @@ class Device:
     def add_nslider(self, id: str, rect: list, **kwargs) -> str:
         return self.add_box(nslider(id, rect, **kwargs))
 
-    def add_newobj(self, id: str, text: str, *, numinlets: int, numoutlets: int,
+    def add_newobj(self, id: str = None, text: str = "", *, numinlets: int, numoutlets: int,
                    **kwargs) -> str:
-        return self.add_box(newobj(id, text, numinlets=numinlets,
-                                   numoutlets=numoutlets, **kwargs))
+        return super().add_newobj(id, text, numinlets=numinlets,
+                                  numoutlets=numoutlets, **kwargs)
 
     def add_subpatcher(self, subpatcher, id: str, rect: list, *,
                        numinlets: int = 1, numoutlets: int = 1,
@@ -270,64 +330,36 @@ class Device:
         """Serialize the device patcher structure to a JSON string."""
         return json.dumps(self.to_patcher(), indent=indent)
 
-    def wire_chain(self, obj_ids: list, outlet: int = 0, inlet: int = 0):
-        """Connect objects end-to-end, each output feeding the next input."""
-        for i in range(len(obj_ids) - 1):
-            self.add_line(obj_ids[i], outlet, obj_ids[i + 1], inlet)
-
     def validate(self) -> list:
         """Check the device for common problems. Returns a list of warning strings."""
-        warnings = []
+        return super().validate()
 
-        seen_ids = {}
-        for box in self.boxes:
-            box_id = box["box"]["id"]
-            if box_id in seen_ids:
-                warnings.append(f"Duplicate box ID: {box_id}")
-            seen_ids[box_id] = True
-
-        for line in self.lines:
-            pl = line["patchline"]
-            src = pl["source"][0]
-            dst = pl["destination"][0]
-            if src not in seen_ids:
-                warnings.append(f"Patchline references unknown source: {src}")
-            if dst not in seen_ids:
-                warnings.append(f"Patchline references unknown destination: {dst}")
-
-        if self.device_type == "audio_effect":
-            if "obj-plugin" not in seen_ids:
-                warnings.append("AudioEffect missing obj-plugin")
-            if "obj-plugout" not in seen_ids:
-                warnings.append("AudioEffect missing obj-plugout")
-
-        connected = set()
-        for line in self.lines:
-            pl = line["patchline"]
-            connected.add(pl["source"][0])
-            connected.add(pl["destination"][0])
-        for box_id in seen_ids:
-            if box_id not in connected:
-                warnings.append(f"Orphan box (no connections): {box_id}")
-
-        return warnings
-
-    def assign_parameter_bank(self, varname: str, bank: int, position: int,
+    def assign_parameter_bank(self, varname, bank: int, position: int,
                               bank_name: str = None):
         """Map a parameter into Push's bank layout for hardware control."""
         if bank < 0:
             raise ValueError(f"bank must be >= 0, got {bank}")
         if position < 0:
             raise ValueError(f"position must be >= 0, got {position}")
-        self._param_banks[varname] = (bank, position)
+        param_name = self._resolve_parameter_name(varname)
+        self._param_banks[param_name] = (bank, position)
         if bank_name is not None:
             self._param_bank_names[bank] = bank_name
+        spec = self.parameter(param_name)
+        if spec is not None:
+            spec.bank = bank
+            spec.position = position
+            if bank_name is not None:
+                spec.bank_name = bank_name
 
     def set_parameter_bank_name(self, bank: int, name: str):
         """Set a human-readable label for a parameter bank."""
         if bank < 0:
             raise ValueError(f"bank must be >= 0, got {bank}")
         self._param_bank_names[bank] = name
+        for spec in self._parameter_specs.values():
+            if spec.bank == bank:
+                spec.bank_name = name
 
     @classmethod
     def from_amxd(cls, path: str):
@@ -373,29 +405,46 @@ class Device:
         if klass is AudioEffect:
             device.boxes.clear()
             device.lines.clear()
+            device._assets.clear()
+            device._parameter_specs.clear()
+            device._box_parameters.clear()
+            device._reserved_ids.clear()
 
         for box in patcher.get("boxes", []):
-            device.boxes.append(box)
+            device.add_box(box)
         for line in patcher.get("lines", []):
             device.lines.append(line)
+        for bank_key, bank_data in patcher.get("parameters", {}).get("parameterbanks", {}).items():
+            bank_index = int(bank_key)
+            bank_name = bank_data.get("name") or None
+            if bank_name is not None:
+                device.set_parameter_bank_name(bank_index, bank_name)
+            for entry in bank_data.get("parameters", []):
+                name = entry.get("name")
+                if name is None:
+                    continue
+                device.assign_parameter_bank(
+                    name,
+                    bank=bank_index,
+                    position=entry.get("index", 0),
+                    bank_name=bank_name,
+                )
 
         return device
 
-    def to_patcher(self) -> dict:
+    def to_patcher(self, *, profile=None) -> dict:
+        effective_profile = profile or self.profile
         patcher = build_patcher(
             self.boxes, self.lines,
             name=self.name,
             width=self.width,
             height=self.height,
             device_type=self.device_type,
+            profile=effective_profile,
         )
-        # Add sidecar file dependencies so Max can resolve them in-device.
-        for js_name in self._js_files:
-            patcher["patcher"]["dependency_cache"].append({
-                "name": js_name,
-                "type": "TEXT",
-                "implicit": 1,
-            })
+        patcher["patcher"]["dependency_cache"] = [
+            asset.dependency_entry() for asset in self.assets()
+        ]
         # Populate parameter banks from assign_parameter_bank() calls
         if self._param_banks:
             banks = {}
@@ -407,78 +456,102 @@ class Device:
                         "name": self._param_bank_names.get(bank, ""),
                         "parameters": [],
                     }
+                spec = self.parameter(varname)
                 banks[bank_key]["parameters"].append({
                     "index": position,
                     "name": varname,
-                    "visible": 1,
+                    "visible": 1 if spec is None else spec.visible,
                 })
             patcher["patcher"]["parameters"]["parameterbanks"] = banks
-        for filename, metadata in self._support_files.items():
-            patcher["patcher"]["dependency_cache"].append({
-                "name": filename,
-                "type": metadata["type"],
-                "implicit": 1,
-            })
         return patcher
 
-    def to_bytes(self) -> bytes:
+    def to_bytes(self, *, validate=None) -> bytes:
         """Build the .amxd binary in memory."""
+        self._apply_validation_policy(validate)
         type_code = DEVICE_TYPE_CODES[self.device_type]
         return build_amxd(self.to_patcher(), type_code)
 
-    def build(self, output_path: str) -> int:
+    def build(self, output_path: str, *, validate=None) -> int:
         """Build and write the .amxd file. Returns bytes written.
 
         Also writes any embedded JS files alongside the .amxd for jsui objects.
         """
+        self._apply_validation_policy(validate)
         type_code = DEVICE_TYPE_CODES[self.device_type]
         result = write_amxd(self.to_patcher(), output_path, type_code)
-        # Write sidecar files alongside the .amxd.
-        if self._js_files:
-            output_dir = os.path.dirname(output_path)
-            for filename, code in self._js_files.items():
-                js_path = os.path.join(output_dir, filename)
-                try:
-                    with open(js_path, "w") as f:
-                        f.write(code)
-                except IOError as e:
-                    raise IOError(f"Cannot write JS file {js_path}: {e}") from e
-        if self._support_files:
-            output_dir = os.path.dirname(output_path)
-            for filename, metadata in self._support_files.items():
-                sidecar_path = os.path.join(output_dir, filename)
-                try:
-                    with open(sidecar_path, "w") as f:
-                        f.write(metadata["content"])
-                except IOError as e:
-                    raise IOError(
-                        f"Cannot write support file {sidecar_path}: {e}"
-                    ) from e
+        output_dir = os.path.dirname(output_path)
+        for asset in self.assets():
+            try:
+                asset.write_to(output_dir)
+            except OSError as e:
+                raise IOError(
+                    f"Cannot write sidecar file {os.path.join(output_dir, asset.filename)}: {e}"
+                ) from e
         return result
+
+    def _apply_validation_policy(self, policy):
+        if policy in (None, False):
+            return
+        if policy not in {"warn", "error"}:
+            raise ValueError("validate must be one of None, 'warn', or 'error'")
+
+        issues = self.lint(device_type=self.device_type)
+        if not issues:
+            return
+
+        error_issues = [issue for issue in issues if issue.severity == "error"]
+        warning_issues = [issue for issue in issues if issue.severity != "error"]
+
+        if policy == "warn":
+            warnings.warn(format_validation_issues(issues), stacklevel=3)
+            return
+
+        if error_issues:
+            raise BuildValidationError(error_issues, warnings=warning_issues)
+        if warning_issues:
+            warnings.warn(format_validation_issues(warning_issues), stacklevel=3)
 
 
 class AudioEffect(Device):
     """Audio effect device with plugin~/plugout~ auto-added."""
 
-    def __init__(self, name: str, width: float, height: float, theme=None):
-        super().__init__(name, width, height, device_type="audio_effect", theme=theme)
+    def __init__(self, name: str, width: float, height: float, theme=None, profile=None):
+        super().__init__(
+            name,
+            width,
+            height,
+            device_type="audio_effect",
+            theme=theme,
+            profile=profile,
+        )
         # Auto-add stereo I/O
         boxes, lines = stereo_io()
-        for b in boxes:
-            self.boxes.append(b)
-        for l in lines:
-            self.lines.append(l)
+        self.add_dsp(boxes, lines)
 
 
 class Instrument(Device):
     """Instrument device."""
 
-    def __init__(self, name: str, width: float, height: float, theme=None):
-        super().__init__(name, width, height, device_type="instrument", theme=theme)
+    def __init__(self, name: str, width: float, height: float, theme=None, profile=None):
+        super().__init__(
+            name,
+            width,
+            height,
+            device_type="instrument",
+            theme=theme,
+            profile=profile,
+        )
 
 
 class MidiEffect(Device):
     """MIDI effect device."""
 
-    def __init__(self, name: str, width: float, height: float, theme=None):
-        super().__init__(name, width, height, device_type="midi_effect", theme=theme)
+    def __init__(self, name: str, width: float, height: float, theme=None, profile=None):
+        super().__init__(
+            name,
+            width,
+            height,
+            device_type="midi_effect",
+            theme=theme,
+            profile=profile,
+        )

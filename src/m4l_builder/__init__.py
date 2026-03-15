@@ -1,6 +1,16 @@
 """m4l_builder: Programmatically build Max for Live (.amxd) devices."""
 
+from . import analysis_api as analysis
+from . import bridge_api as bridge
+from . import builder
+from . import reverse_api as reverse
+from .assets import Asset
 from .device import Device, AudioEffect, Instrument, MidiEffect
+from .graph import BoxRef, GraphContainer, InletRef, OutletRef
+from .modules import ModuleSpec, module_from_block, mount_module
+from .parameters import ParameterSpec
+from .profiles import DEFAULT_PATCHER_PROFILE, PatcherProfile
+from .stages import Stage, StageResult, stage_result
 from .subpatcher import Subpatcher
 from .container import build_amxd, write_amxd
 from .layout import Row, Column, Grid
@@ -144,6 +154,9 @@ from .reverse import (
     extract_poly_shell_bank_candidates,
     extract_poly_editor_bank_candidates,
     extract_behavior_hints,
+    extract_mapping_behavior_traces,
+    extract_mapping_semantic_candidates,
+    extract_mapping_workflow_candidates,
     extract_first_party_api_rig_candidates,
     extract_first_party_abstraction_host_candidates,
     extract_first_party_abstraction_family_candidates,
@@ -184,6 +197,17 @@ from .corpus_analysis import (
     build_reference_device_dossier,
     build_reference_device_dossiers,
     reference_device_dossiers_markdown,
+    rank_mapping_candidates,
+    build_mapping_lane_report,
+    mapping_lane_report_markdown,
+    write_mapping_lane_report,
+    build_mapping_product_brief,
+    build_mapping_product_brief_from_path,
+    build_mapping_product_briefs,
+    mapping_product_brief_markdown,
+    mapping_product_briefs_markdown,
+    write_mapping_product_brief,
+    write_mapping_product_briefs,
     build_corpus_comparison,
     corpus_comparison_markdown,
     corpus_report_markdown,
@@ -206,9 +230,22 @@ from .recipes import (gain_controlled_stage, dry_wet_stage,
                       arpeggio_quantized_stage, grain_playback_controlled,
                       poly_midi_gate, transport_sync_lfo_recipe,
                       midi_learn_macro_assignment)
+from .validation import (
+    BuildValidationError,
+    ValidationIssue,
+    format_validation_issues,
+    lint_graph,
+)
 
 __all__ = [
+    "builder", "reverse", "analysis", "bridge",
     "Device", "AudioEffect", "Instrument", "MidiEffect", "Subpatcher",
+    "GraphContainer", "BoxRef", "OutletRef", "InletRef",
+    "ParameterSpec", "Asset", "PatcherProfile", "DEFAULT_PATCHER_PROFILE",
+    "Stage", "StageResult", "stage_result",
+    "ModuleSpec", "module_from_block", "mount_module",
+    "ValidationIssue", "BuildValidationError", "lint_graph",
+    "format_validation_issues",
     "Row", "Column", "Grid",
     "build_amxd", "write_amxd",
     "newobj", "patchline",
@@ -309,7 +346,7 @@ __all__ = [
     "extract_sample_buffer_candidates",
     "extract_gen_processing_candidates",
     "extract_presentation_widget_cluster_candidates",
-    "extract_poly_shell_candidates", "extract_poly_shell_bank_candidates", "extract_poly_editor_bank_candidates", "extract_behavior_hints",
+    "extract_poly_shell_candidates", "extract_poly_shell_bank_candidates", "extract_poly_editor_bank_candidates", "extract_behavior_hints", "extract_mapping_behavior_traces", "extract_mapping_semantic_candidates", "extract_mapping_workflow_candidates",
     "extract_first_party_api_rig_candidates",
     "extract_first_party_abstraction_host_candidates",
     "extract_first_party_abstraction_family_candidates",
@@ -348,6 +385,17 @@ __all__ = [
     "build_reference_device_dossier",
     "build_reference_device_dossiers",
     "reference_device_dossiers_markdown",
+    "rank_mapping_candidates",
+    "build_mapping_lane_report",
+    "mapping_lane_report_markdown",
+    "write_mapping_lane_report",
+    "build_mapping_product_brief",
+    "build_mapping_product_brief_from_path",
+    "build_mapping_product_briefs",
+    "mapping_product_brief_markdown",
+    "mapping_product_briefs_markdown",
+    "write_mapping_product_brief",
+    "write_mapping_product_briefs",
     "build_corpus_comparison",
     "corpus_comparison_markdown",
     "corpus_report_markdown",
