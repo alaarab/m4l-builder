@@ -34,10 +34,13 @@ Static repo judgment:
 Static repo judgment:
 
 - the EQ lanes already center the graph as the hero surface
+- the graph and node interaction layer is the clearest current strength
 - the selected-band model is present but still described as unfinished in the
   product docs
 - analyzer and precision state are documented as important, which is a strong
   sign that the repo is thinking at product level rather than widget level
+- the weaker area is the surrounding control construction and state plumbing,
+  not the existence of a graph surface
 
 ## Interaction Scenarios
 
@@ -65,6 +68,8 @@ Static repo judgment:
 - Chip row or quick-nav state agrees: `unknown`
 - Parameter state agrees: `unknown`
 - Display-only states are distinguishable from audio states: `partially`
+- Control construction semantics are documented: `baseline no`, now tracked in
+  `docs/ableton_ui_construction_internals.md`
 
 ## Analyzer And Meter Check
 
@@ -91,4 +96,5 @@ Use `docs/ableton_ui_review_checklist.md`.
 - Highest-value follow-up: finalize the selected-band contextual editing model
   in the EQ lanes
 - One thing to keep: graph-first product framing
-- One thing to remove or simplify: duplicated or competing editing surfaces
+- One thing to remove or simplify: duplicated or competing editing surfaces and
+  the routing that keeps them artificially in sync

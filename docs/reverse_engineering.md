@@ -69,6 +69,15 @@ What you get today:
   `mapping_session_controller`, and the combined
   `mapped_random_control_device` summary for mapping-heavy devices like
   `[dnksaus] Rnd Gen v2.2`
+- semantic workflow groupings layered on top of those hints, so devices with
+  repeated editor banks plus explicit trigger/session shells can surface as a
+  `mapping_workflow_shell` instead of only as a lower-level editor-bank
+  cluster
+- a mapping/modulation trace layer that records output banks, trigger sources,
+  random-value generators, mapping-session lifecycle buses, lane-update paths,
+  and hidden sidecar engines; those traces can then be promoted into broader
+  semantic groups like `mapped_modulation_bank`,
+  `random_modulation_mapper`, and `triggered_parameter_mapper`
 - Live API motif semantics and archetypes such as `parameter_probe`,
   `tempo_observer`, `transport_state_observer`, `device_active_state`, and
   `track_management`
@@ -285,12 +294,72 @@ dossiers = build_reference_device_dossiers([
 ])
 ```
 
+There is also a focused mapping/modulation lane report when the question is
+closer to “what kind of device is this trying to be?” than “what exact box
+topology does it use?”:
+
+```python
+from m4l_builder import analyze_amxd_corpus, build_mapping_lane_report, mapping_lane_report_markdown
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+lane_report = build_mapping_lane_report(report, limit=20)
+markdown = mapping_lane_report_markdown(lane_report)
+```
+
+That report classifies devices into:
+
+- `modulation_bank`
+- `random_modulation_source`
+- `parameter_mapper`
+- `parameter_randomizer`
+- `lfo_modulation_source`
+
+and maps them to current proof references:
+
+- `Expression Control`-style bank
+- `Macro Randomizer`-style device
+- `Rnd Gen`-style mapper
+- `Device Randomizer`-style device
+- `LFO MIDI`-style device
+
+If you want fully expanded product briefs instead of just the lane summary:
+
+```python
+from m4l_builder import analyze_amxd_corpus, build_mapping_product_briefs, mapping_product_briefs_markdown
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+briefs = build_mapping_product_briefs(report, limit=10)
+markdown = mapping_product_briefs_markdown(briefs)
+```
+
+The brief layer turns the classification into design language:
+
+- product read
+- value model
+- target model
+- trigger model
+- essential subsystems
+- build-cleanly recommendation
+- open questions
+
+For one device instead of a whole corpus:
+
+```python
+from m4l_builder import build_mapping_product_brief_from_path, mapping_product_brief_markdown
+
+brief = build_mapping_product_brief_from_path("/path/to/device.amxd")
+markdown = mapping_product_brief_markdown(brief)
+```
+
 Repo helpers:
 
 ```bash
 uv run python tools/build_source_lane_report.py /path/to/amxd-corpus /tmp/lane-report.md
 uv run python tools/build_corpus_comparison_report.py /tmp/comparison.md public=/path/to/public-corpus factory=/path/to/factory-packs
 uv run python tools/build_reference_dossiers.py /tmp/reference-dossiers.md /path/to/Max\ DelayLine.amxd
+uv run python tools/build_mapping_lane_report.py /path/to/amxd-corpus /tmp/mapping-lane-report.md
+uv run python tools/build_mapping_product_brief.py /path/to/device.amxd /tmp/mapping-product-brief.md
+uv run python tools/build_mapping_product_briefs.py /path/to/amxd-corpus /tmp/mapping-product-briefs.md
 ```
 
 ## Important limitation

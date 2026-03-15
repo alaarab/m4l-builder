@@ -50,7 +50,7 @@ feeling like "assembled objects" and start feeling like a real product.
 - dynamic EQ
 - mid/side editing in the current version
 - pretending the UI is finished when the EQ lane clearly wants a better
-  selected-band control model
+  surrounding control grammar and tighter state synchronization
 
 ## Core Method
 
@@ -151,23 +151,25 @@ responsiveness matter more than phase preservation.
 
 The current UI is built around:
 
-- a top bar for focus, analyzer mode, and display range
+- a compact left-side band navigator for fast selection
 - a large hero graph with draggable nodes and integrated analyzer
-- a lower band-card area for the eight bands plus output and meters
+- a single selected-band column for contextual editing
+- a global utility area for analyzer, display range, output, bypass, and meters
 
 Current interaction priorities:
 
 - drag nodes for frequency and gain
 - mouse wheel for Q
 - graph-backed visual decision making
-- focus-band selection from the top bar
+- click either the graph or the left navigator to change the selected band
 
 Known direction:
 
-- the backlog now explicitly moves this device toward an EQ Eight-style
-  selected-band column with real contextual knobs
-- the current bottom band-card arrangement works, but it is not the final UI
-  target for the flagship EQ lane
+- the graph should remain the unquestioned primary editor
+- the left rail should stay lightweight navigation, not become a second live
+  editor
+- the hidden canonical parameter controls still need a more semantic shared
+  construction layer in the framework
 
 ## Parameter Semantics
 
@@ -187,21 +189,22 @@ Known direction:
 - eight serial bands are efficient and flexible, but still impose interaction
   and UI complexity
 - the analyzer is a visual aid, not proof that the audio path is correct
-- the current UI still spreads editing between graph, focus tab, and band cards
-  more than a final flagship design should
-- it does not yet implement dynamic EQ, M/S EQ, or the richer selected-band
-  control rail that the backlog now calls for
+- the current device still relies on hidden canonical controls and explicit
+  routing to keep graph, selection, and parameter state synchronized
+- it does not yet implement dynamic EQ, M/S EQ, or a more semantic shared
+  parameter-construction model in the framework
 
 ## UI Sprint Alignment
 
 - Primary Ableton reference: `EQ Eight`
 - Shared standards:
   - [`docs/ableton_ui_playbook.md`](../../docs/ableton_ui_playbook.md)
+  - [`docs/ableton_ui_construction_internals.md`](../../docs/ableton_ui_construction_internals.md)
   - [`docs/ableton_ui_review_checklist.md`](../../docs/ableton_ui_review_checklist.md)
 - Current sprint focus:
-  - selected-band rail as the canonical editor
-  - graph-first editing with less card-first fallback
-  - tighter graph, focus, and parameter anti-drift behavior
+  - single contextual selected-band column as the canonical editor
+  - left-side navigation surface instead of a duplicated core editor
+  - tighter graph, selection, and parameter anti-drift behavior
 - Planned validation note:
   - [`docs/ui_validation/week_03_parametric_eq.md`](../../docs/ui_validation/week_03_parametric_eq.md)
 
@@ -221,8 +224,9 @@ In-Live validation should catch:
 - analyzer usefulness in real playback
 - focus-band synchronization
 - coefficient smoothing behavior during fast sweeps
-- whether the UI still feels graph-first instead of card-first
-- whether the selected-band rail now feels canonical instead of auxiliary
+- whether the UI still feels graph-first instead of widget-first
+- whether the selected-band column now feels canonical instead of auxiliary
+- whether the left navigator helps selection without competing with editing
 
 ## References
 
@@ -233,10 +237,10 @@ In-Live validation should catch:
 
 ## Future Work
 
-- replace the current static lower editing emphasis with a proper selected-band
-  control column
 - add analyzer overlay improvements
 - add dynamic EQ mode per band
 - add M/S and other higher-end workflow features
+- raise parameter metadata and contextual-editor construction into shared
+  framework abstractions instead of keeping them mostly plugin-local
 - keep clarifying how this device differs from both EQ Eight-style UX and the
   project's own `Linear Phase EQ`

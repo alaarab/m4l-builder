@@ -5920,6 +5920,789 @@ def extract_behavior_hints(snapshot: dict) -> list[dict]:
     return hints
 
 
+def extract_mapping_behavior_traces(snapshot: dict) -> list[dict]:
+    """Extract structured behavior traces for mapping/modulation devices."""
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    parameter_specs = {spec.get("box_id"): spec for spec in extract_parameter_specs(snapshot)}
+    hints_by_name = {
+        entry.get("name"): entry
+        for entry in extract_behavior_hints(snapshot)
+        if entry.get("name")
+    }
+    embedded_entries = extract_embedded_patcher_snapshots(snapshot)
+    embedded_by_target: dict[str, list[dict]] = {}
+    for entry in embedded_entries:
+        target = str(entry.get("target") or "").strip()
+        if target:
+            embedded_by_target.setdefault(target, []).append(entry)
+
+    traces: list[dict] = []
+
+    def add_trace(
+        name: str,
+        *,
+        box_ids: list[str],
+        params: dict[str, Any],
+        evidence: list[str],
+        confidence: float,
+    ) -> None:
+        ordered_box_ids = sorted(set(box_ids), key=lambda item: box_indices.get(item, 10 ** 9))
+        if not ordered_box_ids:
+            return
+        traces.append({
+            "name": name,
+            "box_ids": ordered_box_ids,
+            "line_keys": _line_keys_for_box_ids(snapshot, set(ordered_box_ids)),
+            "params": copy.deepcopy(params),
+            "evidence": copy.deepcopy(evidence),
+            "confidence": confidence,
+            "first_box_index": min((box_indices.get(box_id, 10 ** 9) for box_id in ordered_box_ids), default=0),
+        })
+
+    for candidate in extract_poly_editor_bank_candidates(snapshot):
+        params = candidate.get("params", {})
+        add_trace(
+            "modulation_output_bank",
+            box_ids=candidate.get("box_ids", []),
+            params={
+                "output_mode": "mapped_editor_bank",
+                "lane_count": params.get("voice_count"),
+                "target": params.get("target"),
+                "editor_ui_names": copy.deepcopy(params.get("editor_ui_names", [])),
+                "indexed_bus_prefix": params.get("indexed_bus_prefix"),
+                "indexed_bus_indices": copy.deepcopy(params.get("indexed_bus_indices", [])),
+            },
+            evidence=[
+                "repeated editor bank exposes multiple mapped lanes",
+                *(candidate.get("evidence", []) or []),
+            ],
+            confidence=0.89,
+        )
+
+    control_bank_box_ids: list[str] = []
+    control_labels: list[str] = []
+    for box_id, spec in parameter_specs.items():
+        box = boxes_by_id.get(box_id)
+        if not box or box.get("maxclass") != "live.dial":
+            continue
+        annotation = str(box.get("annotation_name") or "").strip()
+        shortname = str(spec.get("shortname") or "").strip()
+        label = annotation or shortname or str(box.get("varname") or box_id)
+        label_lower = label.lower()
+        if any(token in label_lower for token in ("output", "randomizable", "macro", "cc")):
+            control_bank_box_ids.append(box_id)
+            control_labels.append(label)
+
+    if len(control_bank_box_ids) >= 2:
+        connected_box_ids = set(control_bank_box_ids)
+        frontier = set(control_bank_box_ids)
+        for _ in range(3):
+            next_frontier: set[str] = set()
+            for box_id in frontier:
+                next_frontier.update(_connected_box_ids(snapshot, {box_id}))
+            next_frontier -= connected_box_ids
+            if not next_frontier:
+                break
+            connected_box_ids.update(next_frontier)
+            frontier = next_frontier
+        connected_operators = {
+            _box_operator(boxes_by_id.get(box_id, {}))
+            for box_id in connected_box_ids
+            if _box_operator(boxes_by_id.get(box_id, {}))
+        }
+        output_mode = "exposed_control_bank"
+        if "ctlout" in connected_operators:
+            output_mode = "midi_cc_output_bank"
+        add_trace(
+            "modulation_output_bank",
+            box_ids=sorted(connected_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            params={
+                "output_mode": output_mode,
+                "lane_count": len(control_bank_box_ids),
+                "control_ids": sorted(control_bank_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+                "control_labels": control_labels,
+            },
+            evidence=[
+                "multiple exposed modulation/macro controls",
+                f"output mode: {output_mode}",
+            ],
+            confidence=0.82,
+        )
+
+    trigger_box_ids: set[str] = set()
+    trigger_modes: list[str] = []
+    trigger_buses: list[str] = []
+    if "manual_or_midi_trigger_mode" in hints_by_name:
+        trigger_modes.extend(["manual_mode_gate", "midi_note_trigger"])
+        trigger_buses.extend([
+            hints_by_name["manual_or_midi_trigger_mode"].get("params", {}).get("manual_mode_bus"),
+            hints_by_name["manual_or_midi_trigger_mode"].get("params", {}).get("trigger_bus"),
+        ])
+        for entry in embedded_by_target.get("MIDILogic", []):
+            host_box_id = entry.get("host_box_id")
+            if host_box_id in boxes_by_id:
+                trigger_box_ids.add(host_box_id)
+    metro_ids = [
+        box_id
+        for box_id, box in boxes_by_id.items()
+        if _box_operator(box) == "metro"
+    ]
+    if metro_ids:
+        trigger_modes.append("auto_scheduler")
+        for box_id in metro_ids:
+            trigger_box_ids.add(box_id)
+            trigger_box_ids.update(_connected_box_ids(snapshot, {box_id}))
+    manual_trigger_ids = [
+        box_id
+        for box_id, box in boxes_by_id.items()
+        if _box_operator(box) == "sel" and str(box.get("text", "")).strip().startswith("sel 1")
+    ]
+    if manual_trigger_ids:
+        trigger_modes.append("manual_button_trigger")
+        for box_id in manual_trigger_ids:
+            trigger_box_ids.add(box_id)
+            trigger_box_ids.update(_connected_box_ids(snapshot, {box_id}))
+    if trigger_modes:
+        add_trace(
+            "trigger_source_cluster",
+            box_ids=sorted(trigger_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            params={
+                "trigger_modes": sorted(set(mode for mode in trigger_modes if mode)),
+                "trigger_buses": sorted(set(bus for bus in trigger_buses if bus)),
+            },
+            evidence=[
+                "device has explicit trigger-source routing",
+                *(
+                    ["manual vs MIDI trigger gating"]
+                    if "manual_or_midi_trigger_mode" in hints_by_name else []
+                ),
+                *(
+                    ["auto scheduler present"]
+                    if "auto_scheduler" in trigger_modes else []
+                ),
+                *(
+                    ["manual trigger button/filter present"]
+                    if "manual_button_trigger" in trigger_modes else []
+                ),
+            ],
+            confidence=0.86,
+        )
+
+    random_box_ids = [
+        box_id
+        for box_id, box in boxes_by_id.items()
+        if _box_operator(box) in {"random", "drunk"}
+    ]
+    if random_box_ids:
+        generation_box_ids = set(random_box_ids)
+        scaler_texts: list[str] = []
+        random_ranges: list[str] = []
+        for box_id in random_box_ids:
+            box = boxes_by_id[box_id]
+            text = str(box.get("text", "")).strip()
+            if text:
+                random_ranges.append(text)
+            for neighbor_id in _connected_box_ids(snapshot, {box_id}):
+                neighbor = boxes_by_id.get(neighbor_id, {})
+                operator = _box_operator(neighbor)
+                if operator in {"/", "scale", "*", "+", "-", "expr"} or neighbor.get("maxclass") == "message":
+                    generation_box_ids.add(neighbor_id)
+                    neighbor_text = str(neighbor.get("text", "")).strip()
+                    if neighbor_text:
+                        scaler_texts.append(neighbor_text)
+        add_trace(
+            "random_value_generation",
+            box_ids=sorted(generation_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            params={
+                "generator_operators": sorted({
+                    _box_operator(boxes_by_id.get(box_id, {}))
+                    for box_id in random_box_ids
+                    if _box_operator(boxes_by_id.get(box_id, {}))
+                }),
+                "generator_texts": random_ranges,
+                "scaler_texts": sorted(set(scaler_texts)),
+            },
+            evidence=[
+                "random-value generators are visible in the patcher",
+                *([f"generators: {', '.join(random_ranges)}"] if random_ranges else []),
+                *([f"shaping/scaling: {', '.join(sorted(set(scaler_texts)))}"] if scaler_texts else []),
+            ],
+            confidence=0.87,
+        )
+
+    periodic_host_ids: set[str] = set()
+    periodic_operators: set[str] = set()
+    waveform_targets: set[str] = set()
+    if embedded_entries:
+        periodic_target_names = {
+            "sync",
+            "timemode",
+            "waveform_select",
+            "hold",
+            "jitter and smooth",
+            "line",
+            "signalscaling",
+            "signalscalingdisplay",
+            "toctlout",
+        }
+        periodic_operator_markers = {
+            "phasor~",
+            "triangle~",
+            "cycle~",
+            "noise~",
+            "snapshot~",
+            "selector~",
+            "line",
+            "line~",
+        }
+        for entry in embedded_entries:
+            target = str(entry.get("target") or "").strip()
+            target_lower = target.lower()
+            child = entry.get("snapshot", {})
+            child_texts = [
+                str(wrapped.get("box", {}).get("text", "")).strip()
+                for wrapped in child.get("boxes", [])
+                if wrapped.get("box", {}).get("maxclass") == "newobj"
+            ]
+            matched = False
+            for text in child_texts:
+                operator = text.split()[0] if text else ""
+                if operator in periodic_operator_markers:
+                    periodic_operators.add(operator)
+                    matched = True
+            if target_lower in periodic_target_names:
+                waveform_targets.add(target)
+                matched = True
+            if matched and entry.get("host_box_id") in boxes_by_id:
+                periodic_host_ids.add(entry["host_box_id"])
+        if periodic_host_ids and periodic_operators and (
+            {"phasor~", "triangle~", "cycle~", "noise~", "snapshot~", "line", "line~"} & periodic_operators
+        ):
+            add_trace(
+                "periodic_modulation_core",
+                box_ids=sorted(periodic_host_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+                params={
+                    "waveform_targets": sorted(waveform_targets),
+                    "core_operators": sorted(periodic_operators),
+                    "time_sync": any(name.lower() == "sync" for name in waveform_targets),
+                    "hold_stage": any(name.lower() == "hold" for name in waveform_targets),
+                    "smoothing_stage": any(name.lower() == "jitter and smooth" for name in waveform_targets),
+                },
+                evidence=[
+                    "embedded modulation core exposes periodic waveform or sample-and-hold operators",
+                    *([f"embedded modulation stages: {', '.join(sorted(waveform_targets))}"] if waveform_targets else []),
+                    *([f"core operators: {', '.join(sorted(periodic_operators))}"] if periodic_operators else []),
+                ],
+                confidence=0.88,
+            )
+
+    parameter_scan_host_ids: set[str] = set()
+    parameter_scan_targets: set[str] = set()
+    settings_buses: set[str] = set()
+    parameter_scan_markers = {
+        "get_selected_device_id",
+        "selectedid",
+        "checkparamavalibility",
+        "storesettings",
+        "modulation_enabled",
+        "activate",
+    }
+    if embedded_entries:
+        for entry in embedded_entries:
+            target = str(entry.get("target") or "").strip()
+            target_lower = target.lower()
+            child = entry.get("snapshot", {})
+            child_texts = [
+                str(wrapped.get("box", {}).get("text", "")).strip()
+                for wrapped in child.get("boxes", [])
+                if wrapped.get("box", {}).get("maxclass") == "newobj"
+            ]
+            joined_texts = " ".join(child_texts)
+            matched = target_lower in parameter_scan_markers
+            if any(text.startswith(("live.path", "live.object")) for text in child_texts):
+                if any(marker in joined_texts for marker in ("route id", "parameters", "is_quantized", "class_name", "Device On")):
+                    matched = True
+            for text in child_texts:
+                if text.startswith(("s ---", "r ---")) and any(
+                    marker in text
+                    for marker in (
+                        "StoreRandSettings",
+                        "RecallRandSettings",
+                        "AllowEditing",
+                        "numOfParams",
+                        "bangAllParamsInitialized",
+                    )
+                ):
+                    settings_buses.add(text)
+                    matched = True
+            if matched and entry.get("host_box_id") in boxes_by_id:
+                parameter_scan_host_ids.add(entry["host_box_id"])
+                if target:
+                    parameter_scan_targets.add(target)
+        if parameter_scan_host_ids:
+            add_trace(
+                "parameter_target_scan",
+                box_ids=sorted(parameter_scan_host_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+                params={
+                    "scan_targets": sorted(parameter_scan_targets),
+                    "settings_buses": sorted(settings_buses),
+                    "selected_device_tracking": any(
+                        name.lower() in {"selectedid", "get_selected_device_id"}
+                        for name in parameter_scan_targets
+                    ),
+                    "parameter_filtering": any(
+                        name.lower() in {"checkparamavalibility", "modulation_enabled"}
+                        for name in parameter_scan_targets
+                    ),
+                },
+                evidence=[
+                    "embedded subpatchers enumerate devices or parameters for later control",
+                    *([f"scan targets: {', '.join(sorted(parameter_scan_targets))}"] if parameter_scan_targets else []),
+                    *([f"settings buses: {', '.join(sorted(settings_buses))}"] if settings_buses else []),
+                ],
+                confidence=0.87,
+            )
+
+    if "mapping_session_controller" in hints_by_name:
+        lifecycle_box_ids: set[str] = set()
+        for entry in embedded_by_target.get("qm", []):
+            host_box_id = entry.get("host_box_id")
+            if host_box_id in boxes_by_id:
+                lifecycle_box_ids.add(host_box_id)
+        add_trace(
+            "mapping_session_lifecycle",
+            box_ids=sorted(lifecycle_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            params={
+                "start_bus": hints_by_name["mapping_session_controller"].get("params", {}).get("start_bus"),
+                "done_bus": hints_by_name["mapping_session_controller"].get("params", {}).get("done_bus"),
+                "update_bus": hints_by_name["mapping_session_controller"].get("params", {}).get("update_bus"),
+            },
+            evidence=[
+                "mapping lifecycle buses are exposed explicitly",
+                "q-map session state can start, complete, and refresh separately",
+            ],
+            confidence=0.9,
+        )
+
+    lane_update_params = None
+    lane_update_box_ids: set[str] = set()
+    if extract_poly_editor_bank_candidates(snapshot):
+        editor_candidate = extract_poly_editor_bank_candidates(snapshot)[0]
+        lane_update_params = {
+            "indexed_bus_prefix": editor_candidate.get("params", {}).get("indexed_bus_prefix"),
+            "indexed_bus_indices": copy.deepcopy(editor_candidate.get("params", {}).get("indexed_bus_indices", [])),
+            "target": editor_candidate.get("params", {}).get("target"),
+        }
+        lane_update_box_ids.update(editor_candidate.get("box_ids", []))
+    elif control_bank_box_ids:
+        lane_update_params = {
+            "control_ids": sorted(control_bank_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            "target": "exposed_controls",
+        }
+        lane_update_box_ids.update(control_bank_box_ids)
+    if lane_update_params:
+        add_trace(
+            "lane_update_paths",
+            box_ids=sorted(lane_update_box_ids, key=lambda item: box_indices.get(item, 10 ** 9)),
+            params=lane_update_params,
+            evidence=[
+                "per-lane outputs or buses are exposed",
+            ],
+            confidence=0.81,
+        )
+
+    hidden_mapping_sidecars = []
+    for entry in snapshot.get("missing_support_files", []):
+        if isinstance(entry, dict):
+            name = str(entry.get("name", "")).strip()
+        else:
+            name = str(entry).strip()
+        if name and any(token in name.lower() for token in ("map", "transform", "moveui", "rndgen")):
+            hidden_mapping_sidecars.append(name)
+    if hidden_mapping_sidecars and (
+        "mapped_random_control_device" in hints_by_name
+        or "mapping_session_controller" in hints_by_name
+    ):
+        add_trace(
+            "hidden_mapping_engine",
+            box_ids=sorted(
+                {
+                    entry.get("host_box_id")
+                    for target in ("MIDILogic", "qm", "UiScripting")
+                    for entry in embedded_by_target.get(target, [])
+                    if entry.get("host_box_id") in boxes_by_id
+                },
+                key=lambda item: box_indices.get(item, 10 ** 9),
+            ),
+            params={
+                "missing_support_files": hidden_mapping_sidecars,
+            },
+            evidence=[
+                "part of the mapping/random engine lives in unresolved sidecars",
+                "value generation and shaping are not fully visible from the root patcher alone",
+            ],
+            confidence=0.78,
+        )
+
+    traces.sort(key=lambda item: (item["first_box_index"], item["name"]))
+    return traces
+
+
+def extract_mapping_semantic_candidates(snapshot: dict) -> list[dict]:
+    """Return higher-level semantic mapping/modulation candidates."""
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    traces = extract_mapping_behavior_traces(snapshot)
+    trace_by_name: dict[str, list[dict]] = {}
+    for trace in traces:
+        trace_by_name.setdefault(trace.get("name", ""), []).append(trace)
+    hints_by_name = {
+        entry.get("name"): entry
+        for entry in extract_behavior_hints(snapshot)
+        if entry.get("name")
+    }
+    workflow_candidates = extract_mapping_workflow_candidates(snapshot)
+    candidates: list[dict] = []
+    control_labels_lower: set[str] = set()
+    for spec in extract_parameter_specs(snapshot):
+        box = boxes_by_id.get(spec.get("box_id"), {})
+        for label in (
+            box.get("annotation_name"),
+            spec.get("shortname"),
+            spec.get("varname"),
+            box.get("varname"),
+        ):
+            if label:
+                control_labels_lower.add(str(label).strip().lower())
+
+    output_traces = trace_by_name.get("modulation_output_bank", [])
+    trigger_traces = trace_by_name.get("trigger_source_cluster", [])
+    random_traces = trace_by_name.get("random_value_generation", [])
+    lifecycle_traces = trace_by_name.get("mapping_session_lifecycle", [])
+    hidden_engine_traces = trace_by_name.get("hidden_mapping_engine", [])
+    periodic_core_traces = trace_by_name.get("periodic_modulation_core", [])
+    parameter_scan_traces = trace_by_name.get("parameter_target_scan", [])
+
+    def add_candidate(
+        candidate_name: str,
+        *,
+        box_ids: set[str],
+        params: dict[str, Any],
+        evidence: list[str],
+        priority: int,
+    ) -> None:
+        ordered_box_ids = sorted(box_ids, key=lambda item: box_indices.get(item, 10 ** 9))
+        if not ordered_box_ids:
+            return
+        candidates.append({
+            "candidate_name": candidate_name,
+            "box_ids": ordered_box_ids,
+            "line_keys": _line_keys_for_box_ids(snapshot, set(ordered_box_ids)),
+            "motif_kinds": ["mapping_behavior"],
+            "params": copy.deepcopy(params),
+            "evidence": copy.deepcopy(evidence),
+            "normalization_level": "semantic_pattern",
+            "first_box_index": min((box_indices.get(box_id, 10 ** 9) for box_id in ordered_box_ids), default=0),
+            "helper_name": None,
+            "exact": False,
+            "_priority": priority,
+        })
+
+    for output_trace in output_traces:
+        params = output_trace.get("params", {})
+        if (
+            params.get("output_mode") == "mapped_editor_bank"
+            and not trigger_traces
+            and not lifecycle_traces
+            and "mapped_random_control_device" not in hints_by_name
+        ):
+            continue
+        add_candidate(
+            "mapped_modulation_bank",
+            box_ids=set(output_trace.get("box_ids", [])),
+            params={
+                "lane_count": params.get("lane_count"),
+                "output_mode": params.get("output_mode"),
+                "target": params.get("target"),
+                "control_labels": copy.deepcopy(params.get("control_labels", [])),
+                "indexed_bus_prefix": params.get("indexed_bus_prefix"),
+                "indexed_bus_indices": copy.deepcopy(params.get("indexed_bus_indices", [])),
+            },
+            evidence=[
+                "multiple modulation lanes are exposed as one bank",
+                *output_trace.get("evidence", []),
+            ],
+            priority=3,
+        )
+
+    for output_trace in output_traces:
+        if not trigger_traces:
+            continue
+        if not random_traces and "mapped_random_control_device" not in hints_by_name:
+            continue
+        box_ids = set(output_trace.get("box_ids", []))
+        for trace in trigger_traces + random_traces + hidden_engine_traces:
+            box_ids.update(trace.get("box_ids", []))
+        params = {
+            "lane_count": output_trace.get("params", {}).get("lane_count"),
+            "output_mode": output_trace.get("params", {}).get("output_mode"),
+            "trigger_modes": sorted({
+                mode
+                for trace in trigger_traces
+                for mode in trace.get("params", {}).get("trigger_modes", [])
+            }),
+            "random_engine_visible": bool(random_traces),
+            "random_engine_hidden": bool(hidden_engine_traces),
+        }
+        add_candidate(
+            "random_modulation_mapper",
+            box_ids=box_ids,
+            params=params,
+            evidence=[
+                "modulation bank is driven by explicit trigger sources and randomization logic",
+                *(
+                    ["visible random-value generation is present"]
+                    if random_traces else []
+                ),
+                *(
+                    ["randomization behavior is inferred from workflow + missing sidecars"]
+                    if not random_traces and "mapped_random_control_device" in hints_by_name else []
+                ),
+            ],
+            priority=2,
+        )
+
+    for workflow_candidate in workflow_candidates:
+        if not lifecycle_traces or not trigger_traces:
+            continue
+        box_ids = set(workflow_candidate.get("box_ids", []))
+        for trace in lifecycle_traces + trigger_traces:
+            box_ids.update(trace.get("box_ids", []))
+        if random_traces or hidden_engine_traces:
+            for trace in random_traces + hidden_engine_traces:
+                box_ids.update(trace.get("box_ids", []))
+        add_candidate(
+            "triggered_parameter_mapper",
+            box_ids=box_ids,
+            params={
+                "voice_count": workflow_candidate.get("params", {}).get("voice_count"),
+                "editor_target": workflow_candidate.get("params", {}).get("editor_target"),
+                "trigger_modes": sorted({
+                    mode
+                    for trace in trigger_traces
+                    for mode in trace.get("params", {}).get("trigger_modes", [])
+                }),
+                "mapping_start_bus": workflow_candidate.get("params", {}).get("mapping_start_bus"),
+                "mapping_done_bus": workflow_candidate.get("params", {}).get("mapping_done_bus"),
+                "mapping_update_bus": workflow_candidate.get("params", {}).get("mapping_update_bus"),
+            },
+            evidence=[
+                "mapping workflow is explicitly trigger-driven and session-managed",
+                *workflow_candidate.get("evidence", []),
+            ],
+            priority=1,
+        )
+
+    for periodic_trace in periodic_core_traces:
+        if parameter_scan_traces:
+            continue
+        params = periodic_trace.get("params", {})
+        waveform_targets = {str(name).lower() for name in params.get("waveform_targets", [])}
+        core_operators = set(params.get("core_operators", []))
+        has_rate_control = any(
+            any(fragment in label for fragment in ("rate", "time mode", "sync", "bpm"))
+            for label in control_labels_lower
+        )
+        lfo_control_axes = 0
+        if any(any(fragment in label for fragment in ("shape", "waveform")) for label in control_labels_lower):
+            lfo_control_axes += 1
+        if any("depth" in label for label in control_labels_lower):
+            lfo_control_axes += 1
+        if any("phase" in label for label in control_labels_lower):
+            lfo_control_axes += 1
+        if any("hold" in label for label in control_labels_lower):
+            lfo_control_axes += 1
+        if any(any(fragment in label for fragment in ("jitter", "smooth")) for label in control_labels_lower):
+            lfo_control_axes += 1
+        if any("offset" in label for label in control_labels_lower):
+            lfo_control_axes += 1
+        lfo_shell_signature = bool(
+            {"waveform_select", "hold", "jitter and smooth", "signalscaling", "signalscalingdisplay"} & waveform_targets
+            or params.get("hold_stage")
+            or params.get("smoothing_stage")
+        )
+        lfo_signature = (
+            has_rate_control
+            and lfo_shell_signature
+            and (
+                lfo_control_axes >= 2
+                or lfo_control_axes >= 1
+            )
+        )
+        if not lfo_signature:
+            continue
+        box_ids = set(periodic_trace.get("box_ids", []))
+        for trace in trigger_traces:
+            box_ids.update(trace.get("box_ids", []))
+        add_candidate(
+            "lfo_modulation_source",
+            box_ids=box_ids,
+            params={
+                "waveform_targets": copy.deepcopy(params.get("waveform_targets", [])),
+                "core_operators": copy.deepcopy(params.get("core_operators", [])),
+                "time_sync": params.get("time_sync"),
+                "hold_stage": params.get("hold_stage"),
+                "smoothing_stage": params.get("smoothing_stage"),
+                "trigger_modes": sorted({
+                    mode
+                    for trace in trigger_traces
+                    for mode in trace.get("params", {}).get("trigger_modes", [])
+                }),
+            },
+            evidence=[
+                "periodic modulation core is visible in embedded waveform/time subpatchers",
+                *periodic_trace.get("evidence", []),
+            ],
+            priority=2,
+        )
+
+    for scan_trace in parameter_scan_traces:
+        if not trigger_traces:
+            continue
+        params = scan_trace.get("params", {})
+        if not (
+            params.get("selected_device_tracking")
+            or params.get("parameter_filtering")
+            or params.get("settings_buses")
+        ):
+            continue
+        box_ids = set(scan_trace.get("box_ids", []))
+        for trace in trigger_traces + random_traces + hidden_engine_traces:
+            box_ids.update(trace.get("box_ids", []))
+        add_candidate(
+            "device_parameter_randomizer",
+            box_ids=box_ids,
+            params={
+                "scan_targets": copy.deepcopy(params.get("scan_targets", [])),
+                "settings_buses": copy.deepcopy(params.get("settings_buses", [])),
+                "selected_device_tracking": params.get("selected_device_tracking"),
+                "parameter_filtering": params.get("parameter_filtering"),
+                "trigger_modes": sorted({
+                    mode
+                    for trace in trigger_traces
+                    for mode in trace.get("params", {}).get("trigger_modes", [])
+                }),
+                "random_engine_visible": bool(random_traces),
+                "random_engine_hidden": bool(hidden_engine_traces),
+            },
+            evidence=[
+                "device scans selected-device parameters and applies triggered randomization/control logic",
+                *scan_trace.get("evidence", []),
+            ],
+            priority=2,
+        )
+
+    candidates.sort(key=lambda item: (item["first_box_index"], item.get("_priority", 99), item["candidate_name"]))
+    for candidate in candidates:
+        candidate.pop("_priority", None)
+    return candidates
+
+
+def extract_mapping_workflow_candidates(snapshot: dict) -> list[dict]:
+    """Return semantic mapping-workflow candidates derived from behavior hints."""
+    boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
+    hint_by_name = {
+        entry.get("name"): entry
+        for entry in extract_behavior_hints(snapshot)
+        if entry.get("name")
+    }
+    if "mapped_random_control_device" not in hint_by_name:
+        return []
+
+    embedded_entries_by_target: dict[str, list[dict]] = {}
+    for entry in extract_embedded_patcher_snapshots(snapshot):
+        target = str(entry.get("target") or "").strip()
+        if target:
+            embedded_entries_by_target.setdefault(target, []).append(entry)
+
+    required_targets = ("MIDILogic", "qm")
+    if any(not embedded_entries_by_target.get(target) for target in required_targets):
+        return []
+
+    candidates = []
+    mapping_hint = hint_by_name.get("multi_lane_mapping_bank", {})
+    trigger_hint = hint_by_name.get("manual_or_midi_trigger_mode", {})
+    session_hint = hint_by_name.get("mapping_session_controller", {})
+    relayout_hint = hint_by_name.get("dynamic_panel_relayout", {})
+
+    for editor_candidate in extract_poly_editor_bank_candidates(snapshot):
+        candidate_box_ids = set(editor_candidate.get("box_ids", []))
+        attached_targets = []
+        for target in required_targets:
+            for entry in embedded_entries_by_target.get(target, []):
+                host_box_id = entry.get("host_box_id")
+                if host_box_id in boxes_by_id:
+                    candidate_box_ids.add(host_box_id)
+            attached_targets.append(target)
+        if relayout_hint and embedded_entries_by_target.get("UiScripting"):
+            for entry in embedded_entries_by_target.get("UiScripting", []):
+                host_box_id = entry.get("host_box_id")
+                if host_box_id in boxes_by_id:
+                    candidate_box_ids.add(host_box_id)
+            attached_targets.append("UiScripting")
+
+        ordered_box_ids = sorted(candidate_box_ids, key=lambda item: box_indices.get(item, 10 ** 9))
+        candidate_params = {
+            "target": editor_candidate.get("params", {}).get("target"),
+            "voice_count": editor_candidate.get("params", {}).get("voice_count"),
+            "editor_ui_names": copy.deepcopy(editor_candidate.get("params", {}).get("editor_ui_names", [])),
+            "indexed_bus_prefix": editor_candidate.get("params", {}).get("indexed_bus_prefix"),
+            "indexed_bus_indices": copy.deepcopy(editor_candidate.get("params", {}).get("indexed_bus_indices", [])),
+            "manual_mode_bus": trigger_hint.get("params", {}).get("manual_mode_bus"),
+            "trigger_bus": trigger_hint.get("params", {}).get("trigger_bus"),
+            "mapping_start_bus": session_hint.get("params", {}).get("start_bus"),
+            "mapping_done_bus": session_hint.get("params", {}).get("done_bus"),
+            "mapping_update_bus": session_hint.get("params", {}).get("update_bus"),
+            "editor_target": mapping_hint.get("params", {}).get("target"),
+            "attached_targets": attached_targets,
+            "dynamic_panel_relayout": bool(relayout_hint),
+        }
+        evidence = [
+            "mapped random-control workflow",
+            "repeated mapping editor bank",
+            "manual and MIDI trigger paths",
+            "explicit q-map session control",
+        ]
+        if candidate_params.get("voice_count"):
+            evidence.append(f"voice count: {candidate_params['voice_count']}")
+        if candidate_params.get("editor_target"):
+            evidence.append(f"editor target: {candidate_params['editor_target']}")
+        if candidate_params.get("indexed_bus_prefix") and candidate_params.get("indexed_bus_indices"):
+            evidence.append(
+                "indexed bus family: %s[%s]"
+                % (
+                    candidate_params["indexed_bus_prefix"],
+                    ", ".join(str(index) for index in candidate_params["indexed_bus_indices"]),
+                )
+            )
+        if relayout_hint:
+            evidence.append("includes dynamic panel relayout shell")
+        candidates.append({
+            "candidate_name": "mapping_workflow_shell",
+            "box_ids": ordered_box_ids,
+            "line_keys": _line_keys_for_box_ids(snapshot, candidate_box_ids),
+            "motif_kinds": ["poly_shell_bank", "embedded_patcher"],
+            "params": candidate_params,
+            "evidence": evidence,
+            "normalization_level": "semantic_pattern",
+            "first_box_index": min((box_indices.get(box_id, 10 ** 9) for box_id in ordered_box_ids), default=0),
+            "helper_name": None,
+            "exact": False,
+        })
+
+    candidates.sort(key=lambda item: (item["first_box_index"], item["candidate_name"]))
+    return candidates
+
+
 def extract_snapshot_knowledge(snapshot: dict) -> dict:
     """Extract a structured knowledge manifest from a normalized snapshot."""
     analysis = snapshot.get("analysis") or analyze_snapshot(snapshot)
@@ -6030,6 +6813,9 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
     poly_shell_bank_candidates = extract_poly_shell_bank_candidates(snapshot)
     poly_editor_bank_candidates = extract_poly_editor_bank_candidates(snapshot)
     behavior_hints = extract_behavior_hints(snapshot)
+    mapping_behavior_traces = extract_mapping_behavior_traces(snapshot)
+    mapping_semantic_candidates = extract_mapping_semantic_candidates(snapshot)
+    mapping_workflow_candidates = extract_mapping_workflow_candidates(snapshot)
     first_party_api_rig_candidates = extract_first_party_api_rig_candidates(snapshot)
     first_party_abstraction_host_candidates = extract_first_party_abstraction_host_candidates(snapshot)
     first_party_abstraction_family_candidates = extract_first_party_abstraction_family_candidates(snapshot)
@@ -6156,6 +6942,9 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
             "poly_shell_bank_candidate_count": len(poly_shell_bank_candidates),
             "poly_editor_bank_candidate_count": len(poly_editor_bank_candidates),
             "behavior_hint_count": len(behavior_hints),
+            "mapping_behavior_trace_count": len(mapping_behavior_traces),
+            "mapping_semantic_candidate_count": len(mapping_semantic_candidates),
+            "mapping_workflow_candidate_count": len(mapping_workflow_candidates),
             "first_party_api_rig_candidate_count": len(first_party_api_rig_candidates),
             "first_party_abstraction_host_candidate_count": len(first_party_abstraction_host_candidates),
             "first_party_abstraction_family_candidate_count": len(first_party_abstraction_family_candidates),
@@ -6196,6 +6985,9 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
         "poly_shell_bank_candidates": poly_shell_bank_candidates,
         "poly_editor_bank_candidates": poly_editor_bank_candidates,
         "behavior_hints": behavior_hints,
+        "mapping_behavior_traces": mapping_behavior_traces,
+        "mapping_semantic_candidates": mapping_semantic_candidates,
+        "mapping_workflow_candidates": mapping_workflow_candidates,
         "first_party_api_rig_candidates": first_party_api_rig_candidates,
         "first_party_abstraction_host_candidates": first_party_abstraction_host_candidates,
         "first_party_abstraction_family_candidates": first_party_abstraction_family_candidates,
@@ -7556,6 +8348,8 @@ def _select_semantic_group_candidates(
     local_consumed_box_ids = set(consumed_box_ids)
     local_consumed_line_keys = set(consumed_line_keys)
     for extractor in (
+        extract_mapping_semantic_candidates,
+        extract_mapping_workflow_candidates,
         extract_poly_editor_bank_candidates,
         extract_first_party_api_rig_candidates,
         extract_first_party_abstraction_family_candidates,
@@ -7634,6 +8428,9 @@ def _structured_generator_source(
     poly_shell_candidates_all = extract_poly_shell_candidates(snapshot)
     poly_shell_bank_candidates_all = extract_poly_shell_bank_candidates(snapshot)
     poly_editor_bank_candidates_all = extract_poly_editor_bank_candidates(snapshot)
+    mapping_behavior_traces_all = extract_mapping_behavior_traces(snapshot)
+    mapping_semantic_candidates_all = extract_mapping_semantic_candidates(snapshot)
+    mapping_workflow_candidates_all = extract_mapping_workflow_candidates(snapshot)
     state_bundle_router_candidates_all = extract_state_bundle_router_candidates(snapshot)
     sample_buffer_candidates_all = extract_sample_buffer_candidates(snapshot)
     gen_processing_candidates_all = extract_gen_processing_candidates(snapshot)
@@ -7644,6 +8441,10 @@ def _structured_generator_source(
     building_block_candidates_all = extract_building_block_candidates(snapshot)
     semantic_group_preference_box_ids: set[str] = set()
     if include_semantic_group_candidates:
+        for candidate in extract_mapping_semantic_candidates(snapshot):
+            semantic_group_preference_box_ids.update(candidate.get("box_ids", []))
+        for candidate in extract_mapping_workflow_candidates(snapshot):
+            semantic_group_preference_box_ids.update(candidate.get("box_ids", []))
         for candidate in extract_poly_editor_bank_candidates(snapshot):
             semantic_group_preference_box_ids.update(candidate.get("box_ids", []))
 
@@ -7815,6 +8616,12 @@ def _structured_generator_source(
         "SNAPSHOT_POLY_SHELL_BANK_CANDIDATES = %s" % _python_literal(poly_shell_bank_candidates_all),
         "",
         "SNAPSHOT_POLY_EDITOR_BANK_CANDIDATES = %s" % _python_literal(poly_editor_bank_candidates_all),
+        "",
+        "SNAPSHOT_MAPPING_BEHAVIOR_TRACES = %s" % _python_literal(mapping_behavior_traces_all),
+        "",
+        "SNAPSHOT_MAPPING_SEMANTIC_CANDIDATES = %s" % _python_literal(mapping_semantic_candidates_all),
+        "",
+        "SNAPSHOT_MAPPING_WORKFLOW_CANDIDATES = %s" % _python_literal(mapping_workflow_candidates_all),
         "",
         "SNAPSHOT_STATE_BUNDLE_ROUTER_CANDIDATES = %s" % _python_literal(state_bundle_router_candidates_all),
         "",
@@ -8055,6 +8862,9 @@ __all__ = [
     "extract_poly_shell_bank_candidates",
     "extract_poly_editor_bank_candidates",
     "extract_behavior_hints",
+    "extract_mapping_behavior_traces",
+    "extract_mapping_semantic_candidates",
+    "extract_mapping_workflow_candidates",
     "extract_first_party_api_rig_candidates",
     "extract_first_party_abstraction_host_candidates",
     "extract_first_party_abstraction_family_candidates",

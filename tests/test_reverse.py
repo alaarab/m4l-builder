@@ -5,6 +5,7 @@ import os
 from m4l_builder import (
     AudioEffect,
     Instrument,
+    MidiEffect,
     Subpatcher,
     build_livemcp_bridge_demo,
     delay_line,
@@ -39,6 +40,9 @@ from m4l_builder.reverse import (
     detect_snapshot_recipes,
     extract_controller_shell_candidates,
     extract_behavior_hints,
+    extract_mapping_behavior_traces,
+    extract_mapping_semantic_candidates,
+    extract_mapping_workflow_candidates,
     extract_embedded_ui_shell_candidates,
     extract_embedded_patcher_snapshots,
     extract_first_party_abstraction_family_candidates,
@@ -1185,16 +1189,263 @@ class TestSnapshotHelpers:
         device.add_subpatcher(ui, "ui_logic", [300, 220, 120, 50])
 
         snapshot = snapshot_from_device(device)
+        snapshot["missing_support_files"] = [
+            {"name": "Abl.Map.edit.maxpat"},
+            {"name": "Transformdnk5.maxpat"},
+        ]
         hints = extract_behavior_hints(snapshot)
+        traces = extract_mapping_behavior_traces(snapshot)
+        semantic_candidates = extract_mapping_semantic_candidates(snapshot)
+        workflow_candidates = extract_mapping_workflow_candidates(snapshot)
         knowledge = extract_snapshot_knowledge(snapshot)
         hint_names = {entry["name"] for entry in hints}
+        trace_names = {entry["name"] for entry in traces}
+        semantic_candidate_names = {entry["candidate_name"] for entry in semantic_candidates}
 
         assert "multi_lane_mapping_bank" in hint_names
         assert "manual_or_midi_trigger_mode" in hint_names
         assert "mapping_session_controller" in hint_names
         assert "dynamic_panel_relayout" in hint_names
         assert "mapped_random_control_device" in hint_names
+        assert "modulation_output_bank" in trace_names
+        assert "trigger_source_cluster" in trace_names
+        assert "mapping_session_lifecycle" in trace_names
+        assert "lane_update_paths" in trace_names
+        assert "hidden_mapping_engine" in trace_names
+        assert "mapped_modulation_bank" in semantic_candidate_names
+        assert "random_modulation_mapper" in semantic_candidate_names
+        assert "triggered_parameter_mapper" in semantic_candidate_names
+        assert len(workflow_candidates) == 1
+        assert workflow_candidates[0]["candidate_name"] == "mapping_workflow_shell"
+        assert workflow_candidates[0]["params"]["voice_count"] == 3
+        assert workflow_candidates[0]["params"]["editor_target"] == "Abl.Map.edit"
+        assert workflow_candidates[0]["params"]["manual_mode_bus"] == "---manualmode"
+        assert workflow_candidates[0]["params"]["mapping_start_bus"] == "---qmap_start"
+        assert workflow_candidates[0]["params"]["dynamic_panel_relayout"] is True
         assert knowledge["summary"]["behavior_hint_count"] == len(hints)
+        assert knowledge["summary"]["mapping_behavior_trace_count"] == len(traces)
+        assert knowledge["summary"]["mapping_semantic_candidate_count"] == len(semantic_candidates)
+        assert knowledge["summary"]["mapping_workflow_candidate_count"] == 1
+
+    def test_extract_mapping_semantic_candidates_for_control_banks(self):
+        device = MidiEffect("Expression Control", 320, 115)
+        for index in range(8):
+            x = 8 + index * 38
+            device.add_dial(
+                f"macro_{index+1}",
+                f"M{index+1}",
+                [x, 18, 34, 72],
+                min_val=0.0,
+                max_val=127.0,
+                initial=64.0,
+                unitstyle=8,
+                annotation_name=f"Macro {index+1} — outputs CC {index+1}",
+            )
+            device.add_newobj(
+                f"int_{index+1}",
+                "int",
+                numinlets=2,
+                numoutlets=1,
+                outlettype=[""],
+                patching_rect=[20 + index * 50, 200, 30, 20],
+            )
+            device.add_newobj(
+                f"ctlout_{index+1}",
+                f"ctlout {index+1} 1",
+                numinlets=3,
+                numoutlets=0,
+                outlettype=[],
+                patching_rect=[20 + index * 50, 230, 60, 20],
+            )
+            device.add_line(f"macro_{index+1}", 0, f"int_{index+1}", 0)
+            device.add_line(f"int_{index+1}", 0, f"ctlout_{index+1}", 0)
+
+        traces = extract_mapping_behavior_traces(snapshot_from_device(device))
+        candidates = extract_mapping_semantic_candidates(snapshot_from_device(device))
+
+        assert any(
+            entry["name"] == "modulation_output_bank"
+            and entry["params"]["output_mode"] == "midi_cc_output_bank"
+            and entry["params"]["lane_count"] == 8
+            for entry in traces
+        )
+        assert any(
+            entry["candidate_name"] == "mapped_modulation_bank"
+            for entry in candidates
+        )
+        assert not any(
+            entry["candidate_name"] == "random_modulation_mapper"
+            for entry in candidates
+        )
+
+    def test_extract_mapping_semantic_candidates_for_random_output_mapper(self):
+        device = AudioEffect("Macro Randomizer", 300, 140)
+        for index in range(7):
+            x = 8 + index * 30
+            device.add_dial(
+                f"p{index+1}_dial",
+                f"P{index+1}",
+                [x, 38, 28, 70],
+                min_val=0.0,
+                max_val=100.0,
+                initial=50.0,
+                unitstyle=5,
+                annotation_name=f"Parameter {index+1} — randomizable output",
+            )
+        device.add_dial(
+            "rate_dial",
+            "Rate",
+            [222, 38, 40, 70],
+            min_val=0.0,
+            max_val=100.0,
+            initial=25.0,
+            unitstyle=5,
+            annotation_name="Auto-randomize speed — 0 slow, 100 fast",
+        )
+        device.add_newobj("metro", "metro 500", numinlets=2, numoutlets=1, outlettype=["bang"], patching_rect=[20, 200, 70, 20])
+        device.add_newobj("rate_scale", "scale 0. 100. 2000. 50.", numinlets=6, numoutlets=1, outlettype=[""], patching_rect=[120, 200, 120, 20])
+        device.add_newobj("trig_sel", "sel 1", numinlets=2, numoutlets=2, outlettype=["bang", ""], patching_rect=[250, 200, 40, 20])
+        device.add_newobj("fan", "t b b b b b b b", numinlets=1, numoutlets=7, outlettype=["bang"] * 7, patching_rect=[20, 240, 200, 20])
+        device.add_line("rate_dial", 0, "rate_scale", 0)
+        device.add_line("rate_scale", 0, "metro", 1)
+        device.add_line("metro", 0, "fan", 0)
+        device.add_line("trig_sel", 0, "fan", 0)
+        for index in range(7):
+            device.add_newobj(
+                f"rand_{index+1}",
+                "random 10001",
+                numinlets=2,
+                numoutlets=1,
+                outlettype=[""],
+                patching_rect=[20 + index * 50, 280, 65, 20],
+            )
+            device.add_newobj(
+                f"rdiv_{index+1}",
+                "/ 100.",
+                numinlets=2,
+                numoutlets=1,
+                outlettype=[""],
+                patching_rect=[20 + index * 50, 310, 40, 20],
+            )
+            device.add_line("fan", index, f"rand_{index+1}", 0)
+            device.add_line(f"rand_{index+1}", 0, f"rdiv_{index+1}", 0)
+            device.add_line(f"rdiv_{index+1}", 0, f"p{index+1}_dial", 0)
+
+        traces = extract_mapping_behavior_traces(snapshot_from_device(device))
+        candidates = extract_mapping_semantic_candidates(snapshot_from_device(device))
+
+        assert any(entry["name"] == "trigger_source_cluster" for entry in traces)
+        assert any(entry["name"] == "random_value_generation" for entry in traces)
+        assert any(
+            entry["candidate_name"] == "random_modulation_mapper"
+            for entry in candidates
+        )
+
+    def test_extract_mapping_semantic_candidates_for_lfo_modulation_source(self):
+        device = MidiEffect("LFO MIDI", 320, 140)
+        device.add_button("tap", "tap", [10, 10, 24, 24])
+        device.add_dial("rate", "Rate", [10, 40, 34, 70], min_val=0.0, max_val=127.0, initial=64.0)
+        device.add_dial("shape", "Shape", [50, 40, 34, 70], min_val=0.0, max_val=127.0, initial=64.0)
+        device.add_dial("depth", "Depth", [90, 40, 34, 70], min_val=0.0, max_val=127.0, initial=64.0)
+        device.add_newobj("sel", "sel 1", numinlets=2, numoutlets=2, patching_rect=[44, 14, 40, 20])
+        device.add_line("tap", 0, "sel", 0)
+
+        sync = Subpatcher("sync")
+        sync.add_newobj("phasor", "phasor~ @lock 1", numinlets=2, numoutlets=1, outlettype=["signal"], patching_rect=[20, 20, 90, 20])
+        device.add_subpatcher(sync, "sync_shell", [20, 60, 90, 50])
+
+        waveform = Subpatcher("waveform_select")
+        waveform.add_newobj("triangle", "triangle~ 0.5", numinlets=2, numoutlets=1, outlettype=["signal"], patching_rect=[20, 20, 90, 20])
+        waveform.add_newobj("selector", "selector~ 2 1", numinlets=3, numoutlets=1, outlettype=["signal"], patching_rect=[20, 50, 80, 20])
+        waveform.add_newobj("noise", "noise~", numinlets=1, numoutlets=1, outlettype=["signal"], patching_rect=[120, 20, 50, 20])
+        device.add_subpatcher(waveform, "wave_shell", [120, 60, 120, 50])
+
+        hold = Subpatcher("Hold")
+        hold.add_newobj("snapshot", "snapshot~", numinlets=2, numoutlets=1, outlettype=["float"], patching_rect=[20, 20, 70, 20])
+        device.add_subpatcher(hold, "hold_shell", [250, 60, 90, 50])
+
+        traces = extract_mapping_behavior_traces(snapshot_from_device(device))
+        candidates = extract_mapping_semantic_candidates(snapshot_from_device(device))
+
+        assert any(entry["name"] == "periodic_modulation_core" for entry in traces)
+        assert any(
+            entry["candidate_name"] == "lfo_modulation_source"
+            for entry in candidates
+        )
+
+    def test_extract_mapping_semantic_candidates_for_device_parameter_randomizer(self):
+        device = AudioEffect("Device Randomizer", 340, 180)
+        device.add_button("trigger", "trigger", [10, 10, 24, 24])
+        device.add_newobj("sel", "sel 1", numinlets=2, numoutlets=2, patching_rect=[44, 14, 40, 20])
+        device.add_line("trigger", 0, "sel", 0)
+
+        selected = Subpatcher("selectedID")
+        selected.add_newobj("path", "live.path live_set view", numinlets=2, numoutlets=2, patching_rect=[20, 20, 100, 20])
+        selected.add_newobj("object", "live.object", numinlets=2, numoutlets=1, outlettype=[""], patching_rect=[130, 20, 70, 20])
+        selected.add_newobj("route", "route id", numinlets=2, numoutlets=2, patching_rect=[210, 20, 60, 20])
+        device.add_subpatcher(selected, "selected_shell", [20, 70, 110, 50])
+
+        params = Subpatcher("checkParamAvalibility")
+        params.add_newobj("path", "live.path", numinlets=2, numoutlets=2, patching_rect=[20, 20, 60, 20])
+        params.add_newobj("object", "live.object", numinlets=2, numoutlets=1, outlettype=[""], patching_rect=[90, 20, 70, 20])
+        params.add_newobj("route", "route is_quantized", numinlets=2, numoutlets=2, patching_rect=[170, 20, 90, 20])
+        params.add_newobj("store", "s ---StoreRandSettings", numinlets=1, numoutlets=0, patching_rect=[20, 50, 120, 20])
+        params.add_newobj("recall", "r ---RecallRandSettings", numinlets=0, numoutlets=1, patching_rect=[150, 50, 130, 20])
+        device.add_subpatcher(params, "params_shell", [150, 70, 120, 50])
+
+        traces = extract_mapping_behavior_traces(snapshot_from_device(device))
+        candidates = extract_mapping_semantic_candidates(snapshot_from_device(device))
+
+        assert any(entry["name"] == "parameter_target_scan" for entry in traces)
+        assert any(
+            entry["candidate_name"] == "device_parameter_randomizer"
+            for entry in candidates
+        )
+
+    def test_extract_mapping_semantic_candidates_do_not_promote_generic_periodic_core(self):
+        device = MidiEffect("Periodic Internal", 320, 140)
+        device.add_button("tap", "tap", [10, 10, 24, 24])
+        device.add_newobj("sel", "sel 1", numinlets=2, numoutlets=2, patching_rect=[44, 14, 40, 20])
+        device.add_line("tap", 0, "sel", 0)
+
+        sync = Subpatcher("sync")
+        sync.add_newobj("phasor", "phasor~ @lock 1", numinlets=2, numoutlets=1, outlettype=["signal"], patching_rect=[20, 20, 90, 20])
+        sync.add_newobj("send", "s ---freq", numinlets=1, numoutlets=0, patching_rect=[120, 20, 60, 20])
+        device.add_subpatcher(sync, "sync_shell", [20, 60, 90, 50])
+
+        toctl = Subpatcher("toctlout")
+        toctl.add_newobj("snapshot", "snapshot~ 10", numinlets=2, numoutlets=1, outlettype=["float"], patching_rect=[20, 20, 80, 20])
+        device.add_subpatcher(toctl, "ctl_shell", [120, 60, 90, 50])
+
+        traces = extract_mapping_behavior_traces(snapshot_from_device(device))
+        candidates = extract_mapping_semantic_candidates(snapshot_from_device(device))
+
+        assert any(entry["name"] == "periodic_modulation_core" for entry in traces)
+        assert not any(
+            entry["candidate_name"] == "lfo_modulation_source"
+            for entry in candidates
+        )
+
+    def test_extract_mapping_semantic_candidates_do_not_promote_generic_parameter_scan(self):
+        device = AudioEffect("Generic Parameter Scan", 340, 180)
+        device.add_button("trigger", "trigger", [10, 10, 24, 24])
+        device.add_newobj("sel", "sel 1", numinlets=2, numoutlets=2, patching_rect=[44, 14, 40, 20])
+        device.add_line("trigger", 0, "sel", 0)
+
+        api = Subpatcher("API.getDeviceOn")
+        api.add_newobj("path", "live.path live_set", numinlets=2, numoutlets=2, patching_rect=[20, 20, 80, 20])
+        api.add_newobj("object", "live.object", numinlets=2, numoutlets=1, outlettype=[""], patching_rect=[110, 20, 70, 20])
+        api.add_newobj("message", "route Device On", numinlets=2, numoutlets=2, patching_rect=[190, 20, 90, 20])
+        device.add_subpatcher(api, "api_shell", [20, 70, 110, 50])
+
+        traces = extract_mapping_behavior_traces(snapshot_from_device(device))
+        candidates = extract_mapping_semantic_candidates(snapshot_from_device(device))
+
+        assert any(entry["name"] == "parameter_target_scan" for entry in traces)
+        assert not any(
+            entry["candidate_name"] == "device_parameter_randomizer"
+            for entry in candidates
+        )
 
     def test_extract_named_bus_router_candidates_include_attached_shell_neighbors(self):
         device = AudioEffect("Named Bus Shell", 320, 180)
@@ -2301,6 +2552,88 @@ class TestGeneratedPython:
 
         assert "SNAPSHOT_POLY_EDITOR_BANK_CANDIDATES" in source
         assert "# semantic group: poly_editor_bank" in source
+        assert "# semantic target: poly_shell_bank" not in source
+
+    def test_semantic_python_prefers_triggered_parameter_mapper_over_lower_mapping_groups(self):
+        device = Instrument("Mapped Random Control", 420, 260)
+        device.add_box({
+            "box": {
+                "id": "shared_mod",
+                "maxclass": "flonum",
+                "patching_rect": [190, 20, 50, 22],
+                "numinlets": 1,
+                "numoutlets": 2,
+                "outlettype": ["", "bang"],
+            }
+        })
+        for index in range(1, 4):
+            y = 40 + (index - 1) * 60
+            device.add_box({
+                "box": {
+                    "id": f"ui_{index}",
+                    "maxclass": "bpatcher",
+                    "name": "Abl.MapUi.RNDGEN.maxpat",
+                    "patching_rect": [20, y, 120, 24],
+                    "numinlets": 4,
+                    "numoutlets": 4,
+                    "outlettype": ["", "", "", ""],
+                }
+            })
+            device.add_newobj(
+                f"poly_{index}",
+                "poly~ Abl.Map.edit",
+                numinlets=4,
+                numoutlets=4,
+                patching_rect=[170, y, 110, 20],
+            )
+            device.add_newobj(
+                f"send_{index}",
+                f"s ---m{index}",
+                numinlets=1,
+                numoutlets=0,
+                patching_rect=[310, y, 60, 20],
+            )
+            device.add_line(f"ui_{index}", 0, f"poly_{index}", 0)
+            device.add_line(f"ui_{index}", 1, f"poly_{index}", 1)
+            device.add_line(f"poly_{index}", 0, f"ui_{index}", 0)
+            device.add_line(f"poly_{index}", 1, f"ui_{index}", 1)
+            device.add_line(f"poly_{index}", 2, f"send_{index}", 0)
+            device.add_line("shared_mod", 0, f"poly_{index}", 2)
+
+        midi_logic = Subpatcher("MIDILogic")
+        midi_logic.add_newobj("manualmode", "r ---manualmode", numinlets=0, numoutlets=1, patching_rect=[20, 20, 90, 20])
+        midi_logic.add_newobj("compare", "== 0", numinlets=2, numoutlets=1, patching_rect=[120, 20, 40, 20])
+        midi_logic.add_newobj("gate", "gate", numinlets=2, numoutlets=1, patching_rect=[180, 20, 40, 20])
+        midi_logic.add_newobj("parse", "midiparse", numinlets=1, numoutlets=1, patching_rect=[240, 20, 70, 20])
+        midi_logic.add_newobj("unpack", "unpack i i", numinlets=1, numoutlets=2, patching_rect=[320, 20, 70, 20])
+        midi_logic.add_newobj("strip", "stripnote", numinlets=2, numoutlets=2, patching_rect=[400, 20, 70, 20])
+        midi_logic.add_newobj("trigger", "t b", numinlets=1, numoutlets=1, patching_rect=[480, 20, 30, 20])
+        midi_logic.add_newobj("send", "s ---notebang", numinlets=1, numoutlets=0, patching_rect=[520, 20, 80, 20])
+        midi_logic.add_line("manualmode", 0, "compare", 0)
+        midi_logic.add_line("compare", 0, "gate", 0)
+        midi_logic.add_line("gate", 0, "parse", 0)
+        midi_logic.add_line("parse", 0, "unpack", 0)
+        midi_logic.add_line("unpack", 0, "strip", 0)
+        midi_logic.add_line("unpack", 1, "strip", 1)
+        midi_logic.add_line("strip", 1, "trigger", 0)
+        midi_logic.add_line("trigger", 0, "send", 0)
+        device.add_subpatcher(midi_logic, "midi_logic", [20, 220, 120, 50])
+
+        qm = Subpatcher("qm")
+        qm.add_newobj("start", "s ---qmap_start", numinlets=1, numoutlets=0, patching_rect=[20, 20, 90, 20])
+        qm.add_newobj("done", "r ---done_qmap", numinlets=0, numoutlets=1, patching_rect=[130, 20, 90, 20])
+        qm.add_newobj("qmap", "s ---qmap", numinlets=1, numoutlets=0, patching_rect=[240, 20, 70, 20])
+        qm.add_newobj("update", "s ---update_local", numinlets=1, numoutlets=0, patching_rect=[330, 20, 100, 20])
+        device.add_subpatcher(qm, "qm_logic", [160, 220, 120, 50])
+
+        source = generate_semantic_python_from_snapshot(snapshot_from_device(device))
+
+        assert "SNAPSHOT_MAPPING_SEMANTIC_CANDIDATES" in source
+        assert "# semantic group: triggered_parameter_mapper" in source
+        assert "# semantic group: random_modulation_mapper" not in source
+        assert "# semantic group: mapped_modulation_bank" not in source
+        assert "# semantic group: mapping_workflow_shell" not in source
+        assert "# semantic group: poly_editor_bank" not in source
         assert "# semantic target: poly_shell_bank" not in source
 
     def test_semantic_python_groups_factory_presentation_widget_clusters(self, tmp_path):

@@ -147,6 +147,9 @@ practice and review set:
 - [docs/ableton_ui_playbook.md](docs/ableton_ui_playbook.md): shared UI rules
   for primary surfaces, contextual editing, compact behavior, and analyzer
   semantics
+- [docs/ableton_ui_construction_internals.md](docs/ableton_ui_construction_internals.md):
+  how UI elements, parameter metadata, custom surfaces, and plugin-local state
+  routing are actually constructed in the repo today
 - [docs/ableton_ui_review_checklist.md](docs/ableton_ui_review_checklist.md):
   weekly scoring rubric
 - [docs/ableton_ui_90_day_sprint.md](docs/ableton_ui_90_day_sprint.md): the
@@ -353,7 +356,15 @@ The knowledge manifest can also now expose behavior-level hints from that same
 structure. For devices like `Rnd Gen`, the reverse layer can infer summaries
 such as `multi_lane_mapping_bank`, `manual_or_midi_trigger_mode`,
 `mapping_session_controller`, and the combined `mapped_random_control_device`
-hint even when the deepest sidecar logic is still missing.
+hint even when the deepest sidecar logic is still missing. On the semantic
+codegen side, that same evidence can now be grouped into a higher-level
+`mapping_workflow_shell` instead of stopping at the lower-level
+`poly_editor_bank` description. A new mapping/modulation trace layer now sits
+above that too: `Expression Control`-style devices read as
+`mapped_modulation_bank`, `Macro Randomizer`-style devices read as
+`random_modulation_mapper`, and `Rnd Gen`-style devices can now lift all the
+way to `triggered_parameter_mapper` when the trigger/session evidence is
+present.
 
 The knowledge manifest also now includes `named_bus_networks`, which groups
 same-name send/receive fabrics across the root patcher and any embedded
@@ -394,6 +405,54 @@ dossiers = build_reference_device_dossiers([
     "/path/to/Max DelayLine.amxd",
     "/path/to/Poly Vocoder.amxd",
 ])
+```
+
+If you want a product-level view of mapping/modulation devices rather than one
+large generic corpus report, build a focused mapping lane report:
+
+```python
+from m4l_builder import analyze_amxd_corpus, build_mapping_lane_report, mapping_lane_report_markdown
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+lane_report = build_mapping_lane_report(report, limit=20)
+markdown = mapping_lane_report_markdown(lane_report)
+```
+
+That report classifies devices into high-level families such as
+`Expression Control`-style modulation banks, `Macro Randomizer`-style random
+modulation sources, and `Rnd Gen`-style triggered parameter mappers. It also
+separates the essential controls from accidental patch complexity so it is much
+closer to a design brief than to a raw topology dump.
+
+If you want fully expanded product briefs for the strongest mapping/modulation
+devices in a corpus, use the brief helpers:
+
+```python
+from m4l_builder import analyze_amxd_corpus, build_mapping_product_briefs, mapping_product_briefs_markdown
+
+report = analyze_amxd_corpus("/path/to/amxd-corpus")
+briefs = build_mapping_product_briefs(report, limit=10)
+markdown = mapping_product_briefs_markdown(briefs)
+```
+
+Those briefs add plain-language fields like:
+
+- product read
+- value model
+- target model
+- trigger model
+- essential subsystems
+- build-cleanly recommendation
+- open questions
+
+For a single device, you can skip the corpus step and generate one brief
+directly:
+
+```python
+from m4l_builder import build_mapping_product_brief_from_path, mapping_product_brief_markdown
+
+brief = build_mapping_product_brief_from_path("/path/to/device.amxd")
+markdown = mapping_product_brief_markdown(brief)
 ```
 
 For local research batches, the repo also ships a helper script:
@@ -448,6 +507,9 @@ There are also dedicated helpers for lane comparison and fixed proof sets:
 uv run python tools/build_source_lane_report.py /path/to/amxd-corpus /tmp/lane-report.md
 uv run python tools/build_corpus_comparison_report.py /tmp/comparison.md public=/path/to/public-corpus factory=/path/to/factory-packs
 uv run python tools/build_reference_dossiers.py /tmp/reference-dossiers.md /path/to/Max\ DelayLine.amxd
+uv run python tools/build_mapping_lane_report.py /path/to/amxd-corpus /tmp/mapping-lane-report.md
+uv run python tools/build_mapping_product_brief.py /path/to/device.amxd /tmp/mapping-product-brief.md
+uv run python tools/build_mapping_product_briefs.py /path/to/amxd-corpus /tmp/mapping-product-briefs.md
 ```
 
 ### LiveMCP bridge embedding

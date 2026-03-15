@@ -7,6 +7,7 @@ Use it alongside:
 
 - `docs/ableton_ui_90_day_sprint.md`
 - `docs/ableton_ui_playbook.md`
+- `docs/ableton_ui_construction_internals.md`
 - `docs/ableton_ui_scoreboard.md`
 - `docs/ui_validation/README.md`
 
@@ -23,7 +24,7 @@ Use it alongside:
 | Window | Focus | Reference Devices | Repo Targets | Required Artifacts | Current Status |
 | --- | --- | --- | --- | --- | --- |
 | Week 00 | Baseline audit | n/a | Shared repo baseline | `docs/ableton_ui_baseline_audit.md`, `docs/ui_validation/week_00_baseline_repo_audit.md` | `in-progress` |
-| Weeks 01-02 | Mental model | `EQ Eight`, `Spectrum`, `Auto Filter`, `Utility` | `Parametric EQ`, `Linear Phase EQ`, analyzer lane, filter lane | four teardown notes, playbook draft, review checklist | `in-progress` |
+| Weeks 01-02 | Mental model | `EQ Eight`, `Spectrum`, `Auto Filter`, `Utility` | `Parametric EQ`, `Linear Phase EQ`, analyzer lane, filter lane | four teardown notes, playbook draft, UI internals map, review checklist | `in-progress` |
 | Weeks 03-04 | Graph-first EQ | `EQ Eight` | `Parametric EQ` | `docs/ui_validation/week_03_parametric_eq.md` | `planned` |
 | Weeks 05-06 | Precision EQ | `EQ Eight`, `Spectrum` | `Linear Phase EQ` | `docs/ui_validation/week_05_linear_phase_eq.md` | `planned` |
 | Weeks 07-08 | Analyzer trust | `Spectrum` | `Spectrum Analyzer` | `docs/ui_validation/week_07_spectrum_analyzer.md` | `planned` |
@@ -36,6 +37,7 @@ Use it alongside:
 ### Shared Standards
 
 - `complete`: `docs/ableton_ui_playbook.md`
+- `complete`: `docs/ableton_ui_construction_internals.md`
 - `complete`: `docs/ableton_ui_review_checklist.md`
 - `complete`: `docs/ableton_ui_90_day_sprint.md`
 - `complete`: `docs/dual_surface_shell_guidance.md`

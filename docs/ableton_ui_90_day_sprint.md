@@ -14,6 +14,7 @@ Budget:
 Shared docs:
 
 - playbook: `docs/ableton_ui_playbook.md`
+- construction internals: `docs/ableton_ui_construction_internals.md`
 - review rubric: `docs/ableton_ui_review_checklist.md`
 - teardown template: `docs/ableton_ui_teardown_template.md`
 - validation template: `docs/ableton_ui_validation_template.md`
@@ -62,6 +63,16 @@ Use this order and do not expand it until the earlier devices feel internalized.
 External products are contrast references only after the Ableton reading is
 stable.
 
+## Important Framing
+
+This sprint is not starting from zero, and it is not pretending the repo only
+improved after the reference study began.
+
+The repo already built some strong direct-manipulation graph tools before the
+Ableton reference pass was formalized. The study phase exists to improve the
+surrounding control grammar, parameter semantics, compact behavior, and UI
+internals without losing what already feels good.
+
 ## Week-By-Week Plan
 
 ### Weeks 1-2: Mental Model
@@ -83,6 +94,7 @@ Repo targets:
 Outputs:
 
 - baseline audit
+- UI construction internals map
 - first playbook draft
 - review checklist
 - at least two teardown notes
@@ -90,6 +102,7 @@ Outputs:
 Success:
 
 - explain why the current EQ lanes are close but not yet fully Ableton-native
+- explain why the graph layer is ahead of the shared widget and routing grammar
 
 ### Weeks 3-4: Graph-First EQ
 

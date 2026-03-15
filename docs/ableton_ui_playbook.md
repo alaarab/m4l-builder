@@ -8,6 +8,9 @@ Ableton-native. It does not replace per-device design docs in
 `plugins/<lane>/README.md`. It standardizes the cross-device patterns those
 lanes should share.
 
+For how the current builder actually constructs UI internally, see
+`docs/ableton_ui_construction_internals.md`.
+
 ## Scope
 
 This playbook is for devices where UI quality is part of the product claim:
@@ -26,6 +29,22 @@ Current flagship lanes:
 - `plugins/spectrum_analyzer/README.md`
 - `plugins/ladder_filter/README.md`
 - `plugins/granular_sampler/README.md`
+
+## Sequence Correction
+
+This repo did not start from a finished Ableton UI theory and then implement it
+cleanly.
+
+The actual sequence was:
+
+1. build useful custom graph and interaction tools
+2. discover that some of them already felt good
+3. study Ableton devices more deliberately to understand what the surrounding
+   control grammar and internals were still missing
+
+That matters because the playbook should standardize and refine the current
+strengths. It should not pretend the existing flagship work came from a fully
+settled framework.
 
 ## Core Rule
 
@@ -121,6 +140,8 @@ For EQ-style devices specifically:
 - irrelevant parameters should be visually deemphasized or made inert
 - selection should survive short navigation hops unless the model explicitly
   says otherwise
+- if a graph is already the fastest editing surface, support rails must clarify
+  it rather than duplicate it
 
 ## Compact Vs Expanded Behavior
 

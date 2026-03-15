@@ -93,6 +93,9 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 `extract_poly_shell_bank_candidates(snapshot)` -- Extract exact grouped banks of repeated `poly~` editor shells that share the same target and host UI
 `extract_poly_editor_bank_candidates(snapshot)` -- Extract semantic multi-voice editor-bank candidates layered on top of repeated `poly~` shell banks
 `extract_behavior_hints(snapshot)` -- Extract product-level behavior hints such as mapping-bank, trigger-mode, and mapping-session summaries inferred from structure
+`extract_mapping_behavior_traces(snapshot)` -- Extract structured mapping/modulation traces such as output banks, trigger-source clusters, random-value generation, mapping lifecycles, lane-update paths, and hidden sidecar engines
+`extract_mapping_semantic_candidates(snapshot)` -- Extract higher-level semantic mapping candidates such as `mapped_modulation_bank`, `random_modulation_mapper`, and `triggered_parameter_mapper`
+`extract_mapping_workflow_candidates(snapshot)` -- Extract semantic mapping-workflow shells that combine repeated editor banks with trigger-mode and q-map session evidence
 `extract_first_party_api_rig_candidates(snapshot)` -- Extract semantic first-party API rigs from `M4L Building Tools / API`
 `extract_first_party_abstraction_host_candidates(snapshot)` -- Extract semantic factory-only `M4L.*` abstraction host clusters, including inferred abstraction families like `balance_shell`, `gain_shell`, `pan_shell`, and `envelope_follower_shell`, before whole-device building-block fallback
 `extract_first_party_abstraction_family_candidates(snapshot)` -- Derive family-level semantic candidates such as `balance_shell`, `gain_shell`, `pan_shell`, and `envelope_follower_shell` from first-party abstraction hosts for cleaner semantic codegen
@@ -105,7 +108,7 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 `generate_python_from_snapshot(snapshot)` -- Fidelity-first exact rebuild script
 `generate_builder_python_from_snapshot(snapshot)` -- Builder-style rebuild script with semantic `add_*` calls where recognized
 `generate_optimized_python_from_snapshot(snapshot)` -- Exact-safe helper/recipe rebuild with canonical Live API, controller-shell, embedded-ui-shell, and repeated `poly~` bank helper collapsing when safe
-`generate_semantic_python_from_snapshot(snapshot)` -- Rewrite-oriented semantic rebuild that also normalizes safe non-canonical Live API helper opportunities
+`generate_semantic_python_from_snapshot(snapshot)` -- Rewrite-oriented semantic rebuild that also normalizes safe non-canonical Live API helper opportunities and higher-level workflow shells such as `mapping_workflow_shell`
 `analyze_amxd_file(path)` -- Analyze one .amxd file for corpus mining
 `analyze_amxd_corpus(path, recursive=True)` -- Mine a directory of .amxd files into aggregate metrics, motifs, and object/control distributions
 `rank_reverse_candidates(report, limit=20)` -- Rank parsed corpus items by expected reverse-engineering payoff using motifs, embedded patchers, and unresolved helper opportunities
@@ -117,6 +120,17 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 `build_reference_device_dossier(path)` -- Build a semantic-lifting dossier for one fixed proof device, including raw `add_box(...)` reduction, semantic helper-call counts, and a combined structural-lift score
 `build_reference_device_dossiers(paths)` -- Build dossiers for a whole fixed proof set
 `reference_device_dossiers_markdown(dossiers)` -- Render those dossiers as markdown
+`rank_mapping_candidates(report, limit=20)` -- Rank mapping/modulation-oriented devices and classify them as modulation banks, random modulation sources, or triggered parameter mappers
+`build_mapping_lane_report(report, limit=20)` -- Build a focused mapping/modulation-lane report from a general corpus report
+`mapping_lane_report_markdown(report)` -- Render that mapping/modulation-lane report as markdown
+`write_mapping_lane_report(report, path)` -- Write the mapping/modulation-lane markdown report to disk
+`build_mapping_product_brief(item)` -- Build one plain-language product brief from a mined mapping/modulation corpus item
+`build_mapping_product_brief_from_path(path)` -- Build one plain-language product brief directly from a single AMXD path
+`build_mapping_product_briefs(report, limit=20)` -- Build ordered mapping/modulation product briefs from a corpus report
+`mapping_product_brief_markdown(brief)` -- Render one product brief as markdown
+`mapping_product_briefs_markdown(briefs)` -- Render those product briefs as markdown
+`write_mapping_product_brief(brief, path)` -- Write one mapping/modulation product brief to disk
+`write_mapping_product_briefs(briefs, path)` -- Write the mapping/modulation product briefs to disk
 `build_corpus_comparison(reports_by_label)` -- Compare separately mined corpora such as `public` vs `factory`
 `corpus_comparison_markdown(comparison)` -- Render that cross-corpus comparison as markdown
 `corpus_report_markdown(report)` -- Render a markdown report from `analyze_amxd_corpus(...)`

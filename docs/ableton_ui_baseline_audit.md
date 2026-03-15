@@ -15,6 +15,8 @@ The repo already has several real strengths:
   - `Spectrum Analyzer` is framed as shared infrastructure plus product
   - `Ladder Filter` is framed as a performance-oriented character lane
 - graph-first UI work is already real rather than aspirational
+- the best direct-manipulation work was built before the repo had a disciplined
+  Ableton UI study process, which means the core interaction instinct is real
 - selected-band and chip-row concepts already exist in the EQ lanes
 - analyzer behavior is treated as part of trust, not decoration
 - the plugin lanes already use design-doc style README files instead of leaving
@@ -22,6 +24,22 @@ The repo already has several real strengths:
 
 These are not beginner problems. They are the problems of a repo that already
 knows what a flagship lane should feel like.
+
+## Sequence Correction
+
+The repo did not get here by first studying Ableton deeply and then implementing
+the flagship tools from that study.
+
+The rough order was the opposite:
+
+1. build graph-heavy tools and custom interaction surfaces
+2. notice that some of those interactions already felt good
+3. realize the missing parts were the surrounding UI elements, control
+   construction, and internal state model
+4. start the current Ableton study to make those missing pieces explicit
+
+This matters because the sprint should protect the current direct-manipulation
+strength instead of overcorrecting toward generic widget-heavy layouts.
 
 ## Why The EQ Lanes Are Close But Not Yet Native
 
@@ -43,6 +61,8 @@ incomplete:
   shared language
 - the layout system has useful primitives, but not yet the stronger semantic
   section/rail/surface patterns the backlog calls for
+- parameter metadata, UI element construction, and internal routing policy are
+  still specified too locally inside plugin builds
 
 In short: the repo already has good devices, but the repo-level UI grammar is
 not finalized yet.
@@ -137,10 +157,13 @@ Progress means:
 - more trustworthy analyzer and meter semantics
 - faster editing from the primary surface
 - less explanation required for selection and state
+- less plugin-local guesswork about what a control means internally
 
 ## Immediate Next Actions
 
 - use the playbook as the review standard for all flagship lanes
+- use `docs/ableton_ui_construction_internals.md` when reviewing UI element and
+  parameter-construction work
 - score the next EQ changes with the shared checklist
 - require a validation note for each major sprint in `docs/ui_validation/`
 - record non-obvious UI lessons in Cortex as they appear

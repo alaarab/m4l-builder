@@ -86,7 +86,7 @@ def _motif_signature(motif: dict) -> str:
 
 def classify_corpus_source_metadata(path: str) -> dict:
     """Classify a corpus item into public/factory/site-lead lanes."""
-    absolute_path = os.path.abspath(path)
+    absolute_path = os.path.realpath(os.path.abspath(path))
     parts = Path(absolute_path).parts
     source_lane = "public"
     source_family = None
@@ -128,7 +128,7 @@ def classify_corpus_source_metadata(path: str) -> dict:
 
 def analyze_amxd_file(path: str) -> dict:
     """Analyze one .amxd file for corpus mining."""
-    absolute_path = os.path.abspath(path)
+    absolute_path = os.path.realpath(os.path.abspath(path))
     source_metadata = classify_corpus_source_metadata(absolute_path)
     item = {
         "path": absolute_path,
@@ -183,6 +183,9 @@ def analyze_amxd_file(path: str) -> dict:
         poly_shell_candidate_counts: Dict[str, int] = {}
         poly_shell_bank_candidate_counts: Dict[str, int] = {}
         poly_editor_bank_candidate_counts: Dict[str, int] = {}
+        mapping_behavior_trace_counts: Dict[str, int] = {}
+        mapping_semantic_candidate_counts: Dict[str, int] = {}
+        mapping_workflow_candidate_counts: Dict[str, int] = {}
         behavior_hint_counts: Dict[str, int] = {}
         sample_buffer_candidate_counts: Dict[str, int] = {}
         gen_processing_candidate_counts: Dict[str, int] = {}
@@ -208,6 +211,10 @@ def analyze_amxd_file(path: str) -> dict:
             hint_name = entry.get("name")
             if hint_name:
                 behavior_hint_counts[hint_name] = behavior_hint_counts.get(hint_name, 0) + 1
+        for entry in knowledge.get("mapping_behavior_traces", []):
+            trace_name = entry.get("name")
+            if trace_name:
+                mapping_behavior_trace_counts[trace_name] = mapping_behavior_trace_counts.get(trace_name, 0) + 1
         for entry in knowledge.get("embedded_ui_shell_candidates", []):
             candidate_name = entry.get("candidate_name")
             if candidate_name:
@@ -224,6 +231,8 @@ def analyze_amxd_file(path: str) -> dict:
             ("poly_shell_candidates", poly_shell_candidate_counts),
             ("poly_shell_bank_candidates", poly_shell_bank_candidate_counts),
             ("poly_editor_bank_candidates", poly_editor_bank_candidate_counts),
+            ("mapping_semantic_candidates", mapping_semantic_candidate_counts),
+            ("mapping_workflow_candidates", mapping_workflow_candidate_counts),
             ("first_party_api_rig_candidates", first_party_api_rig_candidate_counts),
         ):
             for entry in knowledge.get(key, []):
@@ -396,6 +405,15 @@ def analyze_amxd_file(path: str) -> dict:
             "poly_editor_bank_candidate_count": sum(poly_editor_bank_candidate_counts.values()),
             "poly_editor_bank_candidate_kinds": sorted(poly_editor_bank_candidate_counts),
             "poly_editor_bank_candidate_counts": poly_editor_bank_candidate_counts,
+            "mapping_behavior_trace_count": sum(mapping_behavior_trace_counts.values()),
+            "mapping_behavior_trace_kinds": sorted(mapping_behavior_trace_counts),
+            "mapping_behavior_trace_counts": mapping_behavior_trace_counts,
+            "mapping_semantic_candidate_count": sum(mapping_semantic_candidate_counts.values()),
+            "mapping_semantic_candidate_kinds": sorted(mapping_semantic_candidate_counts),
+            "mapping_semantic_candidate_counts": mapping_semantic_candidate_counts,
+            "mapping_workflow_candidate_count": sum(mapping_workflow_candidate_counts.values()),
+            "mapping_workflow_candidate_kinds": sorted(mapping_workflow_candidate_counts),
+            "mapping_workflow_candidate_counts": mapping_workflow_candidate_counts,
             "first_party_api_rig_candidate_count": sum(first_party_api_rig_candidate_counts.values()),
             "first_party_api_rig_candidate_kinds": sorted(first_party_api_rig_candidate_counts),
             "first_party_api_rig_candidate_counts": first_party_api_rig_candidate_counts,
@@ -1128,6 +1146,8 @@ def build_reference_device_dossier(path: str) -> dict:
         knowledge = extract_snapshot_knowledge(snapshot)
         builder_source = generate_builder_python_from_amxd(path)
         semantic_source = generate_semantic_python_from_amxd(path)
+        item = analyze_amxd_file(path)
+        product_brief = build_mapping_product_brief(item) if item.get("status") == "ok" else None
     except Exception as exc:
         return {
             "name": Path(path).name,
@@ -1144,6 +1164,7 @@ def build_reference_device_dossier(path: str) -> dict:
             "semantic_helper_calls": {},
             "structural_lift_score": 0,
             "fallback_zones": ["analysis_error"],
+            "product_brief": None,
         }
 
     def _count_raw_add_box(source: str) -> int:
@@ -1195,6 +1216,8 @@ def build_reference_device_dossier(path: str) -> dict:
         *(entry.get("candidate_name") for entry in knowledge.get("poly_shell_candidates", [])),
         *(entry.get("candidate_name") for entry in knowledge.get("poly_shell_bank_candidates", [])),
         *(entry.get("candidate_name") for entry in knowledge.get("poly_editor_bank_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("mapping_semantic_candidates", [])),
+        *(entry.get("candidate_name") for entry in knowledge.get("mapping_workflow_candidates", [])),
         *(entry.get("candidate_name") for entry in knowledge.get("first_party_api_rig_candidates", [])),
         *(entry.get("candidate_name") for entry in knowledge.get("first_party_abstraction_host_candidates", [])),
         *(entry.get("candidate_name") for entry in knowledge.get("first_party_abstraction_family_candidates", [])),
@@ -1219,6 +1242,7 @@ def build_reference_device_dossier(path: str) -> dict:
         "line_count": snapshot.get("analysis", {}).get("line_count", 0),
         "recovered_classes": recovered_classes,
         "behavior_hints": [entry.get("name") for entry in knowledge.get("behavior_hints", []) if entry.get("name")],
+        "mapping_behavior_traces": [entry.get("name") for entry in knowledge.get("mapping_behavior_traces", []) if entry.get("name")],
         "raw_add_box_count": raw_add_box_count,
         "semantic_add_box_count": semantic_add_box_count,
         "semantic_add_box_delta": raw_add_box_count - semantic_add_box_count,
@@ -1233,6 +1257,7 @@ def build_reference_device_dossier(path: str) -> dict:
             + semantic_helper_call_count
         ),
         "fallback_zones": fallback_zones,
+        "product_brief": product_brief,
     }
 
 
@@ -1270,6 +1295,7 @@ def reference_device_dossiers_markdown(dossiers: list[dict]) -> str:
             f"- Boxes / lines: `{dossier['box_count']}` / `{dossier['line_count']}`",
             f"- Recovered classes: `{', '.join(dossier['recovered_classes']) or 'None'}`",
             f"- Behavior hints: `{', '.join(dossier.get('behavior_hints', [])) or 'None'}`",
+            f"- Mapping behavior traces: `{', '.join(dossier.get('mapping_behavior_traces', [])) or 'None'}`",
             f"- Raw add_box / add_line count: `{dossier['raw_add_box_count']}` / `{dossier['raw_add_line_count']}`",
             f"- Semantic add_box / add_line count: `{dossier['semantic_add_box_count']}` / `{dossier['semantic_add_line_count']}`",
             f"- Semantic helper calls: `{', '.join(f'{name} x{count}' for name, count in sorted(dossier['semantic_helper_calls'].items())) or 'None'}`",
@@ -1278,6 +1304,25 @@ def reference_device_dossiers_markdown(dossiers: list[dict]) -> str:
             f"- Fallback zones: `{', '.join(dossier['fallback_zones']) or 'None'}`",
             "",
         ])
+        product_brief = dossier.get("product_brief")
+        if product_brief:
+            lines.extend([
+                "### Product Brief",
+                "",
+                f"- Product class: `{product_brief.get('product_class')}`",
+                f"- Closest reference: `{product_brief.get('closest_reference')}`",
+                f"- Product read: `{product_brief.get('product_thesis', '')}`",
+                f"- Value model: `{product_brief.get('value_model', '')}`",
+                f"- Target model: `{product_brief.get('target_model', '')}`",
+                f"- Trigger model: `{product_brief.get('trigger_model', '')}`",
+                f"- Essential controls: `{', '.join(product_brief.get('essential_controls', [])) or 'None'}`",
+                f"- Essential subsystems: `{', '.join(product_brief.get('essential_subsystems', [])) or 'None'}`",
+                f"- Accidental complexity: `{', '.join(product_brief.get('accidental_complexity', [])) or 'None'}`",
+                f"- Build cleanly as: `{product_brief.get('build_cleanly_as', '')}`",
+                f"- Open questions: `{', '.join(product_brief.get('open_questions', [])) or 'None'}`",
+                f"- Confidence: `{product_brief.get('confidence', 'unknown')}`",
+                "",
+            ])
     return "\n".join(lines)
 
 
@@ -1348,6 +1393,495 @@ def corpus_comparison_markdown(comparison: dict) -> str:
     return "\n".join(lines)
 
 
+def _mapping_product_profile(item: dict) -> dict:
+    semantic_counts = item.get("mapping_semantic_candidate_counts", {})
+    trace_counts = item.get("mapping_behavior_trace_counts", {})
+    hint_counts = item.get("behavior_hint_counts", {})
+    missing_support = int(item.get("missing_support_files", 0))
+
+    if semantic_counts.get("triggered_parameter_mapper", 0) > 0:
+        return {
+            "product_class": "parameter_mapper",
+            "closest_reference": "Rnd Gen-style mapper",
+            "essential_controls": [
+                "lane count",
+                "target assignment",
+                "trigger mode",
+                "random range/depth/shape",
+                "smoothing/probability",
+                "mapping session controls",
+            ],
+            "accidental_complexity": [
+                entry
+                for entry in [
+                    "repeated poly editor shells",
+                    "indexed bus naming",
+                    "panel relayout scripting" if hint_counts.get("dynamic_panel_relayout", 0) else None,
+                    "hidden sidecar mapping engine" if trace_counts.get("hidden_mapping_engine", 0) or missing_support else None,
+                ]
+                if entry
+            ],
+        }
+    if semantic_counts.get("device_parameter_randomizer", 0) > 0:
+        return {
+            "product_class": "parameter_randomizer",
+            "closest_reference": "Device Randomizer-style device",
+            "essential_controls": [
+                "target device scope",
+                "trigger mode",
+                "random amount/range",
+                "parameter include/exclude rules",
+                "store or recall settings",
+            ],
+            "accidental_complexity": [
+                "selected-device tracking buses",
+                "parameter enumeration and filtering shells",
+                "settings storage plumbing",
+            ],
+        }
+    if semantic_counts.get("random_modulation_mapper", 0) > 0:
+        return {
+            "product_class": "random_modulation_source",
+            "closest_reference": "Macro Randomizer-style device",
+            "essential_controls": [
+                "output lanes",
+                "trigger mode",
+                "rate or clocking",
+                "random range/depth/shape",
+                "smoothing/probability",
+            ],
+            "accidental_complexity": [
+                "fan-out trigger plumbing",
+                "low-level random/scaling objects",
+            ],
+        }
+    if semantic_counts.get("lfo_modulation_source", 0) > 0:
+        return {
+            "product_class": "lfo_modulation_source",
+            "closest_reference": "LFO MIDI-style device",
+            "essential_controls": [
+                "waveform",
+                "rate or sync",
+                "depth or amount",
+                "smoothing or jitter",
+                "hold or retrigger behavior",
+                "target output routing",
+            ],
+            "accidental_complexity": [
+                "oscilloscope UI plumbing",
+                "time-mode and sync shells",
+                "waveform selector internals",
+            ],
+        }
+    if semantic_counts.get("mapped_modulation_bank", 0) > 0:
+        return {
+            "product_class": "modulation_bank",
+            "closest_reference": "Expression Control-style bank",
+            "essential_controls": [
+                "lane count",
+                "lane labels",
+                "output range",
+            ],
+            "accidental_complexity": [
+                "per-lane output adapters",
+            ],
+        }
+    if item.get("mapping_workflow_candidate_count", 0) > 0:
+        return {
+            "product_class": "mapping_workflow",
+            "closest_reference": "mapping workflow shell",
+            "essential_controls": [
+                "lane count",
+                "trigger mode",
+                "mapping session controls",
+            ],
+            "accidental_complexity": [
+                "workflow shell plumbing",
+            ],
+        }
+    return {
+        "product_class": "unknown",
+        "closest_reference": "unknown",
+        "essential_controls": [],
+        "accidental_complexity": [],
+    }
+
+
+def _mapping_product_brief(item: dict) -> dict:
+    """Build a product-level brief for a mapping/modulation-oriented device."""
+    profile = _mapping_product_profile(item)
+    product_class = profile["product_class"]
+    trace_counts = item.get("mapping_behavior_trace_counts", {})
+    hint_counts = item.get("behavior_hint_counts", {})
+    semantic_counts = item.get("mapping_semantic_candidate_counts", {})
+    workflow_counts = item.get("mapping_workflow_candidate_counts", {})
+    missing_support = bool(item.get("missing_support_files"))
+
+    confidence = "low"
+    if product_class != "unknown":
+        confidence = "high"
+    elif item.get("mapping_workflow_candidate_count", 0) > 0:
+        confidence = "medium"
+
+    open_questions: list[str] = []
+    if trace_counts.get("hidden_mapping_engine", 0) or missing_support:
+        open_questions.append("exact value-generation and shaping may live in unresolved sidecars")
+    if product_class == "parameter_mapper" and not trace_counts.get("random_value_generation", 0):
+        open_questions.append("randomization algorithm is inferred from workflow shape more than fully visible internals")
+    if product_class == "parameter_randomizer" and not semantic_counts.get("device_parameter_randomizer", 0):
+        open_questions.append("parameter-scan shell is present, but parameter eligibility rules are still partially implicit")
+    if product_class == "mapping_workflow":
+        open_questions.append("workflow shell is clear, but the value model is not yet stable enough to classify further")
+
+    if product_class == "parameter_mapper":
+        thesis = "Triggered mapping workflow that assigns and updates target parameters across multiple lanes."
+        value_model = "Fresh lane values are produced on trigger and pushed through per-lane update paths; exact shaping may be partly hidden behind sidecars."
+        target_model = "Targets are assigned per lane through an explicit mapping session and stored as indexed lane routing."
+        trigger_model = "Manual and MIDI-triggered, with optional scheduled refresh if the patch adds it."
+        essential_subsystems = [
+            "lane bank",
+            "target assignment workflow",
+            "trigger router",
+            "mapping-session state",
+            "lane update engine",
+        ]
+        build_cleanly_as = "A lane-based mapper with explicit map/start/done/refresh state and a single clear per-lane randomization stage."
+    elif product_class == "parameter_randomizer":
+        thesis = "Selected-device controller that scans parameters and applies randomized updates under explicit trigger rules."
+        value_model = "Random values are generated against discovered parameters, usually with include/exclude filtering and stored settings."
+        target_model = "Targets come from the current device or a filtered parameter list rather than fixed exposed lanes."
+        trigger_model = "User-triggered or scheduled randomize actions, often with store/recall or edit-state gating."
+        essential_subsystems = [
+            "selected-device tracker",
+            "parameter scanner/filter",
+            "random value engine",
+            "settings store and recall",
+        ]
+        build_cleanly_as = "A parameter-scoped randomizer with a clean selected-device model and explicit parameter-filtering rules."
+    elif product_class == "random_modulation_source":
+        thesis = "Bank of output lanes that emits fresh random values on demand or on a schedule."
+        value_model = "Visible random generators and scaling stages create new lane values each trigger cycle."
+        target_model = "Targets are fixed output lanes rather than a dynamic parameter-assignment workflow."
+        trigger_model = "Manual, clocked, or free-running triggers fan out into per-lane random generation."
+        essential_subsystems = [
+            "output lane bank",
+            "trigger distributor",
+            "random generator/scaler",
+        ]
+        build_cleanly_as = "A simple random-output bank with one shared trigger clock and one normalized value-shaping path per lane."
+    elif product_class == "lfo_modulation_source":
+        thesis = "Periodic waveform modulation source with sync/time controls and a shaped modulation output path."
+        value_model = "Waveform cores generate continuous modulation, then hold/smoothing stages shape it before output."
+        target_model = "Targets are modulation outputs or routed destinations, not a parameter-mapping session."
+        trigger_model = "Rate, sync, and retrigger behavior govern the periodic engine rather than discrete randomize actions."
+        essential_subsystems = [
+            "periodic waveform core",
+            "sync/time-mode shell",
+            "hold or smoothing stage",
+            "output routing",
+        ]
+        build_cleanly_as = "A modulation source centered on one clean waveform core, one timing model, and one output-routing layer."
+    elif product_class == "modulation_bank":
+        thesis = "Stable bank of exposed modulation outputs with minimal internal decision-making."
+        value_model = "Values mostly come from user controls or upstream modulators rather than a built-in generator."
+        target_model = "Targets are fixed exposed lanes or direct macro-style outputs."
+        trigger_model = "Primarily manual or upstream-driven; little or no internal trigger engine is required."
+        essential_subsystems = [
+            "lane bank",
+            "output adapters",
+        ]
+        build_cleanly_as = "A compact exposed-lane bank with clean labeling and predictable output scaling."
+    elif product_class == "mapping_workflow":
+        thesis = "Mapping-session shell around lane editors whose trigger and assignment logic is clearer than its value-generation internals."
+        value_model = "Likely a mapper-style engine, but the exact value-generation path is still partially unresolved."
+        target_model = "Per-lane assignment and workflow state are more visible than the final modulation source."
+        trigger_model = "Workflow-driven map/start/done/refresh actions are the main visible control surface."
+        essential_subsystems = [
+            "lane editor bank",
+            "mapping-session controller",
+            "trigger/session buses",
+        ]
+        build_cleanly_as = "A map-session shell separated cleanly from whichever value engine ultimately drives it."
+    else:
+        thesis = "Mapping or modulation signals are present, but the product-level role is still ambiguous."
+        value_model = "Some control or modulation traces exist, but not enough to safely collapse the device into a stable product family."
+        target_model = "Targeting model is not yet stable."
+        trigger_model = "Trigger model is not yet stable."
+        essential_subsystems = []
+        build_cleanly_as = "A raw reverse candidate that still needs proof-set validation before it becomes a design reference."
+
+    return {
+        "name": item.get("name"),
+        "path": item.get("path"),
+        "source_lane": item.get("source_lane"),
+        "source_family": item.get("source_family"),
+        "pack_name": item.get("pack_name"),
+        "pack_section": item.get("pack_section"),
+        "pack_subsection": item.get("pack_subsection"),
+        "device_type": item.get("device_type"),
+        "product_class": product_class,
+        "closest_reference": profile["closest_reference"],
+        "product_thesis": thesis,
+        "value_model": value_model,
+        "target_model": target_model,
+        "trigger_model": trigger_model,
+        "essential_controls": profile["essential_controls"],
+        "essential_subsystems": essential_subsystems,
+        "accidental_complexity": profile["accidental_complexity"],
+        "build_cleanly_as": build_cleanly_as,
+        "behavior_hints": sorted(hint_counts),
+        "mapping_behavior_traces": sorted(trace_counts),
+        "mapping_semantic_candidates": sorted(semantic_counts),
+        "mapping_workflow_candidates": sorted(workflow_counts),
+        "open_questions": open_questions,
+        "confidence": confidence,
+    }
+
+
+def _mapping_candidate_score(item: dict) -> int:
+    """Return the ranking score for one mapping/modulation-oriented device."""
+    semantic_counts = item.get("mapping_semantic_candidate_counts", {})
+    return (
+        semantic_counts.get("triggered_parameter_mapper", 0) * 100
+        + semantic_counts.get("device_parameter_randomizer", 0) * 85
+        + semantic_counts.get("random_modulation_mapper", 0) * 70
+        + semantic_counts.get("lfo_modulation_source", 0) * 60
+        + semantic_counts.get("mapped_modulation_bank", 0) * 40
+        + item.get("mapping_workflow_candidate_count", 0) * 20
+        + item.get("mapping_behavior_trace_count", 0) * 5
+        + item.get("behavior_hint_count", 0) * 3
+    )
+
+
+def rank_mapping_candidates(report: dict, *, limit: int = 20) -> list[dict]:
+    """Rank mapping/modulation-oriented devices within a corpus report."""
+    ranked = []
+    for item in report.get("items", []):
+        if item.get("status") != "ok":
+            continue
+        trace_counts = item.get("mapping_behavior_trace_counts", {})
+        hint_counts = item.get("behavior_hint_counts", {})
+        semantic_counts = item.get("mapping_semantic_candidate_counts", {})
+        if not (semantic_counts or trace_counts or hint_counts):
+            continue
+        brief = _mapping_product_brief(item)
+        brief["score"] = _mapping_candidate_score(item)
+        ranked.append(brief)
+    ranked.sort(key=lambda entry: (-entry["score"], entry["product_class"], entry["name"]))
+    return ranked[:limit]
+
+
+def build_mapping_lane_report(report: dict, *, limit: int = 20) -> dict:
+    """Build a focused report for mapping/modulation-oriented devices."""
+    items = [
+        item
+        for item in report.get("items", [])
+        if item.get("status") == "ok"
+        and (
+            item.get("mapping_semantic_candidate_count", 0) > 0
+            or item.get("mapping_behavior_trace_count", 0) > 0
+            or item.get("behavior_hint_count", 0) > 0
+            or item.get("mapping_workflow_candidate_count", 0) > 0
+        )
+    ]
+    product_class_counts: Dict[str, int] = {}
+    closest_reference_counts: Dict[str, int] = {}
+    source_family_counts: Dict[str, int] = {}
+    source_lane_counts: Dict[str, int] = {}
+    behavior_trace_counts: Dict[str, int] = {}
+    semantic_candidate_counts: Dict[str, int] = {}
+    behavior_hint_counts: Dict[str, int] = {}
+
+    for item in items:
+        profile = _mapping_product_profile(item)
+        product_class_counts[profile["product_class"]] = product_class_counts.get(profile["product_class"], 0) + 1
+        closest_reference_counts[profile["closest_reference"]] = closest_reference_counts.get(profile["closest_reference"], 0) + 1
+        source_family = item.get("source_family")
+        if source_family:
+            source_family_counts[source_family] = source_family_counts.get(source_family, 0) + 1
+        source_lane = item.get("source_lane")
+        if source_lane:
+            source_lane_counts[source_lane] = source_lane_counts.get(source_lane, 0) + 1
+        for name, count in item.get("mapping_behavior_trace_counts", {}).items():
+            behavior_trace_counts[name] = behavior_trace_counts.get(name, 0) + int(count)
+        for name, count in item.get("mapping_semantic_candidate_counts", {}).items():
+            semantic_candidate_counts[name] = semantic_candidate_counts.get(name, 0) + int(count)
+        for name, count in item.get("behavior_hint_counts", {}).items():
+            behavior_hint_counts[name] = behavior_hint_counts.get(name, 0) + int(count)
+
+    return {
+        "summary": {
+            "count": len(items),
+            "files_with_behavior_hints": sum(1 for item in items if item.get("behavior_hint_count", 0) > 0),
+            "files_with_mapping_behavior_traces": sum(1 for item in items if item.get("mapping_behavior_trace_count", 0) > 0),
+            "files_with_mapping_semantic_candidates": sum(1 for item in items if item.get("mapping_semantic_candidate_count", 0) > 0),
+            "files_with_mapping_workflow_candidates": sum(1 for item in items if item.get("mapping_workflow_candidate_count", 0) > 0),
+        },
+        "product_classes": _sorted_frequency(product_class_counts),
+        "closest_references": _sorted_frequency(closest_reference_counts),
+        "source_families": _sorted_frequency(source_family_counts),
+        "source_lanes": _sorted_frequency(source_lane_counts),
+        "behavior_hints": _sorted_frequency(behavior_hint_counts),
+        "mapping_behavior_traces": _sorted_frequency(behavior_trace_counts),
+        "mapping_semantic_candidates": _sorted_frequency(semantic_candidate_counts),
+        "top_devices": rank_mapping_candidates(report, limit=limit),
+    }
+
+
+def mapping_lane_report_markdown(report: dict) -> str:
+    """Render a mapping/modulation lane report as markdown."""
+    summary = report.get("summary", {})
+    lines = [
+        "# Mapping / Modulation Lane Report",
+        "",
+        f"- Devices in lane: `{summary.get('count', 0)}`",
+        f"- Files with behavior hints: `{summary.get('files_with_behavior_hints', 0)}`",
+        f"- Files with mapping behavior traces: `{summary.get('files_with_mapping_behavior_traces', 0)}`",
+        f"- Files with mapping semantic candidates: `{summary.get('files_with_mapping_semantic_candidates', 0)}`",
+        f"- Files with mapping workflow candidates: `{summary.get('files_with_mapping_workflow_candidates', 0)}`",
+        "",
+    ]
+
+    def add_frequency_section(title: str, entries: list[dict], *, limit: int = 10) -> None:
+        lines.append(f"## {title}")
+        lines.append("")
+        if not entries:
+            lines.append("- None")
+            lines.append("")
+            return
+        for entry in entries[:limit]:
+            lines.append(f"- `{entry['name']}`: `{entry['count']}`")
+        lines.append("")
+
+    add_frequency_section("Product Classes", report.get("product_classes", []))
+    add_frequency_section("Closest References", report.get("closest_references", []))
+    add_frequency_section("Source Lanes", report.get("source_lanes", []))
+    add_frequency_section("Top Source Families", report.get("source_families", []))
+    add_frequency_section("Top Behavior Hints", report.get("behavior_hints", []))
+    add_frequency_section("Top Mapping Behavior Traces", report.get("mapping_behavior_traces", []))
+    add_frequency_section("Top Mapping Semantic Candidates", report.get("mapping_semantic_candidates", []))
+
+    lines.append("## Top Devices")
+    lines.append("")
+    top_devices = report.get("top_devices", [])
+    if not top_devices:
+        lines.extend(["- None", ""])
+        return "\n".join(lines)
+    for entry in top_devices:
+        lines.extend([
+            f"### {entry['name']}",
+            "",
+            f"- Product class: `{entry['product_class']}`",
+            f"- Closest reference: `{entry['closest_reference']}`",
+            f"- Product read: `{entry.get('product_thesis', '')}`",
+            f"- Source lane/family: `{entry.get('source_lane')}` / `{entry.get('source_family')}`",
+            f"- Semantic candidates: `{', '.join(entry.get('mapping_semantic_candidates', [])) or 'None'}`",
+            f"- Behavior traces: `{', '.join(entry.get('mapping_behavior_traces', [])) or 'None'}`",
+            f"- Behavior hints: `{', '.join(entry.get('behavior_hints', [])) or 'None'}`",
+            f"- Value model: `{entry.get('value_model', '') or 'Unknown'}`",
+            f"- Target model: `{entry.get('target_model', '') or 'Unknown'}`",
+            f"- Trigger model: `{entry.get('trigger_model', '') or 'Unknown'}`",
+            f"- Essential controls: `{', '.join(entry.get('essential_controls', [])) or 'None'}`",
+            f"- Essential subsystems: `{', '.join(entry.get('essential_subsystems', [])) or 'None'}`",
+            f"- Accidental complexity: `{', '.join(entry.get('accidental_complexity', [])) or 'None'}`",
+            f"- Build cleanly as: `{entry.get('build_cleanly_as', '') or 'Unknown'}`",
+            f"- Open questions: `{', '.join(entry.get('open_questions', [])) or 'None'}`",
+            f"- Confidence: `{entry.get('confidence', 'unknown')}`",
+            f"- Score: `{entry.get('score', 0)}`",
+            "",
+        ])
+    return "\n".join(lines)
+
+
+def build_mapping_product_brief(item: dict) -> dict:
+    """Build one product-level brief from a mined corpus item."""
+    brief = _mapping_product_brief(item)
+    brief["score"] = _mapping_candidate_score(item)
+    return brief
+
+
+def build_mapping_product_brief_from_path(path: str) -> dict:
+    """Build one product-level brief directly from an AMXD path."""
+    item = analyze_amxd_file(path)
+    if item.get("status") != "ok":
+        raise ValueError(f"Could not analyze AMXD: {path}")
+    return build_mapping_product_brief(item)
+
+
+def build_mapping_product_briefs(
+    report: dict,
+    *,
+    limit: int = 20,
+    include_unknown: bool = False,
+) -> list[dict]:
+    """Build ordered product-level briefs for the mapping/modulation lane."""
+    briefs = rank_mapping_candidates(report, limit=max(limit * 5, limit))
+    if not include_unknown:
+        briefs = [brief for brief in briefs if brief.get("product_class") != "unknown"]
+    return briefs[:limit]
+
+
+def mapping_product_briefs_markdown(briefs: list[dict]) -> str:
+    """Render mapping/modulation product briefs as markdown."""
+    lines = ["# Mapping / Modulation Product Briefs", ""]
+    if not briefs:
+        lines.extend(["- None", ""])
+        return "\n".join(lines)
+    for brief in briefs:
+        lines.extend([
+            f"## {brief['name']}",
+            "",
+            f"- Product class: `{brief['product_class']}`",
+            f"- Closest reference: `{brief['closest_reference']}`",
+            f"- Source lane/family: `{brief.get('source_lane')}` / `{brief.get('source_family')}`",
+            f"- Product read: `{brief.get('product_thesis', '')}`",
+            f"- Value model: `{brief.get('value_model', '')}`",
+            f"- Target model: `{brief.get('target_model', '')}`",
+            f"- Trigger model: `{brief.get('trigger_model', '')}`",
+            f"- Essential controls: `{', '.join(brief.get('essential_controls', [])) or 'None'}`",
+            f"- Essential subsystems: `{', '.join(brief.get('essential_subsystems', [])) or 'None'}`",
+            f"- Accidental complexity: `{', '.join(brief.get('accidental_complexity', [])) or 'None'}`",
+            f"- Build cleanly as: `{brief.get('build_cleanly_as', '')}`",
+            f"- Semantic candidates: `{', '.join(brief.get('mapping_semantic_candidates', [])) or 'None'}`",
+            f"- Behavior traces: `{', '.join(brief.get('mapping_behavior_traces', [])) or 'None'}`",
+            f"- Behavior hints: `{', '.join(brief.get('behavior_hints', [])) or 'None'}`",
+            f"- Open questions: `{', '.join(brief.get('open_questions', [])) or 'None'}`",
+            f"- Confidence: `{brief.get('confidence', 'unknown')}`",
+            f"- Score: `{brief.get('score', 0)}`",
+            "",
+        ])
+    return "\n".join(lines)
+
+
+def mapping_product_brief_markdown(brief: dict) -> str:
+    """Render one mapping/modulation product brief as markdown."""
+    lines = mapping_product_briefs_markdown([brief]).splitlines()
+    if lines:
+        lines[0] = "# Mapping / Modulation Product Brief"
+    return "\n".join(lines)
+
+
+def write_mapping_product_brief(brief: dict, path: str) -> int:
+    """Write one rendered mapping/modulation product brief to disk."""
+    text = mapping_product_brief_markdown(brief)
+    Path(path).write_text(text, encoding="utf-8")
+    return len(text.encode("utf-8"))
+
+
+def write_mapping_product_briefs(briefs: list[dict], path: str) -> int:
+    """Write rendered mapping/modulation product briefs to disk."""
+    text = mapping_product_briefs_markdown(briefs)
+    Path(path).write_text(text, encoding="utf-8")
+    return len(text.encode("utf-8"))
+
+
+def write_mapping_lane_report(report: dict, path: str) -> int:
+    """Write a rendered mapping/modulation lane report to disk."""
+    text = mapping_lane_report_markdown(report)
+    Path(path).write_text(text, encoding="utf-8")
+    return len(text.encode("utf-8"))
+
+
 def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
     """Analyze every `.amxd` file in a directory and aggregate corpus metrics."""
     root = Path(path).expanduser().resolve()
@@ -1401,6 +1935,9 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
     poly_shell_candidate_counts: Dict[str, int] = {}
     poly_shell_bank_candidate_counts: Dict[str, int] = {}
     poly_editor_bank_candidate_counts: Dict[str, int] = {}
+    mapping_behavior_trace_counts: Dict[str, int] = {}
+    mapping_semantic_candidate_counts: Dict[str, int] = {}
+    mapping_workflow_candidate_counts: Dict[str, int] = {}
     sample_buffer_candidate_counts: Dict[str, int] = {}
     gen_processing_candidate_counts: Dict[str, int] = {}
     embedded_sample_buffer_candidate_counts: Dict[str, int] = {}
@@ -1499,6 +2036,8 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
             controller_shell_candidate_counts[candidate_name] = controller_shell_candidate_counts.get(candidate_name, 0) + int(count)
         for hint_name, count in item.get("behavior_hint_counts", {}).items():
             behavior_hint_counts[hint_name] = behavior_hint_counts.get(hint_name, 0) + int(count)
+        for trace_name, count in item.get("mapping_behavior_trace_counts", {}).items():
+            mapping_behavior_trace_counts[trace_name] = mapping_behavior_trace_counts.get(trace_name, 0) + int(count)
         for candidate_name, count in item.get("embedded_ui_shell_candidate_counts", {}).items():
             embedded_ui_shell_candidate_counts[candidate_name] = embedded_ui_shell_candidate_counts.get(candidate_name, 0) + int(count)
         for candidate_name, count in item.get("named_bus_router_candidate_counts", {}).items():
@@ -1515,6 +2054,10 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
             poly_shell_bank_candidate_counts[candidate_name] = poly_shell_bank_candidate_counts.get(candidate_name, 0) + int(count)
         for candidate_name, count in item.get("poly_editor_bank_candidate_counts", {}).items():
             poly_editor_bank_candidate_counts[candidate_name] = poly_editor_bank_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("mapping_semantic_candidate_counts", {}).items():
+            mapping_semantic_candidate_counts[candidate_name] = mapping_semantic_candidate_counts.get(candidate_name, 0) + int(count)
+        for candidate_name, count in item.get("mapping_workflow_candidate_counts", {}).items():
+            mapping_workflow_candidate_counts[candidate_name] = mapping_workflow_candidate_counts.get(candidate_name, 0) + int(count)
         for candidate_name, count in item.get("sample_buffer_candidate_counts", {}).items():
             sample_buffer_candidate_counts[candidate_name] = sample_buffer_candidate_counts.get(candidate_name, 0) + int(count)
         for candidate_name, count in item.get("gen_processing_candidate_counts", {}).items():
@@ -1562,6 +2105,7 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
         "files_with_live_api_helper_opportunities": sum(1 for item in ok_items if item.get("live_api_helper_opportunity_count", 0) > 0),
         "files_with_controller_shell_candidates": sum(1 for item in ok_items if item.get("controller_shell_candidate_count", 0) > 0),
         "files_with_behavior_hints": sum(1 for item in ok_items if item.get("behavior_hint_count", 0) > 0),
+        "files_with_mapping_behavior_traces": sum(1 for item in ok_items if item.get("mapping_behavior_trace_count", 0) > 0),
         "files_with_embedded_ui_shell_candidates": sum(1 for item in ok_items if item.get("embedded_ui_shell_candidate_count", 0) > 0),
         "files_with_named_bus_router_candidates": sum(1 for item in ok_items if item.get("named_bus_router_candidate_count", 0) > 0),
         "files_with_init_dispatch_chain_candidates": sum(1 for item in ok_items if item.get("init_dispatch_chain_candidate_count", 0) > 0),
@@ -1570,6 +2114,8 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
         "files_with_poly_shell_candidates": sum(1 for item in ok_items if item.get("poly_shell_candidate_count", 0) > 0),
         "files_with_poly_shell_bank_candidates": sum(1 for item in ok_items if item.get("poly_shell_bank_candidate_count", 0) > 0),
         "files_with_poly_editor_bank_candidates": sum(1 for item in ok_items if item.get("poly_editor_bank_candidate_count", 0) > 0),
+        "files_with_mapping_semantic_candidates": sum(1 for item in ok_items if item.get("mapping_semantic_candidate_count", 0) > 0),
+        "files_with_mapping_workflow_candidates": sum(1 for item in ok_items if item.get("mapping_workflow_candidate_count", 0) > 0),
         "files_with_sample_buffer_candidates": sum(1 for item in ok_items if item.get("sample_buffer_candidate_count", 0) > 0),
         "files_with_gen_processing_candidates": sum(1 for item in ok_items if item.get("gen_processing_candidate_count", 0) > 0),
         "files_with_embedded_sample_buffer_candidates": sum(1 for item in ok_items if item.get("embedded_sample_buffer_candidate_count", 0) > 0),
@@ -1627,6 +2173,7 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
             "live_api_helper_opportunity_blockers": _sorted_frequency(live_api_helper_opportunity_blockers),
             "controller_shell_candidates": _sorted_frequency(controller_shell_candidate_counts),
             "behavior_hints": _sorted_frequency(behavior_hint_counts),
+            "mapping_behavior_traces": _sorted_frequency(mapping_behavior_trace_counts),
             "embedded_ui_shell_candidates": _sorted_frequency(embedded_ui_shell_candidate_counts),
             "named_bus_router_candidates": _sorted_frequency(named_bus_router_candidate_counts),
             "init_dispatch_chain_candidates": _sorted_frequency(init_dispatch_chain_candidate_counts),
@@ -1635,6 +2182,8 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
             "poly_shell_candidates": _sorted_frequency(poly_shell_candidate_counts),
             "poly_shell_bank_candidates": _sorted_frequency(poly_shell_bank_candidate_counts),
             "poly_editor_bank_candidates": _sorted_frequency(poly_editor_bank_candidate_counts),
+            "mapping_semantic_candidates": _sorted_frequency(mapping_semantic_candidate_counts),
+            "mapping_workflow_candidates": _sorted_frequency(mapping_workflow_candidate_counts),
             "sample_buffer_candidates": _sorted_frequency(sample_buffer_candidate_counts),
             "gen_processing_candidates": _sorted_frequency(gen_processing_candidate_counts),
             "embedded_sample_buffer_candidates": _sorted_frequency(embedded_sample_buffer_candidate_counts),
@@ -1694,6 +2243,7 @@ def corpus_report_markdown(report: dict) -> str:
         f"- Files with Live API helper opportunities: `{summary.get('files_with_live_api_helper_opportunities', 0)}`",
         f"- Files with controller-shell candidates: `{summary.get('files_with_controller_shell_candidates', 0)}`",
         f"- Files with behavior hints: `{summary.get('files_with_behavior_hints', 0)}`",
+        f"- Files with mapping-behavior traces: `{summary.get('files_with_mapping_behavior_traces', 0)}`",
         f"- Files with embedded-ui shell candidates: `{summary.get('files_with_embedded_ui_shell_candidates', 0)}`",
         f"- Files with named-bus router candidates: `{summary.get('files_with_named_bus_router_candidates', 0)}`",
         f"- Files with init-dispatch candidates: `{summary.get('files_with_init_dispatch_chain_candidates', 0)}`",
@@ -1702,6 +2252,8 @@ def corpus_report_markdown(report: dict) -> str:
         f"- Files with poly-shell candidates: `{summary.get('files_with_poly_shell_candidates', 0)}`",
         f"- Files with poly-shell bank candidates: `{summary.get('files_with_poly_shell_bank_candidates', 0)}`",
         f"- Files with poly-editor bank candidates: `{summary.get('files_with_poly_editor_bank_candidates', 0)}`",
+        f"- Files with mapping semantic candidates: `{summary.get('files_with_mapping_semantic_candidates', 0)}`",
+        f"- Files with mapping-workflow candidates: `{summary.get('files_with_mapping_workflow_candidates', 0)}`",
         f"- Files with sample-buffer candidates: `{summary.get('files_with_sample_buffer_candidates', 0)}`",
         f"- Files with gen-processing candidates: `{summary.get('files_with_gen_processing_candidates', 0)}`",
         f"- Files with embedded sample-buffer candidates: `{summary.get('files_with_embedded_sample_buffer_candidates', 0)}`",
@@ -1759,6 +2311,7 @@ def corpus_report_markdown(report: dict) -> str:
     add_frequency_section("Top Live API Helper Opportunity Blockers", frequencies.get("live_api_helper_opportunity_blockers", []))
     add_frequency_section("Top Controller Shell Candidates", frequencies.get("controller_shell_candidates", []))
     add_frequency_section("Top Behavior Hints", frequencies.get("behavior_hints", []))
+    add_frequency_section("Top Mapping Behavior Traces", frequencies.get("mapping_behavior_traces", []))
     add_frequency_section("Top Embedded UI Shell Candidates", frequencies.get("embedded_ui_shell_candidates", []))
     add_frequency_section("Top Named Bus Router Candidates", frequencies.get("named_bus_router_candidates", []))
     add_frequency_section("Top Init Dispatch Candidates", frequencies.get("init_dispatch_chain_candidates", []))
@@ -1767,6 +2320,8 @@ def corpus_report_markdown(report: dict) -> str:
     add_frequency_section("Top Poly Shell Candidates", frequencies.get("poly_shell_candidates", []))
     add_frequency_section("Top Poly Shell Bank Candidates", frequencies.get("poly_shell_bank_candidates", []))
     add_frequency_section("Top Poly Editor Bank Candidates", frequencies.get("poly_editor_bank_candidates", []))
+    add_frequency_section("Top Mapping Semantic Candidates", frequencies.get("mapping_semantic_candidates", []))
+    add_frequency_section("Top Mapping Workflow Candidates", frequencies.get("mapping_workflow_candidates", []))
     add_frequency_section("Top Sample Buffer Candidates", frequencies.get("sample_buffer_candidates", []))
     add_frequency_section("Top Gen Processing Candidates", frequencies.get("gen_processing_candidates", []))
     add_frequency_section("Top Embedded Sample Buffer Candidates", frequencies.get("embedded_sample_buffer_candidates", []))
@@ -1998,6 +2553,17 @@ __all__ = [
     "build_reference_device_dossier",
     "build_reference_device_dossiers",
     "reference_device_dossiers_markdown",
+    "rank_mapping_candidates",
+    "build_mapping_lane_report",
+    "mapping_lane_report_markdown",
+    "write_mapping_lane_report",
+    "build_mapping_product_brief",
+    "build_mapping_product_brief_from_path",
+    "build_mapping_product_briefs",
+    "mapping_product_brief_markdown",
+    "mapping_product_briefs_markdown",
+    "write_mapping_product_brief",
+    "write_mapping_product_briefs",
     "build_corpus_comparison",
     "corpus_comparison_markdown",
     "corpus_report_markdown",
