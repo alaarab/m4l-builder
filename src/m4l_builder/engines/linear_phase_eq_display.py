@@ -70,6 +70,7 @@ def linear_phase_eq_display_js(
     badge_color="0.10, 0.12, 0.15, 0.94",
     badge_border_color="0.25, 0.28, 0.34, 1.0",
     show_dynamic=True,
+    show_selection_readout=True,
 ):
     """Return JavaScript source for the flagship linear-phase EQ display."""
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
@@ -88,6 +89,7 @@ def linear_phase_eq_display_js(
         badge_color=badge_color,
         badge_border_color=badge_border_color,
         show_dynamic="1" if show_dynamic else "0",
+        show_selection_readout="1" if show_selection_readout else "0",
     )
 
 
@@ -116,6 +118,7 @@ var ZERO_LINE_CLR = [$zero_line_color];
 var BADGE_CLR = [$badge_color];
 var BADGE_BORDER_CLR = [$badge_border_color];
 var SHOW_DYNAMIC = $show_dynamic;
+var SHOW_SELECTION_READOUT = $show_selection_readout;
 
 var BAND_COLORS = [
     [0.92, 0.36, 0.34, 1.0],
@@ -198,6 +201,14 @@ var context_menu_band = -1;
 var context_menu_x = 0;
 var context_menu_y = 0;
 var context_menu_hover = -1;
+var last_pointer_press_ms = 0;
+var last_pointer_press_x = -1000;
+var last_pointer_press_y = -1000;
+var suppress_next_click = 0;
+var pending_context_click = 0;
+var pending_context_x = -1000;
+var pending_context_y = -1000;
+var pending_context_ms = 0;
 
 var analyzer_display = [];
 var analyzer_peaks = [];
@@ -1263,6 +1274,8 @@ function draw_hud() {
         draw_badge(badge.x, badge.y, badge.w, badge.h, badge.label, badge.value);
     }
 
+    if (!SHOW_SELECTION_READOUT) return;
+
     if (selected_band < 0 || selected_band >= num_bands) {
         mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(6.5);
@@ -1481,10 +1494,13 @@ function msg_int(v) {
 function pointer_context_click(pointerevent, ctrl, but) {
     if (pointerevent) {
         if (pointerevent.contextModifier) return 1;
-        if (pointerevent.button === 2) return 1;
-        if ((pointerevent.buttons & 2) !== 0) return 1;
+        if (pointerevent.button !== undefined && pointerevent.button === 2) return 1;
+        if (pointerevent.buttons !== undefined && (pointerevent.buttons & 2) !== 0) return 1;
     }
-    return (ctrl || but > 1) ? 1 : 0;
+    if (but !== undefined && but !== null) {
+        if ((but & 2) !== 0) return 1;
+    }
+    return ctrl ? 1 : 0;
 }
 
 function pointer_option_key(pointerevent, opt) {
@@ -1531,6 +1547,52 @@ function pointer_buttons(pointerevent, fallback) {
         return 1;
     }
     return fallback;
+}
+
+function note_pointer_press(x, y) {
+    last_pointer_press_ms = new Date().getTime();
+    last_pointer_press_x = x;
+    last_pointer_press_y = y;
+    suppress_next_click = 1;
+}
+
+function should_ignore_pointer_click(x, y) {
+    var now_ms;
+    if (!suppress_next_click) return 0;
+    now_ms = new Date().getTime();
+    if ((now_ms - last_pointer_press_ms) > 300) {
+        suppress_next_click = 0;
+        return 0;
+    }
+    if (Math.abs(x - last_pointer_press_x) > 4 || Math.abs(y - last_pointer_press_y) > 4) {
+        suppress_next_click = 0;
+        return 0;
+    }
+    suppress_next_click = 0;
+    return 1;
+}
+
+function note_pending_context_click(x, y) {
+    pending_context_click = 1;
+    pending_context_x = x;
+    pending_context_y = y;
+    pending_context_ms = new Date().getTime();
+}
+
+function consume_pending_context_click(x, y) {
+    var now_ms;
+    if (!pending_context_click) return 0;
+    now_ms = new Date().getTime();
+    if ((now_ms - pending_context_ms) > 300) {
+        pending_context_click = 0;
+        return 0;
+    }
+    if (Math.abs(x - pending_context_x) > 4 || Math.abs(y - pending_context_y) > 4) {
+        pending_context_click = 0;
+        return 0;
+    }
+    pending_context_click = 0;
+    return 1;
 }
 
 function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
@@ -1768,14 +1830,26 @@ function clear_hover_state() {
 }
 
 function onpointerdown(pointerevent) {
+    var x = pointer_x(pointerevent, 0);
+    var y = pointer_y(pointerevent, 0);
+    var but = pointer_buttons(pointerevent, 1);
+    var cmd = pointer_command_key(pointerevent, 0);
+    var shift = pointer_shift_key(pointerevent, 0);
+    var opt = pointer_option_key(pointerevent, 0);
+    var ctrl = pointerevent.ctrlKey ? 1 : 0;
+    if (pointer_context_click(pointerevent, ctrl, but)) {
+        note_pending_context_click(x, y);
+        return;
+    }
+    note_pointer_press(x, y);
     handle_press(
-        pointer_x(pointerevent, 0),
-        pointer_y(pointerevent, 0),
-        pointer_buttons(pointerevent, 1),
-        pointer_command_key(pointerevent, 0),
-        pointer_shift_key(pointerevent, 0),
-        pointer_option_key(pointerevent, 0),
-        pointerevent.ctrlKey ? 1 : 0,
+        x,
+        y,
+        but,
+        cmd,
+        shift,
+        opt,
+        ctrl,
         pointerevent
     );
 }
@@ -1822,6 +1896,11 @@ function onpointerleave(pointerevent) {
 }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl, pointerevent) {
+    if (consume_pending_context_click(x, y)) {
+        handle_press(x, y, 2, cmd, shift, opt, 1, pointerevent);
+        return;
+    }
+    if (should_ignore_pointer_click(x, y)) return;
     handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent);
 }
 
