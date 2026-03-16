@@ -1,1 +1,0 @@
-"""Spectrum Analyzer plugin workspace."""

@@ -1,1 +1,0 @@
-"""Vocoder plugin workspace."""

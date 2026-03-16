@@ -7,9 +7,9 @@ Use it for flagship instruments and any effect whose compact surface should
 preserve a strong performance identity while deferring deeper editing to an
 expanded view.
 
-Primary candidate in this repo:
+Primary candidate in the sibling `the device repo` repo:
 
-- `plugins/granular_sampler/README.md`
+- `the device repo/plugins/granular_sampler/README.md`
 
 Future likely candidates:
 
@@ -145,4 +145,4 @@ The Granular Sampler lane should use this shell pattern as follows:
 
 See:
 
-- `plugins/granular_sampler/ui_shell_spec.md`
+- `the device repo/plugins/granular_sampler/ui_shell_spec.md`
