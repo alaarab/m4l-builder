@@ -528,6 +528,6 @@ device.add_line("out_l", 0, "out_scope", 0)
 # -------------------------------------------------------------------
 # Build
 # -------------------------------------------------------------------
-output = device_output_path("Multiband Saturator")
+output = device_output_path("Multiband Saturator", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

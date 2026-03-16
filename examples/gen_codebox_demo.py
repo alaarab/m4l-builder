@@ -87,6 +87,6 @@ device.add_line("cut_ln", 0, "lp_gen", 1)
 # or a ring modulator using sin(counter * freq) for amplitude modulation.
 # gen~ can do anything at sample rate: bitcrushers, phasers, custom envelopes.
 
-output = device_output_path("Gen Codebox Demo")
+output = device_output_path("Gen Codebox Demo", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -3,6 +3,7 @@
 import os
 import platform
 from pathlib import Path
+from typing import Optional
 
 _DEVICE_TYPE_SUBDIRS = {
     "audio_effect": "Audio Effects/Max Audio Effect",
@@ -44,15 +45,34 @@ def user_library() -> Path:
     return Path.home() / "Music" / "Ableton" / "User Library"
 
 
-def device_output_path(name: str, device_type: str = "audio_effect") -> str:
+def _validated_subfolder(subfolder: Optional[str]) -> Optional[Path]:
+    if not subfolder:
+        return None
+    path = Path(subfolder)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError("subfolder must be a relative path inside the device output directory")
+    return path
+
+
+def device_output_path(
+    name: str,
+    device_type: str = "audio_effect",
+    *,
+    subfolder: Optional[str] = None,
+) -> str:
     """Return the full output path for a device .amxd file.
 
     Args:
         name: Device name (without .amxd extension).
         device_type: One of "audio_effect", "instrument", "midi_effect".
+        subfolder: Optional relative subfolder beneath the device-type directory.
     """
     subdir = _DEVICE_TYPE_SUBDIRS.get(device_type, _DEVICE_TYPE_SUBDIRS["audio_effect"])
-    path = user_library() / "Presets" / subdir / f"{name}.amxd"
+    path = user_library() / "Presets" / subdir
+    validated_subfolder = _validated_subfolder(subfolder)
+    if validated_subfolder is not None:
+        path = path / validated_subfolder
+    path = path / f"{name}.amxd"
     os.makedirs(path.parent, exist_ok=True)
     return str(path)
 

@@ -253,6 +253,6 @@ device.add_line("loadbang", 0, "always_on", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Probability Gate", device_type="midi_effect")
+output = device_output_path("Probability Gate", device_type="midi_effect", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

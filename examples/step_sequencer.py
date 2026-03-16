@@ -257,6 +257,6 @@ device.add_line("makenote", 1, "noteout", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Step Sequencer", device_type="midi_effect")
+output = device_output_path("Step Sequencer", device_type="midi_effect", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

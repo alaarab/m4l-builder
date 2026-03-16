@@ -13,6 +13,6 @@ with device.column(10, 10, spacing=4, width=280) as col:
         row.add_dial("gain", "Gain", width=50, min_val=-24, max_val=24, unitstyle=4)
         row.add_dial("mix", "Mix", width=50, min_val=0, max_val=100, unitstyle=5)
 
-output = device_output_path("Layout Demo")
+output = device_output_path("Layout Demo", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

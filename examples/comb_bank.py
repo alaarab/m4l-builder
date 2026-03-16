@@ -568,6 +568,6 @@ device.add_line("damp_l", 0, "res_scope", 0)
 device.add_line("out_l", 0, "meter_out_l", 0)
 device.add_line("out_r", 0, "meter_out_r", 0)
 
-output = device_output_path("Comb Resonator")
+output = device_output_path("Comb Resonator", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

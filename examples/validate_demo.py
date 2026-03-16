@@ -52,6 +52,6 @@ print(json_str[:500])
 print("...\n")
 
 # --- Part 4: Write to .amxd ---
-output = device_output_path("Validate Demo")
+output = device_output_path("Validate Demo", subfolder="_Examples")
 written = good.build(output)
 print(f"Built {written} bytes -> {output}")

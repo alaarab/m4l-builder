@@ -135,6 +135,6 @@ device.add_line("ar_make", 0, "kslider", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Midi Arpeggiator", device_type="midi_effect")
+output = device_output_path("Midi Arpeggiator", device_type="midi_effect", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

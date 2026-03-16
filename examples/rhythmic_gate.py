@@ -313,6 +313,6 @@ device.add_line("depth_disp_scale", 0, "lfo_preview", 2)
 device.add_line("out_l", 0, "meter_l", 0)
 device.add_line("out_r", 0, "meter_r", 0)
 
-output = device_output_path("Rhythmic Gate")
+output = device_output_path("Rhythmic Gate", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -388,6 +388,6 @@ device.add_line("out_r", 0, "meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Auto Filter")  # width=440, height=230
+output = device_output_path("Auto Filter", subfolder="_Examples")  # width=440, height=230
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

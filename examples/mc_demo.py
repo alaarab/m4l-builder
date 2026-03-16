@@ -58,6 +58,6 @@ device.add_line("db2a", 0, "gain_pk", 0)
 device.add_line("gain_pk", 0, "gain_ln", 0)
 device.add_line("gain_ln", 0, "lvl_mcgain", 1)
 
-output = device_output_path("MC Demo")
+output = device_output_path("MC Demo", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

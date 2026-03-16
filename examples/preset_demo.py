@@ -143,6 +143,6 @@ device.add_line("dw_out_r", 0, "obj-plugout", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Preset Demo")
+output = device_output_path("Preset Demo", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

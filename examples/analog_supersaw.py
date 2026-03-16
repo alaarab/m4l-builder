@@ -219,6 +219,6 @@ device.add_line("amp_r", 0, "osc_scope", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Analog Supersaw", device_type="instrument")
+output = device_output_path("Analog Supersaw", device_type="instrument", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

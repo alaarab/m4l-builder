@@ -198,6 +198,6 @@ device.add_line("lp_out_r", 0, "obj-plugout", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Modulation Matrix Demo")
+output = device_output_path("Modulation Matrix Demo", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

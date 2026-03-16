@@ -206,6 +206,6 @@ device.add_line("dw_out_r", 0, "meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("FDN Reverb")
+output = device_output_path("FDN Reverb", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -118,6 +118,6 @@ device.add_line("out_r", 0, "obj-plugout", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("a stock reverb")
+output = device_output_path("a stock reverb", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -100,6 +100,6 @@ device.add_line("obj-plugin", 0, "obj-plugout", 0)
 device.add_line("obj-plugin", 1, "obj-plugout", 1)
 
 # Build
-output = device_output_path("Macro Randomizer")
+output = device_output_path("Macro Randomizer", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

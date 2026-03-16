@@ -343,6 +343,6 @@ device.add_line("sum_r", 0, "meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Simple Compressor")
+output = device_output_path("Simple Compressor", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")
