@@ -412,7 +412,7 @@ Preset management for Max devices.
 ## paths.py
 
 `user_library()` -- Path to Ableton User Library. Checks `M4L_USER_LIBRARY` env var, then auto-detects (macOS, Windows, WSL).
-`device_output_path(name, device_type="audio_effect")` -- Full .amxd output path. Creates parent dirs automatically.
+`device_output_path(name, device_type="audio_effect", *, subfolder=None)` -- Full .amxd output path. Creates parent dirs automatically and optionally nests builds under a relative subfolder such as `_Examples` or `_Debug`.
 
 ---
 

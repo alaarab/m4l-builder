@@ -47,6 +47,6 @@ device.add_line("x_scale", 0, "lpf_r", 1)   # scaled freq -> filter R
 device.add_line("xy", 1, "lpf_l", 2)        # Y -> resonance L
 device.add_line("xy", 1, "lpf_r", 2)        # Y -> resonance R
 
-output = device_output_path("XY Filter")
+output = device_output_path("XY Filter", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

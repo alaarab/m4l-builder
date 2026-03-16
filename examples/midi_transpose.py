@@ -38,6 +38,6 @@ device.add_line("ni_notein", 2, "no_noteout", 2)    # channel passthrough
 # Dial controls transpose amount
 device.add_line("amt", 0, "tp_add", 1)  # dial -> + right inlet
 
-output = device_output_path("MIDI Transpose", device_type="midi_effect")
+output = device_output_path("MIDI Transpose", device_type="midi_effect", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

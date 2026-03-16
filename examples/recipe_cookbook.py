@@ -110,6 +110,6 @@ device.add_panel("div3", [410, 8, 1, 184],
                  bgcolor=[0.2, 0.2, 0.22, 0.5])
 
 # -- Build --
-output = device_output_path("Production Chain")
+output = device_output_path("Production Chain", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -34,6 +34,6 @@ device.add_line("vc_clip", 0, "no_noteout", 1)      # curved velocity -> noteout
 device.add_line("ni_notein", 0, "no_noteout", 0)     # pitch passthrough
 device.add_line("ni_notein", 2, "no_noteout", 2)     # channel passthrough
 
-output = device_output_path("Velocity Curve", device_type="midi_effect")
+output = device_output_path("Velocity Curve", device_type="midi_effect", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

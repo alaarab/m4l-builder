@@ -62,6 +62,6 @@ device.add_line("gain_ln", 0, "gain_r", 1)
 device.add_line("gain_l", 0, "meter_l", 0)
 device.add_line("gain_r", 0, "meter_r", 0)
 
-output = device_output_path("Simple Gain")
+output = device_output_path("Simple Gain", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -331,6 +331,6 @@ device.add_line("degrade_l", 0, "crush_scope", 0)
 device.add_line("out_l", 0, "meter_l", 0)
 device.add_line("out_r", 0, "meter_r", 0)
 
-output = device_output_path("LoFi Processor")
+output = device_output_path("LoFi Processor", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

@@ -528,6 +528,6 @@ device.add_line("out_r", 0, "meter_out_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("MidSide Suite")
+output = device_output_path("MidSide Suite", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

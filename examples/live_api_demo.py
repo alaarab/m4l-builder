@@ -73,6 +73,6 @@ device.add_line("obj-plugin", 1, "obj-plugout", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Live API Demo")
+output = device_output_path("Live API Demo", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

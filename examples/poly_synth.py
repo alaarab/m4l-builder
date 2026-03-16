@@ -156,6 +156,6 @@ device.add_line("gain", 1, "plugout", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Poly Synth", device_type="instrument")
+output = device_output_path("Poly Synth", device_type="instrument", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

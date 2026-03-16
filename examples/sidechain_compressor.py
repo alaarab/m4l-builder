@@ -46,6 +46,6 @@ device.add_line("comp_out_r", 0, "obj-plugout", 1)
 device.add_line("comp_out_l", 0, "meter_l", 0)
 device.add_line("comp_out_r", 0, "meter_r", 0)
 
-output = device_output_path("Sidechain Comp")
+output = device_output_path("Sidechain Comp", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

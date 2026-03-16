@@ -207,6 +207,6 @@ device.add_line("out_gain", 0, "plugout", 1)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Expressive Synth", device_type="instrument")
+output = device_output_path("Expressive Synth", device_type="instrument", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

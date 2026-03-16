@@ -505,6 +505,6 @@ device.add_line("sync_r_ln", 0, "time_sel_r", 2)  # inlet 2 = synced time
 device.add_line("tapout_l", 0, "delay_scope", 0)
 device.add_line("tapout_r", 0, "delay_scope", 1)
 
-output = device_output_path("Stereo Delay")
+output = device_output_path("Stereo Delay", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

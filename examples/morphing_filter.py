@@ -351,6 +351,6 @@ device.add_line("y_clip", 0, "y_to_pct", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Morphing Filter")
+output = device_output_path("Morphing Filter", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

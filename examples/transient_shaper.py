@@ -312,6 +312,6 @@ device.add_line("clip_r", 0, "meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Transient Shaper")
+output = device_output_path("Transient Shaper", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

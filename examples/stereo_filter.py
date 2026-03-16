@@ -270,6 +270,6 @@ device.add_line("out_r", 0, "meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Stereo Filter")
+output = device_output_path("Stereo Filter", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

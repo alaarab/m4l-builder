@@ -94,6 +94,6 @@ device.add_line("clkin_bpm_scale", 0, "bpm_display", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Hardware Sync")
+output = device_output_path("Hardware Sync", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

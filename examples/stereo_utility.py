@@ -320,6 +320,6 @@ device.add_line("mono_sel_r", 0, "meter_r", 0)
 
 # ── Build ────────────────────────────────────────────────────────────────
 
-output = device_output_path("Stereo Utility")
+output = device_output_path("Stereo Utility", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

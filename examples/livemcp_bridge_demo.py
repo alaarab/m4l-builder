@@ -8,7 +8,7 @@ from m4l_builder import (
 
 
 device = build_livemcp_bridge_demo(port=DEFAULT_BRIDGE_PORT)
-output = device_output_path("LiveMCP Bridge Demo")
+output = device_output_path("LiveMCP Bridge Demo", subfolder="_Examples")
 written = device.build(output)
 
 print("Built %s bytes -> %s" % (written, output))

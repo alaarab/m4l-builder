@@ -79,7 +79,7 @@ print(f"  Bytes: {written2}")
 print(f"  Path:  {second_path}")
 
 # Also write to User Library for actual use in Ableton
-output = device_output_path("Round Trip Gain")
+output = device_output_path("Round Trip Gain", subfolder="_Examples")
 device.build(output)
 print()
 print(f"User Library copy: {output}")

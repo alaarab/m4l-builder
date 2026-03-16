@@ -303,6 +303,6 @@ device.add_line("out_r", 0, "out_meter_r", 0)
 # =========================================================================
 # Build
 # =========================================================================
-output = device_output_path("Parallel Compressor")
+output = device_output_path("Parallel Compressor", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

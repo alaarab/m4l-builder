@@ -61,6 +61,6 @@ device.add_dsp(*send_msg("reset_tx", "param_reset"))
 device.add_dsp(*receive_msg("reset_rx", "param_reset"))
 device.add_line("init_msg", 0, "reset_tx_send", 0)
 
-output = device_output_path("Send Receive Demo")
+output = device_output_path("Send Receive Demo", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")

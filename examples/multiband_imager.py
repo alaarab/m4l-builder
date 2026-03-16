@@ -355,6 +355,6 @@ device.add_line("sum_all_r", 0, "meter_r", 0)
 device.add_line("sum_all_l", 0, "vectorscope", 0)   # L → X axis
 device.add_line("sum_all_r", 0, "vectorscope", 1)   # R → Y axis
 
-output = device_output_path("Multiband Imager")
+output = device_output_path("Multiband Imager", subfolder="_Examples")
 written = device.build(output)
 print(f"Built {written} bytes -> {output}")
