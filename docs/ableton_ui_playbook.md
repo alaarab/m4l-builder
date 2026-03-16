@@ -4,9 +4,9 @@ This document is the shared UI standard for flagship Max for Live work in this
 repo.
 
 Use it to design, review, and validate devices that should feel recognizably
-Ableton-native. It does not replace per-device design docs in
-`plugins/<lane>/README.md`. It standardizes the cross-device patterns those
-lanes should share.
+Ableton-native. It does not replace per-device design docs in the sibling
+`Max4LivePlugins/plugins/<lane>/README.md` workspaces. It standardizes the
+cross-device patterns those lanes should share.
 
 For how the current builder actually constructs UI internally, see
 `docs/ableton_ui_construction_internals.md`.
@@ -24,11 +24,11 @@ This playbook is for devices where UI quality is part of the product claim:
 
 Current flagship lanes:
 
-- `plugins/parametric_eq/README.md`
-- `plugins/linear_phase_eq/README.md`
-- `plugins/spectrum_analyzer/README.md`
-- `plugins/ladder_filter/README.md`
-- `plugins/granular_sampler/README.md`
+- `Max4LivePlugins/plugins/parametric_eq/README.md`
+- `Max4LivePlugins/plugins/linear_phase_eq/README.md`
+- `Max4LivePlugins/plugins/spectrum_analyzer/README.md`
+- `Max4LivePlugins/plugins/ladder_filter/README.md`
+- `Max4LivePlugins/plugins/granular_sampler/README.md`
 
 ## Sequence Correction
 
@@ -282,7 +282,7 @@ Default grouping patterns:
 
 Every major UI sprint must leave these artifacts behind:
 
-- updated per-device design doc in `plugins/<lane>/README.md`
+- updated per-device design doc in `Max4LivePlugins/plugins/<lane>/README.md`
 - one weekly teardown note created from
   `docs/ableton_ui_teardown_template.md`
 - one validation note created from

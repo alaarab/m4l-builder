@@ -1,10 +1,7 @@
-"""Run the in-repo Parametric EQ build script."""
+"""Compatibility wrapper for the external Parametric EQ plugin build script."""
 
-import sys
-from pathlib import Path
+from _plugin_repo import add_plugin_repo_paths
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+add_plugin_repo_paths()
 
 from plugins.parametric_eq.build import *  # noqa: F401,F403

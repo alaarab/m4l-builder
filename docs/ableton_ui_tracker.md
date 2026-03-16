@@ -75,7 +75,7 @@ Use it alongside:
 ### Dual-Surface Work
 
 - `complete`: `docs/dual_surface_shell_guidance.md`
-- `complete`: `plugins/granular_sampler/ui_shell_spec.md`
+- `complete`: `Max4LivePlugins/plugins/granular_sampler/ui_shell_spec.md`
 
 ## Next Repo Moves
 

@@ -88,7 +88,7 @@ So the repo has geometry helpers, not a semantic Ableton layout system yet.
 Files:
 
 - `src/m4l_builder/engines/`
-- per-plugin JS sidecars in `plugins/*`
+- per-plugin JS sidecars in `Max4LivePlugins/plugins/*`
 
 This is where the repo is strongest.
 
@@ -114,7 +114,7 @@ control grammar still feels unfinished.
 
 Files:
 
-- `plugins/*/build.py`
+- `Max4LivePlugins/plugins/*/build.py`
 - plugin-specific JS state coordinators and sidecars
 
 This is where most flagship UI behavior is actually decided right now.
@@ -326,7 +326,7 @@ They do not yet enforce:
 ### Plugin-local routing still carries too much UI policy
 
 A lot of real UI behavior currently lives inside explicit patcher routing in
-`plugins/*/build.py`.
+`Max4LivePlugins/plugins/*/build.py`.
 
 That is normal for advanced devices, but it also means the shared API has not
 absorbed the repeated parts yet.

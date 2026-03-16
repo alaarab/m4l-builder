@@ -8,6 +8,7 @@ read from that cached result dict rather than re-running scripts.
 import json
 import os
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -34,7 +35,6 @@ EXAMPLE_SCRIPTS = [
     "auto_filter.py",
     "comb_bank.py",
     "lofi_processor.py",
-    "parametric_eq.py",
     "expression_control.py",
     "macro_randomizer.py",
     "step_sequencer.py",
@@ -67,6 +67,12 @@ EXAMPLE_SCRIPTS = [
     "parallel_compressor.py",
     "livemcp_bridge_demo.py",
 ]
+
+if (
+    os.environ.get("MAX4LIVEPLUGINS_ROOT")
+    or (Path(__file__).resolve().parents[2] / "Max4LivePlugins" / "plugins").exists()
+):
+    EXAMPLE_SCRIPTS.append("parametric_eq.py")
 
 # Non-AudioEffect scripts
 MIDI_EFFECT_SCRIPTS = {

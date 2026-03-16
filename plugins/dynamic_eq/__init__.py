@@ -1,1 +1,0 @@
-"""Dynamic EQ plugin workspace."""

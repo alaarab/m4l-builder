@@ -1,6 +1,7 @@
 # Plugin Design Doc Template
 
-Use this for shipped plugin `.md` docs in `plugins/<plugin>/README.md`.
+Use this for shipped plugin `.md` docs in
+`Max4LivePlugins/plugins/<plugin>/README.md`.
 
 The goal is not marketing copy. The goal is to explain what problem the plugin
 solves, why it exists, how it works, and what tradeoffs come with the chosen

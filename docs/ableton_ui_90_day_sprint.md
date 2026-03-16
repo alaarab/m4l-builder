@@ -23,13 +23,13 @@ Shared docs:
 - scoreboard: `docs/ableton_ui_scoreboard.md`
 - reference matrix: `docs/ableton_ui_reference_matrix.md`
 
-Per-device design docs:
+Per-device design docs now live in the sibling `Max4LivePlugins` repo:
 
-- `plugins/parametric_eq/README.md`
-- `plugins/linear_phase_eq/README.md`
-- `plugins/spectrum_analyzer/README.md`
-- `plugins/ladder_filter/README.md`
-- `plugins/granular_sampler/README.md`
+- `Max4LivePlugins/plugins/parametric_eq/README.md`
+- `Max4LivePlugins/plugins/linear_phase_eq/README.md`
+- `Max4LivePlugins/plugins/spectrum_analyzer/README.md`
+- `Max4LivePlugins/plugins/ladder_filter/README.md`
+- `Max4LivePlugins/plugins/granular_sampler/README.md`
 
 Validation note location:
 

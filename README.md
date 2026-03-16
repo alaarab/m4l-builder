@@ -165,7 +165,8 @@ practice and review set:
 - [docs/ui_validation/README.md](docs/ui_validation/README.md): validation-note
   workflow for in-Live review
 
-This sits on top of the existing plugin design docs in `plugins/*/README.md`.
+The flagship per-plugin design docs now live in the sibling
+`Max4LivePlugins/plugins/*/README.md` workspaces on this machine.
 
 ### Subpatchers
 
