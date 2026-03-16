@@ -7,6 +7,7 @@ import json
 from .amxd import build_device, device_from_amxd, device_to_bytes, device_to_patcher
 from .dsp import stereo_io
 from .graph import GraphContainer
+from .jsui_contract import validate_jsui_contract
 from .layout import Column, Grid, Row
 from .parameters import ParameterSpec
 from .profiles import DEFAULT_PATCHER_PROFILE
@@ -118,9 +119,12 @@ class Device(GraphContainer):
         js_filename: str = None,
         numinlets: int = 1,
         numoutlets: int = 0,
+        validate_contract: bool = True,
         **kwargs,
     ) -> str:
         """Add a jsui with embedded JavaScript code for custom vector graphics."""
+        if validate_contract:
+            validate_jsui_contract(js_code)
         js_filename = js_filename or f"{id}.js"
         self.register_asset(js_filename, js_code, asset_type="TEXT", category="js")
         return self.add_box(

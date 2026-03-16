@@ -335,6 +335,7 @@ def number_box(id: str, varname: str, rect: list, *,
                min_val: float = 0.0, max_val: float = 127.0,
                initial: float = 0.0, shortname: str = None,
                unitstyle: int = 1, patching_rect: list = None,
+               allow_wide_int_range: bool = False,
                parameter: ParameterSpec = None,
                **kwargs) -> dict:
     """Create a live.numbox numeric display with parameter storage."""
@@ -349,6 +350,15 @@ def number_box(id: str, varname: str, rect: list, *,
         initial_enable=True,
         unitstyle=unitstyle,
     )
+    if parameter is not None and isinstance(parameter, ParameterSpec):
+        spec = parameter.copy(
+            shortname=spec.shortname,
+            minimum=spec.minimum,
+            maximum=spec.maximum,
+            initial=spec.initial,
+            initial_enable=spec.initial_enable,
+            unitstyle=spec.unitstyle,
+        )
     box = {
         "id": id,
         "maxclass": "live.numbox",
@@ -362,6 +372,19 @@ def number_box(id: str, varname: str, rect: list, *,
         "presentation_rect": rect,
         "saved_attribute_attributes": spec.to_saved_attributes(),
     }
+    if (
+        parameter is not None
+        and isinstance(parameter, ParameterSpec)
+        and parameter.integer_like
+        and not (allow_wide_int_range or parameter.allow_wide_range)
+        and parameter.minimum is not None
+        and parameter.maximum is not None
+        and (parameter.minimum < 0 or parameter.maximum > 255)
+    ):
+        raise ValueError(
+            "wide integer-like live.numbox ranges are fragile in Live; "
+            "use ParameterSpec.integer(..., allow_wide_range=True) or set allow_wide_int_range=True"
+        )
     box.update(kwargs)
     return {"box": box}
 

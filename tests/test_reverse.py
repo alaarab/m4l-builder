@@ -2740,11 +2740,18 @@ class TestGeneratedPython:
         assert "device.add_dsp(" in source
 
     def test_builder_python_semantically_rebuilds_jsui_device(self, tmp_path):
+        js_code = (
+            "mgraphics.init();\n"
+            "mgraphics.relative_coords = 0;\n"
+            "mgraphics.autofill = 0;\n"
+            "function bang() { mgraphics.redraw(); }\n"
+            "function paint() {}\n"
+        )
         device = AudioEffect("JSUI Reverse", 220, 100)
         device.add_jsui(
             "display",
             [10, 10, 120, 60],
-            js_code="mgraphics.init();\n",
+            js_code=js_code,
             js_filename="display.js",
             numinlets=2,
             numoutlets=1,
@@ -2764,7 +2771,7 @@ class TestGeneratedPython:
 
         assert written == len(expected)
         assert rebuilt == expected
-        assert (tmp_path / "display.js").read_text() == "mgraphics.init();\n"
+        assert (tmp_path / "display.js").read_text() == js_code
         assert "add_jsui" in source
         assert 'add_support_file(\n        \'display.js\'' not in source
 

@@ -7,6 +7,25 @@ from typing import Any, Iterable, Optional
 
 
 _UNSET = object()
+PARAM_HIDDEN = 0
+PARAM_VISIBLE = 1
+LIVE_NATIVE_INT_MIN = 0
+LIVE_NATIVE_INT_MAX = 255
+
+
+def _normalize_label(value: Any, *, field_name: str) -> str:
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"parameter {field_name} must be a non-empty string")
+    return text
+
+
+def _is_int_like(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and value.is_integer()
 
 
 @dataclass
@@ -27,6 +46,36 @@ class ParameterSpec:
     bank: Optional[int] = None
     position: Optional[int] = None
     bank_name: Optional[str] = None
+    integer_like: bool = False
+    allow_wide_range: bool = False
+
+    def __post_init__(self) -> None:
+        self.name = _normalize_label(self.name, field_name="name")
+        if self.shortname is not None:
+            shortname = str(self.shortname).strip()
+            self.shortname = shortname or None
+        if isinstance(self.visible, bool):
+            self.visible = PARAM_VISIBLE if self.visible else PARAM_HIDDEN
+        else:
+            self.visible = int(self.visible)
+        if self.visible < 0:
+            raise ValueError("parameter visible must be >= 0")
+        if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+            raise ValueError("parameter minimum cannot exceed maximum")
+        if self.bank is not None and self.bank < 0:
+            raise ValueError("parameter bank must be >= 0")
+        if self.position is not None and self.position < 0:
+            raise ValueError("parameter position must be >= 0")
+        if self.bank_name is not None:
+            bank_name = str(self.bank_name).strip()
+            self.bank_name = bank_name or None
+        if self.enum is not None:
+            normalized = [_normalize_label(option, field_name="enum option") for option in self.enum]
+            if not normalized:
+                raise ValueError("enumerated parameters require at least one option")
+            self.enum = normalized
+        elif self.parameter_type == 2:
+            raise ValueError("enumerated parameters require options")
 
     def copy(self, **changes: Any) -> "ParameterSpec":
         """Return a copied spec with optional overrides."""
@@ -35,6 +84,10 @@ class ParameterSpec:
     def with_bank(self, bank: int, position: int, bank_name: str = None) -> "ParameterSpec":
         """Return a copied spec with Push bank metadata attached."""
         return self.copy(bank=bank, position=position, bank_name=bank_name)
+
+    def with_visibility(self, visible: int) -> "ParameterSpec":
+        """Return a copied spec with updated parameter-bank visibility."""
+        return self.copy(visible=visible)
 
     def to_valueof_dict(self) -> dict:
         """Return the Max `saved_attribute_attributes.valueof` payload."""
@@ -100,7 +153,53 @@ class ParameterSpec:
             position=position,
             bank_name=bank_name,
             visible=visible,
+            integer_like=False,
+            allow_wide_range=False,
         )
+
+    @classmethod
+    def integer(
+        cls,
+        name: str,
+        *,
+        shortname: str = None,
+        minimum: int = LIVE_NATIVE_INT_MIN,
+        maximum: int = LIVE_NATIVE_INT_MAX,
+        initial: Any = _UNSET,
+        initial_enable: Optional[bool] = True,
+        unitstyle: int = None,
+        bank: int = None,
+        position: int = None,
+        bank_name: str = None,
+        visible: int = PARAM_VISIBLE,
+        allow_wide_range: bool = False,
+    ) -> "ParameterSpec":
+        """Build an integer-like parameter spec with native-range guardrails."""
+        integer_values = [minimum, maximum]
+        if initial is not _UNSET:
+            integer_values.append(initial)
+        if not all(_is_int_like(value) for value in integer_values):
+            raise ValueError("integer parameters require integer-like minimum, maximum, and initial values")
+        if not allow_wide_range and (
+            minimum < LIVE_NATIVE_INT_MIN or maximum > LIVE_NATIVE_INT_MAX
+        ):
+            raise ValueError(
+                f"integer parameters beyond {LIVE_NATIVE_INT_MIN}-{LIVE_NATIVE_INT_MAX} "
+                "require allow_wide_range=True"
+            )
+        return cls.continuous(
+            name=name,
+            shortname=shortname,
+            minimum=float(minimum),
+            maximum=float(maximum),
+            initial=initial,
+            initial_enable=initial_enable,
+            unitstyle=unitstyle,
+            bank=bank,
+            position=position,
+            bank_name=bank_name,
+            visible=visible,
+        ).copy(integer_like=True, allow_wide_range=allow_wide_range)
 
     @classmethod
     def enumerated(
@@ -161,6 +260,8 @@ class ParameterSpec:
             bank=bank,
             position=position,
             bank_name=bank_name,
+            integer_like=False,
+            allow_wide_range=False,
         )
 
 

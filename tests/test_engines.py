@@ -4,6 +4,7 @@ import tempfile
 import pytest
 
 from m4l_builder import AudioEffect, MIDNIGHT
+from m4l_builder.jsui_contract import find_jsui_contract_issues
 from m4l_builder.engines.filter_curve import filter_curve_js, FILTER_CURVE_INLETS
 from m4l_builder.engines.crossover_display import (
     crossover_display_js,
@@ -55,6 +56,46 @@ from m4l_builder.engines.slice_pattern_display import (
     SLICE_PATTERN_DISPLAY_INLETS,
     SLICE_PATTERN_DISPLAY_OUTLETS,
 )
+
+
+ALL_JSUI_FACTORIES = [
+    crossover_display_js,
+    filter_curve_js,
+    eq_band_column_js,
+    eq_curve_js,
+    linear_phase_eq_display_js,
+    spectrum_analyzer_js,
+    envelope_display_js,
+    waveform_display_js,
+    xy_pad_js,
+    piano_roll_js,
+    velocity_curve_display_js,
+    wavetable_display_js,
+    resonance_bank_display_js,
+    sidechain_display_js,
+    spectral_display_js,
+    peaking_eq_display_js,
+    step_grid_display_js,
+    grain_display_js,
+    grid_sequencer_display_js,
+    wavetable_editor_js,
+    spectral_vocoder_display_js,
+    slice_overview_js,
+    slice_pattern_display_js,
+]
+
+MINIMAL_JSUI_CODE = """\
+mgraphics.init();
+mgraphics.relative_coords = 0;
+mgraphics.autofill = 0;
+function bang() { mgraphics.redraw(); }
+function paint() {}
+"""
+
+
+@pytest.mark.parametrize("factory", ALL_JSUI_FACTORIES)
+def test_all_engine_outputs_follow_shared_jsui_contract(factory):
+    assert find_jsui_contract_issues(factory()) == []
 
 
 class TestCrossoverDisplayEngine:
@@ -1175,20 +1216,20 @@ class TestDeviceJsuiIntegration:
     def test_add_jsui_stores_js_code(self):
         d = AudioEffect("Test", 300, 150, theme=MIDNIGHT)
         d.add_jsui("display", [10, 10, 200, 80],
-                   js_code="// test code", numinlets=3)
+                   js_code=MINIMAL_JSUI_CODE, numinlets=3)
         assert "display.js" in d._js_files
-        assert d._js_files["display.js"] == "// test code"
+        assert d._js_files["display.js"] == MINIMAL_JSUI_CODE
 
     def test_add_jsui_custom_filename(self):
         d = AudioEffect("Test", 300, 150)
         d.add_jsui("display", [10, 10, 200, 80],
-                   js_code="// test", js_filename="custom.js", numinlets=1)
+                   js_code=MINIMAL_JSUI_CODE, js_filename="custom.js", numinlets=1)
         assert "custom.js" in d._js_files
 
     def test_dependency_cache_populated(self):
         d = AudioEffect("Test", 300, 150)
         d.add_jsui("display", [10, 10, 200, 80],
-                   js_code="// test", numinlets=1)
+                   js_code=MINIMAL_JSUI_CODE, numinlets=1)
         patcher = d.to_patcher()
         deps = patcher["patcher"]["dependency_cache"]
         assert any(dep["name"] == "display.js" for dep in deps)
@@ -1196,7 +1237,7 @@ class TestDeviceJsuiIntegration:
     def test_dependency_cache_type_is_text(self):
         d = AudioEffect("Test", 300, 150)
         d.add_jsui("display", [10, 10, 200, 80],
-                   js_code="// test", numinlets=1)
+                   js_code=MINIMAL_JSUI_CODE, numinlets=1)
         patcher = d.to_patcher()
         deps = patcher["patcher"]["dependency_cache"]
         js_dep = next(dep for dep in deps if dep["name"] == "display.js")
@@ -1205,7 +1246,7 @@ class TestDeviceJsuiIntegration:
     def test_build_writes_js_file(self):
         d = AudioEffect("Test", 300, 150)
         d.add_jsui("my_display", [10, 10, 200, 80],
-                   js_code="// my js code here", numinlets=1)
+                   js_code=MINIMAL_JSUI_CODE, numinlets=1)
         with tempfile.TemporaryDirectory() as tmpdir:
             amxd_path = os.path.join(tmpdir, "Test.amxd")
             d.build(amxd_path)
@@ -1213,12 +1254,12 @@ class TestDeviceJsuiIntegration:
             js_path = os.path.join(tmpdir, "my_display.js")
             assert os.path.exists(js_path)
             with open(js_path) as f:
-                assert f.read() == "// my js code here"
+                assert f.read() == MINIMAL_JSUI_CODE
 
     def test_build_with_custom_filename(self):
         d = AudioEffect("Test", 300, 150)
         d.add_jsui("display", [10, 10, 200, 80],
-                   js_code="// custom", js_filename="custom_name.js", numinlets=1)
+                   js_code=MINIMAL_JSUI_CODE, js_filename="custom_name.js", numinlets=1)
         with tempfile.TemporaryDirectory() as tmpdir:
             amxd_path = os.path.join(tmpdir, "Test.amxd")
             d.build(amxd_path)

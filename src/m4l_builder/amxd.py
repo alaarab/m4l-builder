@@ -164,5 +164,8 @@ def device_from_amxd(path: str):
                 position=entry.get("index", 0),
                 bank_name=bank_name,
             )
+            spec = device.parameter(name)
+            if spec is not None and "visible" in entry:
+                spec.visible = int(entry.get("visible", 1))
 
     return device
