@@ -534,7 +534,7 @@ class TestProxyMethods:
     def test_pattern_f_jsui(self):
         d = AudioEffect("T", 400, 200)
         with d.row(0, 0, spacing=4, height=80) as row:
-            row.add_jsui("js1", js_code="// test js", width=200)
+            row.add_jsui("js1", js_code="// test js", width=200, validate_contract=False)
         assert _rect(d, "js1") == [0, 0, 200, 80]
 
     def test_bpatcher(self):

@@ -7,12 +7,18 @@ from m4l_builder import (
     AudioEffect,
     BuildValidationError,
     Device,
+    JsuiContractError,
+    PARAM_HIDDEN,
+    PARAM_VISIBLE,
     ParameterSpec,
     PatcherProfile,
     Subpatcher,
+    find_jsui_contract_issues,
     lint_graph,
     module_from_block,
+    validate_jsui_contract,
 )
+from m4l_builder.engines.filter_curve import filter_curve_js
 from m4l_builder.stages import StageResult
 from m4l_builder.ui import dial
 
@@ -68,6 +74,85 @@ class TestParameterSpecs:
 
         params = device.to_patcher()["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
         assert any(param["name"] == "Gain" and param["index"] == 1 for param in params)
+
+    def test_parameter_spec_normalizes_labels_and_visibility(self):
+        spec = ParameterSpec.continuous("  Cutoff  ", shortname="  Cut  ", visible=False)
+
+        assert spec.name == "Cutoff"
+        assert spec.shortname == "Cut"
+        assert spec.visible == PARAM_HIDDEN
+        assert spec.with_visibility(PARAM_VISIBLE).visible == PARAM_VISIBLE
+
+    def test_parameter_spec_rejects_blank_names(self):
+        with pytest.raises(ValueError):
+            ParameterSpec.continuous("   ")
+
+    def test_integer_parameter_requires_native_range_opt_in(self):
+        with pytest.raises(ValueError):
+            ParameterSpec.integer("Steps", minimum=0, maximum=1024, initial=128)
+
+        spec = ParameterSpec.integer(
+            "Steps",
+            minimum=0,
+            maximum=1024,
+            initial=128,
+            allow_wide_range=True,
+        )
+        assert spec.maximum == 1024.0
+
+    def test_hidden_visibility_round_trips_through_amxd(self, tmp_path):
+        device = AudioEffect("test", width=200, height=100)
+        spec = ParameterSpec.continuous(
+            "Cutoff",
+            minimum=20.0,
+            maximum=20000.0,
+            initial=440.0,
+            visible=PARAM_HIDDEN,
+            bank=0,
+            position=0,
+        )
+        device.add_dial("cutoff_dial", spec, [10, 10, 45, 45])
+        output = tmp_path / "hidden.amxd"
+
+        device.build(str(output))
+        rebuilt = Device.from_amxd(str(output))
+
+        assert rebuilt.parameter("Cutoff").visible == PARAM_HIDDEN
+        params = rebuilt.to_patcher()["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
+        assert params[0]["visible"] == PARAM_HIDDEN
+
+
+class TestJsuiContract:
+    def test_contract_accepts_existing_engine_output(self):
+        js = filter_curve_js()
+        assert find_jsui_contract_issues(js) == []
+        assert validate_jsui_contract(js) == js
+
+    def test_contract_rejects_missing_bootstrap_and_es6(self):
+        js = "const draw = () => {}; function paint() {}"
+        issues = find_jsui_contract_issues(js)
+
+        assert any("mgraphics.init()" in issue for issue in issues)
+        assert any("ES6 'const'" in issue for issue in issues)
+        with pytest.raises(JsuiContractError):
+            validate_jsui_contract(js)
+
+    def test_device_add_jsui_validates_by_default(self):
+        device = AudioEffect("test", width=200, height=100)
+
+        with pytest.raises(JsuiContractError):
+            device.add_jsui("bad", [0, 0, 20, 20], js_code="function paint() {}")
+
+    def test_device_add_jsui_can_opt_out_of_contract_validation(self):
+        device = AudioEffect("test", width=200, height=100)
+        box_id = device.add_jsui(
+            "raw",
+            [0, 0, 20, 20],
+            js_code="function paint() {}",
+            validate_contract=False,
+        )
+
+        assert str(box_id) == "raw"
 
 
 class TestTypedGraphHandles:
@@ -212,7 +297,7 @@ class TestProfilesAndAssets:
 
     def test_assets_registry_drives_dependency_cache(self):
         device = AudioEffect("test", width=200, height=100)
-        device.add_jsui("display", [0, 0, 50, 50], js_code="// draw")
+        device.add_jsui("display", [0, 0, 50, 50], js_code="// draw", validate_contract=False)
         device.add_support_file("kernel.maxpat", '{"patcher": {}}', file_type="JSON")
 
         asset_names = {asset.filename for asset in device.assets()}
