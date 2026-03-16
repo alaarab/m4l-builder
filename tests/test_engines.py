@@ -756,7 +756,9 @@ class TestLinearPhaseEqDisplayEngine:
         assert "if (num_bands > 0) {" in js
         assert "if (!band_cache[i]) continue;" in js
         assert "display_range = 15.0;" in js
-        assert "mgraphics.arc(x, y, radius, 0, Math.PI * 2.0);" in js
+        assert "var compact = compact_mode();" in js
+        assert "circle_path(x, y, radius);" in js
+        assert "circle_path(x, y, radius + (compact ? 1.9 : 1.2));" in js
         assert "mgraphics.rectangle_rounded(box_x" not in js
 
     def test_context_menu_can_open_for_disabled_nodes(self):

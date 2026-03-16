@@ -887,18 +887,26 @@ function draw_nodes() {
     var compact = compact_mode();
     var x, y, size, radius, color, label, bounds;
     var enabled_alpha, ring_alpha, fill_alpha, text_alpha, cross_alpha;
+    var center_alpha, shell_alpha, halo_alpha;
     for (i = 0; i < num_bands; i++) {
         if (!band_cache[i]) continue;
         x = freq_to_x(band_cache[i].freq);
         y = gain_to_y(band_cache[i].uses_gain ? band_cache[i].node_gain : 0.0);
-        size = selected_band === i ? 30.0 : (hover_band === i ? 27.0 : 24.0);
+        size = compact
+            ? (selected_band === i ? 17.2 : (hover_band === i ? 15.4 : 14.2))
+            : (selected_band === i ? 30.0 : (hover_band === i ? 27.0 : 24.0));
         radius = size * 0.5;
         color = BAND_COLORS[i];
         enabled_alpha = band_cache[i].enabled ? 1.0 : 0.36;
         ring_alpha = band_cache[i].enabled ? 0.98 : 0.52;
-        fill_alpha = band_cache[i].enabled ? 0.98 : 0.16;
+        fill_alpha = band_cache[i].enabled ? (compact ? 0.94 : 0.98) : (compact ? 0.20 : 0.16);
         text_alpha = band_cache[i].enabled ? 0.96 : 0.54;
         cross_alpha = band_cache[i].enabled ? 0.0 : 0.34;
+        center_alpha = band_cache[i].enabled ? (compact ? 0.78 : 0.0) : 0.0;
+        shell_alpha = band_cache[i].enabled ? (selected_band === i ? 0.82 : 0.60) : 0.28;
+        halo_alpha = band_cache[i].enabled
+            ? (selected_band === i ? (compact ? 0.22 : 0.18) : (compact ? 0.14 : 0.12))
+            : (selected_band === i ? 0.10 : 0.06);
 
         if (selected_band === i || hover_band === i) {
             mgraphics.set_source_rgba(
@@ -917,19 +925,23 @@ function draw_nodes() {
 
             mgraphics.set_source_rgba(
                 color[0], color[1], color[2],
-                (selected_band === i ? 0.28 : 0.18) * enabled_alpha
+                halo_alpha
             );
-            mgraphics.arc(x, y, radius + 5.5, 0, Math.PI * 2.0);
+            circle_path(x, y, radius + (compact ? 6.8 : 5.5));
             mgraphics.fill();
         }
 
-        mgraphics.set_source_rgba(0.95, 0.97, 1.0, fill_alpha);
-        mgraphics.arc(x, y, radius, 0, Math.PI * 2.0);
+        mgraphics.set_source_rgba(0.03, 0.04, 0.05, shell_alpha);
+        circle_path(x, y, radius + (compact ? 1.9 : 1.2));
+        mgraphics.fill();
+
+        mgraphics.set_source_rgba(color[0], color[1], color[2], fill_alpha);
+        circle_path(x, y, radius);
         mgraphics.fill();
 
         mgraphics.set_source_rgba(color[0], color[1], color[2], ring_alpha);
-        mgraphics.set_line_width(selected_band === i ? 3.6 : 2.8);
-        mgraphics.arc(x, y, radius - 0.8, 0, Math.PI * 2.0);
+        mgraphics.set_line_width(compact ? (selected_band === i ? 2.5 : 1.9) : (selected_band === i ? 3.6 : 2.8));
+        circle_path(x, y, compact ? radius : (radius - 0.8));
         mgraphics.stroke();
 
         if (!band_cache[i].enabled) {
@@ -942,15 +954,29 @@ function draw_nodes() {
             mgraphics.stroke();
         }
 
-        mgraphics.set_source_rgba(0.05, 0.06, 0.08, text_alpha);
-        mgraphics.select_font_face("Arial Bold");
-        mgraphics.set_font_size(selected_band === i ? 13.0 : 11.4);
-        mgraphics.move_to(x - (selected_band === i ? 4.8 : 4.0), y + 5.8);
-        mgraphics.show_text("" + (i + 1));
+        if (center_alpha > 0.0) {
+            mgraphics.set_source_rgba(1.0, 1.0, 1.0, center_alpha);
+            circle_path(x, y, compact ? 1.9 : 2.3);
+            mgraphics.fill();
+        }
+
+        if (compact) {
+            mgraphics.set_source_rgba(1.0, 1.0, 1.0, band_cache[i].enabled ? 0.88 : 0.42);
+            mgraphics.select_font_face("Arial");
+            mgraphics.set_font_size(selected_band === i ? 8.8 : 7.8);
+            mgraphics.move_to(x + radius + 3.0, y - radius + 1.4);
+            mgraphics.show_text("" + (i + 1));
+        } else {
+            mgraphics.set_source_rgba(0.05, 0.06, 0.08, text_alpha);
+            mgraphics.select_font_face("Arial Bold");
+            mgraphics.set_font_size(selected_band === i ? 13.0 : 11.4);
+            mgraphics.move_to(x - (selected_band === i ? 4.8 : 4.0), y + 5.8);
+            mgraphics.show_text("" + (i + 1));
+        }
 
         label = TYPE_NAMES[band_cache[i].type];
         bounds = [x + radius + 8, y + 2, x + radius + 62, y + 14];
-        if ((!compact && !label_overlaps(bounds, used_labels)) || selected_band === i || hover_band === i) {
+        if ((!compact && !label_overlaps(bounds, used_labels)) || (!compact && (selected_band === i || hover_band === i))) {
             used_labels.push(bounds);
             mgraphics.select_font_face("Arial");
             mgraphics.set_font_size(7.0);
@@ -965,6 +991,7 @@ function draw_nodes() {
 }
 
 function draw_dynamic_handles() {
+    var compact = compact_mode();
     var x, base_y, target_y, live_y, color, alpha;
     for (i = 0; i < num_bands; i++) {
         if (!band_cache[i].enabled) continue;
@@ -979,18 +1006,29 @@ function draw_dynamic_handles() {
         alpha = selected_band === i ? 0.92 : 0.58;
 
         mgraphics.set_source_rgba(color[0], color[1], color[2], selected_band === i ? 0.38 : 0.24);
-        mgraphics.set_line_width(selected_band === i ? 2.2 : 1.5);
+        mgraphics.set_line_width(compact ? (selected_band === i ? 1.9 : 1.2) : (selected_band === i ? 2.2 : 1.5));
         mgraphics.move_to(x, base_y);
         mgraphics.line_to(x, target_y);
         mgraphics.stroke();
 
         mgraphics.set_source_rgba(color[0], color[1], color[2], alpha);
-        mgraphics.set_line_width(1.6);
-        mgraphics.rectangle(x - 4.5, target_y - 4.5, 9.0, 9.0);
+        mgraphics.set_line_width(compact ? (selected_band === i ? 1.8 : 1.2) : 1.6);
+        mgraphics.rectangle(
+            x - (compact ? 3.8 : 4.5),
+            target_y - (compact ? 3.8 : 4.5),
+            compact ? 7.6 : 9.0,
+            compact ? 7.6 : 9.0
+        );
         mgraphics.stroke();
 
-        mgraphics.set_source_rgba(color[0], color[1], color[2], selected_band === i ? 0.92 : 0.72);
-        circle_path(x, live_y, DYNAMIC_HANDLE_RADIUS);
+        if (compact) {
+            mgraphics.set_source_rgba(color[0], color[1], color[2], selected_band === i ? 0.30 : 0.18);
+            mgraphics.rectangle(x - 5.2, target_y - 5.2, 10.4, 10.4);
+            mgraphics.fill();
+        }
+
+        mgraphics.set_source_rgba(color[0], color[1], color[2], selected_band === i ? 0.94 : 0.74);
+        circle_path(x, live_y, compact ? (DYNAMIC_HANDLE_RADIUS - 0.6) : DYNAMIC_HANDLE_RADIUS);
         mgraphics.fill();
     }
 }
