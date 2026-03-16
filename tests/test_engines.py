@@ -713,9 +713,17 @@ class TestLinearPhaseEqDisplayEngine:
         assert "function draw_dynamic_handles" in js
         assert "function dynamic_hit_test" in js
         assert "function pointer_context_click" in js
+        assert "pointerevent.button !== undefined && pointerevent.button === 2" in js
+        assert "pointerevent.buttons !== undefined && (pointerevent.buttons & 2) !== 0" in js
+        assert "if ((but & 2) !== 0) return 1;" in js
+        assert "return ctrl ? 1 : 0;" in js
         assert "function pointer_x" in js
         assert "function pointer_y" in js
         assert "function pointer_buttons" in js
+        assert "function note_pointer_press(x, y)" in js
+        assert "function should_ignore_pointer_click(x, y)" in js
+        assert "function note_pending_context_click(x, y)" in js
+        assert "function consume_pending_context_click(x, y)" in js
         assert "function onpointerdown" in js
         assert "function onpointermove" in js
         assert "function onpointerup" in js
@@ -747,6 +755,11 @@ class TestLinearPhaseEqDisplayEngine:
         assert '"hud_range"' in js
         assert "find_free_band" in js
         assert "handle_double_click(x, y);" in js
+        assert "note_pending_context_click(x, y);" in js
+        assert "if (consume_pending_context_click(x, y)) {" in js
+        assert "if (pointer_context_click(pointerevent, ctrl, but)) {" in js
+        assert "note_pointer_press(x, y);" in js
+        assert "if (should_ignore_pointer_click(x, y)) return;" in js
 
     def test_keeps_disabled_nodes_visible_and_selectable(self):
         js = linear_phase_eq_display_js()
@@ -783,6 +796,10 @@ class TestLinearPhaseEqDisplayEngine:
     def test_can_disable_dynamic_controls(self):
         js = linear_phase_eq_display_js(show_dynamic=False)
         assert "var SHOW_DYNAMIC = 0;" in js
+
+    def test_can_hide_selection_readout(self):
+        js = linear_phase_eq_display_js(show_selection_readout=False)
+        assert "var SHOW_SELECTION_READOUT = 0;" in js
 
 
 class TestEnvelopeDisplayEngine:
