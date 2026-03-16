@@ -50,6 +50,25 @@ class TestSelectedBandFocusShell:
         assert ("route_graph_events", 0, "focus_tab", 0) in lines
         assert ("prepend_focus", 0, "selected_band_column", 0) in lines
 
+    def test_nav_source_is_optional(self):
+        device = AudioEffect("T", width=200, height=100)
+
+        add_selected_band_focus_shell(
+            device,
+            loadbang_id="lb_init",
+            focus_control_id="focus_tab",
+            graph_source_id="eq_display",
+            focus_target_ids=["eq_display", "selected_band_column"],
+            default_band=3,
+            patch_x=30,
+            patch_y=40,
+        )
+
+        lines = _line_pairs(device)
+
+        assert ("focus_tab", 0, "selected_band_store", 0) in lines
+        assert ("selected_band_store", 0, "prepend_focus", 0) in lines
+
 
 class TestBandMessageRouters:
     def test_adds_indexed_band_routes_with_multiple_targets(self):

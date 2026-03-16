@@ -33,7 +33,7 @@ def add_selected_band_focus_shell(
     loadbang_id: str,
     focus_control_id: str,
     graph_source_id: str,
-    nav_source_id: str,
+    nav_source_id: Optional[str] = None,
     focus_target_ids: list[str],
     default_band: int = 0,
     patch_x: int = 10,
@@ -82,7 +82,8 @@ def add_selected_band_focus_shell(
     for target_id in focus_target_ids:
         device.add_line(prepend_id, 0, target_id, 0)
     device.add_line(focus_control_id, 0, selected_store_id, 0)
-    device.add_line(nav_source_id, 0, focus_control_id, 0)
+    if nav_source_id is not None:
+        device.add_line(nav_source_id, 0, focus_control_id, 0)
     device.add_line(graph_source_id, 0, route_id, 0)
     device.add_line(route_id, 0, focus_control_id, 0)
     device.add_line(route_id, 0, selected_store_id, 0)
