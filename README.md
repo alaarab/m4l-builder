@@ -7,6 +7,18 @@
 
 Build Max for Live devices in Python. Write scripts, emit `.amxd` files straight to your Ableton User Library. No Max GUI required. Everything is version-controllable, scriptable, and reproducible. Zero runtime dependencies -- pure stdlib.
 
+## Workspace boundaries
+
+`m4l-builder` is the library/tooling repo. The active flagship plugin products
+and their per-plugin workspaces live in the sibling `../Max4LivePlugins` repo
+on this machine (or `MAX4LIVEPLUGINS_ROOT` if you have it checked out
+elsewhere).
+
+This repo intentionally does not ship in-repo plugin/device scripts. If you are
+building or revising a real plugin, start in
+`Max4LivePlugins/plugins/<plugin>/`. Migrated legacy device scripts now live in
+`../Max4LivePlugins/legacy_examples/`.
+
 ## Install
 
 ```bash
@@ -165,8 +177,8 @@ practice and review set:
 - [docs/ui_validation/README.md](docs/ui_validation/README.md): validation-note
   workflow for in-Live review
 
-The flagship per-plugin design docs now live in the sibling
-`Max4LivePlugins/plugins/*/README.md` workspaces on this machine.
+The flagship per-plugin design docs and active build work now live in the
+sibling `Max4LivePlugins/plugins/*/README.md` workspaces on this machine.
 
 ### Subpatchers
 
@@ -531,25 +543,14 @@ That device will write the `.amxd` plus the bridge sidecars next to it during
 that device's patcher, not to arbitrary third-party Max devices in the set. See
 [docs/livemcp_max_bridge.md](docs/livemcp_max_bridge.md) for the full contract.
 
-## Examples
+## Plugin workspaces
 
-40+ examples in `examples/`. A few highlights:
+This framework repo does not keep buildable plugin scripts in-tree. Use the
+private sibling repo for concrete devices:
 
-| File | What it builds |
-|------|---------------|
-| `simple_gain.py` | Minimal starter, single gain dial |
-| `stereo_delay.py` | L/R delay with feedback saturation |
-| `simple_compressor.py` | Threshold, ratio, attack/release |
-| `parametric_eq.py` | JSUI custom EQ curve display |
-| `poly_synth.py` | Polyphonic synth with wavetable |
-| `midi_arpeggiator.py` | MIDI arpeggiator |
-| `livemcp_bridge_demo.py` | Compact reference device with embedded LiveMCP bridge |
-| `from_amxd_demo.py` | Round-trip: build, read back, modify |
-
-```bash
-uv run python examples/simple_gain.py           # run one
-for f in examples/*.py; do uv run python "$f"; done  # build all
-```
+- `../Max4LivePlugins/plugins/<plugin>/build.py`: canonical product workspaces
+- `../Max4LivePlugins/legacy_examples/*.py`: migrated private example/archive
+  scripts from older framework iterations
 
 ## Development
 

@@ -20,17 +20,24 @@ The actual package lives under the `src/` layout:
 src/m4l_builder/       <- importable package (NOT m4l_builder/ at the root)
 ```
 
+## Workspace Boundaries
+
+`m4l-builder` is the library/tooling repo.
+
+Active flagship plugin product work lives in the sibling
+`../Max4LivePlugins` repo on this machine, or at `MAX4LIVEPLUGINS_ROOT` if the
+env var is set. When the task is about a real plugin rather than the builder
+library itself, prefer working in `Max4LivePlugins/plugins/<plugin>/`.
+
+This repo should contain zero in-repo plugin/device scripts. Migrated private
+device builders live in `../Max4LivePlugins/legacy_examples/`, and canonical
+product workspaces live in `../Max4LivePlugins/plugins/<plugin>/`.
+
 ## Commands
 
 ```bash
 # Install (editable)
 uv pip install -e .
-
-# Build a single example device
-uv run python examples/stereo_delay.py
-
-# Build all 17 examples
-for f in examples/*.py; do uv run python "$f"; done
 
 # Test
 uv run pytest tests/ -v
@@ -42,7 +49,6 @@ uv build && uv publish --token <pypi-token>
 ```
 
 No linting is configured (`.ruff_cache/` is gitignored but no ruff config exists in `pyproject.toml`).
-`conftest.py` exists with a session-scoped `built_examples` fixture that runs all 40+ example scripts once per test session.
 
 ## Build Output Paths
 
@@ -52,11 +58,11 @@ Devices are written to the Ableton User Library. On this machine: `/mnt/d/Music/
 
 Skills in `.Codex/skills/` directory:
 
-- `/verify`: Pre-commit gate, runs tests then builds all 17 examples, checks git status for .amxd artifacts
+- `/verify`: Pre-commit gate, runs tests then builds the example suite, checks git status for .amxd artifacts
 - `/test`: Run pytest with coverage options
 - `/publish`: Bump version, build, and publish to PyPI
 
-Note: `/publish` skill references updating `CHANGELOG.md`, but that file does not exist in this repo.
+Note: `/publish` should update `CHANGELOG.md`; that file exists at the repo root.
 
 ## Architecture
 
@@ -79,8 +85,7 @@ src/m4l_builder/
     ├── spectrum_analyzer.py # spectrum_analyzer_js()
     └── waveform_display.py  # waveform_display_js()
 
-examples/                 # 17 complete device scripts
-tests/                    # 882+ tests across 9 test files
+tests/                    # automated test suite
 ```
 
 ### Architecture Layers
@@ -208,7 +213,9 @@ Header is 32 bytes. JSON follows immediately.
 
 ## Testing
 
-**2376+ tests** across 12 files. `conftest.py` has a session-scoped `built_examples` fixture that runs all 40 example scripts once per session (~4s total for integration suite). No pytest markers config: `"not slow"` marker in `/test` skill is not registered.
+Automated tests cover the framework modules plus smoke builds that write real
+`.amxd` files. No pytest markers config: `"not slow"` marker in `/test` skill
+is not registered.
 
 ```
 test_objects.py    :newobj, patchline factory functions
@@ -222,38 +229,14 @@ test_engines.py    :JS generator outputs
 test_layout.py     :Row/Column/Grid layout helpers
 test_live_api.py   :live_object_path, live_observer, live_set_control
 test_presets.py    :preset_manager, add_preset_buttons
-test_examples.py   :Integration: builds all 40 examples via session fixture
+test_build_smoke.py:Integration: inline smoke builds for audio, instrument, and MIDI devices
 ```
 
-`test_examples.py::TestExampleBuilds` covers `EXAMPLE_SCRIPTS` (40 scripts).
+## Legacy Device Scripts
 
-Known validations in `test_examples.py`:
-- No `sig~` objects allowed (cold-start silence bug)
-- No `dcblock~` objects (does not exist in Max 8)
-- All `panel` objects must have `background: 1`
-- All `selector~` objects must have an initial argument (avoids default silence)
-
-## Example Devices (17)
-
-All buildable with `uv run python examples/<name>.py`:
-
-1. `simple_gain.py`:Minimal starter (single dial)
-2. `stereo_filter.py`:HP/LP/BP SVF filter
-3. `stereo_utility.py`:Gain, pan, width, phase
-4. `simple_compressor.py`:Threshold, ratio, attack/release
-5. `multiband_imager.py`:3-band stereo width
-6. `transient_shaper.py`:Attack/sustain shaping
-7. `tape_degradation.py`:Saturation, wow/flutter, noise
-8. `stereo_delay.py`:L/R delay with feedback saturation
-9. `midside_suite.py`:M/S processing with tilt EQ
-10. `multiband_saturator.py`:3-band saturation
-11. `rhythmic_gate.py`:LFO-driven gate
-12. `auto_filter.py`:Envelope follower + LFO filter
-13. `comb_bank.py`:Tuned comb resonator
-14. `lofi_processor.py`:Bitcrusher + sample rate reduction
-15. `parametric_eq.py`:JSUI custom EQ curve (not in integration tests)
-16. `expression_control.py`:8 macro knobs (not in integration tests)
-17. `macro_randomizer.py`:7 randomizable outputs (not in integration tests)
+Legacy private device builders that used to live in this repo were migrated to
+`../Max4LivePlugins/legacy_examples/`. This repo should not regain a local
+`examples/` plugin surface.
 
 ## Installation in Ableton
 
@@ -274,8 +257,9 @@ Restart Ableton or refresh the browser to see new devices. Instrument and MIDI E
 6. **Reserved IDs**:`"obj-plugin"` and `"obj-plugout"` are used by AudioEffect automatically; do not reuse them
 7. **Binary artifacts**:Do not commit .amxd files (they are build outputs)
 8. **Theme injection**:Pass theme to the device constructor; all UI inherits colors automatically
-9. **CHANGELOG exists**:`CHANGELOG.md` is at project root, covering v0.1.0 through v0.4.0
-10. **AGENTS.md is repo-local**:Tracked at the repo root; hatchling excludes it via `[tool.hatch.build] exclude`
+9. **Workspace boundary**:Real plugin/device builders belong in `../Max4LivePlugins`, not this repo
+10. **CHANGELOG exists**:`CHANGELOG.md` is at project root
+11. **AGENTS.md is repo-local**:Tracked at the repo root; hatchling excludes it via `[tool.hatch.build] exclude`
 
 ## Recommended Tools
 
