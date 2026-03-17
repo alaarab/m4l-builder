@@ -278,6 +278,19 @@ class TestEqBandColumnEngine:
         assert "return mgraphics.size[0] <= 118 || mgraphics.size[1] <= 148;" in js
         assert "function mix_color(color_a, color_b, amount)" in js
 
+    def test_gain_knob_uses_upright_zero_bipolar_arc(self):
+        js = eq_band_column_js()
+        assert "if (info.key === \"gain\") {" in js
+        assert "var zero_norm = norm_for_info({value: 0.0, min: info.min, max: info.max, log: 0});" in js
+        assert "var zero_angle = start + (end - start) * zero_norm;" in js
+        assert "mgraphics.arc(knob.cx, knob.cy, ring_radius, arc_start, arc_end);" in js
+
+    def test_gain_knob_uses_dedicated_value_label_offset(self):
+        js = eq_band_column_js()
+        assert "var value_y_offset = minimal ? 7 : (compact ? 9 : 11);" in js
+        assert "value_y_offset = minimal ? 6 : (compact ? 8 : 10);" in js
+        assert "value_y = knob.cy + knob.radius + value_y_offset;" in js
+
     def test_supports_frameless_headerless_rail_and_alt_scroll_q(self):
         js = eq_band_column_js(show_header=False, show_frame=False, force_regular_layout=True)
         assert "var SHOW_HEADER = 0;" in js

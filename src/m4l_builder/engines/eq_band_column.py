@@ -623,6 +623,8 @@ function draw_knob(knob, info) {
     var start = Math.PI * 0.75;
     var end = Math.PI * 2.25;
     var angle = start + (end - start) * norm;
+    var arc_start = start;
+    var arc_end = angle;
     var active = hover_control === info.key || drag_control === info.key;
     var accent = knob_accent_color(info);
     var compact = is_compact();
@@ -636,6 +638,23 @@ function draw_knob(knob, info) {
     var ring_radius = knob.radius - (minimal ? 5.2 : (compact ? 4.3 : 5.2));
     var pointer_inner = minimal ? ring_radius * 0.18 : (compact ? ring_radius * 0.24 : ring_radius * 0.20);
     var pointer_outer = ring_radius - (minimal ? 2.7 : (compact ? 2.4 : 3.0));
+    var value_y_offset = minimal ? 7 : (compact ? 9 : 11);
+    var value_y;
+
+    if (info.key === "gain") {
+        // Draw gain as a bipolar control with 0 dB at 12 o'clock (Ableton-style).
+        var zero_norm = norm_for_info({value: 0.0, min: info.min, max: info.max, log: 0});
+        var zero_angle = start + (end - start) * zero_norm;
+        if (angle >= zero_angle) {
+            arc_start = zero_angle;
+            arc_end = angle;
+        } else {
+            arc_start = angle;
+            arc_end = zero_angle;
+        }
+        value_y_offset = minimal ? 6 : (compact ? 8 : 10);
+    }
+    value_y = knob.cy + knob.radius + value_y_offset;
 
     if (active) {
         mgraphics.set_source_rgba(accent[0], accent[1], accent[2], compact ? 0.12 : 0.16);
@@ -663,7 +682,7 @@ function draw_knob(knob, info) {
 
     mgraphics.set_source_rgba(accent[0], accent[1], accent[2], info.disabled ? 0.18 : (active ? 0.96 : 0.84));
     mgraphics.set_line_width(minimal ? (active ? 3.0 : 2.6) : (compact ? (active ? 2.4 : 2.0) : (active ? 2.9 : 2.4)));
-    mgraphics.arc(knob.cx, knob.cy, ring_radius, start, angle);
+    mgraphics.arc(knob.cx, knob.cy, ring_radius, arc_start, arc_end);
     mgraphics.stroke();
 
     mgraphics.set_source_rgba(pointer[0], pointer[1], pointer[2], info.disabled ? 0.28 : 0.96);
@@ -687,7 +706,7 @@ function draw_knob(knob, info) {
     );
     draw_label(
         knob.cx,
-        knob.cy + knob.radius + (minimal ? 7 : (compact ? 9 : 11)),
+        value_y,
         format_value(info),
         info.disabled ? TEXT_DIM_COLOR : TEXT_COLOR,
         minimal ? 7.5 : (compact ? 5.2 : 6.4),
