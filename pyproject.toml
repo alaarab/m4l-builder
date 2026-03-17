@@ -25,4 +25,4 @@ Homepage = "https://github.com/alaarab/m4l-builder"
 Repository = "https://github.com/alaarab/m4l-builder"
 
 [tool.hatch.build]
-exclude = ["CLAUDE.md", ".claude/", "tests/", "examples/"]
+exclude = ["CLAUDE.md", ".claude/", "tests/"]
