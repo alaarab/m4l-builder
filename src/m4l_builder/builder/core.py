@@ -6,7 +6,7 @@ from ..container import build_amxd, write_amxd
 from ..device import AudioEffect, Device, Instrument, MidiEffect
 from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
 from ..jsui_contract import JsuiContractError, find_jsui_contract_issues, validate_jsui_contract
-from ..layout import Column, Grid, Row
+from ..layout import Column, Columns, Grid, Row, inset_rect
 from ..modules import ModuleSpec, module_from_block, mount_module
 from ..objects import newobj, patchline
 from ..parameters import LIVE_NATIVE_INT_MAX, LIVE_NATIVE_INT_MIN, PARAM_HIDDEN, PARAM_VISIBLE, ParameterSpec
@@ -54,7 +54,9 @@ __all__ = [
     "lint_graph",
     "Row",
     "Column",
+    "Columns",
     "Grid",
+    "inset_rect",
     "build_amxd",
     "write_amxd",
     "newobj",

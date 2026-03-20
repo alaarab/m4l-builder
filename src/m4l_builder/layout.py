@@ -1,11 +1,63 @@
 """Context manager-based layout containers for placing UI elements."""
 
 
+def inset_rect(
+    rect,
+    *,
+    pad=0,
+    pad_x=None,
+    pad_y=None,
+    left=None,
+    top=None,
+    right=None,
+    bottom=None,
+):
+    """Return an inset rect while preserving non-negative width/height."""
+    x, y, w, h = rect
+    pad_x = pad if pad_x is None else pad_x
+    pad_y = pad if pad_y is None else pad_y
+    left = pad_x if left is None else left
+    right = pad_x if right is None else right
+    top = pad_y if top is None else top
+    bottom = pad_y if bottom is None else bottom
+    inner_w = max(0, w - left - right)
+    inner_h = max(0, h - top - bottom)
+    return [x + left, y + top, inner_w, inner_h]
+
+
 class _LayoutContainer:
     """Mixin providing proxy add_* methods that auto-compute rects."""
 
-    def _next_rect(self, width=None, height=None):
+    def _next_rect(self, width=None, height=None, span=None):
         raise NotImplementedError
+
+    def slot(
+        self,
+        *,
+        width=None,
+        height=None,
+        span=None,
+        pad=0,
+        pad_x=None,
+        pad_y=None,
+        left=None,
+        top=None,
+        right=None,
+        bottom=None,
+    ):
+        rect = self._next_rect(width, height, span=span)
+        if any(value is not None for value in (pad_x, pad_y, left, top, right, bottom)) or pad:
+            return inset_rect(
+                rect,
+                pad=pad,
+                pad_x=pad_x,
+                pad_y=pad_y,
+                left=left,
+                top=top,
+                right=right,
+                bottom=bottom,
+            )
+        return rect
 
     # Pattern A: (id, rect, **kw)
     def add_panel(self, id, *, width=None, height=None, **kw):
@@ -146,6 +198,10 @@ class _LayoutContainer:
         rect = self._next_rect(width, height)
         return self._device.add_jsui(id, rect, js_code=js_code, **kw)
 
+    def add_v8ui(self, id, *, js_code, width=None, height=None, **kw):
+        rect = self._next_rect(width, height)
+        return self._device.add_v8ui(id, rect, js_code=js_code, **kw)
+
     # bpatcher: (id, rect, patcher_name, **kw)
     def add_bpatcher(self, id, patcher_name, *, width=None, height=None, **kw):
         rect = self._next_rect(width, height)
@@ -181,7 +237,7 @@ class Row(_LayoutContainer):
     def used_height(self):
         return self._default_height or 0
 
-    def _next_rect(self, width=None, height=None):
+    def _next_rect(self, width=None, height=None, span=None):
         w = width or self._default_width or 50
         h = height or self._default_height or 50
         rect = [self._cursor_x, self._y, w, h]
@@ -223,7 +279,7 @@ class Column(_LayoutContainer):
             return 0
         return self._cursor_y - self._y - self._spacing
 
-    def _next_rect(self, width=None, height=None):
+    def _next_rect(self, width=None, height=None, span=None):
         w = width or self._default_width or 50
         h = height or self._default_height or 50
         rect = [self._x, self._cursor_y, w, h]
@@ -276,7 +332,7 @@ class Grid(_LayoutContainer):
             total_rows = self._current_row
         return total_rows * self._row_height + (total_rows - 1) * self._spacing_y
 
-    def _next_rect(self, width=None, height=None):
+    def _next_rect(self, width=None, height=None, span=None):
         col = self._current_col
         row = self._current_row
         x = self._x + col * (self._col_width + self._spacing_x)
@@ -288,6 +344,76 @@ class Grid(_LayoutContainer):
         if self._current_col >= self._cols:
             self._current_col = 0
             self._current_row += 1
+        self._items += 1
+        return rect
+
+
+class Columns(_LayoutContainer):
+    """Span-based horizontal layout for 12-col style shells."""
+
+    def __init__(self, device, x, y, *, width, cols=12.0, height=None):
+        if cols <= 0:
+            raise ValueError(f"cols must be > 0, got {cols}")
+        if width <= 0:
+            raise ValueError(f"width must be > 0, got {width}")
+        self._device = device
+        self._x = x
+        self._y = y
+        self._width = float(width)
+        self._cols = float(cols)
+        self._default_height = height
+        self._cursor_cols = 0.0
+        self._items = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    @property
+    def unit_width(self):
+        return self._width / self._cols
+
+    @property
+    def used_width(self):
+        return self._cursor_cols * self.unit_width
+
+    @property
+    def used_height(self):
+        return self._default_height or 0
+
+    @property
+    def used_cols(self):
+        return self._cursor_cols
+
+    @property
+    def remaining_cols(self):
+        return max(0.0, self._cols - self._cursor_cols)
+
+    def _normalize_span(self, width=None, span=None):
+        if span is not None and width is not None:
+            raise ValueError("pass either width or span, not both")
+        if span is None:
+            if width is None:
+                span = 1.0
+            else:
+                span = float(width) / self.unit_width
+        span = float(span)
+        if span <= 0:
+            raise ValueError(f"span must be > 0, got {span}")
+        if self._cursor_cols + span > self._cols + 1e-9:
+            raise ValueError(
+                f"span overflow: used {self._cursor_cols}, requested {span}, total {self._cols}"
+            )
+        return span
+
+    def _next_rect(self, width=None, height=None, span=None):
+        span = self._normalize_span(width=width, span=span)
+        w = float(width) if width is not None else span * self.unit_width
+        h = height or self._default_height or 50
+        rect = [round(self._x + self.used_width, 4), self._y, round(w, 4), h]
+        self._cursor_cols += span
         self._items += 1
         return rect
 

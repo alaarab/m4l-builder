@@ -1,8 +1,8 @@
-"""Tests for the layout system (Row, Column, Grid, nesting)."""
+"""Tests for the layout system (Row, Column, Columns, Grid, nesting)."""
 
 import pytest
 
-from m4l_builder import AudioEffect, MidiEffect, WARM, Row, Column, Grid
+from m4l_builder import AudioEffect, MidiEffect, WARM, Row, Column, Columns, Grid, inset_rect
 
 
 def _find_box(device, box_id):
@@ -258,6 +258,74 @@ class TestGrid:
         g = d.grid(0, 0, cols=2, col_width=30, row_height=30)
         with g as ctx:
             assert ctx is g
+
+
+# ---------------------------------------------------------------------------
+# Span-based columns tests
+# ---------------------------------------------------------------------------
+
+class TestColumns:
+    def test_first_slot_uses_fractional_span(self):
+        d = AudioEffect("T", 400, 200)
+        with d.columns(0, 0, width=120, cols=12, height=40) as cols:
+            rect = cols.slot(span=1.5)
+        assert rect == [0.0, 0, 15.0, 40]
+
+    def test_fractional_spans_fill_expected_positions(self):
+        d = AudioEffect("T", 400, 200)
+        with d.columns(0, 0, width=120, cols=12, height=40) as cols:
+            left = cols.slot(span=1.5)
+            main = cols.slot(span=9)
+            right = cols.slot(span=1.5)
+        assert left == [0.0, 0, 15.0, 40]
+        assert main == [15.0, 0, 90.0, 40]
+        assert right == [105.0, 0, 15.0, 40]
+
+    def test_used_cols_and_width_track_fractional_spans(self):
+        d = AudioEffect("T", 400, 200)
+        with d.columns(10, 20, width=240, cols=12, height=30) as cols:
+            cols.slot(span=3)
+            cols.slot(span=4.5)
+            assert cols.used_cols == 7.5
+            assert cols.used_width == 150.0
+
+    def test_width_override_consumes_matching_span(self):
+        d = AudioEffect("T", 400, 200)
+        with d.columns(0, 0, width=120, cols=12, height=40) as cols:
+            rect = cols.slot(width=30)
+        assert rect == [0.0, 0, 30.0, 40]
+        assert cols.used_cols == 3.0
+
+    def test_slot_padding_insets_rect(self):
+        d = AudioEffect("T", 400, 200)
+        with d.columns(0, 0, width=120, cols=12, height=40) as cols:
+            rect = cols.slot(span=6, pad=4)
+        assert rect == [4.0, 4, 52.0, 32]
+
+    def test_slot_supports_asymmetric_padding(self):
+        d = AudioEffect("T", 400, 200)
+        with d.columns(0, 0, width=120, cols=12, height=40) as cols:
+            rect = cols.slot(span=6, left=3, top=2, right=7, bottom=6)
+        assert rect == [3.0, 2, 50.0, 32]
+
+    def test_overflow_raises(self):
+        d = AudioEffect("T", 400, 200)
+        with pytest.raises(ValueError, match="span overflow"):
+            with d.columns(0, 0, width=120, cols=12, height=40) as cols:
+                cols.slot(span=10)
+                cols.slot(span=3)
+
+    def test_device_columns_returns_columns(self):
+        d = AudioEffect("T", 400, 200)
+        assert isinstance(d.columns(0, 0, width=120), Columns)
+
+
+class TestInsetRect:
+    def test_inset_rect_supports_symmetric_padding(self):
+        assert inset_rect([10, 20, 100, 50], pad=4) == [14, 24, 92, 42]
+
+    def test_inset_rect_supports_px_axes(self):
+        assert inset_rect([10, 20, 100, 50], pad_x=6, pad_y=2) == [16, 22, 88, 46]
 
 
 # ---------------------------------------------------------------------------

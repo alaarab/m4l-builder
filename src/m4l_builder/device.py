@@ -8,7 +8,7 @@ from .amxd import build_device, device_from_amxd, device_to_bytes, device_to_pat
 from .dsp import stereo_io
 from .graph import GraphContainer
 from .jsui_contract import validate_jsui_contract
-from .layout import Column, Grid, Row
+from .layout import Column, Columns, Grid, Row
 from .parameters import ParameterSpec
 from .profiles import DEFAULT_PATCHER_PROFILE
 from .ui import jsui, v8ui
@@ -216,6 +216,9 @@ class Device(GraphContainer):
             spacing_x=spacing_x,
             spacing_y=spacing_y,
         )
+
+    def columns(self, x, y, *, width, cols=12.0, height=None):
+        return Columns(self, x, y, width=width, cols=cols, height=height)
 
     def to_json(self, indent: int = 2) -> str:
         """Serialize the device patcher structure to a JSON string."""

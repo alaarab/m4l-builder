@@ -70,6 +70,7 @@ def linear_phase_eq_display_js(
     badge_color="0.10, 0.12, 0.15, 0.94",
     badge_border_color="0.25, 0.28, 0.34, 1.0",
     show_dynamic=True,
+    show_hud_badges=True,
     show_selection_readout=True,
 ):
     """Return JavaScript source for the flagship linear-phase EQ display."""
@@ -89,6 +90,7 @@ def linear_phase_eq_display_js(
         badge_color=badge_color,
         badge_border_color=badge_border_color,
         show_dynamic="1" if show_dynamic else "0",
+        show_hud_badges="1" if show_hud_badges else "0",
         show_selection_readout="1" if show_selection_readout else "0",
     )
 
@@ -118,6 +120,7 @@ var ZERO_LINE_CLR = [$zero_line_color];
 var BADGE_CLR = [$badge_color];
 var BADGE_BORDER_CLR = [$badge_border_color];
 var SHOW_DYNAMIC = $show_dynamic;
+var SHOW_HUD_BADGES = $show_hud_badges;
 var SHOW_SELECTION_READOUT = $show_selection_readout;
 
 var BAND_COLORS = [
@@ -227,6 +230,7 @@ for (i = 0; i < MAX_BANDS; i++) {
         gain: DEFAULT_GAINS[i],
         q: DEFAULT_QS[i],
         type: DEFAULT_TYPES[i],
+        present: 0,
         enabled: 0,
         slope: DEFAULT_SLOPES[i],
         solo: 0,
@@ -239,6 +243,7 @@ for (i = 0; i < MAX_BANDS; i++) {
         gain: DEFAULT_GAINS[i],
         q: DEFAULT_QS[i],
         type: DEFAULT_TYPES[i],
+        present: 0,
         enabled: 0,
         slope: DEFAULT_SLOPES[i],
         solo: 0,
@@ -429,17 +434,17 @@ function slope_stage_count(slope) {
 
 function find_free_band() {
     for (i = 0; i < num_bands; i++) {
-        if (!band_cache[i].enabled) return i;
+        if (!band_cache[i].present) return i;
     }
     return -1;
 }
 
 function next_enabled_band(preferred_idx) {
-    if (preferred_idx >= 0 && preferred_idx < num_bands && band_cache[preferred_idx].enabled) {
+    if (preferred_idx >= 0 && preferred_idx < num_bands && band_cache[preferred_idx].present) {
         return preferred_idx;
     }
     for (i = 0; i < num_bands; i++) {
-        if (band_cache[i].enabled) return i;
+        if (band_cache[i].present) return i;
     }
     return -1;
 }
@@ -448,7 +453,8 @@ function delete_band_at(idx) {
     var next_idx;
     idx = Math.floor(idx);
     if (idx < 0 || idx >= num_bands) return 0;
-    if (!band_cache[idx].enabled) return 0;
+    if (!band_cache[idx].present) return 0;
+    bands[idx].present = 0;
     bands[idx].enabled = 0;
     bands[idx].solo = 0;
     bands[idx].dynamic_enabled = 0;
@@ -500,7 +506,7 @@ function context_menu_items() {
         "Type  " + TYPE_NAMES[band.type],
         "Slope  " + (is_cut_type(band.type) ? SLOPE_NAMES[band.slope] : "--"),
         band.solo ? "Listen  On" : "Listen  Off",
-        band.enabled ? "Disable" : "Enable",
+        band.enabled ? "Bypass" : "Enable",
         "Delete"
     ];
     if (SHOW_DYNAMIC) {
@@ -670,7 +676,9 @@ function rebuild_band_cache() {
         band_cache[i].gain = clamp(bands[i].gain, MIN_GAIN, MAX_GAIN);
         band_cache[i].q = clamp(bands[i].q, MIN_Q, MAX_Q);
         band_cache[i].type = Math.floor(bands[i].type);
+        band_cache[i].present = bands[i].present ? 1 : 0;
         band_cache[i].enabled = bands[i].enabled ? 1 : 0;
+        if (band_cache[i].enabled) band_cache[i].present = 1;
         band_cache[i].slope = Math.floor(clamp(bands[i].slope, 0, 2));
         band_cache[i].solo = bands[i].solo ? 1 : 0;
         band_cache[i].dynamic_enabled = bands[i].dynamic_enabled ? 1 : 0;
@@ -696,6 +704,14 @@ function rebuild_band_cache() {
         }
     }
     curve_dirty = 1;
+}
+
+function present_band_count() {
+    var count = 0;
+    for (i = 0; i < num_bands; i++) {
+        if (band_cache[i].present) count++;
+    }
+    return count;
 }
 
 function enabled_band_count() {
@@ -900,7 +916,7 @@ function draw_nodes() {
     var enabled_alpha, ring_alpha, fill_alpha, text_alpha, cross_alpha;
     var center_alpha, shell_alpha, halo_alpha;
     for (i = 0; i < num_bands; i++) {
-        if (!band_cache[i]) continue;
+        if (!band_cache[i] || !band_cache[i].present) continue;
         x = freq_to_x(band_cache[i].freq);
         y = gain_to_y(band_cache[i].uses_gain ? band_cache[i].node_gain : 0.0);
         size = compact
@@ -1073,8 +1089,9 @@ function ensure_curve_cache() {
 
 function tooltip_band_idx() {
     if (context_menu_open) return -1;
-    if (hover_band >= 0 && hover_band < num_bands) return hover_band;
+    if (hover_band >= 0 && hover_band < num_bands && band_cache[hover_band].present) return hover_band;
     if (dragging && selected_band >= 0 && selected_band < num_bands) {
+        if (!band_cache[selected_band].present) return -1;
         return selected_band;
     }
     return -1;
@@ -1097,6 +1114,7 @@ function draw_tooltip() {
     if (idx < 0) return;
 
     band = band_cache[idx];
+    if (!band || !band.present) return;
     x = freq_to_x(band.freq) + 10;
     y = gain_to_y(band.node_gain) - 34;
     w = 122;
@@ -1132,6 +1150,7 @@ function draw_tooltip() {
 function draw_context_menu() {
     var bounds, x, y, w, h, row_h, items, i, row_y, color, band;
     if (!context_menu_open || context_menu_band < 0 || context_menu_band >= num_bands) return;
+    if (!band_cache[context_menu_band].present) return;
 
     bounds = context_menu_bounds();
     x = bounds[0];
@@ -1196,6 +1215,7 @@ function draw_badge(x, y, w, h, label, value) {
 }
 
 function hud_badges() {
+    if (!SHOW_HUD_BADGES) return [];
     var badge_x = plot_left() + 6;
     var info_y = plot_top() + 5;
     return [
@@ -1269,19 +1289,21 @@ function draw_hud() {
     var title, subtitle;
     var badge;
 
-    for (i = 0; i < badges.length; i++) {
-        badge = badges[i];
-        draw_badge(badge.x, badge.y, badge.w, badge.h, badge.label, badge.value);
+    if (SHOW_HUD_BADGES) {
+        for (i = 0; i < badges.length; i++) {
+            badge = badges[i];
+            draw_badge(badge.x, badge.y, badge.w, badge.h, badge.label, badge.value);
+        }
     }
 
     if (!SHOW_SELECTION_READOUT) return;
 
-    if (selected_band < 0 || selected_band >= num_bands) {
+    if (selected_band < 0 || selected_band >= num_bands || !band_cache[selected_band].present) {
         mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(6.5);
         mgraphics.set_source_rgba(0.60, 0.65, 0.71, 0.90);
         mgraphics.move_to(plot_right() - 128, plot_top() + 12);
-        mgraphics.show_text(enabled_band_count() > 0 ? "Select a node." : "Awaiting first band");
+        mgraphics.show_text(present_band_count() > 0 ? "Select a node." : "Awaiting first band");
         return;
     }
 
@@ -1325,7 +1347,7 @@ function paint() {
 
     draw_grid();
     draw_analyzer();
-    if (enabled_band_count() < 1) {
+    if (present_band_count() < 1) {
         draw_empty_state();
     } else {
         ensure_curve_cache();
@@ -1346,7 +1368,7 @@ function paint() {
 function hit_test(x, y) {
     var dx, dy, node_x, node_y;
     for (i = 0; i < num_bands; i++) {
-        if (!band_cache[i]) continue;
+        if (!band_cache[i] || !band_cache[i].present) continue;
         node_x = freq_to_x(band_cache[i].freq);
         node_y = gain_to_y(band_cache[i].node_gain);
         dx = x - node_x;
@@ -1359,6 +1381,7 @@ function hit_test(x, y) {
 function dynamic_hit_test(x, y) {
     var dx, dy, node_x, node_y, target_gain;
     for (i = 0; i < num_bands; i++) {
+        if (!band_cache[i].present) continue;
         if (!band_cache[i].enabled) continue;
         if (!band_cache[i].dynamic_enabled) continue;
         if (!band_supports_dynamic(band_cache[i].type)) continue;
@@ -1386,6 +1409,7 @@ function create_band_at(x, y) {
     created_freq = clamp(x_to_freq(x), MIN_FREQ, MAX_FREQ);
     created_gain = clamp(y_to_gain(y), MIN_GAIN, MAX_GAIN);
     created_gain = Math.round(created_gain * 10.0) / 10.0;
+    bands[created_idx].present = 1;
     bands[created_idx].freq = created_freq;
     bands[created_idx].gain = created_gain;
     bands[created_idx].q = 1.0;
@@ -1398,26 +1422,28 @@ function create_band_at(x, y) {
     bands[created_idx].dynamic_current = 0.0;
     selected_band = created_idx;
     rebuild_band_cache();
-    outlet(0, "add_band", created_idx, created_freq, created_gain, 1.0, TYPE_PEAK, 1, 0, 0, 0, 0.0, 0.0);
+    outlet(0, "add_band", created_idx, created_freq, created_gain, 1.0, TYPE_PEAK, 1, 0, 0, 0, 0.0, 0.0, 1);
     outlet(0, "selected_band", created_idx);
     mgraphics.redraw();
     return 1;
 }
 
-function set_band(idx, freq, gain, q, type, enabled, slope, solo, dynamic_enabled, dynamic_amount, dynamic_current) {
+function set_band(idx, freq, gain, q, type, enabled, slope, solo, dynamic_enabled, dynamic_amount, dynamic_current, present) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= MAX_BANDS) return;
     bands[idx].freq = freq;
     bands[idx].gain = gain;
     bands[idx].q = q;
     bands[idx].type = Math.floor(type);
+    bands[idx].present = present === undefined ? (bands[idx].present ? 1 : 0) : (present ? 1 : 0);
     bands[idx].enabled = enabled ? 1 : 0;
+    if (bands[idx].enabled) bands[idx].present = 1;
     bands[idx].slope = slope === undefined ? 0 : Math.floor(slope);
     bands[idx].solo = solo ? 1 : 0;
     bands[idx].dynamic_enabled = dynamic_enabled ? 1 : 0;
     bands[idx].dynamic_amount = dynamic_amount === undefined ? 0.0 : clamp(dynamic_amount, -MAX_DYNAMIC_RANGE, MAX_DYNAMIC_RANGE);
     bands[idx].dynamic_current = dynamic_current === undefined ? 0.0 : clamp(dynamic_current, -MAX_DYNAMIC_RANGE, MAX_DYNAMIC_RANGE);
-    if (context_menu_open && context_menu_band === idx && !bands[idx].enabled) {
+    if (context_menu_open && context_menu_band === idx && !bands[idx].present) {
         close_context_menu();
     }
     rebuild_band_cache();
@@ -1436,7 +1462,7 @@ function set_num_bands(n) {
 
 function set_selected(idx) {
     idx = Math.floor(idx);
-    if (idx < 0 || idx >= num_bands) selected_band = -1;
+    if (idx < 0 || idx >= num_bands || !band_cache[idx].present) selected_band = -1;
     else selected_band = idx;
     mgraphics.redraw();
 }
@@ -1668,6 +1694,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
                 return;
             }
             if (menu_idx === context_enable_index()) {
+                band.present = 1;
                 band.enabled = band.enabled ? 0 : 1;
                 if (!band.enabled) {
                     band.solo = 0;
@@ -1924,6 +1951,7 @@ function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl) {
     var target = hover_band >= 0 ? hover_band : selected_band;
     var q, factor;
     if (target < 0 || target >= num_bands) return;
+    if (!bands[target].present) return;
     if (!bands[target].enabled) return;
 
     q = bands[target].q;

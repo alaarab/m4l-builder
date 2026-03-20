@@ -778,9 +778,12 @@ class TestLinearPhaseEqDisplayEngine:
         js = linear_phase_eq_display_js()
         assert "var DEFAULT_FREQS = [30.0, 200.0, 1000.0, 5000.0, 3600.0, 7200.0, 12000.0, 18000.0];" in js
         assert "var num_bands = MAX_BANDS;" in js
+        assert "present: 0," in js
         assert 'band_cache[selected_band].enabled ? "" : "   Bypassed"' in js
+        assert "if (!band_cache[i].present) continue;" in js
+        assert "bands[idx].present = 0;" in js
+        assert "bands[created_idx].present = 1;" in js
         assert "if (num_bands > 0) {" in js
-        assert "if (!band_cache[i]) continue;" in js
         assert "display_range = 15.0;" in js
         assert "var compact = compact_mode();" in js
         assert "circle_path(x, y, radius);" in js
@@ -809,6 +812,10 @@ class TestLinearPhaseEqDisplayEngine:
     def test_can_disable_dynamic_controls(self):
         js = linear_phase_eq_display_js(show_dynamic=False)
         assert "var SHOW_DYNAMIC = 0;" in js
+
+    def test_can_hide_hud_badges(self):
+        js = linear_phase_eq_display_js(show_hud_badges=False)
+        assert "var SHOW_HUD_BADGES = 0;" in js
 
     def test_can_hide_selection_readout(self):
         js = linear_phase_eq_display_js(show_selection_readout=False)
