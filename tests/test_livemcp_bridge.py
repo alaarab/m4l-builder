@@ -18,6 +18,7 @@ from m4l_builder.livemcp_bridge import (
     bridge_schema,
     bridge_server_js,
     build_livemcp_bridge_demo,
+    _mix_color,
 )
 
 
@@ -175,3 +176,21 @@ class TestBridgeSources:
 
         subprocess.run([node, "--check", str(runtime_path)], check=True)
         subprocess.run([node, "--check", str(server_path)], check=True)
+
+
+class TestMixColor:
+    """_mix_color validates RGBA inputs instead of raising a bare IndexError."""
+
+    def test_midpoint_mix(self):
+        result = _mix_color([0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 1.0], 0.5)
+        assert result == [0.5, 0.5, 0.5, 1.0]
+
+    def test_amount_is_clamped(self):
+        white = [1.0, 1.0, 1.0, 1.0]
+        black = [0.0, 0.0, 0.0, 0.0]
+        assert _mix_color(black, white, 2.0) == white
+        assert _mix_color(black, white, -1.0) == black
+
+    def test_rgb_without_alpha_raises_valueerror(self):
+        with pytest.raises(ValueError, match="RGBA"):
+            _mix_color([1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0], 0.5)

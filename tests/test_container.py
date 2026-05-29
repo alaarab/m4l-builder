@@ -3,6 +3,8 @@
 import json
 import struct
 
+import pytest
+
 from m4l_builder.container import build_amxd
 from m4l_builder.constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
 
@@ -88,3 +90,20 @@ class TestBuildAmxd:
         assert recovered == patcher
         assert len(recovered["patcher"]["boxes"]) == 2
         assert len(recovered["patcher"]["lines"]) == 1
+
+
+class TestBuildAmxdErrors:
+    """build_amxd surfaces an actionable error for unserializable patchers."""
+
+    def test_non_serializable_value_raises_typeerror(self):
+        bad_patcher = {"patcher": {"boxes": [object()]}}
+        with pytest.raises(TypeError, match="non-JSON-serializable"):
+            build_amxd(bad_patcher)
+
+    def test_error_chains_original_cause(self):
+        # A set is not JSON-serializable; the underlying error is preserved.
+        bad_patcher = {"patcher": {"value": {1, 2, 3}}}
+        with pytest.raises(TypeError) as excinfo:
+            build_amxd(bad_patcher)
+        assert excinfo.value.__cause__ is not None
+        assert "could not be serialized" in str(excinfo.value)

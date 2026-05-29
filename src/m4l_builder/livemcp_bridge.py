@@ -126,13 +126,13 @@ def _require_bridge_id_space(device: Device, prefix: str) -> dict[str, str]:
 
 
 def _mix_color(base: list[float], other: list[float], amount: float) -> list[float]:
+    if len(base) != 4 or len(other) != 4:
+        raise ValueError(
+            "LiveMCP bridge colors must be RGBA (4 floats); "
+            f"got base={base!r}, other={other!r}"
+        )
     amount = max(0.0, min(1.0, amount))
-    return [
-        base[0] + (other[0] - base[0]) * amount,
-        base[1] + (other[1] - base[1]) * amount,
-        base[2] + (other[2] - base[2]) * amount,
-        base[3] + (other[3] - base[3]) * amount,
-    ]
+    return [base[i] + (other[i] - base[i]) * amount for i in range(4)]
 
 
 def _bridge_palette(device: Device) -> dict[str, list[float]]:
