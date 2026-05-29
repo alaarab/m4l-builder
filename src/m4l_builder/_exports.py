@@ -320,6 +320,7 @@ LIVE_EXPORTS = _dedupe(
 ROOT_RECIPE_EXPORTS = [
     "gain_controlled_stage",
     "dry_wet_stage",
+    "stereo_width_stage",
     "tempo_synced_delay",
     "midi_note_gate",
     "convolver_controlled_stage",

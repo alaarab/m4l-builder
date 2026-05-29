@@ -484,6 +484,121 @@ def dry_wet_stage(device, id_prefix, dial_rect, x=30, y=30):
     )
 
 
+def stereo_width_stage(device, id_prefix, dial_rect, x=30, y=30):
+    """Add a mid/side stereo width control.
+
+    A `width` dial scales the side (L-R) component: 0.0 collapses the image to
+    mono, 1.0 leaves it unchanged, and up to 2.0 widens it. The signal is
+    decomposed into mid = (L+R)/2 and side = (L-R)/2, the side is scaled by the
+    smoothed width, then recombined as L = mid + side, R = mid - side.
+
+    Wire the left/right inputs into the `audio_in_l`/`audio_in_r` ports and take
+    the processed pair from `audio_out_l`/`audio_out_r`.
+
+    Args:
+        device: Device instance to add objects to.
+        id_prefix: Prefix for all object IDs in this stage.
+        dial_rect: [x, y, w, h] for the dial in presentation mode.
+        x: Patching x offset for DSP objects.
+        y: Patching y offset for DSP objects.
+
+    Returns:
+        dict with keys "dial", "in_l", "in_r", "mid", "side", "left", "right".
+    """
+    p = id_prefix
+
+    dial_id = device.add_dial(
+        f"{p}_dial", f"{p}_width", dial_rect,
+        min_val=0.0, max_val=2.0, initial=1.0,
+        unitstyle=0, annotation_name=f"{p} Width",
+    )
+
+    # Input fan: each channel feeds both the sum and difference objects.
+    in_l_id = device.add_newobj(
+        f"{p}_in_l", "*~ 1.", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x, y, 40, 20],
+    )
+    in_r_id = device.add_newobj(
+        f"{p}_in_r", "*~ 1.", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x + 60, y, 40, 20],
+    )
+
+    # mid = (L + R) * 0.5 ; side = (L - R) * 0.5
+    sum_id = device.add_newobj(
+        f"{p}_sum", "+~", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x, y + 40, 40, 20],
+    )
+    diff_id = device.add_newobj(
+        f"{p}_diff", "-~", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x + 60, y + 40, 40, 20],
+    )
+    mid_id = device.add_newobj(
+        f"{p}_mid", "*~ 0.5", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x, y + 70, 40, 20],
+    )
+    side_id = device.add_newobj(
+        f"{p}_side", "*~ 0.5", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x + 60, y + 70, 40, 20],
+    )
+
+    # Smooth the width dial, then scale the side component by it.
+    smooth_boxes, smooth_lines = param_smooth(f"{p}_smooth")
+    device.add_dsp(smooth_boxes, smooth_lines)
+    side_gain_id = device.add_newobj(
+        f"{p}_side_gain", "*~ 1.", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x + 60, y + 110, 40, 20],
+    )
+
+    # Recombine: L = mid + side_scaled ; R = mid - side_scaled
+    left_id = device.add_newobj(
+        f"{p}_left", "+~", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x, y + 150, 40, 20],
+    )
+    right_id = device.add_newobj(
+        f"{p}_right", "-~", numinlets=2, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x + 60, y + 150, 40, 20],
+    )
+
+    # Wiring: fan inputs into sum/diff
+    device.add_line(in_l_id, 0, sum_id, 0)
+    device.add_line(in_r_id, 0, sum_id, 1)
+    device.add_line(in_l_id, 0, diff_id, 0)
+    device.add_line(in_r_id, 0, diff_id, 1)
+    # halve to get mid/side
+    device.add_line(sum_id, 0, mid_id, 0)
+    device.add_line(diff_id, 0, side_id, 0)
+    # scale side by smoothed width
+    device.add_line(side_id, 0, side_gain_id, 0)
+    device.add_line(dial_id, 0, f"{p}_smooth_pack", 0)
+    device.add_line(f"{p}_smooth_line", 0, side_gain_id, 1)
+    # recombine into L/R
+    device.add_line(mid_id, 0, left_id, 0)
+    device.add_line(side_gain_id, 0, left_id, 1)
+    device.add_line(mid_id, 0, right_id, 0)
+    device.add_line(side_gain_id, 0, right_id, 1)
+
+    return stage_result(
+        {
+            "dial": dial_id,
+            "in_l": in_l_id,
+            "in_r": in_r_id,
+            "mid": mid_id,
+            "side": side_id,
+            "left": left_id,
+            "right": right_id,
+        },
+        name="stereo_width_stage",
+        params={"width": device.parameter(dial_id)},
+        ports={
+            "audio_in_l": in_l_id.inlet(0),
+            "audio_in_r": in_r_id.inlet(0),
+            "audio_out_l": left_id.outlet(0),
+            "audio_out_r": right_id.outlet(0),
+            "control_out": dial_id.outlet(0),
+        },
+    )
+
+
 def tempo_synced_delay(device, id_prefix, time_dial_rect, feedback_dial_rect,
                        x=30, y=30):
     """Add a tempo-synced delay: two dials + tapin~/tapout~ with transport.

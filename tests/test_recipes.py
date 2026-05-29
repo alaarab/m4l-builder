@@ -14,6 +14,7 @@ from m4l_builder.recipes import (
     poly_midi_gate,
     sidechain_compressor_recipe,
     spectral_gate_stage,
+    stereo_width_stage,
     tempo_synced_delay,
     transport_sync_lfo_recipe,
 )
@@ -508,3 +509,37 @@ class TestMidiLearnMacroAssignment:
         midi_learn_macro_assignment(device, "ml")
         # midi_learn_chain and macromap both add internal lines
         assert len(device.lines) > 0
+
+
+class TestStereoWidthStage:
+    def test_returns_expected_keys(self):
+        device = AudioEffect("test", width=200, height=200)
+        result = stereo_width_stage(device, "wid", [10, 10, 40, 40])
+        for key in ("dial", "in_l", "in_r", "mid", "side", "left", "right"):
+            assert key in result
+
+    def test_adds_expected_objects(self):
+        device = AudioEffect("test", width=200, height=200)
+        result = stereo_width_stage(device, "wid", [10, 10, 40, 40])
+        ids = _box_ids(device)
+        assert result["dial"] in ids
+        for box_id in ("wid_sum", "wid_diff", "wid_mid", "wid_side", "wid_side_gain",
+                       "wid_left", "wid_right", "wid_smooth_pack", "wid_smooth_line"):
+            assert box_id in ids
+
+    def test_mid_side_wiring(self):
+        device = AudioEffect("test", width=200, height=200)
+        stereo_width_stage(device, "wid", [10, 10, 40, 40])
+        pairs = _line_pairs(device)
+        # both inputs fan into sum and diff
+        assert ("wid_in_l", "wid_sum") in pairs
+        assert ("wid_in_r", "wid_sum") in pairs
+        assert ("wid_in_l", "wid_diff") in pairs
+        assert ("wid_in_r", "wid_diff") in pairs
+        # side scaled by smoothed width, then recombined into both outputs
+        assert ("wid_side", "wid_side_gain") in pairs
+        assert ("wid_smooth_line", "wid_side_gain") in pairs
+        assert ("wid_mid", "wid_left") in pairs
+        assert ("wid_side_gain", "wid_left") in pairs
+        assert ("wid_mid", "wid_right") in pairs
+        assert ("wid_side_gain", "wid_right") in pairs
