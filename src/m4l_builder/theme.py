@@ -1,6 +1,6 @@
 """Theme system for coordinated M4L device styling."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List
 
 
@@ -91,7 +91,7 @@ class Theme:
         accent: RGBA list [r, g, b, a] with values 0.0-1.0.
         bg/surface: optional overrides; derived from accent if omitted.
         """
-        r, g, b, a = accent[0], accent[1], accent[2], accent[3]
+        r, g, b = accent[0], accent[1], accent[2]
 
         if bg is None:
             # Desaturate and darken significantly

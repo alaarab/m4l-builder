@@ -1,6 +1,5 @@
 """Tests for objects.py — newobj() and patchline() factory functions."""
 
-import pytest
 
 from m4l_builder.objects import newobj, patchline
 

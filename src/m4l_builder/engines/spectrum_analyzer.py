@@ -12,7 +12,6 @@ Inlets:
 
 import math
 
-from ..objects import newobj, patchline
 from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_BORDER_COLOR,
     DEFAULT_GRAPH_PLOT_COLOR,
