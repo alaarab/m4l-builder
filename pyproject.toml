@@ -100,9 +100,7 @@ module = [
     "m4l_builder.ui",
     "m4l_builder.ui_registry",
     "m4l_builder.dsp",
-    "m4l_builder.subpatcher",
     "m4l_builder.modules",
     "m4l_builder.live_api",
-    "m4l_builder.graph",
 ]
 ignore_errors = true
