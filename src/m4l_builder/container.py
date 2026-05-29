@@ -29,7 +29,14 @@ def build_amxd(patcher_dict: dict, device_type: bytes = AUDIO_EFFECT) -> bytes:
     Returns:
         Complete .amxd file contents as bytes.
     """
-    json_bytes = json.dumps(patcher_dict, indent="\t").encode("utf-8") + b"\n\x00"
+    try:
+        json_bytes = json.dumps(patcher_dict, indent="\t").encode("utf-8") + b"\n\x00"
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            "patcher_dict could not be serialized to the .amxd JSON payload; it "
+            "likely contains a non-JSON-serializable value (e.g. bytes, a set, or "
+            f"a custom object). Original error: {exc}"
+        ) from exc
 
     header = b"ampf"
     header += struct.pack("<I", 4)          # format version
