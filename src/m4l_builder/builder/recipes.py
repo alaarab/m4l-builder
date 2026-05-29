@@ -14,6 +14,7 @@ from ..recipes import (
     poly_midi_gate,
     sidechain_compressor_recipe,
     spectral_gate_stage,
+    stereo_width_stage,
     tempo_synced_delay,
     transport_sync_lfo_recipe,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "gain_controlled_stage",
     "parametric_eq_band_backend",
     "dry_wet_stage",
+    "stereo_width_stage",
     "tempo_synced_delay",
     "midi_note_gate",
     "convolver_controlled_stage",
