@@ -1,6 +1,7 @@
 """Theme system for coordinated M4L device styling."""
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -29,24 +30,24 @@ class Theme:
     fontname_bold: str = "Ableton Sans Bold"
 
     # Dial colors (derived from accent by default)
-    dial_color: list[float] = None       # activedialcolor
-    needle_color: list[float] = None     # activeneedlecolor
+    dial_color: Optional[list[float]] = None       # activedialcolor
+    needle_color: Optional[list[float]] = None     # activeneedlecolor
 
     # Tab colors
-    tab_bg: list[float] = None           # bgcolor for unselected
-    tab_bg_on: list[float] = None        # bgoncolor for selected
-    tab_text: list[float] = None
-    tab_text_on: list[float] = None
+    tab_bg: Optional[list[float]] = None           # bgcolor for unselected
+    tab_bg_on: Optional[list[float]] = None        # bgoncolor for selected
+    tab_text: Optional[list[float]] = None
+    tab_text_on: Optional[list[float]] = None
 
     # Meter colors
-    meter_cold: list[float] = None   # Low level color (green-ish)
-    meter_warm: list[float] = None   # Medium level color (yellow-ish)
-    meter_hot: list[float] = None    # High level color (orange-ish)
-    meter_over: list[float] = None   # Overload color (red)
+    meter_cold: Optional[list[float]] = None   # Low level color (green-ish)
+    meter_warm: Optional[list[float]] = None   # Medium level color (yellow-ish)
+    meter_hot: Optional[list[float]] = None    # High level color (orange-ish)
+    meter_over: Optional[list[float]] = None   # Overload color (red)
 
     # Scope colors
-    scope_color: list[float] = None    # Waveform/trace color
-    scope_bgcolor: list[float] = None  # Scope background
+    scope_color: Optional[list[float]] = None    # Waveform/trace color
+    scope_bgcolor: Optional[list[float]] = None  # Scope background
 
     def __post_init__(self):
         if self.dial_color is None:

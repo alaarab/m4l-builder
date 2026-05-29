@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from .amxd import build_device, device_from_amxd, device_to_bytes, device_to_patcher
 from .dsp import stereo_io
-from .graph import GraphContainer
+from .graph import BoxRef, GraphContainer
 from .jsui_contract import validate_jsui_contract
 from .layout import Column, Columns, Grid, Row
 from .parameters import ParameterSpec
@@ -38,10 +39,10 @@ class Device(GraphContainer):
         self.device_type = device_type
         self.theme = theme
         self.profile = profile or DEFAULT_PATCHER_PROFILE
-        self._js_files = {}
-        self._param_banks = {}
-        self._param_bank_names = {}
-        self._support_files = {}
+        self._js_files: dict[Any, Any] = {}
+        self._param_banks: dict[Any, Any] = {}
+        self._param_bank_names: dict[Any, Any] = {}
+        self._support_files: dict[Any, Any] = {}
 
     def register_parameter(self, spec, *, box_id: str = None):
         """Register parameter specs and keep bank metadata synchronized."""
@@ -176,7 +177,7 @@ class Device(GraphContainer):
         numinlets: int,
         numoutlets: int,
         **kwargs,
-    ) -> str:
+    ) -> BoxRef:
         return super().add_newobj(id, text, numinlets=numinlets, numoutlets=numoutlets, **kwargs)
 
     def add_subpatcher(

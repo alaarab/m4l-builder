@@ -349,7 +349,7 @@ def live_parameter_probe(
             patchline(
                 object_id or f"{id_prefix}_obj",
                 0,
-                route_id,
+                route_id or f"{id_prefix}_route",
                 0,
                 **dict(route_line_attrs or {}),
             )

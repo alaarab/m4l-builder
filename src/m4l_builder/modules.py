@@ -98,7 +98,7 @@ def module_from_block(
         return ModuleSpec(
             boxes=boxes,
             lines=lines,
-            name=name or getattr(block_fn, "__name__", "module"),
+            name=str(name or getattr(block_fn, "__name__", "module")),
             mapping=dict(mapping_factory(*args, **kwargs) if mapping_factory else {}),
             ports=dict(port_factory(*args, **kwargs) if port_factory else {}),
             params=dict(param_factory(*args, **kwargs) if param_factory else {}),
