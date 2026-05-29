@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .ui import (
@@ -45,7 +46,7 @@ from .ui import (
 class DeviceWidgetSpec:
     """Metadata describing a `Device.add_*` wrapper."""
 
-    factory: callable
+    factory: Callable[..., dict]
     theme_mapping: dict[str, str] = field(default_factory=dict)
     parameter_arg_index: int | None = None
     keyword_only_args: dict[int, str] = field(default_factory=dict)

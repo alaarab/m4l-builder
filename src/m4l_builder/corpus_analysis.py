@@ -8,6 +8,7 @@ import re
 from collections.abc import Iterable
 from pathlib import Path
 from statistics import mean
+from typing import Any
 
 from .reverse import (
     extract_embedded_patcher_snapshots,
@@ -591,7 +592,7 @@ def _coverage_frequency_entries(
     stable_only: bool | None = None,
     limit: int | None = None,
 ) -> list[dict]:
-    entries = []
+    entries: list[dict[str, Any]] = []
     for name, total in totals.items():
         variant_presence = presence.get(name, 0)
         is_stable = variant_presence == variant_count

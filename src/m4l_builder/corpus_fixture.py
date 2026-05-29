@@ -7,7 +7,7 @@ import json
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .corpus_analysis import analyze_amxd_corpus, classify_corpus_source_metadata
 from .reverse import (
@@ -408,7 +408,7 @@ def run_corpus_fixture(
     for index, entry in enumerate(selected, start=1):
         item_dir = _fixture_item_dir(output_root, index, entry)
         item_dir.mkdir(parents=True, exist_ok=True)
-        result_item = {
+        result_item: dict[str, Any] = {
             "name": entry.get("name"),
             "path": entry.get("path"),
             "relative_path": entry.get("relative_path"),

@@ -85,21 +85,13 @@ ignore_missing_imports = true
 # Lenient baseline so CI is green today; tighten module-by-module later.
 implicit_optional = true
 
-# Modules with a pre-existing type-checking backlog. They are excluded from the
-# gate for now and cleaned up incrementally -- shrink this list as each module
-# is annotated. New modules are checked by default.
+# Remaining type-checking backlog. Everything else in the package is gated.
+#   _reverse_legacy: the 8k-line legacy reverse-engineering module.
+#   livemcp_bridge:  relies on Device.add_* methods attached dynamically via
+#                    setattr (see device.py), which mypy cannot see statically.
 [[tool.mypy.overrides]]
 module = [
     "m4l_builder._reverse_legacy",
-    "m4l_builder.corpus_fixture",
-    "m4l_builder.corpus_analysis",
-    "m4l_builder.theme",
     "m4l_builder.livemcp_bridge",
-    "m4l_builder.device",
-    "m4l_builder.ui",
-    "m4l_builder.ui_registry",
-    "m4l_builder.dsp",
-    "m4l_builder.modules",
-    "m4l_builder.live_api",
 ]
 ignore_errors = true

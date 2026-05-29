@@ -1350,8 +1350,10 @@ def velocity_curve(id_prefix: str, curve: str = "linear") -> tuple:
                    outlettype=[""]),
         )
     else:
+        expr_text = curves[curve]
+        assert expr_text is not None  # non-linear curves always define an expr
         boxes.append(
-            newobj(f"{id_prefix}_expr", curves[curve], numinlets=1, numoutlets=1,
+            newobj(f"{id_prefix}_expr", expr_text, numinlets=1, numoutlets=1,
                    outlettype=[""]),
         )
         boxes.append(
@@ -1467,7 +1469,7 @@ def chord(id_prefix: str, intervals: list = None) -> tuple:
 
     p = id_prefix
     boxes = []
-    lines = []
+    lines: list = []
 
     for i, semitones in enumerate(intervals):
         boxes.append(

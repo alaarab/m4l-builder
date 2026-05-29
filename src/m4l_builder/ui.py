@@ -5,6 +5,8 @@ don't interfere with the DSP wiring) and placed at the specified rect in
 presentation view.
 """
 
+from typing import Any
+
 from .constants import DEFAULT_TEXT_COLOR
 from .parameters import ParameterSpec
 
@@ -33,7 +35,7 @@ def _resolve_parameter_spec(
     else:
         spec = ParameterSpec(name=str(base))
 
-    updates = {
+    updates: dict[str, Any] = {
         "parameter_type": parameter_type,
     }
     if shortname is not None and (not provided_spec or spec.shortname is None):
@@ -80,7 +82,7 @@ def panel(id: str, rect: list, *, bgcolor: list, border: int = 0,
 
     Always sets background:1 so the panel renders behind other objects in presentation view.
     """
-    extra = {
+    extra: dict[str, Any] = {
         "mode": 0,
         "bgcolor": bgcolor,
         "border": border,
@@ -275,7 +277,7 @@ def meter(id: str, rect: list, *, orientation: int = 0,
           warmcolor: list = None, hotcolor: list = None,
           overloadcolor: list = None, **kwargs) -> dict:
     """Create a live.meter~ level meter."""
-    extra = {
+    extra: dict[str, Any] = {
         "outlettype": [""],
         "orientation": orientation,
         "patching_rect": patching_rect or [700, 600, rect[2], rect[3]],
