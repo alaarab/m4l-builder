@@ -58,12 +58,11 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-# Conservative starter set. E501 (line length), I (import sorting) and UP
-# (pyupgrade) are deferred to follow-up passes -- the codebase has many long
-# generated DSP/JS strings, large multi-line import blocks, and printf-style
-# format calls that would create a large, noisy diff if enforced now.
-select = ["E", "F", "W", "B"]
-ignore = ["E501"]
+# E501 (line length) is deferred: the codebase has many long generated DSP/JS
+# string literals. UP031 (printf -> str.format) is deferred too -- the rewrites
+# are behavior-sensitive (%-with-tuple semantics) and not worth the risk here.
+select = ["E", "F", "W", "B", "I", "UP"]
+ignore = ["E501", "UP031"]
 
 [tool.ruff.lint.per-file-ignores]
 # Facade modules deliberately re-export names to form the public API surface;

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 
 def _message_box(box_id: str, text: str, patching_rect: list[float]) -> dict:
     return {
@@ -33,7 +31,7 @@ def add_selected_band_focus_shell(
     loadbang_id: str,
     focus_control_id: str,
     graph_source_id: str,
-    nav_source_id: Optional[str] = None,
+    nav_source_id: str | None = None,
     focus_target_ids: list[str],
     default_band: int = 0,
     patch_x: int = 10,
@@ -43,7 +41,7 @@ def add_selected_band_focus_shell(
     selected_store_id: str = "selected_band_store",
     prepend_id: str = "prepend_focus",
     route_id: str = "route_graph_events",
-    graph_route_messages: Optional[list[str]] = None,
+    graph_route_messages: list[str] | None = None,
 ) -> dict[str, str]:
     """Add a shared focus-band shell used by graph-first EQ UIs."""
     if graph_route_messages is None:

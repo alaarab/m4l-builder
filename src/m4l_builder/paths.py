@@ -79,7 +79,7 @@ def device_output_path(
 
 def _is_wsl():
     try:
-        with open("/proc/version", "r") as f:
+        with open("/proc/version") as f:
             return "microsoft" in f.read().lower()
     except FileNotFoundError:
         return False

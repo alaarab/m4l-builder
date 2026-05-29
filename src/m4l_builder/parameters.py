@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from typing import Any, Iterable, Optional
-
+from typing import Any
 
 _UNSET = object()
 PARAM_HIDDEN = 0
@@ -33,19 +33,19 @@ class ParameterSpec:
     """Semantic description of a Max for Live parameter."""
 
     name: str
-    shortname: Optional[str] = None
+    shortname: str | None = None
     parameter_type: int = 0
-    minimum: Optional[float] = None
-    maximum: Optional[float] = None
+    minimum: float | None = None
+    maximum: float | None = None
     initial: Any = _UNSET
-    initial_enable: Optional[bool] = None
-    unitstyle: Optional[int] = None
-    exponent: Optional[float] = None
-    enum: Optional[list[str]] = None
+    initial_enable: bool | None = None
+    unitstyle: int | None = None
+    exponent: float | None = None
+    enum: list[str] | None = None
     visible: int = 1
-    bank: Optional[int] = None
-    position: Optional[int] = None
-    bank_name: Optional[str] = None
+    bank: int | None = None
+    position: int | None = None
+    bank_name: str | None = None
     integer_like: bool = False
     allow_wide_range: bool = False
 
@@ -77,15 +77,15 @@ class ParameterSpec:
         elif self.parameter_type == 2:
             raise ValueError("enumerated parameters require options")
 
-    def copy(self, **changes: Any) -> "ParameterSpec":
+    def copy(self, **changes: Any) -> ParameterSpec:
         """Return a copied spec with optional overrides."""
         return replace(self, **changes)
 
-    def with_bank(self, bank: int, position: int, bank_name: str = None) -> "ParameterSpec":
+    def with_bank(self, bank: int, position: int, bank_name: str = None) -> ParameterSpec:
         """Return a copied spec with Push bank metadata attached."""
         return self.copy(bank=bank, position=position, bank_name=bank_name)
 
-    def with_visibility(self, visible: int) -> "ParameterSpec":
+    def with_visibility(self, visible: int) -> ParameterSpec:
         """Return a copied spec with updated parameter-bank visibility."""
         return self.copy(visible=visible)
 
@@ -130,14 +130,14 @@ class ParameterSpec:
         minimum: float = None,
         maximum: float = None,
         initial: Any = _UNSET,
-        initial_enable: Optional[bool] = True,
+        initial_enable: bool | None = True,
         unitstyle: int = None,
         exponent: float = None,
         bank: int = None,
         position: int = None,
         bank_name: str = None,
         visible: int = 1,
-    ) -> "ParameterSpec":
+    ) -> ParameterSpec:
         """Build a continuous parameter spec."""
         return cls(
             name=name,
@@ -166,14 +166,14 @@ class ParameterSpec:
         minimum: int = LIVE_NATIVE_INT_MIN,
         maximum: int = LIVE_NATIVE_INT_MAX,
         initial: Any = _UNSET,
-        initial_enable: Optional[bool] = True,
+        initial_enable: bool | None = True,
         unitstyle: int = None,
         bank: int = None,
         position: int = None,
         bank_name: str = None,
         visible: int = PARAM_VISIBLE,
         allow_wide_range: bool = False,
-    ) -> "ParameterSpec":
+    ) -> ParameterSpec:
         """Build an integer-like parameter spec with native-range guardrails."""
         integer_values = [minimum, maximum]
         if initial is not _UNSET:
@@ -211,12 +211,12 @@ class ParameterSpec:
         minimum: float = None,
         maximum: float = None,
         initial: Any = _UNSET,
-        initial_enable: Optional[bool] = None,
+        initial_enable: bool | None = None,
         bank: int = None,
         position: int = None,
         bank_name: str = None,
         visible: int = 1,
-    ) -> "ParameterSpec":
+    ) -> ParameterSpec:
         """Build an enum parameter spec."""
         option_list = list(options)
         return cls(
@@ -237,7 +237,7 @@ class ParameterSpec:
     @classmethod
     def from_valueof_dict(
         cls, valueof: dict, *, bank: int = None, position: int = None, bank_name: str = None
-    ) -> "ParameterSpec":
+    ) -> ParameterSpec:
         """Rebuild a spec from a Max `valueof` dict."""
         initial = valueof.get("parameter_initial", _UNSET)
         if isinstance(initial, list) and len(initial) == 1:
@@ -265,7 +265,7 @@ class ParameterSpec:
         )
 
 
-def extract_parameter_spec(box_dict: dict) -> Optional[ParameterSpec]:
+def extract_parameter_spec(box_dict: dict) -> ParameterSpec | None:
     """Return a ParameterSpec when a box stores Max parameter metadata."""
     box = box_dict.get("box", {})
     valueof = box.get("saved_attribute_attributes", {}).get("valueof")

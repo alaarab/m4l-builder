@@ -3,8 +3,7 @@
 import json
 import os
 
-
-from m4l_builder.device import Device, AudioEffect, Instrument, MidiEffect
+from m4l_builder.device import AudioEffect, Device, Instrument, MidiEffect
 from m4l_builder.theme import MIDNIGHT, WARM
 
 

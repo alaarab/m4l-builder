@@ -7,10 +7,8 @@ import json
 import os
 import re
 import struct
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from .device import Device
-from .patcher import build_patcher
 from ._reverse_legacy import (
     TYPE_CODE_TO_DEVICE_TYPE,
     _bridge_dependencies_from_support_files,
@@ -26,6 +24,8 @@ from ._reverse_legacy import (
     _parameter_spec_from_box,
     _snapshot_from_parts,
 )
+from .device import Device
+from .patcher import build_patcher
 
 
 def _finalize_snapshot(snapshot: dict) -> dict:
@@ -191,7 +191,7 @@ def read_amxd(path: str) -> dict:
 def snapshot_from_device(device: Device) -> dict:
     """Capture a normalized snapshot from an in-memory Device instance."""
     patcher_dict = device.to_patcher()
-    support_files: List[Dict[str, Any]] = []
+    support_files: list[dict[str, Any]] = []
 
     for filename, code in getattr(device, "_js_files", {}).items():
         support_files.append({
@@ -236,7 +236,7 @@ def snapshot_from_amxd(path: str) -> dict:
         sidecar_path = os.path.join(output_dir, name)
         if os.path.isfile(sidecar_path):
             try:
-                with open(sidecar_path, "r", encoding="utf-8") as handle:
+                with open(sidecar_path, encoding="utf-8") as handle:
                     content = handle.read()
             except UnicodeDecodeError:
                 missing_support_files.append({
@@ -275,10 +275,10 @@ def snapshot_from_bridge_payload(
     *,
     current_patcher: dict,
     boxes: list[dict],
-    selected_device: Optional[dict] = None,
-    box_attrs: Optional[dict] = None,
-    patchlines: Optional[list[dict]] = None,
-    support_files: Optional[list[dict]] = None,
+    selected_device: dict | None = None,
+    box_attrs: dict | None = None,
+    patchlines: list[dict] | None = None,
+    support_files: list[dict] | None = None,
 ) -> dict:
     """Capture a normalized snapshot from LiveMCP Max bridge payloads."""
     box_attrs = box_attrs or {}
@@ -348,7 +348,7 @@ def write_snapshot(snapshot: dict, path: str, *, indent: int = 2) -> int:
 
 def load_snapshot(path: str) -> dict:
     """Load a previously written normalized snapshot."""
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return json.load(handle)
 
 

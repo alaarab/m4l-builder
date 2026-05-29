@@ -1,6 +1,6 @@
 """Subpatcher: a nested patcher that can be embedded inside a Device."""
 
-from .graph import GraphContainer, BoxRef
+from .graph import BoxRef, GraphContainer
 from .profiles import DEFAULT_PATCHER_PROFILE
 
 

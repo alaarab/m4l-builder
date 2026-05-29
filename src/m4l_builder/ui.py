@@ -8,7 +8,6 @@ presentation view.
 from .constants import DEFAULT_TEXT_COLOR
 from .parameters import ParameterSpec
 
-
 _PARAM_UNSET = object()
 
 

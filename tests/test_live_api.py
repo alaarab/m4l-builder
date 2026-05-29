@@ -3,10 +3,10 @@
 from m4l_builder.live_api import (
     device_active_state,
     live_object_path,
-    live_parameter_probe,
     live_observer,
-    live_state_observer,
+    live_parameter_probe,
     live_set_control,
+    live_state_observer,
     live_thisdevice,
 )
 

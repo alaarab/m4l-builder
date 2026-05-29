@@ -4,12 +4,12 @@ import pytest
 
 import m4l_builder as m4l
 from m4l_builder import (
+    PARAM_HIDDEN,
+    PARAM_VISIBLE,
     AudioEffect,
     BuildValidationError,
     Device,
     JsuiContractError,
-    PARAM_HIDDEN,
-    PARAM_VISIBLE,
     ParameterSpec,
     PatcherProfile,
     Subpatcher,

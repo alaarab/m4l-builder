@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any, Callable
 
 
 class StageResult(dict):

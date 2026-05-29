@@ -1,13 +1,43 @@
 """Tests for UI/presentation element creators in ui.py."""
 
-from m4l_builder.ui import (panel, dial, tab, toggle, comment, scope, meter,
-                             menu, number_box, slider, button, live_text, fpic,
-                             live_gain, multislider, jsui, v8ui, adsrui, live_drop,
-                             bpatcher, swatch, textedit, live_step, live_grid,
-                             live_line, live_arrows, rslider, kslider,
-                             textbutton, umenu, radiogroup, nodes, matrixctrl,
-                             ubutton, nslider)
 from m4l_builder.constants import DEFAULT_TEXT_COLOR
+from m4l_builder.ui import (
+    adsrui,
+    bpatcher,
+    button,
+    comment,
+    dial,
+    fpic,
+    jsui,
+    kslider,
+    live_arrows,
+    live_drop,
+    live_gain,
+    live_grid,
+    live_line,
+    live_step,
+    live_text,
+    matrixctrl,
+    menu,
+    meter,
+    multislider,
+    nodes,
+    nslider,
+    number_box,
+    panel,
+    radiogroup,
+    rslider,
+    scope,
+    slider,
+    swatch,
+    tab,
+    textbutton,
+    textedit,
+    toggle,
+    ubutton,
+    umenu,
+    v8ui,
+)
 
 
 class TestPanel:

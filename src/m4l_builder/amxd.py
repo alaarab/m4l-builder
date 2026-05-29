@@ -95,7 +95,7 @@ def build_device(device, output_path: str, *, validate=None) -> int:
         try:
             asset.write_to(output_dir)
         except OSError as exc:
-            raise IOError(
+            raise OSError(
                 f"Cannot write sidecar file {os.path.join(output_dir, asset.filename)}: {exc}"
             ) from exc
     return result

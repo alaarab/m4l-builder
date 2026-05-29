@@ -1,8 +1,8 @@
 """Tests for presets.py — preset_manager and add_preset_buttons."""
 
 
-from m4l_builder.presets import preset_manager, add_preset_buttons
 from m4l_builder import AudioEffect
+from m4l_builder.presets import add_preset_buttons, preset_manager
 
 
 def _texts(boxes):

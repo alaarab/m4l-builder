@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from statistics import mean
-from typing import Dict, Iterable
 
 from .reverse import (
     extract_embedded_patcher_snapshots,
@@ -139,15 +139,15 @@ def analyze_amxd_file(path: str) -> dict:
         knowledge = extract_snapshot_knowledge(snapshot)
         analysis = snapshot.get("analysis", {})
         missing_support_files = snapshot.get("missing_support_files", [])
-        object_name_counts: Dict[str, int] = {}
+        object_name_counts: dict[str, int] = {}
         for wrapped in snapshot.get("boxes", []):
             box = wrapped.get("box", {})
             object_name = _object_name_from_box(box)
             if object_name:
                 object_name_counts[object_name] = object_name_counts.get(object_name, 0) + 1
 
-        control_maxclass_counts: Dict[str, int] = {}
-        control_unitstyle_counts: Dict[str, int] = {}
+        control_maxclass_counts: dict[str, int] = {}
+        control_unitstyle_counts: dict[str, int] = {}
         for control in knowledge.get("controls", []):
             maxclass = control.get("maxclass")
             if maxclass:
@@ -156,43 +156,43 @@ def analyze_amxd_file(path: str) -> dict:
             if unitstyle is not None:
                 key = str(unitstyle)
                 control_unitstyle_counts[key] = control_unitstyle_counts.get(key, 0) + 1
-        motif_signature_counts: Dict[str, int] = {}
+        motif_signature_counts: dict[str, int] = {}
         for motif in knowledge.get("motifs", []):
             signature = _motif_signature(motif)
             motif_signature_counts[signature] = motif_signature_counts.get(signature, 0) + 1
-        live_api_helper_counts: Dict[str, int] = {}
+        live_api_helper_counts: dict[str, int] = {}
         for entry in knowledge.get("live_api_helpers", []):
             helper_name = entry.get("helper_name")
             if helper_name:
                 live_api_helper_counts[helper_name] = live_api_helper_counts.get(helper_name, 0) + 1
-        live_api_normalization_level_counts: Dict[str, int] = {}
+        live_api_normalization_level_counts: dict[str, int] = {}
         for entry in knowledge.get("live_api_normalization_candidates", []):
             level = entry.get("normalization_level")
             if level:
                 live_api_normalization_level_counts[level] = live_api_normalization_level_counts.get(level, 0) + 1
-        live_api_helper_opportunity_counts: Dict[str, int] = {}
-        live_api_helper_opportunity_blockers: Dict[str, int] = {}
-        controller_shell_candidate_counts: Dict[str, int] = {}
-        embedded_ui_shell_candidate_counts: Dict[str, int] = {}
-        named_bus_router_candidate_counts: Dict[str, int] = {}
-        init_dispatch_chain_candidate_counts: Dict[str, int] = {}
-        state_bundle_router_candidate_counts: Dict[str, int] = {}
-        presentation_widget_cluster_candidate_counts: Dict[str, int] = {}
-        poly_shell_candidate_counts: Dict[str, int] = {}
-        poly_shell_bank_candidate_counts: Dict[str, int] = {}
-        poly_editor_bank_candidate_counts: Dict[str, int] = {}
-        mapping_behavior_trace_counts: Dict[str, int] = {}
-        mapping_semantic_candidate_counts: Dict[str, int] = {}
-        mapping_workflow_candidate_counts: Dict[str, int] = {}
-        behavior_hint_counts: Dict[str, int] = {}
-        sample_buffer_candidate_counts: Dict[str, int] = {}
-        gen_processing_candidate_counts: Dict[str, int] = {}
-        embedded_sample_buffer_candidate_counts: Dict[str, int] = {}
-        embedded_gen_processing_candidate_counts: Dict[str, int] = {}
-        first_party_api_rig_candidate_counts: Dict[str, int] = {}
-        first_party_abstraction_host_candidate_counts: Dict[str, int] = {}
-        first_party_abstraction_host_family_counts: Dict[str, int] = {}
-        building_block_candidate_counts: Dict[str, int] = {}
+        live_api_helper_opportunity_counts: dict[str, int] = {}
+        live_api_helper_opportunity_blockers: dict[str, int] = {}
+        controller_shell_candidate_counts: dict[str, int] = {}
+        embedded_ui_shell_candidate_counts: dict[str, int] = {}
+        named_bus_router_candidate_counts: dict[str, int] = {}
+        init_dispatch_chain_candidate_counts: dict[str, int] = {}
+        state_bundle_router_candidate_counts: dict[str, int] = {}
+        presentation_widget_cluster_candidate_counts: dict[str, int] = {}
+        poly_shell_candidate_counts: dict[str, int] = {}
+        poly_shell_bank_candidate_counts: dict[str, int] = {}
+        poly_editor_bank_candidate_counts: dict[str, int] = {}
+        mapping_behavior_trace_counts: dict[str, int] = {}
+        mapping_semantic_candidate_counts: dict[str, int] = {}
+        mapping_workflow_candidate_counts: dict[str, int] = {}
+        behavior_hint_counts: dict[str, int] = {}
+        sample_buffer_candidate_counts: dict[str, int] = {}
+        gen_processing_candidate_counts: dict[str, int] = {}
+        embedded_sample_buffer_candidate_counts: dict[str, int] = {}
+        embedded_gen_processing_candidate_counts: dict[str, int] = {}
+        first_party_api_rig_candidate_counts: dict[str, int] = {}
+        first_party_abstraction_host_candidate_counts: dict[str, int] = {}
+        first_party_abstraction_host_family_counts: dict[str, int] = {}
+        building_block_candidate_counts: dict[str, int] = {}
         for entry in knowledge.get("live_api_helper_opportunities", []):
             helper_name = entry.get("helper_name")
             if helper_name:
@@ -274,14 +274,14 @@ def analyze_amxd_file(path: str) -> dict:
                 building_block_candidate_counts[candidate_name] = (
                     building_block_candidate_counts.get(candidate_name, 0) + 1
                 )
-        live_api_path_target_counts: Dict[str, int] = {}
-        live_api_property_counts: Dict[str, int] = {}
-        live_api_get_target_counts: Dict[str, int] = {}
-        live_api_set_target_counts: Dict[str, int] = {}
-        live_api_call_target_counts: Dict[str, int] = {}
-        live_api_archetype_counts: Dict[str, int] = {}
-        named_bus_network_names: Dict[str, int] = {}
-        cross_scope_named_bus_network_names: Dict[str, int] = {}
+        live_api_path_target_counts: dict[str, int] = {}
+        live_api_property_counts: dict[str, int] = {}
+        live_api_get_target_counts: dict[str, int] = {}
+        live_api_set_target_counts: dict[str, int] = {}
+        live_api_call_target_counts: dict[str, int] = {}
+        live_api_archetype_counts: dict[str, int] = {}
+        named_bus_network_names: dict[str, int] = {}
+        cross_scope_named_bus_network_names: dict[str, int] = {}
         for motif in knowledge.get("motifs", []):
             if motif.get("kind") != "live_api_component":
                 continue
@@ -306,16 +306,16 @@ def analyze_amxd_file(path: str) -> dict:
                     cross_scope_named_bus_network_names[name] = (
                         cross_scope_named_bus_network_names.get(name, 0) + 1
                     )
-        embedded_patcher_host_kind_counts: Dict[str, int] = {}
-        embedded_pattern_kind_counts: Dict[str, int] = {}
-        embedded_recipe_kind_counts: Dict[str, int] = {}
-        embedded_motif_kind_counts: Dict[str, int] = {}
-        embedded_live_api_path_target_counts: Dict[str, int] = {}
-        embedded_live_api_property_counts: Dict[str, int] = {}
-        embedded_live_api_get_target_counts: Dict[str, int] = {}
-        embedded_live_api_set_target_counts: Dict[str, int] = {}
-        embedded_live_api_call_target_counts: Dict[str, int] = {}
-        embedded_live_api_archetype_counts: Dict[str, int] = {}
+        embedded_patcher_host_kind_counts: dict[str, int] = {}
+        embedded_pattern_kind_counts: dict[str, int] = {}
+        embedded_recipe_kind_counts: dict[str, int] = {}
+        embedded_motif_kind_counts: dict[str, int] = {}
+        embedded_live_api_path_target_counts: dict[str, int] = {}
+        embedded_live_api_property_counts: dict[str, int] = {}
+        embedded_live_api_get_target_counts: dict[str, int] = {}
+        embedded_live_api_set_target_counts: dict[str, int] = {}
+        embedded_live_api_call_target_counts: dict[str, int] = {}
+        embedded_live_api_archetype_counts: dict[str, int] = {}
         for embedded in knowledge.get("embedded_patchers", []):
             host_kind = embedded.get("host_kind")
             if host_kind:
@@ -1185,8 +1185,8 @@ def build_reference_device_dossier(path: str) -> dict:
     semantic_add_line_count = _count_raw_add_line(semantic_source)
     semantic_helper_calls = _semantic_helper_call_counts(semantic_source)
     semantic_helper_call_count = sum(semantic_helper_calls.values())
-    embedded_sample_buffer_candidates: Dict[str, int] = {}
-    embedded_gen_processing_candidates: Dict[str, int] = {}
+    embedded_sample_buffer_candidates: dict[str, int] = {}
+    embedded_gen_processing_candidates: dict[str, int] = {}
     for entry in extract_embedded_patcher_snapshots(snapshot):
         nested_snapshot = entry.get("snapshot", {})
         for candidate in extract_sample_buffer_candidates(nested_snapshot):
@@ -1682,13 +1682,13 @@ def build_mapping_lane_report(report: dict, *, limit: int = 20) -> dict:
             or item.get("mapping_workflow_candidate_count", 0) > 0
         )
     ]
-    product_class_counts: Dict[str, int] = {}
-    closest_reference_counts: Dict[str, int] = {}
-    source_family_counts: Dict[str, int] = {}
-    source_lane_counts: Dict[str, int] = {}
-    behavior_trace_counts: Dict[str, int] = {}
-    semantic_candidate_counts: Dict[str, int] = {}
-    behavior_hint_counts: Dict[str, int] = {}
+    product_class_counts: dict[str, int] = {}
+    closest_reference_counts: dict[str, int] = {}
+    source_family_counts: dict[str, int] = {}
+    source_lane_counts: dict[str, int] = {}
+    behavior_trace_counts: dict[str, int] = {}
+    semantic_candidate_counts: dict[str, int] = {}
+    behavior_hint_counts: dict[str, int] = {}
 
     for item in items:
         profile = _mapping_product_profile(item)
@@ -1895,66 +1895,66 @@ def analyze_amxd_corpus(path: str, *, recursive: bool = True) -> dict:
     items = [analyze_amxd_file(str(file_path)) for file_path in files]
     ok_items = [item for item in items if item.get("status") == "ok"]
 
-    device_type_counts: Dict[str, int] = {}
-    error_counts: Dict[str, int] = {}
-    error_type_counts: Dict[str, int] = {}
-    pattern_counts: Dict[str, int] = {}
-    recipe_counts: Dict[str, int] = {}
-    motif_counts: Dict[str, int] = {}
-    motif_signature_counts: Dict[str, int] = {}
-    maxclass_counts: Dict[str, int] = {}
-    object_name_counts: Dict[str, int] = {}
-    control_maxclass_counts: Dict[str, int] = {}
-    control_unitstyle_counts: Dict[str, int] = {}
-    display_role_counts: Dict[str, int] = {}
-    embedded_patcher_host_kind_counts: Dict[str, int] = {}
-    embedded_pattern_kind_counts: Dict[str, int] = {}
-    embedded_recipe_kind_counts: Dict[str, int] = {}
-    embedded_motif_kind_counts: Dict[str, int] = {}
-    live_api_path_target_counts: Dict[str, int] = {}
-    live_api_property_counts: Dict[str, int] = {}
-    live_api_get_target_counts: Dict[str, int] = {}
-    live_api_set_target_counts: Dict[str, int] = {}
-    live_api_call_target_counts: Dict[str, int] = {}
-    live_api_archetype_counts: Dict[str, int] = {}
-    named_bus_network_name_counts: Dict[str, int] = {}
-    cross_scope_named_bus_network_name_counts: Dict[str, int] = {}
-    live_api_helper_counts: Dict[str, int] = {}
-    live_api_normalization_level_counts: Dict[str, int] = {}
-    live_api_helper_opportunity_counts: Dict[str, int] = {}
-    live_api_helper_opportunity_blockers: Dict[str, int] = {}
-    controller_shell_candidate_counts: Dict[str, int] = {}
-    behavior_hint_counts: Dict[str, int] = {}
-    embedded_ui_shell_candidate_counts: Dict[str, int] = {}
-    named_bus_router_candidate_counts: Dict[str, int] = {}
-    init_dispatch_chain_candidate_counts: Dict[str, int] = {}
-    state_bundle_router_candidate_counts: Dict[str, int] = {}
-    presentation_widget_cluster_candidate_counts: Dict[str, int] = {}
-    poly_shell_candidate_counts: Dict[str, int] = {}
-    poly_shell_bank_candidate_counts: Dict[str, int] = {}
-    poly_editor_bank_candidate_counts: Dict[str, int] = {}
-    mapping_behavior_trace_counts: Dict[str, int] = {}
-    mapping_semantic_candidate_counts: Dict[str, int] = {}
-    mapping_workflow_candidate_counts: Dict[str, int] = {}
-    sample_buffer_candidate_counts: Dict[str, int] = {}
-    gen_processing_candidate_counts: Dict[str, int] = {}
-    embedded_sample_buffer_candidate_counts: Dict[str, int] = {}
-    embedded_gen_processing_candidate_counts: Dict[str, int] = {}
-    first_party_api_rig_candidate_counts: Dict[str, int] = {}
-    first_party_abstraction_host_candidate_counts: Dict[str, int] = {}
-    first_party_abstraction_host_family_counts: Dict[str, int] = {}
-    building_block_candidate_counts: Dict[str, int] = {}
-    embedded_live_api_path_target_counts: Dict[str, int] = {}
-    embedded_live_api_property_counts: Dict[str, int] = {}
-    embedded_live_api_get_target_counts: Dict[str, int] = {}
-    embedded_live_api_set_target_counts: Dict[str, int] = {}
-    embedded_live_api_call_target_counts: Dict[str, int] = {}
-    embedded_live_api_archetype_counts: Dict[str, int] = {}
-    missing_support_counts: Dict[str, int] = {}
-    source_lane_counts: Dict[str, int] = {}
-    source_family_counts: Dict[str, int] = {}
-    pack_name_counts: Dict[str, int] = {}
-    pack_section_counts: Dict[str, int] = {}
+    device_type_counts: dict[str, int] = {}
+    error_counts: dict[str, int] = {}
+    error_type_counts: dict[str, int] = {}
+    pattern_counts: dict[str, int] = {}
+    recipe_counts: dict[str, int] = {}
+    motif_counts: dict[str, int] = {}
+    motif_signature_counts: dict[str, int] = {}
+    maxclass_counts: dict[str, int] = {}
+    object_name_counts: dict[str, int] = {}
+    control_maxclass_counts: dict[str, int] = {}
+    control_unitstyle_counts: dict[str, int] = {}
+    display_role_counts: dict[str, int] = {}
+    embedded_patcher_host_kind_counts: dict[str, int] = {}
+    embedded_pattern_kind_counts: dict[str, int] = {}
+    embedded_recipe_kind_counts: dict[str, int] = {}
+    embedded_motif_kind_counts: dict[str, int] = {}
+    live_api_path_target_counts: dict[str, int] = {}
+    live_api_property_counts: dict[str, int] = {}
+    live_api_get_target_counts: dict[str, int] = {}
+    live_api_set_target_counts: dict[str, int] = {}
+    live_api_call_target_counts: dict[str, int] = {}
+    live_api_archetype_counts: dict[str, int] = {}
+    named_bus_network_name_counts: dict[str, int] = {}
+    cross_scope_named_bus_network_name_counts: dict[str, int] = {}
+    live_api_helper_counts: dict[str, int] = {}
+    live_api_normalization_level_counts: dict[str, int] = {}
+    live_api_helper_opportunity_counts: dict[str, int] = {}
+    live_api_helper_opportunity_blockers: dict[str, int] = {}
+    controller_shell_candidate_counts: dict[str, int] = {}
+    behavior_hint_counts: dict[str, int] = {}
+    embedded_ui_shell_candidate_counts: dict[str, int] = {}
+    named_bus_router_candidate_counts: dict[str, int] = {}
+    init_dispatch_chain_candidate_counts: dict[str, int] = {}
+    state_bundle_router_candidate_counts: dict[str, int] = {}
+    presentation_widget_cluster_candidate_counts: dict[str, int] = {}
+    poly_shell_candidate_counts: dict[str, int] = {}
+    poly_shell_bank_candidate_counts: dict[str, int] = {}
+    poly_editor_bank_candidate_counts: dict[str, int] = {}
+    mapping_behavior_trace_counts: dict[str, int] = {}
+    mapping_semantic_candidate_counts: dict[str, int] = {}
+    mapping_workflow_candidate_counts: dict[str, int] = {}
+    sample_buffer_candidate_counts: dict[str, int] = {}
+    gen_processing_candidate_counts: dict[str, int] = {}
+    embedded_sample_buffer_candidate_counts: dict[str, int] = {}
+    embedded_gen_processing_candidate_counts: dict[str, int] = {}
+    first_party_api_rig_candidate_counts: dict[str, int] = {}
+    first_party_abstraction_host_candidate_counts: dict[str, int] = {}
+    first_party_abstraction_host_family_counts: dict[str, int] = {}
+    building_block_candidate_counts: dict[str, int] = {}
+    embedded_live_api_path_target_counts: dict[str, int] = {}
+    embedded_live_api_property_counts: dict[str, int] = {}
+    embedded_live_api_get_target_counts: dict[str, int] = {}
+    embedded_live_api_set_target_counts: dict[str, int] = {}
+    embedded_live_api_call_target_counts: dict[str, int] = {}
+    embedded_live_api_archetype_counts: dict[str, int] = {}
+    missing_support_counts: dict[str, int] = {}
+    source_lane_counts: dict[str, int] = {}
+    source_family_counts: dict[str, int] = {}
+    pack_name_counts: dict[str, int] = {}
+    pack_section_counts: dict[str, int] = {}
 
     for item in items:
         if item.get("status") != "ok":

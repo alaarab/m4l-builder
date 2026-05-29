@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
+from typing import Callable
 
 from .corpus_analysis import analyze_amxd_corpus, classify_corpus_source_metadata
 from .reverse import (
@@ -18,7 +19,6 @@ from .reverse import (
     snapshot_from_amxd,
     snapshot_to_json,
 )
-
 
 _GENERATOR_MAP: dict[str, Callable[[str], str]] = {
     "exact": generate_python_from_amxd,

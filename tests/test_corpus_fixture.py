@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import m4l_builder.corpus_fixture as corpus_fixture_module
-
 from m4l_builder import (
     AudioEffect,
     build_corpus_manifest,

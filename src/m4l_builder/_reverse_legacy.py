@@ -7,17 +7,17 @@ import os
 import pprint
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .constants import AMXD_TYPE, AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
 from .device import Device
 from .live_api import (
     device_active_state,
-    live_parameter_probe,
     live_object_path,
     live_observer,
-    live_state_observer,
+    live_parameter_probe,
     live_set_control,
+    live_state_observer,
     live_thisdevice,
 )
 from .recipes import (
@@ -27,7 +27,6 @@ from .recipes import (
     tempo_synced_delay,
     transport_sync_lfo_recipe,
 )
-
 
 TYPE_CODE_TO_DEVICE_TYPE = {
     AUDIO_EFFECT: "audio_effect",
@@ -277,9 +276,9 @@ def _snapshot_from_parts(
     patcher_dict: dict,
     device_type: str,
     source: dict,
-    device_name: Optional[str] = None,
-    support_files: Optional[List[Dict[str, Any]]] = None,
-    missing_support_files: Optional[List[Dict[str, Any]]] = None,
+    device_name: str | None = None,
+    support_files: list[dict[str, Any]] | None = None,
+    missing_support_files: list[dict[str, Any]] | None = None,
 ) -> dict:
     width, height = _patcher_dimensions(patcher_dict)
     patcher = patcher_dict.get("patcher", {})
@@ -309,7 +308,7 @@ def _snapshot_from_parts(
     }
 
 
-def _device_type_from_bridge(selected_device: Optional[dict]) -> str:
+def _device_type_from_bridge(selected_device: dict | None) -> str:
     class_name = str((selected_device or {}).get("class_name") or "")
     lowered = class_name.lower()
     if "audioeffect" in lowered:
@@ -340,7 +339,7 @@ def _coerce_flag(value: Any) -> int:
     return 1 if bool(value) else 0
 
 
-def _normalize_bridge_box(summary: dict, attrs_payload: Optional[dict] = None) -> dict:
+def _normalize_bridge_box(summary: dict, attrs_payload: dict | None = None) -> dict:
     attrs_payload = attrs_payload or {}
     object_attrs = copy.deepcopy(attrs_payload.get("object_attrs", {}))
     box_attrs = copy.deepcopy(attrs_payload.get("box_attrs", {}))
@@ -395,7 +394,7 @@ def _bridge_dependencies_from_support_files(support_files: list[dict]) -> list[d
     return deps
 
 
-def _parameter_spec_from_box(box: dict) -> Optional[dict]:
+def _parameter_spec_from_box(box: dict) -> dict | None:
     valueof = box.get("saved_attribute_attributes", {}).get("valueof")
     if not isinstance(valueof, dict):
         return None
@@ -458,7 +457,7 @@ def _snapshot_graph(snapshot: dict) -> tuple[dict, dict, set[tuple]]:
     return boxes_by_id, box_indices, line_keys
 
 
-def _box_operator(box: dict) -> Optional[str]:
+def _box_operator(box: dict) -> str | None:
     if box.get("maxclass") != "newobj":
         return None
     text = str(box.get("text", "")).strip()
@@ -467,7 +466,7 @@ def _box_operator(box: dict) -> Optional[str]:
     return text.split()[0]
 
 
-def _box_text_args(box: dict) -> Optional[str]:
+def _box_text_args(box: dict) -> str | None:
     text = str(box.get("text", "")).strip()
     if not text:
         return None
@@ -478,7 +477,7 @@ def _box_text_args(box: dict) -> Optional[str]:
     return args or None
 
 
-def _buffer_target_name(box: dict) -> Optional[str]:
+def _buffer_target_name(box: dict) -> str | None:
     args = _box_text_args(box)
     if not args:
         return None
@@ -488,7 +487,7 @@ def _buffer_target_name(box: dict) -> Optional[str]:
     return first
 
 
-def _embedded_patcher_kind_and_target(box: dict) -> tuple[Optional[str], Optional[str]]:
+def _embedded_patcher_kind_and_target(box: dict) -> tuple[str | None, str | None]:
     if box.get("maxclass") == "bpatcher":
         return "bpatcher", box.get("name")
 
@@ -508,7 +507,7 @@ def _embedded_patcher_kind_and_target(box: dict) -> tuple[Optional[str], Optiona
     return host_kind, target
 
 
-def _snapshot_source_path(snapshot: dict) -> Optional[str]:
+def _snapshot_source_path(snapshot: dict) -> str | None:
     source = snapshot.get("source", {})
     path = source.get("path")
     if not path:
@@ -516,7 +515,7 @@ def _snapshot_source_path(snapshot: dict) -> Optional[str]:
     return os.path.abspath(str(path))
 
 
-def _factory_pack_context(snapshot: dict) -> dict[str, Optional[str]]:
+def _factory_pack_context(snapshot: dict) -> dict[str, str | None]:
     source_path = _snapshot_source_path(snapshot)
     context = {
         "source_path": source_path,
@@ -569,7 +568,7 @@ def _rect_matches(box: dict, expected: list[float]) -> bool:
     return all(float(actual) == float(target) for actual, target in zip(rect, expected))
 
 
-def _presentation_rect(box: dict) -> Optional[list[float]]:
+def _presentation_rect(box: dict) -> list[float] | None:
     rect = box.get("presentation_rect")
     if rect is None or len(rect) != 4:
         return None
@@ -591,7 +590,7 @@ def _rects_touch(a: list[float], b: list[float], *, padding: float = 18.0) -> bo
     )
 
 
-def _text_float(text: str, prefix: str) -> Optional[float]:
+def _text_float(text: str, prefix: str) -> float | None:
     if not text.startswith(prefix):
         return None
     try:
@@ -600,7 +599,7 @@ def _text_float(text: str, prefix: str) -> Optional[float]:
         return None
 
 
-def _text_int(text: str, prefix: str) -> Optional[int]:
+def _text_int(text: str, prefix: str) -> int | None:
     value = _text_float(text, prefix)
     if value is None or not float(value).is_integer():
         return None
@@ -770,7 +769,7 @@ def _adjacent_message_texts(component: list[str], full_adjacency: dict[str, set[
     return sorted(set(texts))
 
 
-def _transport_lfo_division_from_text(text: str) -> Optional[str]:
+def _transport_lfo_division_from_text(text: str) -> str | None:
     match = re.fullmatch(r"expr \$f1 / \(60\.0 \* ([0-9.]+)\)", text)
     if match is None:
         return None
@@ -801,8 +800,8 @@ def _pattern_match(
     prefix: str,
     box_ids: list[str],
     line_keys: list[tuple],
-    params: Optional[dict] = None,
-    helper: Optional[dict] = None,
+    params: dict | None = None,
+    helper: dict | None = None,
 ) -> dict:
     return {
         "kind": kind,
@@ -822,8 +821,8 @@ def _recipe_match(
     prefix: str,
     box_ids: list[str],
     line_keys: list[tuple],
-    params: Optional[dict] = None,
-    recipe: Optional[dict] = None,
+    params: dict | None = None,
+    recipe: dict | None = None,
 ) -> dict:
     return {
         "kind": kind,
@@ -841,7 +840,7 @@ def _motif_match(
     *,
     kind: str,
     box_ids: list[str],
-    params: Optional[dict] = None,
+    params: dict | None = None,
     first_box_index: int = 0,
 ) -> dict:
     return {
@@ -859,7 +858,7 @@ def _semantic_helper_match(
     box_ids: list[str],
     line_keys: list[tuple],
     helper: dict[str, Any],
-    params: Optional[dict] = None,
+    params: dict | None = None,
     first_box_index: int = 0,
 ) -> dict:
     return {
@@ -960,8 +959,8 @@ def _adjacent_property_message_box(
     component_box_ids: list[str],
     boxes_by_id: dict[str, dict],
     *,
-    prop: Optional[str] = None,
-) -> Optional[dict]:
+    prop: str | None = None,
+) -> dict | None:
     property_boxes = []
     for box in _adjacent_message_boxes_for_component(snapshot, component_box_ids, boxes_by_id):
         text = str(box.get("text", "")).strip()
@@ -984,7 +983,7 @@ def _adjacent_probe_message_box(
     snapshot: dict,
     component_box_ids: list[str],
     boxes_by_id: dict[str, dict],
-) -> Optional[dict]:
+) -> dict | None:
     probe_boxes = []
     for box in _adjacent_message_boxes_for_component(snapshot, component_box_ids, boxes_by_id):
         text = str(box.get("text", "")).strip()
@@ -1006,7 +1005,7 @@ def _line_source_outlet_to_destination(
     snapshot: dict,
     source_id: str,
     destination_id: str,
-) -> Optional[int]:
+) -> int | None:
     matches = []
     for wrapped in snapshot.get("lines", []):
         patchline = wrapped.get("patchline", {})
@@ -1045,7 +1044,7 @@ def _line_index_in_snapshot(
     source_outlet: int,
     destination_id: str,
     destination_inlet: int,
-) -> Optional[int]:
+) -> int | None:
     for index, wrapped in enumerate(snapshot.get("lines", [])):
         patchline = wrapped.get("patchline", {})
         source = patchline.get("source", [None, 0])
@@ -1540,8 +1539,8 @@ def _canonical_live_api_helper_match(
     helper_fn,
     helper_positional: list[Any],
     helper_kwargs: dict[str, Any],
-    params: Optional[dict] = None,
-) -> Optional[dict]:
+    params: dict | None = None,
+) -> dict | None:
     candidate_boxes, candidate_lines = helper_fn(*helper_positional, **helper_kwargs)
     candidate_box_ids = [wrapped["box"]["id"] for wrapped in candidate_boxes]
     if sorted(candidate_box_ids) != sorted(box_ids):
@@ -1574,7 +1573,7 @@ def _box_parameter_matches(
     max_val: float,
     initial: float,
     unitstyle: int,
-    annotation_name: Optional[str] = None,
+    annotation_name: str | None = None,
 ) -> bool:
     if box.get("maxclass") != maxclass or box.get("varname") != varname:
         return False
@@ -1633,7 +1632,7 @@ def _recipeizable_subset_matches(
     return recipe_lines.issubset(line_keys)
 
 
-def _match_param_smooth(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_param_smooth(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     pack_id = f"{prefix}_pack"
     line_id = f"{prefix}_line"
     pack = boxes_by_id.get(pack_id)
@@ -1671,7 +1670,7 @@ def _match_param_smooth(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -
     )
 
 
-def _match_delay_line(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_delay_line(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     tapin_id = f"{prefix}_tapin"
     tapout_id = f"{prefix}_tapout"
     tapin = boxes_by_id.get(tapin_id)
@@ -1709,7 +1708,7 @@ def _match_delay_line(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> 
     )
 
 
-def _match_gain_stage(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_gain_stage(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     left_id = f"{prefix}_l"
     right_id = f"{prefix}_r"
     left = boxes_by_id.get(left_id)
@@ -1738,7 +1737,7 @@ def _match_gain_stage(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> 
     )
 
 
-def _match_dc_block(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_dc_block(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     left_id = f"{prefix}_l"
     right_id = f"{prefix}_r"
     left = boxes_by_id.get(left_id)
@@ -1767,7 +1766,7 @@ def _match_dc_block(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Op
     )
 
 
-def _match_saturation(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_saturation(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     left_id = f"{prefix}_l"
     right_id = f"{prefix}_r"
     left = boxes_by_id.get(left_id)
@@ -1806,7 +1805,7 @@ def _match_saturation(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> 
     )
 
 
-def _match_selector(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_selector(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     box = boxes_by_id.get(prefix)
     if not box:
         return None
@@ -1840,7 +1839,7 @@ def _match_selector(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Op
     )
 
 
-def _match_onepole_filter(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_onepole_filter(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     left_id = f"{prefix}_l"
     right_id = f"{prefix}_r"
     left = boxes_by_id.get(left_id)
@@ -1874,7 +1873,7 @@ def _match_onepole_filter(prefix: str, boxes_by_id: dict, line_keys: set[tuple])
     )
 
 
-def _match_svf_filter(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_svf_filter(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     left_id = f"{prefix}_l"
     right_id = f"{prefix}_r"
     out_left_id = f"{prefix}_out_l"
@@ -1923,7 +1922,7 @@ def _match_svf_filter(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> 
     return None
 
 
-def _match_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     osc_id = f"{prefix}_osc"
     depth_id = f"{prefix}_depth"
     osc = boxes_by_id.get(osc_id)
@@ -2001,7 +2000,7 @@ def _match_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optiona
     )
 
 
-def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     transport_id = f"{prefix}_transport"
     bpm_id = f"{prefix}_bpm"
     rate_id = f"{prefix}_rate"
@@ -2068,7 +2067,7 @@ def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) 
     )
 
 
-def _match_ms_encode_decode(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_ms_encode_decode(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     specs = {
         f"{prefix}_enc_add": "+~",
         f"{prefix}_enc_sub": "-~",
@@ -2115,7 +2114,7 @@ def _match_ms_encode_decode(prefix: str, boxes_by_id: dict, line_keys: set[tuple
     )
 
 
-def _match_feedback_delay(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> Optional[dict]:
+def _match_feedback_delay(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
     sum_id = f"{prefix}_sum"
     tapin_id = f"{prefix}_tapin"
     tapout_id = f"{prefix}_tapout"
@@ -2240,7 +2239,7 @@ def _match_gain_controlled_recipe(
     boxes_by_id: dict[str, dict],
     line_keys: set[tuple],
     pattern_index: dict[tuple[str, str], dict],
-) -> Optional[dict]:
+) -> dict | None:
     dial_id = f"{prefix}_dial"
     dbtoa_id = f"{prefix}_dbtoa"
     gain_id = f"{prefix}_gain"
@@ -2321,7 +2320,7 @@ def _match_dry_wet_recipe(
     boxes_by_id: dict[str, dict],
     line_keys: set[tuple],
     pattern_index: dict[tuple[str, str], dict],
-) -> Optional[dict]:
+) -> dict | None:
     dial_id = f"{prefix}_dial"
     scale_id = f"{prefix}_scale"
     trig_id = f"{prefix}_trig"
@@ -2418,7 +2417,7 @@ def _match_tempo_synced_delay_recipe(
     boxes_by_id: dict[str, dict],
     line_keys: set[tuple],
     pattern_index: dict[tuple[str, str], dict],
-) -> Optional[dict]:
+) -> dict | None:
     time_dial_id = f"{prefix}_time_dial"
     fb_dial_id = f"{prefix}_fb_dial"
     transport_id = f"{prefix}_transport"
@@ -2546,7 +2545,7 @@ def _match_midi_note_gate_recipe(
     boxes_by_id: dict[str, dict],
     line_keys: set[tuple],
     pattern_index: dict[tuple[str, str], dict],
-) -> Optional[dict]:
+) -> dict | None:
     del pattern_index
 
     notein_id = f"{prefix}_notein"
@@ -2628,7 +2627,7 @@ def _match_transport_sync_lfo_recipe(
     boxes_by_id: dict[str, dict],
     line_keys: set[tuple],
     pattern_index: dict[tuple[str, str], dict],
-) -> Optional[dict]:
+) -> dict | None:
     depth_dial_id = f"{prefix}_depth_dial"
     depth_mul_id = f"{prefix}_depth_mul"
     menu_id = f"{prefix}_div_menu"
@@ -3121,7 +3120,7 @@ def _detect_live_api_component_motifs(snapshot: dict, boxes_by_id: dict, box_ind
     return motifs
 
 
-def _sample_buffer_component_label(box: dict) -> Optional[str]:
+def _sample_buffer_component_label(box: dict) -> str | None:
     operator = _box_operator(box)
     if operator in SAMPLE_BUFFER_CORE_OPERATORS or operator in SAMPLE_BUFFER_HELPER_OPERATORS:
         return operator
@@ -3130,7 +3129,7 @@ def _sample_buffer_component_label(box: dict) -> Optional[str]:
     return None
 
 
-def _gen_processing_component_label(box: dict) -> Optional[str]:
+def _gen_processing_component_label(box: dict) -> str | None:
     operator = _box_operator(box)
     if operator in GEN_PROCESSING_CORE_OPERATORS or operator in GEN_PROCESSING_HELPER_OPERATORS:
         return operator
@@ -3346,7 +3345,7 @@ def detect_snapshot_motifs(snapshot: dict) -> list[dict]:
     return motifs
 
 
-def _detect_live_api_helper_matches(snapshot: dict, motifs: Optional[list[dict]] = None) -> list[dict]:
+def _detect_live_api_helper_matches(snapshot: dict, motifs: list[dict] | None = None) -> list[dict]:
     boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
     motifs = motifs if motifs is not None else detect_snapshot_motifs(snapshot)
     matches = []
@@ -3936,8 +3935,8 @@ def _helper_opportunity(
     helper_name: str,
     prefix: str,
     box_ids: list[str],
-    params: Optional[dict] = None,
-    blocking_factors: Optional[list[str]] = None,
+    params: dict | None = None,
+    blocking_factors: list[str] | None = None,
     first_box_index: int = 0,
 ) -> dict:
     return {
@@ -3984,8 +3983,8 @@ def _live_api_semantic_helper_call(
 def _detect_live_api_helper_opportunities(
     snapshot: dict,
     *,
-    motifs: Optional[list[dict]] = None,
-    exact_matches: Optional[list[dict]] = None,
+    motifs: list[dict] | None = None,
+    exact_matches: list[dict] | None = None,
 ) -> list[dict]:
     boxes_by_id, box_indices, _line_keys = _snapshot_graph(snapshot)
     motifs = motifs if motifs is not None else detect_snapshot_motifs(snapshot)
@@ -5404,8 +5403,8 @@ def _collect_embedded_patcher_summaries_from_box(box: dict, depth: int = 1) -> l
 
     nested_boxes = nested.get("boxes", [])
     nested_lines = nested.get("lines", [])
-    maxclass_counts: Dict[str, int] = {}
-    object_name_counts: Dict[str, int] = {}
+    maxclass_counts: dict[str, int] = {}
+    object_name_counts: dict[str, int] = {}
     direct_child_ids = []
 
     for wrapped in nested_boxes:
@@ -5556,7 +5555,7 @@ def analyze_snapshot(snapshot: dict) -> dict:
     lines = snapshot.get("lines", [])
     support_names = {entry.get("name") for entry in snapshot.get("support_files", [])}
 
-    maxclass_counts: Dict[str, int] = {}
+    maxclass_counts: dict[str, int] = {}
     ui_box_ids = []
     parameter_box_ids = []
     presentation_box_ids = []
@@ -7076,10 +7075,10 @@ def snapshot_from_bridge_payload(
     *,
     current_patcher: dict,
     boxes: list[dict],
-    selected_device: Optional[dict] = None,
-    box_attrs: Optional[dict] = None,
-    patchlines: Optional[list[dict]] = None,
-    support_files: Optional[list[dict]] = None,
+    selected_device: dict | None = None,
+    box_attrs: dict | None = None,
+    patchlines: list[dict] | None = None,
+    support_files: list[dict] | None = None,
 ) -> dict:
     """Capture a normalized snapshot from LiveMCP Max bridge payloads.
 
@@ -7190,7 +7189,7 @@ def _semantic_jsui_filenames(snapshot: dict, support_files_by_name: dict[str, di
     return filenames
 
 
-def _support_file_statements(snapshot: dict, *, skipped_names: Optional[set[str]] = None) -> list[str]:
+def _support_file_statements(snapshot: dict, *, skipped_names: set[str] | None = None) -> list[str]:
     statements = []
     skipped_names = skipped_names or set()
     for support in snapshot.get("support_files", []):
@@ -7267,7 +7266,7 @@ def _parameter_box_common_kwargs(box: dict, *, include_shortname: bool = True) -
     return kwargs
 
 
-def _box_builder_statement(box: dict, support_files_by_name: Optional[dict[str, dict]] = None) -> str:
+def _box_builder_statement(box: dict, support_files_by_name: dict[str, dict] | None = None) -> str:
     maxclass = box.get("maxclass")
     box_id = box.get("id")
     rect = copy.deepcopy(box.get("presentation_rect") or box.get("patching_rect") or [0, 0, 60, 20])

@@ -2,20 +2,20 @@
 
 from m4l_builder import AudioEffect
 from m4l_builder.recipes import (
-    gain_controlled_stage,
-    dry_wet_stage,
-    tempo_synced_delay,
-    midi_note_gate,
-    convolver_controlled_stage,
-    sidechain_compressor_recipe,
-    lfo_matrix_distribute,
-    spectral_gate_stage,
     arpeggio_quantized_stage,
+    convolver_controlled_stage,
+    dry_wet_stage,
+    gain_controlled_stage,
     grain_playback_controlled,
-    poly_midi_gate,
-    transport_sync_lfo_recipe,
+    lfo_matrix_distribute,
     midi_learn_macro_assignment,
+    midi_note_gate,
     parametric_eq_band_backend,
+    poly_midi_gate,
+    sidechain_compressor_recipe,
+    spectral_gate_stage,
+    tempo_synced_delay,
+    transport_sync_lfo_recipe,
 )
 
 

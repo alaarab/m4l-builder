@@ -10,32 +10,32 @@ Usage:
                     js_code=filter_curve_js(), numinlets=3)
 """
 
-from .filter_curve import filter_curve_js
+from .compressor_display import compressor_display_js
 from .crossover_display import crossover_display_js
-from .eq_curve import eq_curve_js
-from .eq_band_column import eq_band_column_js
-from .linear_phase_eq_display import linear_phase_eq_display_js
 from .envelope_display import envelope_display_js
-from .spectrum_analyzer import spectrum_analyzer_js
-from .waveform_display import waveform_display_js
-from .xy_pad import xy_pad_js
-from .piano_roll import piano_roll_js
-from .velocity_curve_display import velocity_curve_display_js
-from .wavetable_display import wavetable_display_js
-from .resonance_bank_display import resonance_bank_display_js
-from .sidechain_display import sidechain_display_js
-from .spectral_display import spectral_display_js
-from .peaking_eq_display import peaking_eq_display_js
-from .step_grid_display import step_grid_display_js
+from .eq_band_column import eq_band_column_js
+from .eq_curve import eq_curve_js
+from .filter_curve import filter_curve_js
 from .grain_display import grain_display_js
 from .grid_sequencer_display import grid_sequencer_display_js
-from .wavetable_editor import wavetable_editor_js
-from .spectral_vocoder_display import spectral_vocoder_display_js
 from .lfo_display import lfo_display_js
-from .compressor_display import compressor_display_js
-from .xy_trail_display import xy_trail_display_js
+from .linear_phase_eq_display import linear_phase_eq_display_js
+from .peaking_eq_display import peaking_eq_display_js
+from .piano_roll import piano_roll_js
+from .resonance_bank_display import resonance_bank_display_js
+from .sidechain_display import sidechain_display_js
 from .slice_overview import slice_overview_js
 from .slice_pattern_display import slice_pattern_display_js
+from .spectral_display import spectral_display_js
+from .spectral_vocoder_display import spectral_vocoder_display_js
+from .spectrum_analyzer import spectrum_analyzer_js
+from .step_grid_display import step_grid_display_js
+from .velocity_curve_display import velocity_curve_display_js
+from .waveform_display import waveform_display_js
+from .wavetable_display import wavetable_display_js
+from .wavetable_editor import wavetable_editor_js
+from .xy_pad import xy_pad_js
+from .xy_trail_display import xy_trail_display_js
 
 __all__ = [
     "filter_curve_js",
