@@ -86,12 +86,14 @@ ignore_missing_imports = true
 implicit_optional = true
 
 # Remaining type-checking backlog. Everything else in the package is gated.
-#   _amxd_legacy: the 8k-line legacy analysis module.
+#   _amxd_legacy:  the large legacy analysis module.
+#   _amxd_codegen: the codegen half split out of _amxd_legacy.
 #   livemcp_bridge:  relies on Device.add_* methods attached dynamically via
 #                    setattr (see device.py), which mypy cannot see statically.
 [[tool.mypy.overrides]]
 module = [
     "m4l_builder._amxd_legacy",
+    "m4l_builder._amxd_codegen",
     "m4l_builder.livemcp_bridge",
 ]
 ignore_errors = true
