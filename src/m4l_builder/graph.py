@@ -16,6 +16,8 @@ from .parameters import ParameterSpec, extract_parameter_spec
 class BoxRef(str):
     """Typed object handle that still behaves like a string ID."""
 
+    graph: Any
+
     def __new__(cls, box_id: str, graph=None):
         obj = str.__new__(cls, box_id)
         obj.graph = graph
