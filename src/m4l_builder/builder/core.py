@@ -9,7 +9,13 @@ from ..jsui_contract import JsuiContractError, find_jsui_contract_issues, valida
 from ..layout import Column, Columns, Grid, Row, inset_rect
 from ..modules import ModuleSpec, module_from_block, mount_module
 from ..objects import newobj, patchline
-from ..parameters import LIVE_NATIVE_INT_MAX, LIVE_NATIVE_INT_MIN, PARAM_HIDDEN, PARAM_VISIBLE, ParameterSpec
+from ..parameters import (
+    LIVE_NATIVE_INT_MAX,
+    LIVE_NATIVE_INT_MIN,
+    PARAM_HIDDEN,
+    PARAM_VISIBLE,
+    ParameterSpec,
+)
 from ..paths import device_output_path, user_library
 from ..profiles import DEFAULT_PATCHER_PROFILE, PatcherProfile
 from ..stages import Stage, StageResult, stage_result

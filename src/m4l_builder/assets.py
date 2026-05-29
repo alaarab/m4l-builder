@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
 
 
 @dataclass
@@ -12,7 +11,7 @@ class Asset:
     """A file dependency emitted alongside a built device."""
 
     filename: str
-    content: Union[str, bytes]
+    content: str | bytes
     asset_type: str = "TEXT"
     category: str = "support"
     encoding: str = "utf-8"

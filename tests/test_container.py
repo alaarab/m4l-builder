@@ -5,9 +5,8 @@ import struct
 
 import pytest
 
-from m4l_builder.container import build_amxd
 from m4l_builder.constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
-
+from m4l_builder.container import build_amxd
 
 MINIMAL_PATCHER = {"patcher": {"fileversion": 1, "boxes": [], "lines": []}}
 

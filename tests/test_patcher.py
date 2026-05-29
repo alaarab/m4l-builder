@@ -1,9 +1,8 @@
 """Tests for patcher.py — build_patcher() function."""
 
 
-from m4l_builder.patcher import build_patcher
 from m4l_builder.constants import AMXD_TYPE, DEFAULT_APPVERSION
-
+from m4l_builder.patcher import build_patcher
 
 SAMPLE_BOX = {"box": {"id": "obj-1", "maxclass": "newobj", "text": "plugin~"}}
 SAMPLE_LINE = {"patchline": {"source": ["obj-1", 0], "destination": ["obj-2", 0]}}

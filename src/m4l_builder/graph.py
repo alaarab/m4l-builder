@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-import re
-from typing import Any, Optional
+from typing import Any
 
 from .assets import Asset
 from .objects import newobj, patchline
@@ -28,11 +28,11 @@ class BoxRef(str):
         """Return the raw box ID."""
         return str(self)
 
-    def inlet(self, index: int = 0) -> "InletRef":
+    def inlet(self, index: int = 0) -> InletRef:
         """Return a typed inlet reference."""
         return InletRef(str(self), index, graph=getattr(self, "graph", None))
 
-    def outlet(self, index: int = 0) -> "OutletRef":
+    def outlet(self, index: int = 0) -> OutletRef:
         """Return a typed outlet reference."""
         return OutletRef(str(self), index, graph=getattr(self, "graph", None))
 
@@ -132,7 +132,7 @@ class GraphContainer:
         self._assets[filename] = stored
         return stored
 
-    def asset(self, filename: str) -> Optional[Asset]:
+    def asset(self, filename: str) -> Asset | None:
         """Return a registered asset by filename."""
         return self._assets.get(filename)
 
@@ -148,7 +148,7 @@ class GraphContainer:
             self._box_parameters[box_id] = stored.name
         return stored
 
-    def parameter(self, name_or_ref) -> Optional[ParameterSpec]:
+    def parameter(self, name_or_ref) -> ParameterSpec | None:
         """Return a registered parameter spec by name or box handle."""
         key = self._resolve_parameter_name(name_or_ref)
         if key is None:
@@ -163,7 +163,7 @@ class GraphContainer:
         """Return a typed box reference for an existing ID."""
         return self._make_box_ref(str(box_id))
 
-    def _resolve_parameter_name(self, name_or_ref) -> Optional[str]:
+    def _resolve_parameter_name(self, name_or_ref) -> str | None:
         if isinstance(name_or_ref, ParameterSpec):
             return name_or_ref.name
         if isinstance(name_or_ref, BoxRef):

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Optional
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class ValidationIssue:
     code: str
     message: str
     severity: str = "warning"
-    box_id: Optional[str] = None
+    box_id: str | None = None
 
 
 def format_validation_issues(issues: Iterable[ValidationIssue]) -> str:

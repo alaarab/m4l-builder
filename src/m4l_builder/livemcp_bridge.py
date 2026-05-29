@@ -11,10 +11,8 @@ This matches the selected-device bridge model validated in LiveMCP.
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 from .device import AudioEffect, Device
-
 
 BRIDGE_PROTOCOL_VERSION = 1
 DEFAULT_BRIDGE_PORT = 9881
@@ -222,7 +220,7 @@ def enable_livemcp_bridge(
     port: int = DEFAULT_BRIDGE_PORT,
     prefix: str = "livemcp_bridge",
     include_ui: bool = False,
-    include_demo_ui: Optional[bool] = None,
+    include_demo_ui: bool | None = None,
 ) -> dict:
     """Attach the LiveMCP bridge runtime to an existing device.
 

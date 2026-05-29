@@ -49,7 +49,6 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 
-
 LINEAR_PHASE_EQ_DISPLAY_INLETS = 3
 LINEAR_PHASE_EQ_DISPLAY_OUTLETS = 4
 

@@ -1,7 +1,19 @@
 """Tests for Theme dataclass and Device theme integration."""
 
-from m4l_builder.theme import Theme, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR, LOFI, SYNTHWAVE, INDUSTRIAL
-from m4l_builder.device import Device, AudioEffect
+from m4l_builder.device import AudioEffect, Device
+from m4l_builder.theme import (
+    COOL,
+    FOREST,
+    INDUSTRIAL,
+    LIGHT,
+    LOFI,
+    MIDNIGHT,
+    SOLAR,
+    SYNTHWAVE,
+    VIOLET,
+    WARM,
+    Theme,
+)
 
 
 class TestThemeDataclass:

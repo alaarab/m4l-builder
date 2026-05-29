@@ -5,12 +5,26 @@ pre-wired section using device.add_dsp(), device.add_newobj(), device.add_dial()
 and device.add_line(). Returns a dict of important IDs for further wiring.
 """
 
-from .dsp import (notein as dsp_notein, delay_line, param_smooth,
-                   convolver, sidechain_routing, compressor,
-                   lfo, spectral_gate, arpeggiator, pitch_quantize, grain_cloud, poly_voices, velocity_curve, transport_lfo,
-                   midi_learn_chain, macromap)
-from .engines.sidechain_display import sidechain_display_js, SIDECHAIN_DISPLAY_INLETS
-from .engines.spectral_display import spectral_display_js, SPECTRAL_DISPLAY_INLETS
+from .dsp import (
+    arpeggiator,
+    compressor,
+    convolver,
+    delay_line,
+    grain_cloud,
+    lfo,
+    macromap,
+    midi_learn_chain,
+    param_smooth,
+    pitch_quantize,
+    poly_voices,
+    sidechain_routing,
+    spectral_gate,
+    transport_lfo,
+    velocity_curve,
+)
+from .dsp import notein as dsp_notein
+from .engines.sidechain_display import SIDECHAIN_DISPLAY_INLETS, sidechain_display_js
+from .engines.spectral_display import SPECTRAL_DISPLAY_INLETS, spectral_display_js
 from .stages import stage_result
 
 

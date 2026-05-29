@@ -2,7 +2,7 @@
 
 import pytest
 
-from m4l_builder import AudioEffect, MidiEffect, WARM, Row, Column, Columns, Grid, inset_rect
+from m4l_builder import WARM, AudioEffect, Column, Columns, Grid, MidiEffect, Row, inset_rect
 
 
 def _find_box(device, box_id):

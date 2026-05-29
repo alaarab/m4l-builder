@@ -14,11 +14,11 @@ from m4l_builder.livemcp_bridge import (
     BRIDGE_SCHEMA_FILENAME,
     BRIDGE_SERVER_FILENAME,
     DEFAULT_BRIDGE_PORT,
+    _mix_color,
     bridge_runtime_js,
     bridge_schema,
     bridge_server_js,
     build_livemcp_bridge_demo,
-    _mix_color,
 )
 
 

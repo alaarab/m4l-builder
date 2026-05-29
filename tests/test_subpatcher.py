@@ -1,6 +1,6 @@
 """Tests for the Subpatcher class."""
 
-from m4l_builder import Subpatcher, AudioEffect, Device, newobj, patchline
+from m4l_builder import AudioEffect, Device, Subpatcher, newobj, patchline
 
 
 class TestSubpatcherBasics:

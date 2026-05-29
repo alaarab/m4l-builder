@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import time
+from dataclasses import dataclass, field
 
 from .constants import AMXD_TYPE, DEFAULT_APPVERSION
 

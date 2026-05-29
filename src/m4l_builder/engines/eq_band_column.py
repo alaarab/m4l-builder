@@ -52,7 +52,6 @@ from __future__ import annotations
 import json
 from string import Template
 
-
 EQ_BAND_COLUMN_INLETS = 1
 EQ_BAND_COLUMN_OUTLETS = 1
 

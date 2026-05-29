@@ -1,62 +1,101 @@
 """Tests for visual engine modules (jsui JavaScript code generators)."""
 import os
 import tempfile
+
 import pytest
 
-from m4l_builder import AudioEffect, MIDNIGHT
-from m4l_builder.jsui_contract import find_jsui_contract_issues
-from m4l_builder.engines.filter_curve import filter_curve_js, FILTER_CURVE_INLETS
+from m4l_builder import MIDNIGHT, AudioEffect
 from m4l_builder.engines.crossover_display import (
-    crossover_display_js,
     CROSSOVER_DISPLAY_INLETS,
+    crossover_display_js,
 )
+from m4l_builder.engines.envelope_display import ENVELOPE_INLETS, envelope_display_js
 from m4l_builder.engines.eq_band_column import (
-    eq_band_column_js, EQ_BAND_COLUMN_INLETS, EQ_BAND_COLUMN_OUTLETS)
-from m4l_builder.engines.eq_curve import eq_curve_js, EQ_CURVE_INLETS
+    EQ_BAND_COLUMN_INLETS,
+    EQ_BAND_COLUMN_OUTLETS,
+    eq_band_column_js,
+)
+from m4l_builder.engines.eq_curve import EQ_CURVE_INLETS, eq_curve_js
+from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, filter_curve_js
+from m4l_builder.engines.grain_display import (
+    GRAIN_DISPLAY_INLETS,
+    GRAIN_DISPLAY_OUTLETS,
+    grain_display_js,
+)
+from m4l_builder.engines.grid_sequencer_display import (
+    GRID_SEQ_INLETS,
+    GRID_SEQ_OUTLETS,
+    grid_sequencer_display_js,
+)
 from m4l_builder.engines.linear_phase_eq_display import (
-    linear_phase_eq_display_js,
     LINEAR_PHASE_EQ_DISPLAY_INLETS,
     LINEAR_PHASE_EQ_DISPLAY_OUTLETS,
+    linear_phase_eq_display_js,
 )
-from m4l_builder.engines.spectrum_analyzer import (
-    spectrum_analyzer_js,
-    spectrum_analyzer_dsp,
-    SPECTRUM_INLETS,
-)
-from m4l_builder.engines.envelope_display import envelope_display_js, ENVELOPE_INLETS
-from m4l_builder.engines.waveform_display import waveform_display_js, WAVEFORM_INLETS
-from m4l_builder.engines.xy_pad import xy_pad_js, XY_PAD_INLETS, XY_PAD_OUTLETS
-from m4l_builder.engines.piano_roll import piano_roll_js, PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS
-from m4l_builder.engines.velocity_curve_display import (
-    velocity_curve_display_js, VELOCITY_CURVE_INLETS, VELOCITY_CURVE_OUTLETS)
-from m4l_builder.engines.wavetable_display import (
-    wavetable_display_js, WAVETABLE_DISPLAY_INLETS, WAVETABLE_DISPLAY_OUTLETS)
-from m4l_builder.engines.resonance_bank_display import (
-    resonance_bank_display_js, RESONANCE_BANK_INLETS, RESONANCE_BANK_OUTLETS)
-from m4l_builder.engines.sidechain_display import (
-    sidechain_display_js, SIDECHAIN_DISPLAY_INLETS, SIDECHAIN_DISPLAY_OUTLETS)
-from m4l_builder.engines.spectral_display import (
-    spectral_display_js, SPECTRAL_DISPLAY_INLETS, SPECTRAL_DISPLAY_OUTLETS)
 from m4l_builder.engines.peaking_eq_display import (
-    peaking_eq_display_js, PEAKING_EQ_DISPLAY_INLETS, PEAKING_EQ_DISPLAY_OUTLETS)
-from m4l_builder.engines.step_grid_display import (
-    step_grid_display_js, STEP_GRID_DISPLAY_INLETS, STEP_GRID_DISPLAY_OUTLETS)
-from m4l_builder.engines.grain_display import (
-    grain_display_js, GRAIN_DISPLAY_INLETS, GRAIN_DISPLAY_OUTLETS)
-from m4l_builder.engines.grid_sequencer_display import (
-    grid_sequencer_display_js, GRID_SEQ_INLETS, GRID_SEQ_OUTLETS)
-from m4l_builder.engines.wavetable_editor import (
-    wavetable_editor_js, WAVETABLE_EDITOR_INLETS, WAVETABLE_EDITOR_OUTLETS)
-from m4l_builder.engines.spectral_vocoder_display import (
-    spectral_vocoder_display_js, SPECTRAL_VOCODER_INLETS, SPECTRAL_VOCODER_OUTLETS)
+    PEAKING_EQ_DISPLAY_INLETS,
+    PEAKING_EQ_DISPLAY_OUTLETS,
+    peaking_eq_display_js,
+)
+from m4l_builder.engines.piano_roll import PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS, piano_roll_js
+from m4l_builder.engines.resonance_bank_display import (
+    RESONANCE_BANK_INLETS,
+    RESONANCE_BANK_OUTLETS,
+    resonance_bank_display_js,
+)
+from m4l_builder.engines.sidechain_display import (
+    SIDECHAIN_DISPLAY_INLETS,
+    SIDECHAIN_DISPLAY_OUTLETS,
+    sidechain_display_js,
+)
 from m4l_builder.engines.slice_overview import (
-    slice_overview_js, SLICE_OVERVIEW_INLETS, SLICE_OVERVIEW_OUTLETS)
+    SLICE_OVERVIEW_INLETS,
+    SLICE_OVERVIEW_OUTLETS,
+    slice_overview_js,
+)
 from m4l_builder.engines.slice_pattern_display import (
-    slice_pattern_display_js,
     SLICE_PATTERN_DISPLAY_INLETS,
     SLICE_PATTERN_DISPLAY_OUTLETS,
+    slice_pattern_display_js,
 )
-
+from m4l_builder.engines.spectral_display import (
+    SPECTRAL_DISPLAY_INLETS,
+    SPECTRAL_DISPLAY_OUTLETS,
+    spectral_display_js,
+)
+from m4l_builder.engines.spectral_vocoder_display import (
+    SPECTRAL_VOCODER_INLETS,
+    SPECTRAL_VOCODER_OUTLETS,
+    spectral_vocoder_display_js,
+)
+from m4l_builder.engines.spectrum_analyzer import (
+    SPECTRUM_INLETS,
+    spectrum_analyzer_dsp,
+    spectrum_analyzer_js,
+)
+from m4l_builder.engines.step_grid_display import (
+    STEP_GRID_DISPLAY_INLETS,
+    STEP_GRID_DISPLAY_OUTLETS,
+    step_grid_display_js,
+)
+from m4l_builder.engines.velocity_curve_display import (
+    VELOCITY_CURVE_INLETS,
+    VELOCITY_CURVE_OUTLETS,
+    velocity_curve_display_js,
+)
+from m4l_builder.engines.waveform_display import WAVEFORM_INLETS, waveform_display_js
+from m4l_builder.engines.wavetable_display import (
+    WAVETABLE_DISPLAY_INLETS,
+    WAVETABLE_DISPLAY_OUTLETS,
+    wavetable_display_js,
+)
+from m4l_builder.engines.wavetable_editor import (
+    WAVETABLE_EDITOR_INLETS,
+    WAVETABLE_EDITOR_OUTLETS,
+    wavetable_editor_js,
+)
+from m4l_builder.engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS, xy_pad_js
+from m4l_builder.jsui_contract import find_jsui_contract_issues
 
 ALL_JSUI_FACTORIES = [
     crossover_display_js,
@@ -1177,15 +1216,24 @@ class TestEngineImports:
     """Test that all engines import correctly from the package."""
 
     def test_import_from_engines_package(self):
-        from m4l_builder.engines import (filter_curve_js, eq_curve_js,
-                                          envelope_display_js, spectrum_analyzer_js,
-                                          waveform_display_js, xy_pad_js, piano_roll_js,
-                                          velocity_curve_display_js, wavetable_display_js,
-                                          resonance_bank_display_js,
-                                          sidechain_display_js, spectral_display_js,
-                                          peaking_eq_display_js, step_grid_display_js,
-                                          grain_display_js,
-                                          slice_pattern_display_js)
+        from m4l_builder.engines import (
+            envelope_display_js,
+            eq_curve_js,
+            filter_curve_js,
+            grain_display_js,
+            peaking_eq_display_js,
+            piano_roll_js,
+            resonance_bank_display_js,
+            sidechain_display_js,
+            slice_pattern_display_js,
+            spectral_display_js,
+            spectrum_analyzer_js,
+            step_grid_display_js,
+            velocity_curve_display_js,
+            waveform_display_js,
+            wavetable_display_js,
+            xy_pad_js,
+        )
         assert callable(filter_curve_js)
         assert callable(eq_curve_js)
         assert callable(envelope_display_js)
@@ -1204,19 +1252,25 @@ class TestEngineImports:
         assert callable(slice_pattern_display_js)
 
     def test_import_constants_from_modules(self):
-        from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, FILTER_CURVE_OUTLETS
-        from m4l_builder.engines.eq_curve import EQ_CURVE_INLETS, EQ_CURVE_OUTLETS
-        from m4l_builder.engines.spectrum_analyzer import SPECTRUM_INLETS, SPECTRUM_OUTLETS
         from m4l_builder.engines.envelope_display import ENVELOPE_INLETS, ENVELOPE_OUTLETS
-        from m4l_builder.engines.waveform_display import WAVEFORM_INLETS, WAVEFORM_OUTLETS
-        from m4l_builder.engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS
+        from m4l_builder.engines.eq_curve import EQ_CURVE_INLETS, EQ_CURVE_OUTLETS
+        from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, FILTER_CURVE_OUTLETS
         from m4l_builder.engines.piano_roll import PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS
-        from m4l_builder.engines.velocity_curve_display import (
-            VELOCITY_CURVE_INLETS, VELOCITY_CURVE_OUTLETS)
-        from m4l_builder.engines.wavetable_display import (
-            WAVETABLE_DISPLAY_INLETS, WAVETABLE_DISPLAY_OUTLETS)
         from m4l_builder.engines.resonance_bank_display import (
-            RESONANCE_BANK_INLETS, RESONANCE_BANK_OUTLETS)
+            RESONANCE_BANK_INLETS,
+            RESONANCE_BANK_OUTLETS,
+        )
+        from m4l_builder.engines.spectrum_analyzer import SPECTRUM_INLETS, SPECTRUM_OUTLETS
+        from m4l_builder.engines.velocity_curve_display import (
+            VELOCITY_CURVE_INLETS,
+            VELOCITY_CURVE_OUTLETS,
+        )
+        from m4l_builder.engines.waveform_display import WAVEFORM_INLETS, WAVEFORM_OUTLETS
+        from m4l_builder.engines.wavetable_display import (
+            WAVETABLE_DISPLAY_INLETS,
+            WAVETABLE_DISPLAY_OUTLETS,
+        )
+        from m4l_builder.engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS
         assert isinstance(FILTER_CURVE_INLETS, int)
         assert isinstance(EQ_CURVE_INLETS, int)
         assert isinstance(SPECTRUM_INLETS, int)
