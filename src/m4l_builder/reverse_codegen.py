@@ -1,6 +1,6 @@
 """Python generation helpers for normalized reverse snapshots."""
 
-from ._reverse_legacy import (
+from ._reverse_codegen import (
     generate_builder_python_from_amxd,
     generate_builder_python_from_bridge_payload,
     generate_builder_python_from_device,
