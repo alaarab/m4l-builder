@@ -17,7 +17,7 @@ DSP feeding:
     an audio signal outlet to the jsui inlet 0.
 """
 
-from ..objects import newobj, patchline
+from ..objects import newobj
 
 WAVEFORM_INLETS = 2
 WAVEFORM_OUTLETS = 0

@@ -1,6 +1,5 @@
 """Tests for patcher.py — build_patcher() function."""
 
-import pytest
 
 from m4l_builder.patcher import build_patcher
 from m4l_builder.constants import AMXD_TYPE, DEFAULT_APPVERSION

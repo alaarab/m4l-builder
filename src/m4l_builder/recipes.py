@@ -6,10 +6,8 @@ and device.add_line(). Returns a dict of important IDs for further wiring.
 """
 
 from .dsp import (notein as dsp_notein, delay_line, param_smooth,
-                   convolver, dry_wet_mix, sidechain_routing, compressor,
-                   lfo, spectral_gate, spectral_gate_subpatcher,
-                   arpeggiator, pitch_quantize, grain_cloud, buffer_load,
-                   poly_voices, velocity_curve, transport_lfo,
+                   convolver, sidechain_routing, compressor,
+                   lfo, spectral_gate, arpeggiator, pitch_quantize, grain_cloud, poly_voices, velocity_curve, transport_lfo,
                    midi_learn_chain, macromap)
 from .engines.sidechain_display import sidechain_display_js, SIDECHAIN_DISPLAY_INLETS
 from .engines.spectral_display import spectral_display_js, SPECTRAL_DISPLAY_INLETS
@@ -418,7 +416,7 @@ def dry_wet_stage(device, id_prefix, dial_rect, x=30, y=30):
         unitstyle=5, annotation_name=f"{p} Dry/Wet",
     )
 
-    scale_id = device.add_newobj(
+    device.add_newobj(
         f"{p}_scale", "*~ 0.01", numinlets=2, numoutlets=1,
         outlettype=["signal"], patching_rect=[x, y, 55, 20],
     )
@@ -725,7 +723,7 @@ def sidechain_compressor_recipe(device, id_prefix, threshold_rect,
     comp_boxes, comp_lines = compressor(f"{p}_comp")
     device.add_dsp(comp_boxes, comp_lines)
 
-    display_id = device.add_jsui(
+    device.add_jsui(
         f"{p}_display", [x, y + 120, 120, 60],
         js_code=sidechain_display_js(),
         numinlets=SIDECHAIN_DISPLAY_INLETS,

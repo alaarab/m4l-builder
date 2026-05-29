@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Sequence
+from typing import Callable, Iterable, Sequence
 
 from .corpus_analysis import analyze_amxd_corpus, classify_corpus_source_metadata
 from .reverse import (

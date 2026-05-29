@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import copy
-import json
 import os
 import pprint
 import re
-import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,7 +20,6 @@ from .live_api import (
     live_set_control,
     live_thisdevice,
 )
-from .patcher import build_patcher
 from .recipes import (
     dry_wet_stage,
     gain_controlled_stage,
@@ -6504,7 +6501,6 @@ def extract_mapping_semantic_candidates(snapshot: dict) -> list[dict]:
             continue
         params = periodic_trace.get("params", {})
         waveform_targets = {str(name).lower() for name in params.get("waveform_targets", [])}
-        core_operators = set(params.get("core_operators", []))
         has_rate_control = any(
             any(fragment in label for fragment in ("rate", "time mode", "sync", "bpm"))
             for label in control_labels_lower

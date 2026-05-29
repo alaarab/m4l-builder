@@ -1,14 +1,10 @@
 """Tests for the high-level Device API (device.py)."""
 
 import json
-import struct
 import os
-from unittest.mock import patch, call
 
-import pytest
 
 from m4l_builder.device import Device, AudioEffect, Instrument, MidiEffect
-from m4l_builder.constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
 from m4l_builder.theme import MIDNIGHT, WARM
 
 

@@ -7,13 +7,11 @@ import os
 import re
 from pathlib import Path
 from statistics import mean
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable
 
 from .reverse import (
-    extract_behavior_hints,
     extract_embedded_patcher_snapshots,
     extract_gen_processing_candidates,
-    extract_poly_shell_bank_candidates,
     extract_sample_buffer_candidates,
     extract_snapshot_knowledge,
     generate_builder_python_from_amxd,

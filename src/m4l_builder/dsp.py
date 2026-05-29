@@ -499,11 +499,11 @@ def envelope_follower(id_prefix: str, attack_ms: float = 10,
         newobj(f"{p}_sr_snap", "snapshot~", numinlets=1, numoutlets=1,
                outlettype=[""], patching_rect=[130, 115, 70, 20]),
         # expr converts attack ms to samples: ms/1000 * sr
-        newobj(f"{p}_atk_expr", f"expr ($f1 / 1000.0) * $f2",
+        newobj(f"{p}_atk_expr", "expr ($f1 / 1000.0) * $f2",
                numinlets=2, numoutlets=1, outlettype=[""],
                patching_rect=[30, 145, 150, 20]),
         # expr converts release ms to samples
-        newobj(f"{p}_rel_expr", f"expr ($f1 / 1000.0) * $f2",
+        newobj(f"{p}_rel_expr", "expr ($f1 / 1000.0) * $f2",
                numinlets=2, numoutlets=1, outlettype=[""],
                patching_rect=[190, 145, 150, 20]),
         newobj(f"{p}_slide", f"slide~ {attack_ms * 44.1} {release_ms * 44.1}",
@@ -1576,7 +1576,7 @@ def spectral_gate(id_prefix: str, threshold: float = 0.01) -> tuple:
     """
     p = id_prefix
     boxes = [
-        newobj(f"{p}_pfft", f"pfft~ spectral_gate_sub.maxpat 1024 4",
+        newobj(f"{p}_pfft", "pfft~ spectral_gate_sub.maxpat 1024 4",
                numinlets=2, numoutlets=1,
                outlettype=["signal"],
                patching_rect=[30, 120, 200, 20]),

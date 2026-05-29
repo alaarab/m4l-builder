@@ -36,19 +36,26 @@ product workspaces live in `../Max4LivePlugins/plugins/<plugin>/`.
 ## Commands
 
 ```bash
-# Install (editable)
-uv pip install -e .
+# Install dev environment (editable project + pytest, ruff, mypy)
+uv sync --group dev
 
 # Test
-uv run pytest tests/ -v
-uv run pytest tests/ --cov=m4l_builder --cov-report=term-missing
+uv run pytest                       # or: uv run pytest tests/ -v
+uv run pytest --cov=m4l_builder --cov-report=term-missing
+
+# Lint and type-check
+uv run ruff check src tests
+uv run mypy
 
 # Build and publish to PyPI (requires token)
 uv build && uv publish --token <pypi-token>
 # or set UV_PUBLISH_TOKEN env var
 ```
 
-No linting is configured (`.ruff_cache/` is gitignored but no ruff config exists in `pyproject.toml`).
+Linting (ruff) and type-checking (mypy) are configured in `pyproject.toml` and
+run in CI (`.github/workflows/tests.yml`). Ruff uses a conservative starter
+rule set (E, F, W, B); mypy gates the whole package except a documented backlog
+of legacy modules that are being annotated incrementally.
 
 ## Build Output Paths
 
