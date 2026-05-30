@@ -10,6 +10,7 @@ from .dsp import (
     compressor,
     convolver,
     delay_line,
+    euclidean_rhythm,
     grain_cloud,
     lfo,
     macromap,
@@ -1296,4 +1297,63 @@ def generative_midi_stage(device, id_prefix, rate_rect, density_rect, *,
         },
         name="generative_midi_stage",
         params={"rate": device.parameter(rate_id), "density": device.parameter(density_id)},
+    )
+
+
+def euclidean_sequencer_stage(device, id_prefix, rate_rect, *, steps=16, pulses=4,
+                              note=60, x=30, y=30):
+    """Add a Euclidean rhythm MIDI sequencer.
+
+    Wraps `euclidean_rhythm` into a complete stage: an enable toggle and a
+    step-time dial drive `pulses` hits spread over `steps`, each firing a fixed
+    `note` through makenote -> noteout. Drop into a MidiEffect or Instrument.
+
+    Args:
+        device: Device instance to add objects to.
+        id_prefix: Prefix for all object IDs in this stage.
+        rate_rect: [x, y, w, h] for the step-time dial (presentation mode).
+        x: Patching x offset for DSP objects.
+        y: Patching y offset for DSP objects.
+        steps, pulses: Euclidean pattern parameters (pulses hits over steps).
+        note: MIDI pitch fired on each hit.
+
+    Returns:
+        dict with keys "enable", "rate", "hit", "make", "noteout".
+    """
+    p = id_prefix
+    enable_id = device.add_toggle(
+        f"{p}_enable", f"{p}_enable", [rate_rect[0], rate_rect[1] - 24, 20, 20]
+    )
+    rate_id = device.add_dial(
+        f"{p}_rate", f"{p}_rate", rate_rect,
+        min_val=30.0, max_val=500.0, initial=125.0,
+        unitstyle=0, annotation_name=f"{p} Step ms",
+    )
+
+    device.add_dsp(*euclidean_rhythm(f"{p}_euc", steps=steps, pulses=pulses))
+    device.add_newobj(f"{p}_note", f"t {note}", numinlets=1, numoutlets=1,
+                      outlettype=[""], patching_rect=[x, y + 150, 50, 20])
+    make_id = device.add_newobj(
+        f"{p}_make", "makenote 100 200", numinlets=3, numoutlets=2,
+        outlettype=["", ""], patching_rect=[x, y + 180, 100, 20],
+    )
+    device.add_dsp(*noteout(f"{p}_out"))
+
+    device.add_line(enable_id, 0, f"{p}_euc_metro", 0)
+    device.add_line(rate_id, 0, f"{p}_euc_metro", 1)
+    device.add_line(f"{p}_euc_hit", 0, f"{p}_note", 0)
+    device.add_line(f"{p}_note", 0, make_id, 0)
+    device.add_line(make_id, 0, f"{p}_out_noteout", 0)
+    device.add_line(make_id, 1, f"{p}_out_noteout", 1)
+
+    return stage_result(
+        {
+            "enable": enable_id,
+            "rate": rate_id,
+            "hit": f"{p}_euc_hit",
+            "make": make_id,
+            "noteout": f"{p}_out_noteout",
+        },
+        name="euclidean_sequencer_stage",
+        params={"rate": device.parameter(rate_id)},
     )

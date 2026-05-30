@@ -5,6 +5,7 @@ from ..recipes import (
     arpeggio_quantized_stage,
     convolver_controlled_stage,
     dry_wet_stage,
+    euclidean_sequencer_stage,
     gain_controlled_stage,
     generative_midi_stage,
     grain_playback_controlled,
@@ -44,4 +45,5 @@ __all__ = [
     "transport_sync_lfo_recipe",
     "midi_learn_macro_assignment",
     "generative_midi_stage",
+    "euclidean_sequencer_stage",
 ]
