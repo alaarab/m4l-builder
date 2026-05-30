@@ -339,6 +339,7 @@ ROOT_RECIPE_EXPORTS = [
     "transport_sync_lfo_recipe",
     "midi_learn_macro_assignment",
     "generative_midi_stage",
+    "euclidean_sequencer_stage",
 ]
 
 BUILDER_RECIPE_EXPORTS = _dedupe(

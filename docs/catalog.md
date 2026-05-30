@@ -170,7 +170,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `wavetable_editor_js` | Return JavaScript source for an interactive wavetable editor (Max jsui). |
 | `xy_pad_js` | Return JavaScript source for an XY pad control (Max jsui). |
 
-## Recipes (22)
+## Recipes (23)
 
 | Name | Summary |
 |------|---------|
@@ -180,6 +180,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `arpeggio_quantized_stage` | Add an arpeggiator followed by pitch quantization. |
 | `convolver_controlled_stage` | Add a convolver with dry/wet mix controlled by a dial. |
 | `dry_wet_stage` | Add a dry/wet crossfade stage: live.dial (0-100) -> scaled mix. |
+| `euclidean_sequencer_stage` | Add a Euclidean rhythm MIDI sequencer. |
 | `gain_controlled_stage` | Add a gain-controlled stage: live.dial -> dbtoa -> *~ gain cell. |
 | `generative_midi_stage` | Add a self-contained generative MIDI note generator. |
 | `grain_playback_controlled` | Add a granular playback stage with position, size, and density dials. |

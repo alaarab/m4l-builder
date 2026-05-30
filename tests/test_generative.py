@@ -4,7 +4,7 @@ import pytest
 
 from m4l_builder import MidiEffect
 from m4l_builder.dsp import euclidean_rhythm, probability_gate, random_note
-from m4l_builder.recipes import generative_midi_stage
+from m4l_builder.recipes import euclidean_sequencer_stage, generative_midi_stage
 
 
 def _line_pairs(device):
@@ -97,3 +97,30 @@ class TestEuclideanRhythm:
     def test_invalid_pulses_raises(self):
         with pytest.raises(ValueError):
             euclidean_rhythm("e", steps=4, pulses=8)
+
+
+class TestEuclideanSequencerStage:
+    def _build(self):
+        device = MidiEffect("Seq", 200, 160)
+        result = euclidean_sequencer_stage(device, "seq", [60, 30, 48, 48],
+                                           steps=16, pulses=4, note=60)
+        return device, result
+
+    def test_returns_expected_keys(self):
+        _, result = self._build()
+        for key in ("enable", "rate", "hit", "make", "noteout"):
+            assert key in result
+
+    def test_chain_wired(self):
+        device, _ = self._build()
+        pairs = {
+            (ln["patchline"]["source"][0], ln["patchline"]["destination"][0])
+            for ln in device.lines
+        }
+        for edge in [("seq_enable", "seq_euc_metro"), ("seq_euc_hit", "seq_note"),
+                     ("seq_note", "seq_make"), ("seq_make", "seq_out_noteout")]:
+            assert edge in pairs
+
+    def test_builds(self):
+        device, _ = self._build()
+        assert device.to_bytes()[:4] == b"ampf"
