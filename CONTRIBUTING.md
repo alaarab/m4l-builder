@@ -36,6 +36,11 @@ All three must pass before a change is merged. CI
   of legacy modules is temporarily excluded (see the `[[tool.mypy.overrides]]`
   list in `pyproject.toml`); shrink that list rather than growing it.
 
+## What to work on
+
+See the [roadmap](docs/roadmap.md) for tracked open work, including items that
+need validation inside Ableton Live.
+
 ## Commit & PR conventions
 
 - Write imperative, descriptive commit subjects (e.g. "Add FDN reverb recipe"),
