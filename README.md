@@ -76,17 +76,26 @@ uv run python examples/02_generative_midi.py   # builds a generative MIDI device
 
 ### Device types
 
-Three device types, matching what Ableton expects:
+The three classic types plus Live 12 MIDI Tools:
 
 ```python
 from m4l_builder import AudioEffect, Instrument, MidiEffect
+from m4l_builder import MidiTransformation, MidiGenerator  # Live 12 MIDI Tools
 
 fx    = AudioEffect("FX", 300, 170)      # auto-adds plugin~/plugout~
 synth = Instrument("Synth", 400, 200)    # no auto I/O
 midi  = MidiEffect("MIDI FX", 200, 100)  # MIDI only
+
+transform = MidiTransformation("Swing", 200, 120)  # rewrites clip notes
+generator = MidiGenerator("Euclid", 200, 120)      # adds notes to a clip
 ```
 
 `AudioEffect` auto-wires stereo `plugin~` / `plugout~` objects (IDs `obj-plugin`, `obj-plugout`). Instruments and MIDI effects leave I/O to you.
+
+**MIDI Tools** (Live 12) are built around a `live.miditool.in` → processing →
+`live.miditool.out` chain; use the `midi_tool_io` helper for the scaffolding.
+A `MidiTransformation` rewrites the selected notes of a clip; a `MidiGenerator`
+adds new notes. See [`examples/04_midi_transformation.py`](examples/04_midi_transformation.py).
 
 ### DSP blocks
 

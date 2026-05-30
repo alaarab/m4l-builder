@@ -316,6 +316,44 @@ class MidiEffect(Device):
         )
 
 
+class MidiTransformation(Device):
+    """Live 12 MIDI Transformation device (a MIDI Tool).
+
+    Rewrites the selected notes of a clip. Build the patcher around a
+    ``live.miditool.in`` -> processing -> ``live.miditool.out`` chain (see
+    ``midi_tool_io``). No audio/MIDI I/O is auto-added.
+    """
+
+    def __init__(self, name: str, width: float, height: float, theme=None, profile=None):
+        super().__init__(
+            name,
+            width,
+            height,
+            device_type="note_transformation",
+            theme=theme,
+            profile=profile,
+        )
+
+
+class MidiGenerator(Device):
+    """Live 12 MIDI Generator device (a MIDI Tool).
+
+    Adds new notes to a clip. Build the patcher around a ``live.miditool.in``
+    -> processing -> ``live.miditool.out`` chain (see ``midi_tool_io``). No
+    audio/MIDI I/O is auto-added.
+    """
+
+    def __init__(self, name: str, width: float, height: float, theme=None, profile=None):
+        super().__init__(
+            name,
+            width,
+            height,
+            device_type="note_generator",
+            theme=theme,
+            profile=profile,
+        )
+
+
 for _widget_name, _widget_spec in DEVICE_WIDGET_SPECS.items():
     setattr(Device, f"add_{_widget_name}", make_device_widget_method(_widget_name, _widget_spec))
 
