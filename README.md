@@ -591,7 +591,8 @@ uv run pytest tests/ --cov=m4l_builder --cov-report=term-missing
 
 ## API reference
 
-Full API docs at [docs/api.md](docs/api.md).
+Browse the [catalog](docs/catalog.md) for every DSP block, UI widget, recipe,
+theme, and engine at a glance, or the full [API docs](docs/api.md).
 
 ## License
 
