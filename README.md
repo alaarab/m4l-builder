@@ -95,7 +95,8 @@ generator = MidiGenerator("Euclid", 200, 120)      # adds notes to a clip
 **MIDI Tools** (Live 12) are built around a `live.miditool.in` → processing →
 `live.miditool.out` chain; use the `midi_tool_io` helper for the scaffolding.
 A `MidiTransformation` rewrites the selected notes of a clip; a `MidiGenerator`
-adds new notes. See [`examples/04_midi_transformation.py`](examples/04_midi_transformation.py).
+adds new notes. See the [MIDI Tools guide](docs/midi_tools.md) and
+[`examples/04_midi_transformation.py`](examples/04_midi_transformation.py).
 
 ### DSP blocks
 

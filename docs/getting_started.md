@@ -93,6 +93,8 @@ device.add_dsp(boxes, lines)
   including a Live 12 MIDI Tool.
 - **[catalog.md](catalog.md)** — a browsable index of every DSP block, UI
   widget, recipe, theme, and engine.
+- **[midi_tools.md](midi_tools.md)** — build Live 12 MIDI Generators and
+  Transformations.
 - **[api.md](api.md)** — the detailed API reference.
 - **[reverse_engineering.md](reverse_engineering.md)** — read an existing
   `.amxd` back into Python.
