@@ -89,8 +89,10 @@ device.add_dsp(boxes, lines)
 
 ## Where to go next
 
-- **[examples/](../examples/)** — three runnable devices you can build today.
-- **[api.md](api.md)** — the full catalog of DSP blocks, UI widgets, recipes,
-  themes, and engines.
+- **[examples/](../examples/)** — four runnable devices you can build today,
+  including a Live 12 MIDI Tool.
+- **[catalog.md](catalog.md)** — a browsable index of every DSP block, UI
+  widget, recipe, theme, and engine.
+- **[api.md](api.md)** — the detailed API reference.
 - **[reverse_engineering.md](reverse_engineering.md)** — read an existing
   `.amxd` back into Python.
