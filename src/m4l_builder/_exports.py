@@ -208,6 +208,8 @@ DSP_EXPORTS = [
     "arpeggiator",
     "chord",
     "pitch_quantize",
+    "probability_gate",
+    "random_note",
     "lookahead_envelope_follower",
     "fdn_reverb",
     "spectral_gate",
@@ -332,6 +334,7 @@ ROOT_RECIPE_EXPORTS = [
     "poly_midi_gate",
     "transport_sync_lfo_recipe",
     "midi_learn_macro_assignment",
+    "generative_midi_stage",
 ]
 
 BUILDER_RECIPE_EXPORTS = _dedupe(

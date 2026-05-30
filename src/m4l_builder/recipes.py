@@ -14,9 +14,12 @@ from .dsp import (
     lfo,
     macromap,
     midi_learn_chain,
+    noteout,
     param_smooth,
     pitch_quantize,
     poly_voices,
+    probability_gate,
+    random_note,
     sidechain_routing,
     spectral_gate,
     transport_lfo,
@@ -1203,4 +1206,94 @@ def midi_learn_macro_assignment(device, id_prefix, num_targets=4, x=30, y=30):
         ports={
             "learn_in": device.box(learn_id).outlet(0),
         },
+    )
+
+
+def generative_midi_stage(device, id_prefix, rate_rect, density_rect, *,
+                          x=30, y=30, low=48, high=72, scale="major"):
+    """Add a self-contained generative MIDI note generator.
+
+    A metro (rate dial, ms) drives a probability gate (density dial, %); on each
+    hit a random pitch in [low, high] is drawn, quantized to `scale`, and played
+    through makenote -> noteout. The {prefix}_enable toggle starts/stops the
+    clock. Drop this into a MidiEffect or Instrument device.
+
+    Args:
+        device: Device instance to add objects to.
+        id_prefix: Prefix for all object IDs in this stage.
+        rate_rect: [x, y, w, h] for the rate dial (presentation mode).
+        density_rect: [x, y, w, h] for the density dial (presentation mode).
+        x: Patching x offset for DSP objects.
+        y: Patching y offset for DSP objects.
+        low, high: Inclusive MIDI pitch range for generated notes.
+        scale: Scale for pitch_quantize (chromatic/major/minor/pentatonic/dorian).
+
+    Returns:
+        dict with keys "enable", "rate", "density", "metro", "make", "noteout".
+    """
+    p = id_prefix
+
+    enable_id = device.add_toggle(
+        f"{p}_enable", f"{p}_enable",
+        [rate_rect[0], rate_rect[1] - 24, 20, 20],
+    )
+    rate_id = device.add_dial(
+        f"{p}_rate", f"{p}_rate", rate_rect,
+        min_val=20.0, max_val=1000.0, initial=250.0,
+        unitstyle=0, annotation_name=f"{p} Rate",
+    )
+    density_id = device.add_dial(
+        f"{p}_density", f"{p}_density", density_rect,
+        min_val=0.0, max_val=100.0, initial=70.0,
+        unitstyle=5, annotation_name=f"{p} Density",
+    )
+
+    metro_id = device.add_newobj(
+        f"{p}_metro", "metro 250", numinlets=2, numoutlets=1,
+        outlettype=["bang"], patching_rect=[x, y, 70, 20],
+    )
+    # density% (0-100) -> 0-1000 threshold for the probability gate
+    dens_scale_id = device.add_newobj(
+        f"{p}_dens", "* 10", numinlets=2, numoutlets=1,
+        outlettype=["int"], patching_rect=[x + 180, y, 50, 20],
+    )
+
+    gate_boxes, gate_lines = probability_gate(f"{p}_gate", probability=0.7)
+    device.add_dsp(gate_boxes, gate_lines)
+    note_boxes, note_lines = random_note(f"{p}_note", low=low, high=high)
+    device.add_dsp(note_boxes, note_lines)
+    quant_boxes, quant_lines = pitch_quantize(f"{p}_quant", scale=scale)
+    device.add_dsp(quant_boxes, quant_lines)
+    out_boxes, out_lines = noteout(f"{p}_out")
+    device.add_dsp(out_boxes, out_lines)
+
+    make_id = device.add_newobj(
+        f"{p}_make", "makenote 100 200", numinlets=3, numoutlets=2,
+        outlettype=["", ""], patching_rect=[x, y + 240, 100, 20],
+    )
+
+    # Clock + density control
+    device.add_line(enable_id, 0, metro_id, 0)
+    device.add_line(rate_id, 0, metro_id, 1)
+    device.add_line(density_id, 0, dens_scale_id, 0)
+    device.add_line(dens_scale_id, 0, f"{p}_gate_thresh", 1)
+    # Generative chain: clock -> gate -> random pitch -> quantize -> makenote -> noteout
+    device.add_line(metro_id, 0, f"{p}_gate_gate", 0)
+    device.add_line(f"{p}_gate_sel", 0, f"{p}_note_rand", 0)
+    device.add_line(f"{p}_note_offset", 0, f"{p}_quant_scale", 0)
+    device.add_line(f"{p}_quant_scale", 0, make_id, 0)
+    device.add_line(make_id, 0, f"{p}_out_noteout", 0)
+    device.add_line(make_id, 1, f"{p}_out_noteout", 1)
+
+    return stage_result(
+        {
+            "enable": enable_id,
+            "rate": rate_id,
+            "density": density_id,
+            "metro": metro_id,
+            "make": make_id,
+            "noteout": f"{p}_out_noteout",
+        },
+        name="generative_midi_stage",
+        params={"rate": device.parameter(rate_id), "density": device.parameter(density_id)},
     )

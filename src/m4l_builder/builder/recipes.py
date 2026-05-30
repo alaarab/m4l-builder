@@ -6,6 +6,7 @@ from ..recipes import (
     convolver_controlled_stage,
     dry_wet_stage,
     gain_controlled_stage,
+    generative_midi_stage,
     grain_playback_controlled,
     lfo_matrix_distribute,
     midi_learn_macro_assignment,
@@ -42,4 +43,5 @@ __all__ = [
     "poly_midi_gate",
     "transport_sync_lfo_recipe",
     "midi_learn_macro_assignment",
+    "generative_midi_stage",
 ]
