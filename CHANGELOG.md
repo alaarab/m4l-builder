@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.8.0] — 2026-05-30
+
+### Added
+
+**Live 12 MIDI Tools**
+- `MidiTransformation` and `MidiGenerator` device types (`.amxd` device-type
+  codes `natt` / `nagg`, reverse-engineered and byte-verified against shipping
+  devices), with round-trip read-back via `device_from_amxd`.
+- `midi_tool_io` block: the `live.miditool.in` / `live.miditool.out` scaffold.
+- `docs/midi_tools.md` guide.
+
+**Generative building blocks**
+- `probability_gate`, `random_note`, and `euclidean_rhythm` DSP blocks.
+- `generative_midi_stage`, `euclidean_sequencer_stage`, and `stereo_width_stage`
+  recipes.
+
+**Docs & examples**
+- Six runnable example devices (`examples/`) covering every device category,
+  guarded by `tests/test_examples.py`.
+- `docs/getting_started.md`, a generated `docs/catalog.md`, `docs/roadmap.md`,
+  plus `CONTRIBUTING.md` / `DEVELOPING.md`.
+
+### Changed
+
+**Quality & tooling**
+- GitHub Actions CI (lint + type-check + a pytest matrix on Python 3.9–3.13).
+- Configured ruff and mypy in `pyproject.toml`; added a `py.typed` marker;
+  modernized type annotations (PEP 585/604). Mypy now gates all but two legacy
+  modules.
+
+**Refactor**
+- Split the code-generation half out of `_reverse_legacy.py` into
+  `_reverse_codegen.py` (no public API change).
+- Hardened `.amxd` serialization errors and bridge color-mixing validation.
+
 ## [0.7.0] — 2026-03-04
 
 ### Added
