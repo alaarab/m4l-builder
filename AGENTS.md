@@ -5,7 +5,7 @@
 
 **Purpose**: Programmatically build Max for Live devices in Python. Write scripts, emit binary .amxd files directly to Ableton User Library
 **Stack**: Python 3.9+, hatchling build, uv package manager, pytest, zero runtime dependencies (pure stdlib)
-**Version**: 0.4.0 (on PyPI as `m4l-builder`)
+**Version**: 0.8.0 (on PyPI as `m4l-builder`)
 **Status**: Production
 
 Build .amxd devices without the Max GUI: version controllable, scriptable, reproducible.

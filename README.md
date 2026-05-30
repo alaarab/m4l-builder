@@ -114,12 +114,14 @@ device.add_dsp(boxes, lines)
 **Delay/Reverb**: delay line, feedback delay, reverb network, FDN reverb, convolver
 **Modulation**: LFO (4 waveforms), tremolo, transport LFO, morphing LFO
 **MIDI**: notein/out, ctlin/out, velocity curve, transpose, arpeggiator, chord, pitch quantize, midi learn
+**Generative**: probability gate, random note, Euclidean rhythm
+**MIDI Tools**: `midi_tool_io` (the `live.miditool.in/out` scaffold for Live 12 Generators/Transformations)
 **Synthesis**: wavetable osc, noise, oscillator bank, ADSR, poly voices, grain cloud
 **Spectral**: spectral gate, crossover, vocoder, phase vocoder
 **Routing**: selector, send/receive (signal + message), matrix mixer, sidechain routing
 **Utility**: param smooth, tempo sync, sample and hold, bitcrusher, coll/dict/pattr storage
 
-90+ blocks total. See [docs/api.md](docs/api.md) for the full list with signatures.
+100+ blocks total. Browse the [catalog](docs/catalog.md) or [docs/api.md](docs/api.md) for the full list with signatures.
 
 ### Engines (jsui visualizations)
 
@@ -132,7 +134,7 @@ device.add_jsui("display", [10, 30, 200, 80],
                 js_code=filter_curve_js(), numinlets=3)
 ```
 
-18 generators available: filter curves, EQ, envelopes, spectrum, waveforms, XY pad, piano roll, step grids, grain clouds, vocoder bands, and more.
+26 generators available: filter curves, EQ, envelopes, spectrum, waveforms, XY pad, piano roll, step grids, grain clouds, vocoder bands, and more.
 
 ### Themes
 
@@ -162,7 +164,10 @@ ids = gain_controlled_stage(device, "out", [10, 10, 50, 70])
 # ids["gain"] is the *~ you wire into your signal chain
 ```
 
-Available: `gain_controlled_stage`, `dry_wet_stage`, `tempo_synced_delay`, `midi_note_gate`.
+Available recipes include `gain_controlled_stage`, `dry_wet_stage`,
+`stereo_width_stage`, `generative_midi_stage`, `euclidean_sequencer_stage`,
+`tempo_synced_delay`, and `midi_note_gate` — see the full list in the
+[catalog](docs/catalog.md).
 
 ### Layout helpers
 
