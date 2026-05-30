@@ -4,12 +4,16 @@
 AUDIO_EFFECT = b"aaaa"
 INSTRUMENT = b"iiii"
 MIDI_EFFECT = b"mmmm"
+NOTE_TRANSFORMATION = b"natt"   # Live 12 MIDI Transformation
+NOTE_GENERATOR = b"nagg"        # Live 12 MIDI Generator
 
 # amxdtype integer values for the project section
 AMXD_TYPE = {
     "audio_effect": 1633771873,   # aaaa as uint32 LE
     "instrument": 1768515945,     # iiii as uint32 LE
     "midi_effect": 1835887981,    # mmmm as uint32 LE
+    "note_transformation": 1851880564,  # big-endian "natt" (verified from Live 12 devices)
+    "note_generator": 1851877223,       # big-endian "nagg" (verified from Live 12 devices)
 }
 
 # Map device type string to binary type code
@@ -17,6 +21,8 @@ DEVICE_TYPE_CODES = {
     "audio_effect": AUDIO_EFFECT,
     "instrument": INSTRUMENT,
     "midi_effect": MIDI_EFFECT,
+    "note_transformation": NOTE_TRANSFORMATION,
+    "note_generator": NOTE_GENERATOR,
 }
 
 # Default appversion matching Max 8.6.5

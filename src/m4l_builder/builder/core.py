@@ -3,7 +3,14 @@
 from ..assets import Asset
 from ..constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
 from ..container import build_amxd, write_amxd
-from ..device import AudioEffect, Device, Instrument, MidiEffect
+from ..device import (
+    AudioEffect,
+    Device,
+    Instrument,
+    MidiEffect,
+    MidiGenerator,
+    MidiTransformation,
+)
 from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
 from ..jsui_contract import JsuiContractError, find_jsui_contract_issues, validate_jsui_contract
 from ..layout import Column, Columns, Grid, Row, inset_rect
@@ -32,6 +39,8 @@ __all__ = [
     "AudioEffect",
     "Instrument",
     "MidiEffect",
+    "MidiTransformation",
+    "MidiGenerator",
     "Subpatcher",
     "GraphContainer",
     "BoxRef",

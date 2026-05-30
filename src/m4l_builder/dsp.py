@@ -1554,6 +1554,27 @@ def random_note(id_prefix: str, low: int = 48, high: int = 72) -> tuple:
     return (boxes, lines)
 
 
+def midi_tool_io(id_prefix: str) -> tuple:
+    """Create the live.miditool.in / live.miditool.out pair for a MIDI Tool.
+
+    Required scaffolding for Live 12 MIDI Generator / Transformation devices
+    (the MidiGenerator / MidiTransformation device types). `{prefix}_in` carries
+    the notes dictionary on outlet 0 and the context dictionary (grid,
+    selection, scale, root) on outlet 1; route your note processing from there
+    into `{prefix}_out` inlet 0 to write notes back to the clip. A bare
+    `{prefix}_in` outlet 0 -> `{prefix}_out` inlet 0 connection is a valid
+    pass-through transformation.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_in", "live.miditool.in", numinlets=1, numoutlets=2,
+               outlettype=["", ""], patching_rect=[30, 30, 110, 22]),
+        newobj(f"{p}_out", "live.miditool.out", numinlets=1, numoutlets=0,
+               patching_rect=[30, 260, 110, 22]),
+    ]
+    return (boxes, [])
+
+
 def lookahead_envelope_follower(id_prefix: str, lookahead_ms: float = 5) -> tuple:
     """Lookahead envelope follower: delays the signal while detecting envelope ahead.
 

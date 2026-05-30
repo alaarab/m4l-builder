@@ -103,7 +103,14 @@ def build_device(device, output_path: str, *, validate=None) -> int:
 
 def device_from_amxd(path: str):
     """Parse an AMXD file back into a Device instance."""
-    from .device import AudioEffect, Device, Instrument, MidiEffect
+    from .device import (
+        AudioEffect,
+        Device,
+        Instrument,
+        MidiEffect,
+        MidiGenerator,
+        MidiTransformation,
+    )
 
     with open(path, "rb") as handle:
         data = handle.read()
@@ -113,6 +120,8 @@ def device_from_amxd(path: str):
         b"aaaa": "audio_effect",
         b"iiii": "instrument",
         b"mmmm": "midi_effect",
+        b"natt": "note_transformation",
+        b"nagg": "note_generator",
     }
     device_type = type_map.get(type_code, "audio_effect")
 
@@ -129,6 +138,8 @@ def device_from_amxd(path: str):
         "audio_effect": AudioEffect,
         "instrument": Instrument,
         "midi_effect": MidiEffect,
+        "note_transformation": MidiTransformation,
+        "note_generator": MidiGenerator,
     }
     klass = subclass_map.get(device_type, Device)
 
