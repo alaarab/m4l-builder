@@ -31,6 +31,12 @@ device in Live to confirm behavior before relying on it.
 - **ruff `UP031`.** The printf-style → `str.format` rewrites are deferred
   because `%`-with-tuple semantics are behavior-sensitive; enable with manual
   review.
+- **Large legacy functions.** A few functions in `_reverse_legacy.py` (e.g.
+  `_detect_live_api_helper_matches` ~580 lines, `_live_api_helper_call_from_snapshot`
+  ~460) and `corpus_analysis.py` remain large; decompose them incrementally with
+  the reverse/corpus test suites as the safety net. (`dsp` was split into a
+  categorized package; the JS-string generators in `engines/` and
+  `livemcp_bridge.py` are intentionally template-shaped and left as-is.)
 
 ## Nice to have
 
