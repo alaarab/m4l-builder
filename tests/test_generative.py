@@ -3,7 +3,7 @@
 import pytest
 
 from m4l_builder import MidiEffect
-from m4l_builder.dsp import probability_gate, random_note
+from m4l_builder.dsp import euclidean_rhythm, probability_gate, random_note
 from m4l_builder.recipes import generative_midi_stage
 
 
@@ -77,3 +77,23 @@ class TestGenerativeMidiStage:
     def test_builds_to_bytes(self):
         device, _ = self._build()
         assert device.to_bytes()[:4] == b"ampf"
+
+
+class TestEuclideanRhythm:
+    def test_even_distribution(self):
+        boxes, _ = euclidean_rhythm("e", steps=16, pulses=4)
+        sel = next(b["box"]["text"] for b in boxes if b["box"]["id"] == "e_sel")
+        assert sel == "sel 0 4 8 12"
+
+    def test_all_hits_merge_to_single_bang(self):
+        _, lines = euclidean_rhythm("e", steps=16, pulses=5)
+        sel_to_hit = [
+            ln for ln in lines
+            if ln["patchline"]["source"][0] == "e_sel"
+            and ln["patchline"]["destination"][0] == "e_hit"
+        ]
+        assert len(sel_to_hit) == 5  # one per pulse
+
+    def test_invalid_pulses_raises(self):
+        with pytest.raises(ValueError):
+            euclidean_rhythm("e", steps=4, pulses=8)

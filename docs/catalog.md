@@ -2,7 +2,7 @@
 
 A browsable index of the public building blocks. Regenerate with `uv run python tools/build_catalog.py`.
 
-## DSP blocks (108)
+## DSP blocks (109)
 
 | Name | Summary |
 |------|---------|
@@ -31,6 +31,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `dict_store` | Create a dict object for key-value data storage. |
 | `dry_wet_mix` | Create a stereo dry/wet crossfade stage (0.0-1.0 mix control). |
 | `envelope_follower` | Create an envelope follower: abs~ -> slide~. |
+| `euclidean_rhythm` | Generate a Euclidean rhythm: `pulses` hits spread evenly over `steps`. |
 | `fdn_reverb` | Feedback delay network reverb with prime delay times. |
 | `feedback_delay` | Create a delay line with tanh~ saturation and onepole~ filtering in the feedback path. |
 | `gain_stage` | Create a stereo *~ gain stage (left and right channels). |
