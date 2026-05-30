@@ -23,7 +23,7 @@ jobs:
       - name: Sync dev dependencies
         run: uv sync --group dev
       - name: Ruff
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests examples
       - name: Mypy
         run: uv run mypy
 
