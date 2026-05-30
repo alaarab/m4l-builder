@@ -212,6 +212,7 @@ DSP_EXPORTS = [
     "pitch_quantize",
     "probability_gate",
     "random_note",
+    "euclidean_rhythm",
     "midi_tool_io",
     "lookahead_envelope_follower",
     "fdn_reverb",
