@@ -58,6 +58,20 @@ device.build(device_output_path("My Gain"))
 
 Restart Ableton (or refresh the browser) and your device shows up in the User Library.
 
+## Examples
+
+Runnable scripts that build real devices live in [`examples/`](examples/); new
+users should start with the step-by-step [getting started
+guide](docs/getting_started.md).
+
+```bash
+uv run python examples/02_generative_midi.py   # builds a generative MIDI device
+```
+
+- [`01_gain_audio_effect.py`](examples/01_gain_audio_effect.py) — audio effect, low-level API
+- [`02_generative_midi.py`](examples/02_generative_midi.py) — MIDI effect using the generative recipe
+- [`03_stereo_width.py`](examples/03_stereo_width.py) — audio effect using the mid/side width recipe
+
 ## Key concepts
 
 ### Device types
