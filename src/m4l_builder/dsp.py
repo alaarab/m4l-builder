@@ -1501,6 +1501,59 @@ def pitch_quantize(id_prefix: str, scale: str = "chromatic") -> tuple:
     return (boxes, [])
 
 
+def probability_gate(id_prefix: str, probability: float = 0.5) -> tuple:
+    """Probabilistic gate: pass an incoming bang only some fraction of the time.
+
+    A staple generative building block. Each bang into {prefix}_gate inlet 0
+    draws a fresh random value; when it falls under the threshold a bang fires
+    from {prefix}_sel outlet 0. Drive it from a clock (e.g. metro). Send an int
+    0-1000 into {prefix}_thresh inlet 1 to change the density live (probability
+    x 1000).
+    """
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError(f"probability must be in [0.0, 1.0], got {probability}")
+
+    p = id_prefix
+    threshold = int(round(probability * 1000))
+    boxes = [
+        newobj(f"{p}_gate", "random 1000", numinlets=2, numoutlets=1,
+               outlettype=["int"], patching_rect=[30, 120, 90, 20]),
+        newobj(f"{p}_thresh", f"< {threshold}", numinlets=2, numoutlets=1,
+               outlettype=["int"], patching_rect=[30, 150, 70, 20]),
+        newobj(f"{p}_sel", "sel 1", numinlets=2, numoutlets=2,
+               outlettype=["bang", ""], patching_rect=[30, 180, 50, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_gate", 0, f"{p}_thresh", 0),
+        patchline(f"{p}_thresh", 0, f"{p}_sel", 0),
+    ]
+    return (boxes, lines)
+
+
+def random_note(id_prefix: str, low: int = 48, high: int = 72) -> tuple:
+    """Generate a random MIDI note number in [low, high] on each incoming bang.
+
+    A generative pitch source. Wire a trigger (bang) into {prefix}_rand inlet 0;
+    the chosen pitch appears at {prefix}_offset outlet 0. Pair with
+    pitch_quantize() to constrain the output to a musical scale.
+    """
+    if not 0 <= low <= high <= 127:
+        raise ValueError(f"require 0 <= low <= high <= 127, got low={low}, high={high}")
+
+    p = id_prefix
+    span = high - low + 1
+    boxes = [
+        newobj(f"{p}_rand", f"random {span}", numinlets=2, numoutlets=1,
+               outlettype=["int"], patching_rect=[30, 120, 80, 20]),
+        newobj(f"{p}_offset", f"+ {low}", numinlets=2, numoutlets=1,
+               outlettype=["int"], patching_rect=[30, 150, 60, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_rand", 0, f"{p}_offset", 0),
+    ]
+    return (boxes, lines)
+
+
 def lookahead_envelope_follower(id_prefix: str, lookahead_ms: float = 5) -> tuple:
     """Lookahead envelope follower: delays the signal while detecting envelope ahead.
 
