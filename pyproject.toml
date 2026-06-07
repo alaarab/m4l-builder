@@ -32,10 +32,17 @@ packages = ["src/m4l_builder"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8",
-    "pytest-cov>=5",
-    "ruff>=0.15",
-    "mypy>=1.19,<2",  # mypy 2.x dropped Python 3.9 support; project targets 3.9+
+    # pytest 9.x dropped runtime support for Python 3.9; install it where it
+    # runs and fall back to the latest 8.x series on 3.9. Project targets 3.9+.
+    "pytest>=9; python_version >= '3.10'",
+    "pytest>=8.4,<9; python_version < '3.10'",
+    "pytest-cov>=7",
+    "ruff>=0.15.16",
+    # mypy 2.x rejects --python-version 3.9 and mypy>=1.20 dropped runtime
+    # support for Python 3.9; the project targets 3.9+, so cap below 2 and only
+    # install the newer mypy where it can run. CI type-checks on 3.12.
+    "mypy>=1.20,<2; python_version >= '3.10'",
+    "mypy>=1.19,<1.20; python_version < '3.10'",
 ]
 
 [tool.pytest.ini_options]
