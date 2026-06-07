@@ -59,7 +59,7 @@ device.build(device_output_path("My Gain"))
 
 `device_output_path("My Gain")` resolves to your Ableton User Library, so the
 device shows up after you refresh Live's browser. The complete, runnable version
-is [`examples/01_gain_audio_effect.py`](../examples/01_gain_audio_effect.py).
+is [`examples/01_gain_audio_effect.py`](https://github.com/alaarab/m4l-builder/blob/main/examples/01_gain_audio_effect.py).
 
 ## Skip the boilerplate with recipes
 
@@ -89,7 +89,7 @@ device.add_dsp(boxes, lines)
 
 ## Where to go next
 
-- **[examples/](../examples/)** — four runnable devices you can build today,
+- **[examples/](https://github.com/alaarab/m4l-builder/tree/main/examples)** — four runnable devices you can build today,
   including a Live 12 MIDI Tool.
 - **[catalog.md](catalog.md)** — a browsable index of every DSP block, UI
   widget, recipe, theme, and engine.

@@ -26,7 +26,7 @@ device.build(device_output_path("Passthrough"))
 
 That bare `mt_in[0] → mt_out[0]` connection is a valid (no-op) transformation.
 Insert your note processing between them to actually change the clip. See
-[`examples/04_midi_transformation.py`](../examples/04_midi_transformation.py).
+[`examples/04_midi_transformation.py`](https://github.com/alaarab/m4l-builder/blob/main/examples/04_midi_transformation.py).
 
 ## The `live.miditool.in` / `live.miditool.out` contract
 
