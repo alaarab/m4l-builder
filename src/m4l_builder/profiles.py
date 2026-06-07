@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, field
 
 from .constants import AMXD_TYPE, DEFAULT_APPVERSION
+
+
+def _build_timestamp() -> int:
+    """Creation/modification timestamp stamped into generated patches.
+
+    Honors ``SOURCE_DATE_EPOCH`` (the reproducible-builds convention) when it is
+    set to a valid integer, so that identical inputs serialize to identical
+    bytes. Falls back to the current wall-clock time otherwise.
+    """
+    epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    if epoch:
+        try:
+            return int(epoch)
+        except ValueError:
+            pass
+    return int(time.time())
 
 
 @dataclass
@@ -45,7 +62,7 @@ class PatcherProfile:
         device_type: str,
     ) -> dict:
         """Build the root patcher payload for a device."""
-        now = int(time.time())
+        now = _build_timestamp()
         return {
             "patcher": {
                 "fileversion": 1,
