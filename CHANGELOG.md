@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- `NoteEvent` / `notes_dict` (new `notes` module): pure-Python builders for
+  the Live 12 MIDI Tool notes dictionary (`{"notes": [...]}`), with range
+  validation and JSON-ready output. Structure-building only — sending the
+  dict to `live.miditool.out` still needs Live-side wiring (see roadmap).
+
 ### Fixed
 
 - `device_output_path` now knows the Live 12 MIDI Tool device types

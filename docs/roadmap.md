@@ -6,15 +6,14 @@ device in Live to confirm behavior before relying on it.
 
 ## Needs Ableton Live validation
 
-- **MIDI Generator note emission.** The `MidiGenerator` device type and the
-  `midi_tool_io` scaffold ship today, but a generator that actually *emits*
-  notes must construct a notes dictionary (`pitch` / `start_time` / `duration`,
-  see [midi_tools.md](midi_tools.md)) and send it to `live.miditool.out`. The
-  likely approach is Max `dict` / `dict.pack` objects or an embedded `v8`/`js`
-  script. Open-source reference generators are *frozen* (`.amxd` patcher
-  encrypted), so the mechanism must be confirmed in Live rather than
-  reverse-engineered. A pure-Python notes-dictionary builder helper would make
-  this ergonomic.
+- **MIDI Generator note emission.** The `MidiGenerator` device type, the
+  `midi_tool_io` scaffold, and a pure-Python notes-dictionary builder
+  (`NoteEvent` / `notes_dict`, see [midi_tools.md](midi_tools.md)) ship today,
+  but a generator that actually *emits* notes must send that dictionary to
+  `live.miditool.out`. The likely approach is Max `dict` / `dict.pack` objects
+  or an embedded `v8`/`js` script. Open-source reference generators are
+  *frozen* (`.amxd` patcher encrypted), so the mechanism must be confirmed in
+  Live rather than reverse-engineered.
 - **MPE per-note expression helpers.** Blocks for per-note channel routing,
   per-note pitch bend (±48 st), channel pressure, and slide (CC74). The objects
   are easy to emit; the per-note routing behavior needs a Live check.
