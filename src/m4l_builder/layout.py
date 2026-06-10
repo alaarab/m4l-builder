@@ -59,120 +59,9 @@ class _LayoutContainer:
             )
         return rect
 
-    # Pattern A: (id, rect, **kw)
-    def add_panel(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_panel(id, rect, **kw)
-
-    def add_scope(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_scope(id, rect, **kw)
-
-    def add_meter(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_meter(id, rect, **kw)
-
-    def add_fpic(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_fpic(id, rect, **kw)
-
-    def add_multislider(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_multislider(id, rect, **kw)
-
-    def add_adsrui(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_adsrui(id, rect, **kw)
-
-    def add_live_drop(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_live_drop(id, rect, **kw)
-
-    def add_swatch(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_swatch(id, rect, **kw)
-
-    def add_textedit(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_textedit(id, rect, **kw)
-
-    def add_live_step(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_live_step(id, rect, **kw)
-
-    def add_live_grid(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_live_grid(id, rect, **kw)
-
-    def add_live_line(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_live_line(id, rect, **kw)
-
-    def add_live_arrows(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_live_arrows(id, rect, **kw)
-
-    def add_rslider(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_rslider(id, rect, **kw)
-
-    def add_kslider(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_kslider(id, rect, **kw)
-
-    def add_nodes(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_nodes(id, rect, **kw)
-
-    def add_matrixctrl(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_matrixctrl(id, rect, **kw)
-
-    def add_ubutton(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_ubutton(id, rect, **kw)
-
-    def add_nslider(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_nslider(id, rect, **kw)
-
-    # Pattern G: same as A
-    def add_umenu(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_umenu(id, rect, **kw)
-
-    def add_radiogroup(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_radiogroup(id, rect, **kw)
-
-    # Pattern B: (id, varname, rect, **kw)
-    def add_dial(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_dial(id, varname, rect, **kw)
-
-    def add_toggle(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_toggle(id, varname, rect, **kw)
-
-    def add_slider(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_slider(id, varname, rect, **kw)
-
-    def add_button(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_button(id, varname, rect, **kw)
-
-    def add_number_box(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_number_box(id, varname, rect, **kw)
-
-    def add_live_text(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_live_text(id, varname, rect, **kw)
-
-    def add_live_gain(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return self._device.add_live_gain(id, varname, rect, **kw)
+    # Proxies whose shape is uniform — (id, rect, **kw) or (id, varname,
+    # rect, **kw) — are generated below the class body; only widgets with
+    # unique signatures are defined inline.
 
     # Pattern C: (id, rect, text, **kw)
     def add_comment(self, id, text, *, width=None, height=None, **kw):
@@ -206,6 +95,72 @@ class _LayoutContainer:
     def add_bpatcher(self, id, patcher_name, *, width=None, height=None, **kw):
         rect = self._next_rect(width, height)
         return self._device.add_bpatcher(id, rect, patcher_name, **kw)
+
+
+# Widgets whose device wrapper takes (id, rect, **kw).
+_SIMPLE_PROXY_WIDGETS = (
+    "panel",
+    "scope",
+    "meter",
+    "fpic",
+    "multislider",
+    "adsrui",
+    "live_drop",
+    "swatch",
+    "textedit",
+    "live_step",
+    "live_grid",
+    "live_line",
+    "live_arrows",
+    "rslider",
+    "kslider",
+    "nodes",
+    "matrixctrl",
+    "ubutton",
+    "nslider",
+    "umenu",
+    "radiogroup",
+)
+
+# Widgets whose device wrapper takes (id, varname, rect, **kw).
+_VARNAME_PROXY_WIDGETS = (
+    "dial",
+    "toggle",
+    "slider",
+    "button",
+    "number_box",
+    "live_text",
+    "live_gain",
+)
+
+
+def _make_simple_proxy(widget_name):
+    def method(self, id, *, width=None, height=None, **kw):
+        rect = self._next_rect(width, height)
+        return getattr(self._device, f"add_{widget_name}")(id, rect, **kw)
+
+    method.__name__ = f"add_{widget_name}"
+    method.__qualname__ = f"_LayoutContainer.add_{widget_name}"
+    method.__doc__ = f"Add a `{widget_name}` widget at the next layout slot."
+    return method
+
+
+def _make_varname_proxy(widget_name):
+    def method(self, id, varname, *, width=None, height=None, **kw):
+        rect = self._next_rect(width, height)
+        return getattr(self._device, f"add_{widget_name}")(id, varname, rect, **kw)
+
+    method.__name__ = f"add_{widget_name}"
+    method.__qualname__ = f"_LayoutContainer.add_{widget_name}"
+    method.__doc__ = f"Add a `{widget_name}` widget at the next layout slot."
+    return method
+
+
+for _widget_name in _SIMPLE_PROXY_WIDGETS:
+    setattr(_LayoutContainer, f"add_{_widget_name}", _make_simple_proxy(_widget_name))
+for _widget_name in _VARNAME_PROXY_WIDGETS:
+    setattr(_LayoutContainer, f"add_{_widget_name}", _make_varname_proxy(_widget_name))
+del _widget_name
 
 
 class Row(_LayoutContainer):
