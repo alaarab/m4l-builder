@@ -15,6 +15,7 @@ from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
 from ..jsui_contract import JsuiContractError, find_jsui_contract_issues, validate_jsui_contract
 from ..layout import Column, Columns, Grid, Row, inset_rect
 from ..modules import ModuleSpec, module_from_block, mount_module
+from ..notes import NoteEvent, notes_dict
 from ..objects import newobj, patchline
 from ..parameters import (
     LIVE_NATIVE_INT_MAX,
@@ -63,6 +64,8 @@ __all__ = [
     "ModuleSpec",
     "module_from_block",
     "mount_module",
+    "NoteEvent",
+    "notes_dict",
     "ValidationIssue",
     "BuildValidationError",
     "format_validation_issues",

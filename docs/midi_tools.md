@@ -59,9 +59,28 @@ Insert your note processing between them to actually change the clip. See
 ```
 
 Process this dictionary with `dict`/`dict.pack`/`zl` objects or a `v8`/`js`
-script between `mt_in` outlet 0 and `mt_out` inlet 0. (A pure-Python helper for
-constructing note dictionaries is on the roadmap; for now a generator builds the
-dict with Max `dict` objects or an embedded script.)
+script between `mt_in` outlet 0 and `mt_out` inlet 0.
+
+To construct the dictionary in Python — e.g. to bake a pattern into a `dict`
+message or generate the body of an embedded script — use `NoteEvent` and
+`notes_dict`:
+
+```python
+import json
+
+from m4l_builder import NoteEvent, notes_dict
+
+payload = notes_dict([
+    NoteEvent(pitch=60, start_time=0.0, duration=0.5, velocity=100.0),
+    NoteEvent(pitch=64, start_time=0.5, duration=0.5, probability=0.75),
+])
+json.dumps(payload)   # '{"notes": [{"pitch": 60, ...}, ...]}'
+```
+
+These helpers build the documented structure only; wiring it into
+`live.miditool.out` (Max `dict` objects or a `v8`/`js` script) is still up to
+the patch, and that emission mechanism needs validation inside Live (see the
+[roadmap](roadmap.md)).
 
 ## Where Live loads them
 

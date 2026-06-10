@@ -416,6 +416,13 @@ Preset management for Max devices.
 
 ---
 
+## notes.py
+
+`NoteEvent(pitch, start_time, duration, *, velocity=None, probability=None, velocity_deviation=None, release_velocity=None, mute=None)` -- One note in a Live 12 MIDI Tool notes dictionary. Validates ranges; `to_dict()` omits unset optionals.
+`notes_dict(events)` -- Build the `{"notes": [...]}` dictionary for `live.miditool.out` from `NoteEvent` instances and/or plain mappings. Structure-building only; emission into Live is up to the patch.
+
+---
+
 ## objects.py
 
 `newobj(id, text, *, numinlets, numoutlets, **kwargs)` -- Create a box dict for any Max object

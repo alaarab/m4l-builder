@@ -43,6 +43,8 @@ CORE_EXPORTS = [
     "ModuleSpec",
     "module_from_block",
     "mount_module",
+    "NoteEvent",
+    "notes_dict",
     "ValidationIssue",
     "BuildValidationError",
     "format_validation_issues",
