@@ -880,26 +880,60 @@ function draw_analyzer() {
     var i, n, freq;
     var xs = [];
     var ys = [];
+    var py = [];
     if (!analyzer_enabled) return;
     n = analyzer_display.length;
     if (n < 2) return;
+
+    var left = plot_left();
+    var right = plot_right();
+    var bottom = plot_bottom();
+    var top = plot_top();
 
     for (i = 0; i < n; i++) {
         freq = analyzer_bin_freq(i, n);
         xs[i] = freq_to_x(freq);
         ys[i] = analyzer_db_to_y(analyzer_display[i]);
+        py[i] = analyzer_db_to_y(analyzer_peaks[i]);
     }
 
+    // Filled area under the spectrum, with a vertical gradient that fades
+    // toward the floor. One pattern fill for the whole shape (cheap; avoids
+    // per-slice fills).
+    var grad = mgraphics.pattern_create_linear(left, top, left, bottom);
+    grad.add_color_stop_rgba(0.0,
+        ANALYZER_FILL_CLR[0], ANALYZER_FILL_CLR[1], ANALYZER_FILL_CLR[2],
+        ANALYZER_FILL_CLR[3]);
+    grad.add_color_stop_rgba(1.0,
+        ANALYZER_FILL_CLR[0], ANALYZER_FILL_CLR[1], ANALYZER_FILL_CLR[2], 0.0);
+    mgraphics.set_source(grad);
+    mgraphics.move_to(xs[0], bottom);
+    for (i = 0; i < n; i++) mgraphics.line_to(xs[i], ys[i]);
+    mgraphics.line_to(xs[n - 1], bottom);
+    mgraphics.close_path();
+    mgraphics.fill();
+
+    // Spectrum line on top of the fill.
     mgraphics.set_source_rgba(ANALYZER_LINE_CLR);
-    mgraphics.set_line_width(1.0);
+    mgraphics.set_line_width(1.4);
     for (i = 0; i < n; i++) {
-        if (i === 0) {
-            mgraphics.move_to(xs[i], ys[i]);
-        } else {
-            mgraphics.line_to(xs[i], ys[i]);
-        }
+        if (i === 0) mgraphics.move_to(xs[i], ys[i]);
+        else mgraphics.line_to(xs[i], ys[i]);
     }
     mgraphics.stroke();
+
+    // Peak-hold line (slow-decaying), drawn thin above the live spectrum.
+    if (ANALYZER_PEAK_CLR[3] > 0.001) {
+        mgraphics.set_source_rgba(ANALYZER_PEAK_CLR);
+        mgraphics.set_line_width(1.0);
+        var started = 0;
+        for (i = 0; i < n; i++) {
+            if (analyzer_peaks[i] <= ANALYZER_MIN_DB + 1.0) { started = 0; continue; }
+            if (!started) { mgraphics.move_to(xs[i], py[i]); started = 1; }
+            else mgraphics.line_to(xs[i], py[i]);
+        }
+        mgraphics.stroke();
+    }
 }
 
 function format_freq_text(freq) {
