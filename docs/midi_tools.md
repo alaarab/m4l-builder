@@ -16,12 +16,12 @@ A MIDI Tool is built around a `live.miditool.in` → processing → `live.midito
 chain. The `midi_tool_io` helper creates that scaffolding:
 
 ```python
-from m4l_builder import MidiTransformation, midi_tool_io
+from m4l_builder import MidiTransformation, device_output_path, midi_tool_io
 
 device = MidiTransformation("Passthrough", 200, 120)
 device.add_dsp(*midi_tool_io("mt"))
 device.add_line("mt_in", 0, "mt_out", 0)   # notes pass straight through
-device.build(device_output_path("Passthrough"))
+device.build(device_output_path("Passthrough", "note_transformation"))
 ```
 
 That bare `mt_in[0] → mt_out[0]` connection is a valid (no-op) transformation.

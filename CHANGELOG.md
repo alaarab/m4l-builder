@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `device_output_path` now knows the Live 12 MIDI Tool device types
+  (`note_transformation`, `note_generator`) and resolves them to the
+  `MIDI Tools/Max Transformations|Max Generators` folders at the User Library
+  root. Unknown device types now raise `ValueError` instead of silently
+  landing in the Audio Effects folder.
+
 ## [0.8.0] — 2026-05-30
 
 ### Added

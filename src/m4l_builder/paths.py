@@ -5,10 +5,14 @@ import platform
 from pathlib import Path
 from typing import Optional
 
+# Output directories relative to the User Library root. Regular devices live
+# under Presets/; Live 12 MIDI Tools load from a top-level MIDI Tools folder.
 _DEVICE_TYPE_SUBDIRS = {
-    "audio_effect": "Audio Effects/Max Audio Effect",
-    "instrument": "Instruments/Max Instrument",
-    "midi_effect": "MIDI Effects/Max MIDI Effect",
+    "audio_effect": "Presets/Audio Effects/Max Audio Effect",
+    "instrument": "Presets/Instruments/Max Instrument",
+    "midi_effect": "Presets/MIDI Effects/Max MIDI Effect",
+    "note_transformation": "MIDI Tools/Max Transformations",
+    "note_generator": "MIDI Tools/Max Generators",
 }
 
 
@@ -64,11 +68,16 @@ def device_output_path(
 
     Args:
         name: Device name (without .amxd extension).
-        device_type: One of "audio_effect", "instrument", "midi_effect".
+        device_type: One of "audio_effect", "instrument", "midi_effect",
+            "note_transformation", "note_generator".
         subfolder: Optional relative subfolder beneath the device-type directory.
     """
-    subdir = _DEVICE_TYPE_SUBDIRS.get(device_type, _DEVICE_TYPE_SUBDIRS["audio_effect"])
-    path = user_library() / "Presets" / subdir
+    try:
+        subdir = _DEVICE_TYPE_SUBDIRS[device_type]
+    except KeyError:
+        valid = ", ".join(sorted(_DEVICE_TYPE_SUBDIRS))
+        raise ValueError(f"unknown device_type {device_type!r}; expected one of: {valid}") from None
+    path = user_library() / subdir
     validated_subfolder = _validated_subfolder(subfolder)
     if validated_subfolder is not None:
         path = path / validated_subfolder
