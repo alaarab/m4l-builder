@@ -351,10 +351,15 @@ function knob_defs(band) {
     var center_x = SHOW_TYPE_CONTROLS ? Math.floor(w * 0.5) : (SHOW_TOGGLE_STACK ? Math.floor(w * 0.41) : Math.floor(w * 0.5));
     var motion_pad = 0;
     if (uses_minimal_rail_layout()) {
-        var slim_radius = Math.max(15, Math.min(17, Math.floor(Math.min(w * 0.27, h * 0.125))));
-        var slim_top_y = 11 + slim_radius;
-        var slim_middle_y = Math.floor(h * 0.50);
-        var slim_lower_y = h - slim_radius - 12;
+        // Three knobs split the column into equal thirds. Radius is bounded so
+        // the name label (cy - r - 9) and value label (cy + r + 7) both stay
+        // inside their third — otherwise the bottom knob's value overflows the
+        // strip and gets clipped by Live's device frame.
+        var slim_third = h / 3.0;
+        var slim_radius = Math.max(11, Math.min(15, Math.floor(Math.min(w * 0.22, slim_third * 0.5 - 9.0))));
+        var slim_top_y = Math.floor(slim_third * 0.5) + 1;
+        var slim_middle_y = Math.floor(h * 0.5);
+        var slim_lower_y = Math.floor(h - slim_third * 0.5) - 1;
         return [
             {key: "freq",  label: "FREQ", cx: center_x, cy: slim_top_y, radius: slim_radius},
             {key: "gain",  label: "GAIN", cx: center_x, cy: slim_middle_y, radius: slim_radius},
