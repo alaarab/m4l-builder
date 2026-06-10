@@ -61,6 +61,10 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
+# Measured 87% (branch) at the time this gate was added; 85 leaves headroom
+# for matrix variance (version-gated shims, platform branches). If a matrix
+# leg ever flakes near the line, move this to a single-version CLI flag.
+fail_under = 85
 
 [tool.ruff]
 target-version = "py39"

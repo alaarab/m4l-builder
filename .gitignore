@@ -16,3 +16,5 @@ env/
 .mypy_cache/
 .ruff_cache/
 site/
+.coverage
+coverage.xml
