@@ -17,6 +17,16 @@
   root. Unknown device types now raise `ValueError` instead of silently
   landing in the Audio Effects folder.
 
+### Changed
+
+- `_reverse_codegen` is now mypy-gated, shrinking the type-checking backlog
+  to `_reverse_legacy` and `livemcp_bridge`.
+- CI now enforces an 85% coverage floor (`fail_under` in pyproject;
+  measured 87% when added).
+- The uniform layout-container proxies are generated from name tables
+  instead of 28 hand-copied methods (no API change), with exhaustive proxy
+  smoke tests and a Device-widget parity test.
+
 ## [0.8.0] — 2026-05-30
 
 ### Added
