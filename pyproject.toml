@@ -97,13 +97,11 @@ implicit_optional = true
 
 # Remaining type-checking backlog. Everything else in the package is gated.
 #   _reverse_legacy:  the large legacy reverse-engineering module.
-#   _reverse_codegen: the codegen half split out of _reverse_legacy.
 #   livemcp_bridge:  relies on Device.add_* methods attached dynamically via
 #                    setattr (see device.py), which mypy cannot see statically.
 [[tool.mypy.overrides]]
 module = [
     "m4l_builder._reverse_legacy",
-    "m4l_builder._reverse_codegen",
     "m4l_builder.livemcp_bridge",
 ]
 ignore_errors = true

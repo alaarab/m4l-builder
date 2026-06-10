@@ -306,7 +306,7 @@ def _controller_shell_helper_statements(
         lines.append(f"    # {evidence}")
     lines.append(
         _dsp_add_statement(
-            helper_name,
+            str(helper_name),
             helper.get("positional", []),
             helper.get("kwargs", {}),
         )
@@ -322,7 +322,7 @@ def _candidate_helper_statements(candidate: dict) -> list[str]:
         lines.append(f"    # {evidence}")
     lines.append(
         _dsp_add_statement(
-            helper_name,
+            str(helper_name),
             helper.get("positional", []),
             helper.get("kwargs", {}),
         )
