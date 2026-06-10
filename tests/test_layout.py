@@ -695,3 +695,38 @@ class TestImports:
     def test_grid_importable_from_package(self):
         from m4l_builder import Grid
         assert Grid is not None
+
+
+# ---------------------------------------------------------------------------
+# Generated proxy coverage
+# ---------------------------------------------------------------------------
+
+class TestGeneratedProxies:
+    def test_every_simple_proxy_places_a_box(self):
+        from m4l_builder.layout import _SIMPLE_PROXY_WIDGETS
+
+        d = AudioEffect("T", 4000, 200, theme=WARM)
+        with d.row(10, 30, spacing=8, height=70) as row:
+            for i, widget_name in enumerate(_SIMPLE_PROXY_WIDGETS):
+                expected = row.slot(width=50)
+                row._cursor_x = expected[0]  # rewind: slot() advanced the cursor
+                getattr(row, f"add_{widget_name}")(f"w{i}", width=50)
+                assert _rect(d, f"w{i}") == expected, widget_name
+
+    def test_every_varname_proxy_places_a_box(self):
+        from m4l_builder.layout import _VARNAME_PROXY_WIDGETS
+
+        d = AudioEffect("T", 2000, 200, theme=WARM)
+        with d.row(10, 30, spacing=8, height=70) as row:
+            for i, widget_name in enumerate(_VARNAME_PROXY_WIDGETS):
+                expected = row.slot(width=50)
+                row._cursor_x = expected[0]
+                getattr(row, f"add_{widget_name}")(f"v{i}", f"V{i}", width=50)
+                assert _rect(d, f"v{i}") == expected, widget_name
+
+    def test_every_device_widget_has_a_layout_proxy(self):
+        from m4l_builder.layout import _LayoutContainer
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+
+        for widget_name in list(DEVICE_WIDGET_SPECS) + ["jsui", "v8ui"]:
+            assert hasattr(_LayoutContainer, f"add_{widget_name}"), widget_name
