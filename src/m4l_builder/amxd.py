@@ -90,6 +90,7 @@ def device_to_patcher(device, *, profile=None) -> dict:
         width=device.width,
         height=device.height,
         device_type=device.device_type,
+        latency=int(getattr(device, "latency", 0)),
         profile=effective_profile,
     )
     patcher["patcher"]["dependency_cache"] = [

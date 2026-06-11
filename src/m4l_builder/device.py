@@ -38,6 +38,9 @@ class Device(GraphContainer):
         self.height = height
         self.device_type = device_type
         self.theme = theme
+        # Defined Latency (samples) reported to Live for plugin delay
+        # compensation — the patcher-level "latency" key.
+        self.latency = 0
         self.profile = profile or DEFAULT_PATCHER_PROFILE
         self._js_files: dict[Any, Any] = {}
         self._param_banks: dict[Any, Any] = {}

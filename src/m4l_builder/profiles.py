@@ -60,6 +60,7 @@ class PatcherProfile:
         width: float,
         height: float,
         device_type: str,
+        latency: int = 0,
     ) -> dict:
         """Build the root patcher payload for a device."""
         now = _build_timestamp()
@@ -100,7 +101,7 @@ class PatcherProfile:
                 "boxes": boxes,
                 "lines": lines,
                 "dependency_cache": [],
-                "latency": 0,
+                "latency": int(latency),
                 "project": {
                     "version": 1,
                     "creationdate": now,
