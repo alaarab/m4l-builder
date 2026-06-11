@@ -378,3 +378,18 @@ class TestNamespaces:
         assert m4l.reverse.generate_python_from_amxd is not None
         assert m4l.analysis.analyze_amxd_file is not None
         assert m4l.bridge.enable_livemcp_bridge is not None
+
+
+class TestDefinedLatency:
+    def test_default_latency_zero(self):
+        device = Device("test", 200, 100)
+        patcher = device.to_patcher()
+        assert patcher["patcher"]["latency"] == 0
+
+    def test_device_latency_lands_in_patcher(self):
+        # "Defined Latency" (samples) is how an M4L device reports PDC
+        # latency to Live — the patcher-level "latency" key.
+        device = Device("test", 200, 100)
+        device.latency = 2048
+        patcher = device.to_patcher()
+        assert patcher["patcher"]["latency"] == 2048

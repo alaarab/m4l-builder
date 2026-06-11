@@ -8,6 +8,7 @@ def build_patcher(boxes: list, lines: list, *,
                   width: float = 400.0,
                   height: float = 170.0,
                   device_type: str = "audio_effect",
+                  latency: int = 0,
                   profile=None) -> dict:
     """Build the complete M4L patcher dict ready for JSON serialization."""
     effective_profile = profile or DEFAULT_PATCHER_PROFILE
@@ -17,4 +18,5 @@ def build_patcher(boxes: list, lines: list, *,
         width=width,
         height=height,
         device_type=device_type,
+        latency=latency,
     )
