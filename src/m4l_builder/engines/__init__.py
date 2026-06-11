@@ -36,6 +36,11 @@ from .spectral_display import spectral_display_js
 from .spectral_vocoder_display import spectral_vocoder_display_js
 from .spectrum_analyzer import spectrum_analyzer_js
 from .step_grid_display import step_grid_display_js
+from .transfer_curve import (
+    TRANSFER_CURVE_INLETS,
+    TRANSFER_CURVE_OUTLETS,
+    transfer_curve_js,
+)
 from .velocity_curve_display import velocity_curve_display_js
 from .waveform_display import waveform_display_js
 from .wavetable_display import wavetable_display_js
@@ -50,6 +55,9 @@ __all__ = [
     "eq_band_column_js",
     "fft_analyzer_dsp",
     "fft_analyzer_kernel",
+    "transfer_curve_js",
+    "TRANSFER_CURVE_INLETS",
+    "TRANSFER_CURVE_OUTLETS",
     "FFT_ANALYZER_DEFAULT_SIZE",
     "FFT_ANALYZER_DEFAULT_OVERLAP",
     "linear_phase_eq_display_js",
