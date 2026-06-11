@@ -43,6 +43,11 @@ from .transfer_curve import (
 )
 from .velocity_curve_display import velocity_curve_display_js
 from .waveform_display import waveform_display_js
+from .waveshape_curve import (
+    WAVESHAPE_CURVE_INLETS,
+    WAVESHAPE_CURVE_OUTLETS,
+    waveshape_curve_js,
+)
 from .wavetable_display import wavetable_display_js
 from .wavetable_editor import wavetable_editor_js
 from .xy_pad import xy_pad_js
@@ -58,6 +63,9 @@ __all__ = [
     "transfer_curve_js",
     "TRANSFER_CURVE_INLETS",
     "TRANSFER_CURVE_OUTLETS",
+    "waveshape_curve_js",
+    "WAVESHAPE_CURVE_INLETS",
+    "WAVESHAPE_CURVE_OUTLETS",
     "FFT_ANALYZER_DEFAULT_SIZE",
     "FFT_ANALYZER_DEFAULT_OVERLAP",
     "linear_phase_eq_display_js",
