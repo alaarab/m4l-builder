@@ -77,8 +77,14 @@ def eq_curve_js(
     grid_color="0.2, 0.2, 0.22, 0.5",
     text_color="0.5, 0.5, 0.52, 1.0",
     zero_line_color="0.3, 0.3, 0.32, 0.8",
+    analyzer_trim_db=42.0,
 ):
-    """Return JavaScript source for an interactive parametric EQ display."""
+    """Return JavaScript source for an interactive parametric EQ display.
+
+    ``analyzer_trim_db`` lifts raw ``fft_frame`` magnitudes into the display's
+    -72..0 dB window (2/N-normalized FFT bins of typical program material sit
+    well below 0 dB). Ignored for the legacy dB-list analyzer path.
+    """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
         bg_color=bg_color,
@@ -92,6 +98,7 @@ def eq_curve_js(
         grid_color=grid_color,
         text_color=text_color,
         zero_line_color=zero_line_color,
+        analyzer_trim_db=analyzer_trim_db,
     )
 
 
@@ -168,6 +175,8 @@ var MAX_BANDS       = 8;
 var DEFAULT_SR      = 48000.0;
 var ANALYZER_MIN_DB = -72.0;
 var ANALYZER_MAX_DB = 0.0;
+var ANALYZER_BINS   = 128;        // fixed log-spaced display bins for fft_frame
+var ANALYZER_TRIM_DB = $analyzer_trim_db;
 var LOG_MIN         = Math.log(MIN_FREQ);
 var LOG_MAX         = Math.log(MAX_FREQ);
 var LOG_RANGE       = LOG_MAX - LOG_MIN;
@@ -431,6 +440,77 @@ function update_analyzer_data(values) {
         }
     }
     request_redraw();
+}
+
+// Raw FFT magnitude frame (fft_frame): linear-spaced, linear-magnitude bins.
+// Rebin into a fixed set of log-spaced display bins so the analyzer always has
+// ANALYZER_BINS entries (no blank-out when the FFT size changes), and so the
+// log frequency axis is correct (raw FFT bins are linear in Hz).
+function ensure_analyzer_arrays() {
+    var i;
+    if (analyzer_display.length === ANALYZER_BINS) return;
+    analyzer_display = [];
+    analyzer_peaks = [];
+    for (i = 0; i < ANALYZER_BINS; i++) {
+        analyzer_display[i] = ANALYZER_MIN_DB;
+        analyzer_peaks[i] = ANALYZER_MIN_DB;
+    }
+}
+
+function update_analyzer_from_fft(mags) {
+    var m = mags.length;
+    if (m < 4) return;
+    ensure_analyzer_arrays();
+    var hz_per_bin = (sample_rate * 0.5) / m;   // mags = FFT_SIZE/2 bins -> Nyquist
+    var half = 0.5 / (ANALYZER_BINS - 1);
+    var i, k, klo, khi, norm, f_lo, f_hi, peak, sum, cnt, mag, energy, db, atk, rel;
+    for (i = 0; i < ANALYZER_BINS; i++) {
+        norm = i / (ANALYZER_BINS - 1);
+        f_lo = Math.exp(LOG_MIN + (norm - half) * LOG_RANGE);
+        f_hi = Math.exp(LOG_MIN + (norm + half) * LOG_RANGE);
+        klo = Math.floor(f_lo / hz_per_bin);
+        khi = Math.ceil(f_hi / hz_per_bin);
+        if (klo < 0) klo = 0;
+        if (khi >= m) khi = m - 1;
+        if (khi < klo) khi = klo;
+        peak = 0.0; sum = 0.0; cnt = 0;
+        for (k = klo; k <= khi; k++) {
+            mag = mags[k];
+            if (mag < 0.0) mag = -mag;
+            if (mag !== mag) mag = 0.0;       // NaN guard
+            if (mag > peak) peak = mag;
+            sum += mag; cnt++;
+        }
+        // Blend peak + mean: peak keeps tonal spikes, mean tames broadband noise.
+        energy = cnt > 0 ? (0.4 * peak + 0.6 * (sum / cnt)) : 0.0;
+        db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
+        db += ANALYZER_TRIM_DB;
+        db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
+        // Frame-rate-independent enough at ~30fps: fast attack, slow release.
+        if (db > analyzer_display[i]) {
+            analyzer_display[i] = analyzer_display[i] * 0.35 + db * 0.65;
+        } else {
+            analyzer_display[i] = analyzer_display[i] * 0.82 + db * 0.18;
+        }
+        if (analyzer_display[i] > analyzer_peaks[i]) {
+            analyzer_peaks[i] = analyzer_display[i];
+        } else {
+            analyzer_peaks[i] = Math.max(ANALYZER_MIN_DB, analyzer_peaks[i] - 0.22);
+        }
+    }
+    request_redraw();
+}
+
+function fft_frame() {
+    update_analyzer_from_fft(arrayfromargs(arguments));
+}
+
+function set_samplerate(hz) {
+    if (hz > 1000.0 && hz < 768000.0) {
+        sample_rate = hz;
+        rebuild_band_cache();
+        request_redraw();
+    }
 }
 
 function band_uses_gain(type) {

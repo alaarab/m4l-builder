@@ -15,6 +15,12 @@ from .crossover_display import crossover_display_js
 from .envelope_display import envelope_display_js
 from .eq_band_column import eq_band_column_js
 from .eq_curve import eq_curve_js
+from .fft_analyzer import (
+    FFT_ANALYZER_DEFAULT_OVERLAP,
+    FFT_ANALYZER_DEFAULT_SIZE,
+    fft_analyzer_dsp,
+    fft_analyzer_kernel,
+)
 from .filter_curve import filter_curve_js
 from .grain_display import grain_display_js
 from .grid_sequencer_display import grid_sequencer_display_js
@@ -42,6 +48,10 @@ __all__ = [
     "crossover_display_js",
     "eq_curve_js",
     "eq_band_column_js",
+    "fft_analyzer_dsp",
+    "fft_analyzer_kernel",
+    "FFT_ANALYZER_DEFAULT_SIZE",
+    "FFT_ANALYZER_DEFAULT_OVERLAP",
     "linear_phase_eq_display_js",
     "envelope_display_js",
     "spectrum_analyzer_js",
