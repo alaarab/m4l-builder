@@ -1,26 +1,26 @@
-"""Real FFT spectrum-analysis backend (``pfft~``-based).
+"""Real FFT spectrum-analysis backend (``pfft~`` + ``buffer~``).
 
 This is the analysis half of the spectrum feature; the *display* half lives in
-``spectrum_analyzer.py`` (standalone) and ``eq_curve.py`` (EQ overlay). Both
-consume the same wire contract:
+``spectrum_analyzer.py`` (standalone) and ``eq_curve.py`` (EQ overlay).
 
-    fft_frame <m0> <m1> ... <m_{N-1}>     N = fft_size/2 linear magnitudes,
-                                          ~2/N-normalized so a full-scale sine
-                                          lands near 0 dB, emitted every
-                                          ``frame_interval_ms``.
+Contract: the kernel writes ``fft_size/2`` linear magnitudes (~2/N-normalized
+so a full-scale sine lands near 0 dB) into a named ``buffer~`` every spectral
+frame, indexed by ``fftin~``'s sync outlet. The consumer is told where to look:
+
+    set_analyzer_buffer <name> <bins>     poll this buffer~ (display-side Task
+                                          or setInterval reads peek(1,0,bins))
     set_samplerate <hz>                   so the consumer can map bin -> Hz.
 
-The kernel is emitted as a JSON ``.maxpat`` support file and instantiated with
-``pfft~ <stem> <fft_size> <overlap>``. Topology (proven in the standalone
-Spectrum Analyzer product)::
+Kernel topology (the classic "Forbidden Planet" spectral-buffer pattern)::
 
-    fftin~ 1 blackman ─┬─ cartopol~ ─ *~ 2/N ─ vectral~ N ─ framesnap~ <ms> ─ out 1
-                       └─ fftout~ 1 blackman                 (audio passthrough)
-    in 1 ─ route interval slide ─┬─ framesnap~ (right inlet)
-                                 └─ prepend slide ─ vectral~ (left inlet)
+    fftin~ 1 blackman ─┬─ cartopol~ ─ *~ 2/N ─ poke~ <buf> (value)
+                       │       fftin~ idx ────────┘ (index, samples)
+                       └─ fftout~ 1 blackman    (spectral passthrough)
 
-The ``fftin~ -> fftout~`` passthrough keeps ``pfft~`` happy (it expects a
-spectral path to the output); the analysis tap is a side branch.
+Why not message frames? An earlier framesnap~/vectral~ design emitted
+zero-filled 256-sample vector chunks in Live (framesnap~ snapshots the MSP
+vector, not the spectral frame) — the buffer~ handoff is sample-accurate,
+scheduler-free, and survives FFT-size changes.
 """
 
 from __future__ import annotations
@@ -68,19 +68,15 @@ def _support_patcher(boxes, lines, width=520.0, height=280.0):
 
 def fft_analyzer_kernel(
     *,
+    buffer_name: str,
     fft_size: int = FFT_ANALYZER_DEFAULT_SIZE,
     window: str = "blackman",
-    frame_interval_ms: int = 33,
-    slide_up: float = 3.0,
-    slide_down: float = 11.0,
 ) -> str:
     """Return the ``pfft~`` kernel as a JSON ``.maxpat`` string.
 
-    ``slide_up``/``slide_down`` set the ``vectral~`` spectral smoothing (fast
-    rise, slow fall). ``frame_interval_ms`` sets how often a full frame is
-    emitted on ``out 1``.
+    Writes 2/N-normalized magnitudes into ``buffer_name`` at the bin index
+    given by ``fftin~``'s sync outlet, every spectral frame.
     """
-    bins = fft_size // 2
     boxes: list = []
     lines: list = []
 
@@ -94,46 +90,24 @@ def fft_analyzer_kernel(
                outlettype=["signal", "signal", "signal"],
                patching_rect=[34.0, 34.0, 110.0, 22.0]))
     add(newobj("fft_out", f"fftout~ 1 {window}", numinlets=2, numoutlets=0,
-               patching_rect=[34.0, 250.0, 110.0, 22.0]))
+               patching_rect=[34.0, 220.0, 110.0, 22.0]))
     add(newobj("cartopol", "cartopol~", numinlets=2, numoutlets=2,
                outlettype=["signal", "signal"],
                patching_rect=[34.0, 78.0, 72.0, 22.0]))
     # ~2/N normalization so a full-scale sine reads near 0 dB.
     add(newobj("mag_scale", f"*~ {2.0 / fft_size}", numinlets=2, numoutlets=1,
                outlettype=["signal"], patching_rect=[34.0, 118.0, 96.0, 22.0]))
-    add(newobj("mag_smooth", f"vectral~ {bins}", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[34.0, 158.0, 100.0, 22.0]))
-    add(newobj("smooth_default", f"loadmess slide {slide_up} {slide_down}",
-               numinlets=1, numoutlets=1, outlettype=[""],
-               patching_rect=[150.0, 158.0, 150.0, 20.0]))
-    add(newobj("frame_snap", f"framesnap~ {frame_interval_ms}",
-               numinlets=2, numoutlets=1, outlettype=["list"],
-               patching_rect=[34.0, 198.0, 100.0, 22.0]))
-    add(newobj("frame_start", "loadmess 1", numinlets=1, numoutlets=1,
-               outlettype=[""], patching_rect=[150.0, 198.0, 80.0, 20.0]))
-    add(newobj("ctrl_in", "in 1", numinlets=1, numoutlets=1, outlettype=[""],
-               patching_rect=[320.0, 34.0, 40.0, 22.0]))
-    add(newobj("ctrl_route", "route interval slide", numinlets=1, numoutlets=3,
-               outlettype=["", "", ""], patching_rect=[320.0, 78.0, 120.0, 22.0]))
-    add(newobj("smooth_prepend", "prepend slide", numinlets=1, numoutlets=1,
-               outlettype=[""], patching_rect=[320.0, 118.0, 92.0, 22.0]))
-    add(newobj("frame_out", "out 1", numinlets=1, numoutlets=0,
-               patching_rect=[160.0, 250.0, 48.0, 22.0]))
+    add(newobj("spec_poke", f"poke~ {buffer_name}", numinlets=3, numoutlets=0,
+               patching_rect=[34.0, 162.0, 120.0, 22.0]))
 
     wire("fft_in", 0, "cartopol", 0)
     wire("fft_in", 1, "cartopol", 1)
     wire("fft_in", 0, "fft_out", 0)
     wire("fft_in", 1, "fft_out", 1)
     wire("cartopol", 0, "mag_scale", 0)
-    wire("mag_scale", 0, "mag_smooth", 1)
-    wire("smooth_default", 0, "mag_smooth", 0)
-    wire("frame_start", 0, "frame_snap", 0)
-    wire("mag_smooth", 0, "frame_snap", 0)
-    wire("frame_snap", 0, "frame_out", 0)
-    wire("ctrl_in", 0, "ctrl_route", 0)
-    wire("ctrl_route", 0, "frame_snap", 1)
-    wire("ctrl_route", 1, "smooth_prepend", 0)
-    wire("smooth_prepend", 0, "mag_smooth", 0)
+    wire("mag_scale", 0, "spec_poke", 0)
+    # fftin~ outlet 2 = bin index (samples) -> poke~ index inlet.
+    wire("fft_in", 2, "spec_poke", 1)
 
     return json.dumps(_support_patcher(boxes, lines), indent=2)
 
@@ -148,9 +122,6 @@ def fft_analyzer_dsp(
     fft_size: int = FFT_ANALYZER_DEFAULT_SIZE,
     overlap: int = FFT_ANALYZER_DEFAULT_OVERLAP,
     window: str = "blackman",
-    frame_interval_ms: int = 33,
-    slide_up: float = 3.0,
-    slide_down: float = 11.0,
     id_prefix: str = "fft",
     kernel_filename: str | None = None,
     samplerate_handshake: bool = True,
@@ -158,43 +129,85 @@ def fft_analyzer_dsp(
     patch_x: int = 80,
     patch_y: int = 560,
 ) -> dict[str, str]:
-    """Wire a ``pfft~`` analyzer from ``source_id`` into ``target_id``'s inlet.
+    """Wire a ``pfft~`` analyzer from ``source_id`` for ``target_id`` to poll.
 
-    Emits the kernel support file, instantiates ``pfft~``, taps the mono signal
-    at ``source_id[source_outlet]``, and feeds ``fft_frame <mags...>`` into
-    ``target_id`` at ``target_inlet``. When ``samplerate_handshake`` is set,
-    also wires ``dspstate~ -> prepend set_samplerate`` into the same inlet so
-    the consumer can map bins to Hz. Returns the created object ids.
+    Emits the kernel support file, instantiates ``pfft~`` writing magnitudes
+    into a device-local ``buffer~``, and tells the consumer where to look via
+    ``set_analyzer_buffer <name> <bins>`` at load. When
+    ``samplerate_handshake`` is set, also wires ``dspstate~ ->
+    prepend set_samplerate`` into the same inlet so the consumer can map bins
+    to Hz. Returns the created object ids.
     """
     kernel_filename = kernel_filename or f"{id_prefix}_analyzer_core.maxpat"
     stem = kernel_filename[:-len(".maxpat")] if kernel_filename.endswith(".maxpat") else kernel_filename
+    bins = fft_size // 2
+    buffer_name = f"{id_prefix}_specbuf"
     device.add_support_file(
         kernel_filename,
         fft_analyzer_kernel(
-            fft_size=fft_size, window=window,
-            frame_interval_ms=frame_interval_ms,
-            slide_up=slide_up, slide_down=slide_down,
+            buffer_name=buffer_name, fft_size=fft_size, window=window,
         ),
         file_type="JSON",
     )
 
     pfft_id = f"{id_prefix}_pfft"
-    frame_prepend = f"{id_prefix}_frame_prepend"
+    buf_id = f"{id_prefix}_buf"
+    bufsize_id = f"{id_prefix}_bufsize"
+    bufmsg_id = f"{id_prefix}_bufannounce"
+    lb_id = loadbang_id
+    ids = {"pfft": pfft_id, "buffer": buf_id}
+
+    if lb_id is None:
+        lb_id = f"{id_prefix}_lb"
+        device.add_newobj(
+            lb_id, "loadbang", numinlets=0, numoutlets=1, outlettype=["bang"],
+            patching_rect=[patch_x + 240, patch_y - 40, 70, 22],
+        )
+        ids["loadbang"] = lb_id
+
+    # buffer~ sized in samples (fft_size covers the full frame; the consumer
+    # reads the first fft_size/2 bins).
+    device.add_newobj(
+        buf_id, f"buffer~ {buffer_name}",
+        numinlets=1, numoutlets=2, outlettype=["float", "bang"],
+        patching_rect=[patch_x, patch_y - 40, 160, 22],
+    )
+    device.add_box({
+        "box": {
+            "id": bufsize_id,
+            "maxclass": "message",
+            "text": f"sizeinsamps {fft_size}",
+            "numinlets": 2,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [patch_x + 180, patch_y - 70, 130, 20],
+        }
+    })
+    device.add_line(lb_id, 0, bufsize_id, 0)
+    device.add_line(bufsize_id, 0, buf_id, 0)
+
     device.add_newobj(
         pfft_id, f"pfft~ {stem} {fft_size} {overlap}",
-        numinlets=1, numoutlets=2, outlettype=["signal", ""],
+        numinlets=1, numoutlets=1, outlettype=["signal"],
         patching_rect=[patch_x, patch_y, 220, 22],
     )
-    device.add_newobj(
-        frame_prepend, "prepend fft_frame",
-        numinlets=1, numoutlets=1, outlettype=[""],
-        patching_rect=[patch_x, patch_y + 30, 140, 22],
-    )
     device.add_line(source_id, source_outlet, pfft_id, 0)
-    device.add_line(pfft_id, 1, frame_prepend, 0)
-    device.add_line(frame_prepend, 0, target_id, target_inlet)
 
-    ids = {"pfft": pfft_id, "frame_prepend": frame_prepend}
+    # Tell the consumer where the spectrum lives.
+    device.add_box({
+        "box": {
+            "id": bufmsg_id,
+            "maxclass": "message",
+            "text": f"set_analyzer_buffer {buffer_name} {bins}",
+            "numinlets": 2,
+            "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [patch_x, patch_y + 40, 240, 20],
+        }
+    })
+    device.add_line(lb_id, 0, bufmsg_id, 0)
+    device.add_line(bufmsg_id, 0, target_id, target_inlet)
+    ids["buffer_announce"] = bufmsg_id
 
     if samplerate_handshake:
         dspstate_id = f"{id_prefix}_dspstate"
@@ -211,16 +224,7 @@ def fft_analyzer_dsp(
         )
         device.add_line(dspstate_id, 1, sr_prepend, 0)
         device.add_line(sr_prepend, 0, target_id, target_inlet)
-        if loadbang_id is not None:
-            device.add_line(loadbang_id, 0, dspstate_id, 0)
-        else:
-            lb_id = f"{id_prefix}_lb"
-            device.add_newobj(
-                lb_id, "loadbang", numinlets=0, numoutlets=1, outlettype=["bang"],
-                patching_rect=[patch_x + 240, patch_y - 30, 70, 22],
-            )
-            device.add_line(lb_id, 0, dspstate_id, 0)
-            ids["loadbang"] = lb_id
+        device.add_line(lb_id, 0, dspstate_id, 0)
         ids["dspstate"] = dspstate_id
         ids["sr_prepend"] = sr_prepend
 
