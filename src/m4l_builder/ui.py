@@ -509,7 +509,10 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
               **kwargs) -> dict:
     """Create a live.text styled button/toggle.
 
-    mode: 0=toggle, 1=button (momentary).
+    mode: 0 = Button (MOMENTARY — fires on press, un-latches on release,
+    rejects Live-API sets), 1 = Toggle (latching). Proven live in Ableton
+    12.4: every latching control (bypass, band on/off, AN) needs mode=1;
+    the old docstring had these inverted and shipped un-latching "toggles".
     """
     spec = _resolve_parameter_spec(
         varname,
