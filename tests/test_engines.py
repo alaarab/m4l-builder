@@ -27,6 +27,11 @@ from m4l_builder.engines.grid_sequencer_display import (
     GRID_SEQ_OUTLETS,
     grid_sequencer_display_js,
 )
+from m4l_builder.engines.level_history import (
+    LEVEL_HISTORY_INLETS,
+    LEVEL_HISTORY_OUTLETS,
+    level_history_js,
+)
 from m4l_builder.engines.linear_phase_eq_display import (
     LINEAR_PHASE_EQ_DISPLAY_INLETS,
     LINEAR_PHASE_EQ_DISPLAY_OUTLETS,
@@ -2492,6 +2497,95 @@ class TestSpectralVocoderDisplay:
 
     def test_no_es6_arrow_functions(self):
         js = spectral_vocoder_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestLevelHistory:
+    def test_returns_string(self):
+        js = level_history_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = level_history_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = level_history_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = level_history_js()
+        assert "inlets = 1;" in js
+
+    def test_declares_outlets(self):
+        js = level_history_js()
+        assert "outlets = 1;" in js
+
+    def test_inlet_count_metadata(self):
+        assert LEVEL_HISTORY_INLETS == 1
+
+    def test_outlet_count_metadata(self):
+        assert LEVEL_HISTORY_OUTLETS == 1
+
+    def test_message_handlers_present(self):
+        js = level_history_js()
+        for fn in ("function levels", "function set_range",
+                   "function set_gr_scale", "function set_seconds",
+                   "function set_rate", "function clear"):
+            assert fn in js
+
+    def test_display_only_no_outlet_calls(self):
+        # V1 is display-only: nothing may fire the outlet (no-echo rule).
+        js = level_history_js()
+        assert "outlet(" not in js
+
+    def test_levels_handler_guards_non_finite(self):
+        # A per-frame TypeError flood wedges Max's UI thread Live-wide.
+        js = level_history_js()
+        assert "isFinite" in js
+
+    def test_ring_wrap_math(self):
+        js = level_history_js()
+        assert "(head + 1) % cap" in js
+        assert "function frame_at" in js
+
+    def test_no_task_usage(self):
+        # Legacy js Task.schedule silently no-ops in Live; redraws must be
+        # driven by the inbound levels stream.
+        js = level_history_js()
+        assert "new Task" not in js
+
+    def test_custom_gr_color(self):
+        js = level_history_js(gr_line_color="0.9, 0.1, 0.1, 1.0")
+        assert "0.9, 0.1, 0.1, 1.0" in js
+
+    def test_custom_range_defaults(self):
+        js = level_history_js(lo_db=-48.0, hi_db=12.0, gr_scale_db=12.0)
+        assert "var lo_db = -48.0;" in js
+        assert "var hi_db = 12.0;" in js
+        assert "var gr_scale_db = 12.0;" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = level_history_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = level_history_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = level_history_js()
         for line in js.split('\n'):
             stripped = line.strip()
             if stripped.startswith('//'):
