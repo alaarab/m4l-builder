@@ -12,6 +12,11 @@ Usage:
 
 from .compressor_display import compressor_display_js
 from .crossover_display import crossover_display_js
+from .delay_trail import (
+    DELAY_TRAIL_INLETS,
+    DELAY_TRAIL_OUTLETS,
+    delay_trail_js,
+)
 from .envelope_display import envelope_display_js
 from .eq_band_column import eq_band_column_js
 from .eq_curve import eq_curve_js
@@ -64,6 +69,9 @@ __all__ = [
     "TRANSFER_CURVE_INLETS",
     "TRANSFER_CURVE_OUTLETS",
     "waveshape_curve_js",
+    "delay_trail_js",
+    "DELAY_TRAIL_INLETS",
+    "DELAY_TRAIL_OUTLETS",
     "WAVESHAPE_CURVE_INLETS",
     "WAVESHAPE_CURVE_OUTLETS",
     "FFT_ANALYZER_DEFAULT_SIZE",
