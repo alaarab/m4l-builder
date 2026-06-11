@@ -71,8 +71,13 @@ def linear_phase_eq_display_js(
     show_dynamic=True,
     show_hud_badges=True,
     show_selection_readout=True,
+    analyzer_trim_db=18.0,
 ):
-    """Return JavaScript source for the flagship linear-phase EQ display."""
+    """Return JavaScript source for the flagship linear-phase EQ display.
+
+    ``analyzer_trim_db`` lifts raw ``fft_frame``/buffer magnitudes into the
+    -72..0 dB display window (see engines/fft_analyzer.py contract).
+    """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
         bg_color=bg_color,
@@ -91,6 +96,7 @@ def linear_phase_eq_display_js(
         show_dynamic="1" if show_dynamic else "0",
         show_hud_badges="1" if show_hud_badges else "0",
         show_selection_readout="1" if show_selection_readout else "0",
+        analyzer_trim_db=analyzer_trim_db,
     )
 
 
@@ -1514,6 +1520,111 @@ function msg_float(v) {
 
 function msg_int(v) {
     if (inlet === 1) msg_float(v);
+}
+
+// ── FFT analyzer source (buffer~ polling; see engines/fft_analyzer.py) ──
+// Raw linear FFT magnitudes are rebinned into a fixed set of log-spaced
+// display bins (correct log axis; no blank-out across FFT-size changes).
+var ANALYZER_BINS = 128;
+var ANALYZER_TRIM_DB = $analyzer_trim_db;
+var analyzer_buffer_name = "";
+var analyzer_buffer_bins = 0;
+var analyzer_poll_task = null;
+
+function ensure_analyzer_arrays() {
+    var i;
+    if (analyzer_display.length === ANALYZER_BINS) return;
+    analyzer_display = [];
+    analyzer_peaks = [];
+    analyzer_input = [];
+    for (i = 0; i < ANALYZER_BINS; i++) {
+        analyzer_display[i] = ANALYZER_MIN_DB;
+        analyzer_peaks[i] = ANALYZER_MIN_DB;
+    }
+}
+
+function update_analyzer_from_fft(mags) {
+    var m = mags.length;
+    if (m < 4) return;
+    ensure_analyzer_arrays();
+    var hz_per_bin = (sample_rate * 0.5) / m;
+    var half = 0.5 / (ANALYZER_BINS - 1);
+    var i, k, klo, khi, norm, f_lo, f_hi, peak, sum, cnt, mag, energy, db;
+    for (i = 0; i < ANALYZER_BINS; i++) {
+        norm = i / (ANALYZER_BINS - 1);
+        f_lo = Math.exp(LOG_MIN + (norm - half) * LOG_RANGE);
+        f_hi = Math.exp(LOG_MIN + (norm + half) * LOG_RANGE);
+        klo = Math.floor(f_lo / hz_per_bin);
+        khi = Math.ceil(f_hi / hz_per_bin);
+        if (klo < 0) klo = 0;
+        if (khi >= m) khi = m - 1;
+        if (khi < klo) khi = klo;
+        peak = 0.0; sum = 0.0; cnt = 0;
+        for (k = klo; k <= khi; k++) {
+            mag = mags[k];
+            if (mag < 0.0) mag = -mag;
+            if (mag !== mag) mag = 0.0;
+            if (mag > peak) peak = mag;
+            sum += mag; cnt++;
+        }
+        energy = cnt > 0 ? (0.4 * peak + 0.6 * (sum / cnt)) : 0.0;
+        db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
+        db += ANALYZER_TRIM_DB;
+        db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
+        if (db > analyzer_display[i]) {
+            analyzer_display[i] = analyzer_display[i] * 0.35 + db * 0.65;
+        } else {
+            analyzer_display[i] = analyzer_display[i] * 0.82 + db * 0.18;
+        }
+        if (analyzer_display[i] > analyzer_peaks[i]) {
+            analyzer_peaks[i] = analyzer_display[i];
+        } else {
+            analyzer_peaks[i] = Math.max(ANALYZER_MIN_DB, analyzer_peaks[i] - 0.22);
+        }
+    }
+    mgraphics.redraw();
+}
+
+function fft_frame() {
+    update_analyzer_from_fft(arrayfromargs(arguments));
+}
+
+function set_samplerate(hz) {
+    if (hz > 1000.0 && hz < 768000.0) {
+        sample_rate = hz;
+        rebuild_band_cache();
+        mgraphics.redraw();
+    }
+}
+
+function poll_analyzer_buffer() {
+    if (!analyzer_enabled || analyzer_buffer_name === "") return;
+    var vals = null;
+    try {
+        var b = new Buffer(analyzer_buffer_name);
+        var n = analyzer_buffer_bins > 0 ? analyzer_buffer_bins : 1024;
+        vals = b.peek(1, 0, n);
+    } catch (e) {
+        return;
+    }
+    if (vals && vals.length >= 4) update_analyzer_from_fft(vals);
+}
+
+function start_analyzer_poll() {
+    if (analyzer_poll_task !== null) return;
+    if (typeof Task !== "undefined") {
+        analyzer_poll_task = new Task(poll_analyzer_buffer);
+        analyzer_poll_task.interval = 33;
+        analyzer_poll_task.repeat();
+    } else if (typeof setInterval !== "undefined") {
+        analyzer_poll_task = setInterval(poll_analyzer_buffer, 33);
+    }
+}
+
+function set_analyzer_buffer(name, bins) {
+    analyzer_buffer_name = "" + name;
+    analyzer_buffer_bins = bins ? Math.floor(bins) : 0;
+    start_analyzer_poll();
 }
 
 function pointer_context_click(pointerevent, ctrl, but) {
