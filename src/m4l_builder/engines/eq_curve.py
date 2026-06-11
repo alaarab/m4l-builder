@@ -1561,7 +1561,16 @@ function apply_menu_action(action) {
 
 // ── Tooltip on hover ────────────────────────────────────────────────
 function draw_tooltip() {
-    var target = menu_band >= 0 ? -1 : (hover_band >= 0 ? hover_band : selected_band);
+    // Hover/drag only — a persistent tooltip for the selected band occludes
+    // the curve (the left strip already shows the selection's values).
+    var target = -1;
+    if (menu_band >= 0) {
+        target = -1;
+    } else if (dragging && selected_band >= 0) {
+        target = selected_band;
+    } else if (hover_band >= 0) {
+        target = hover_band;
+    }
     if (target < 0 || target >= num_bands) return;
 
     var b = band_cache[target];
@@ -1669,6 +1678,25 @@ function hit_test(mx, my) {
 function set_band(idx, freq, gain, q, type, enabled, motion, dynamic, dynamic_amount, motion_rate, motion_depth, motion_direction) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= MAX_BANDS) return;
+    // Drag ownership: while the user drags this band the graph is the source
+    // of truth. Parameter echoes of our own outlet values would fight the
+    // gesture and force a rebuild+redraw per tick.
+    if (dragging && idx === selected_band) return;
+    // Echo guard: the shell routes our outlets into live.* params whose
+    // changes come straight back here. Skip exact no-ops (6-arg form only —
+    // the extended motion/dynamic form always applies).
+    if (arguments.length <= 6) {
+        var bb = bands[idx];
+        var en_g = enabled ? 1 : 0;
+        if ((en_g ? bb.present : 1) &&
+            bb.enabled === en_g &&
+            bb.type === Math.floor(type) &&
+            Math.abs(bb.freq - freq) < 0.05 &&
+            Math.abs(bb.gain - gain) < 0.01 &&
+            Math.abs(bb.q - q) < 0.005) {
+            return;
+        }
+    }
     if (enabled) {
         bands[idx].present = 1;
     }
@@ -1696,7 +1724,9 @@ function set_band(idx, freq, gain, q, type, enabled, motion, dynamic, dynamic_am
         bands[idx].motion_direction = clamp_motion_direction(motion_direction);
     }
     rebuild_band_cache();
-    force_redraw();
+    // Message-driven updates coalesce through the 33ms throttle; direct
+    // gestures redraw synchronously in their own handlers.
+    request_redraw();
 }
 
 function set_num_bands(n) {
@@ -2124,13 +2154,10 @@ function handle_drag_at(x, y, but, cmd, shift) {
         new_freq = b.freq + (new_freq - b.freq) * 0.15;
     }
 
-    if (new_freq < 100) {
-        new_freq = Math.round(new_freq);
-    } else if (new_freq < 1000) {
-        new_freq = Math.round(new_freq);
-    } else {
-        new_freq = Math.round(new_freq / 10.0) * 10.0;
-    }
+    // Continuous frequency (0.1 Hz resolution) — the old 10 Hz snap above
+    // 1 kHz made the node stutter against the visual drag position. Display
+    // formatting handles presentation rounding.
+    new_freq = Math.round(new_freq * 10.0) / 10.0;
     new_freq = clamp(new_freq, MIN_FREQ, MAX_FREQ);
 
     if (uses_gain && new_freq === b.freq && new_gain === b.gain) return;
