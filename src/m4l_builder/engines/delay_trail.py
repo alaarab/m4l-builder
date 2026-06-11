@@ -220,9 +220,10 @@ function start_drag(x) {
     drag_start_time = time_ms;
 }
 
-function drag_to(x) {
+function drag_to(x, fine) {
     if (!dragging) return;
     var dms = ((x - drag_start_x) / plot_w()) * MAX_MS;
+    if (fine) dms *= 0.15;
     time_ms = clamp(drag_start_time + dms, 1.0, MAX_MS);
     outlet(0, "time", Math.round(time_ms));
     mgraphics.redraw();
@@ -236,7 +237,7 @@ function end_drag() {
 
 function onpointerdown(pointerevent) { start_drag(pointerevent.x); }
 function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.x);
+    if (dragging) drag_to(pointerevent.x, pointerevent.shiftKey ? 1 : 0);
     else if (!hovering) { hovering = 1; mgraphics.redraw(); }
 }
 function onpointerup(pointerevent) { end_drag(); }
@@ -244,7 +245,7 @@ function onpointerleave(pointerevent) { hovering = 0; end_drag(); mgraphics.redr
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
-    if (but) drag_to(x);
+    if (but) drag_to(x, shift);
     else end_drag();
 }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }

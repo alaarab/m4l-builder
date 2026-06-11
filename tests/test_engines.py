@@ -2552,10 +2552,17 @@ class TestLevelHistory:
                    "function set_rate", "function clear"):
             assert fn in js
 
-    def test_display_only_no_outlet_calls(self):
-        # V1 is display-only: nothing may fire the outlet (no-echo rule).
+    def test_display_only_by_default(self):
+        # Default build is display-only: the drag path is compile-time
+        # gated off (behavioral no-emission proven in test_js_behavior).
         js = level_history_js()
-        assert "outlet(" not in js
+        assert "var INTERACTIVE = 0;" in js
+        assert "if (!INTERACTIVE) return;" in js
+
+    def test_interactive_kwarg_enables_threshold_drag(self):
+        js = level_history_js(interactive=True)
+        assert "var INTERACTIVE = 1;" in js
+        assert 'outlet(0, "threshold"' in js
 
     def test_levels_handler_guards_non_finite(self):
         # A per-frame TypeError flood wedges Max's UI thread Live-wide.

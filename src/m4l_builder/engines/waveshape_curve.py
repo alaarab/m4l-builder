@@ -228,10 +228,10 @@ function start_drag(y) {
     drag_start_drive = drive_db;
 }
 
-function drag_to(y) {
+function drag_to(y, fine) {
     if (!dragging) return;
-    // Up = more drive. 1 px = 0.3 dB.
-    var dd = (drag_start_y - y) * 0.3;
+    // Up = more drive. 1 px = 0.3 dB (0.045 with shift).
+    var dd = (drag_start_y - y) * (fine ? 0.045 : 0.3);
     drive_db = clamp(drag_start_drive + dd, 0.0, 36.0);
     outlet(0, "drive", Math.round(drive_db * 10) / 10);
     mgraphics.redraw();
@@ -245,7 +245,7 @@ function end_drag() {
 
 function onpointerdown(pointerevent) { start_drag(pointerevent.y); }
 function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.y);
+    if (dragging) drag_to(pointerevent.y, pointerevent.shiftKey ? 1 : 0);
     else if (!hovering) { hovering = 1; mgraphics.redraw(); }
 }
 function onpointerup(pointerevent) { end_drag(); }
@@ -253,7 +253,7 @@ function onpointerleave(pointerevent) { hovering = 0; end_drag(); mgraphics.redr
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
-    if (but) drag_to(y);
+    if (but) drag_to(y, shift);
     else end_drag();
 }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }

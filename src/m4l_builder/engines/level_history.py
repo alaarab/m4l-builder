@@ -17,6 +17,11 @@ Messages in (inlet 0):
                               values outside the window hide it
     clear                     wipe history
 
+With interactive=True the reference line becomes draggable (Pro-C style:
+threshold on the main view): vertical drag emits "threshold <db>" on
+outlet 0 (shift = fine), clamped to [lo_db, min(hi_db, 0)]. While
+dragging, inbound set_ref_db is ignored (drag owns the line).
+
 Messages out (outlet 0): none in V1 (reserved for threshold drag later).
 """
 
@@ -54,6 +59,7 @@ def level_history_js(
     seconds=6.0,
     rate_hz=30.0,
     ref_db=None,
+    interactive=False,
 ):
     """Return JavaScript source for the scrolling level/GR history display."""
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
@@ -74,6 +80,7 @@ def level_history_js(
         seconds=seconds,
         rate_hz=rate_hz,
         ref_db="null" if ref_db is None else ref_db,
+        interactive=1 if interactive else 0,
     )
 
 
@@ -100,6 +107,10 @@ var TEXT_CLR    = [$text_color];
 var REF_CLR     = [$ref_color];
 
 var ref_db = $ref_db;
+var INTERACTIVE = $interactive;
+var dragging = 0;
+var drag_start_y = 0.0;
+var drag_start_ref = 0.0;
 var lo_db = $lo_db;
 var hi_db = $hi_db;
 var gr_scale_db = $gr_scale_db;
@@ -325,10 +336,47 @@ function set_rate(hz) {
 }
 
 function set_ref_db(v) {
+    if (dragging) return;  // drag owns the line
     v = parseFloat(v);
     if (!isFinite(v)) { ref_db = null; }
     else { ref_db = v; }
     mgraphics.redraw();
+}
+
+// ── Interaction (interactive=True): drag the reference line ──────────
+function start_drag(y) {
+    if (!INTERACTIVE) return;
+    dragging = 1;
+    drag_start_y = y;
+    drag_start_ref = ref_db === null ? 0.0 : ref_db;
+}
+
+function drag_to(y, fine) {
+    if (!dragging) return;
+    var dd = (y - drag_start_y) / plot_h() * (hi_db - lo_db);
+    if (fine) dd *= 0.15;
+    ref_db = clamp(drag_start_ref - dd, lo_db, Math.min(hi_db, 0.0));
+    outlet(0, "threshold", Math.round(ref_db * 10) / 10);
+    mgraphics.redraw();
+}
+
+function end_drag() {
+    if (!dragging) return;
+    dragging = 0;
+    mgraphics.redraw();
+}
+
+function onpointerdown(pointerevent) { start_drag(pointerevent.y); }
+function onpointermove(pointerevent) {
+    if (dragging) drag_to(pointerevent.y, pointerevent.shiftKey ? 1 : 0);
+}
+function onpointerup(pointerevent) { end_drag(); }
+function onpointerleave(pointerevent) { end_drag(); }
+
+function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
+function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
+    if (but) drag_to(y, shift);
+    else end_drag();
 }
 
 function clear() {
