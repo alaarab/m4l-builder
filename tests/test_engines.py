@@ -504,7 +504,12 @@ class TestEqCurveEngine:
         assert "function delete_band_at(idx)" in js
         assert "var DOUBLE_CLICK_MS = 320;" in js
         assert "var suppress_next_ondblclick_delete = 0;" in js
-        assert "delete_band_at(clicked_band);" in js
+        # Pro-Q semantics (it16): double-click RESETS the band; delete
+        # stays on the context menu (behavioral coverage in
+        # tests/test_js_behavior.py).
+        assert "function reset_band_at(idx)" in js
+        assert "reset_band_at(clicked_band);" in js
+        assert "delete_band_at(clicked_band);" not in js
         assert "suppress_next_ondblclick_delete = 1;" in js
         assert "if (dynamic_hit >= 0 || hit >= 0)" in js
         assert "create_band_at(x, y);" in js

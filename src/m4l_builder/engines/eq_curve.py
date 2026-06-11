@@ -1990,7 +1990,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
 
     if (is_delete_double_click) {
         close_node_menu();
-        delete_band_at(clicked_band);
+        reset_band_at(clicked_band);
         suppress_next_ondblclick_delete = 1;
         last_click_ms = 0;
         last_click_band = -1;
@@ -2012,7 +2012,13 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
 
     if (option_click) {
         if (dynamic_hit >= 0 || hit >= 0) {
-            delete_band_at(dynamic_hit >= 0 ? dynamic_hit : hit);
+            var opt_idx = dynamic_hit >= 0 ? dynamic_hit : hit;
+            bands[opt_idx].enabled = bands[opt_idx].enabled ? 0 : 1;
+            selected_band = opt_idx;
+            rebuild_band_cache();
+            outlet(0, "band_enable", opt_idx, bands[opt_idx].enabled);
+            outlet(0, "selected_band", opt_idx);
+            mgraphics.redraw();
             return;
         }
     }
@@ -2071,6 +2077,27 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     mgraphics.redraw();
 }
 
+function reset_band_at(idx) {
+    // Pro-Q semantics: double-click resets the band (gain bands -> 0 dB,
+    // gain-less types -> default Q). Delete stays on the context menu.
+    if (idx < 0 || idx >= num_bands) return;
+    if (!bands[idx].present) return;
+    selected_band = idx;
+    if (band_cache[idx].uses_gain) {
+        if (bands[idx].gain !== 0.0) {
+            bands[idx].gain = 0.0;
+            rebuild_band_cache();
+            outlet(2, "band_gain", idx, 0.0);
+        }
+    } else if (bands[idx].q !== 1.0) {
+        bands[idx].q = 1.0;
+        rebuild_band_cache();
+        outlet(3, "band_q", idx, 1.0);
+    }
+    outlet(0, "selected_band", idx);
+    mgraphics.redraw();
+}
+
 function handle_double_click(x, y) {
     if (suppress_next_ondblclick_delete) {
         suppress_next_ondblclick_delete = 0;
@@ -2081,7 +2108,7 @@ function handle_double_click(x, y) {
     var dynamic_hit = dynamic_hit_test(x, y);
 
     if (dynamic_hit >= 0 || hit >= 0) {
-        delete_band_at(dynamic_hit >= 0 ? dynamic_hit : hit);
+        reset_band_at(dynamic_hit >= 0 ? dynamic_hit : hit);
         return;
     }
     if (!point_in_plot(x, y)) return;
