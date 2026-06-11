@@ -209,6 +209,14 @@ class TestFilterCurveEngine:
         assert "0.24, 0.24, 0.25, 1.0" in js
         assert "0.07, 0.10, 0.15, 1.0" in js
 
+    def test_samplerate_message_replaces_hardcode(self):
+        # Shelf response math must follow the actual DSP rate, not 48k.
+        js = filter_curve_js()
+        assert "function set_samplerate(v)" in js
+        assert "var sample_rate = 48000.0;" in js
+        assert "/ 48000" not in js
+        assert "/ sample_rate" in js
+
     def test_no_es6_let(self):
         """Verify no 'let' declarations (ES5 only uses var).
         Checks for 'let ' at the start of a statement, not as substring of 'inlet'."""

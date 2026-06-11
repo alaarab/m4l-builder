@@ -34,12 +34,34 @@ def _parameter_banks_payload(device) -> dict[str, dict]:
     return banks
 
 
+# Wiring-integrity rules enforced on every build (policy None). Max drops
+# patchlines to unknown box ids silently at load ("patchcord source not
+# found: deleting") -> dead controls with no build error; these rules have
+# zero false positives, so they are always errors.
+WIRING_INTEGRITY_CODES = frozenset(
+    {"duplicate-box-id", "unknown-source", "unknown-destination"}
+)
+
+
 def apply_validation_policy(device, policy) -> None:
-    """Apply build validation semantics to a device-like object."""
-    if policy in (None, False):
+    """Apply build validation semantics to a device-like object.
+
+    policy None (default): enforce wiring-integrity rules only.
+    policy False: skip all validation (explicit escape hatch).
+    policy "warn"/"error": full lint with the chosen severity behavior.
+    """
+    if policy is False:
+        return
+    if policy is None:
+        issues = device.lint(device_type=device.device_type)
+        wiring_issues = [
+            issue for issue in issues if issue.code in WIRING_INTEGRITY_CODES
+        ]
+        if wiring_issues:
+            raise BuildValidationError(wiring_issues)
         return
     if policy not in {"warn", "error"}:
-        raise ValueError("validate must be one of None, 'warn', or 'error'")
+        raise ValueError("validate must be one of None, False, 'warn', or 'error'")
 
     issues = device.lint(device_type=device.device_type)
     if not issues:

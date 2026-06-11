@@ -280,6 +280,56 @@ class TestValidation:
         assert written == output.stat().st_size
         assert output.exists()
 
+    def test_default_build_rejects_unknown_patchline_ids(self, tmp_path):
+        # Max silently drops patchlines to unknown box ids at load -> dead
+        # wiring with no error. The default build must catch the typo.
+        device = Device("test", 200, 100)
+        device.add_newobj("gain", "live.gain~", numinlets=2, numoutlets=5)
+        device.add_line("gain", 0, "no_such_box", 0)
+
+        with pytest.raises(BuildValidationError) as excinfo:
+            device.build(str(tmp_path / "bad.amxd"))
+        assert "unknown-destination" in str(excinfo.value)
+        assert "no_such_box" in str(excinfo.value)
+
+    def test_default_build_rejects_unknown_source(self, tmp_path):
+        device = Device("test", 200, 100)
+        device.add_newobj("gain", "live.gain~", numinlets=2, numoutlets=5)
+        device.add_line("ghost", 0, "gain", 0)
+
+        with pytest.raises(BuildValidationError) as excinfo:
+            device.build(str(tmp_path / "bad.amxd"))
+        assert "unknown-source" in str(excinfo.value)
+
+    def test_default_build_rejects_duplicate_box_ids(self, tmp_path):
+        device = Device("test", 200, 100)
+        device.add_newobj("dup", "+ 1", numinlets=2, numoutlets=1)
+        device.add_newobj("dup", "+ 2", numinlets=2, numoutlets=1)
+
+        with pytest.raises(BuildValidationError) as excinfo:
+            device.build(str(tmp_path / "bad.amxd"))
+        assert "duplicate-box-id" in str(excinfo.value)
+
+    def test_default_build_ignores_style_rules(self, tmp_path):
+        # Style/policy lint (sig~ ban, orphans, panel background) stays
+        # opt-in via validate="warn"/"error"; the default only enforces
+        # wiring integrity.
+        device = Device("test", 200, 100)
+        device.add_newobj("sig", "sig~ 1.", numinlets=1, numoutlets=1)
+        output = tmp_path / "style_ok.amxd"
+
+        written = device.build(str(output))
+        assert written == output.stat().st_size
+
+    def test_validate_false_skips_wiring_checks(self, tmp_path):
+        device = Device("test", 200, 100)
+        device.add_newobj("gain", "live.gain~", numinlets=2, numoutlets=5)
+        device.add_line("gain", 0, "no_such_box", 0)
+        output = tmp_path / "escape.amxd"
+
+        written = device.build(str(output), validate=False)
+        assert written == output.stat().st_size
+
 
 class TestProfilesAndAssets:
     def test_device_and_subpatcher_share_profile_model(self):
