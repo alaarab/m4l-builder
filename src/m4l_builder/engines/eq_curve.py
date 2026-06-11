@@ -77,7 +77,7 @@ def eq_curve_js(
     grid_color="0.2, 0.2, 0.22, 0.5",
     text_color="0.5, 0.5, 0.52, 1.0",
     zero_line_color="0.3, 0.3, 0.32, 0.8",
-    analyzer_trim_db=42.0,
+    analyzer_trim_db=18.0,
 ):
     """Return JavaScript source for an interactive parametric EQ display.
 
@@ -511,6 +511,43 @@ function set_samplerate(hz) {
         rebuild_band_cache();
         request_redraw();
     }
+}
+
+// Buffer-polling analyzer source: the fft_analyzer backend pokes magnitudes
+// into a named buffer~ every spectral frame; we read it on a ~30fps clock.
+// (Scheduler-message frames proved unreliable in Live — see fft_analyzer.py.)
+var analyzer_buffer_name = "";
+var analyzer_buffer_bins = 0;
+var analyzer_poll_task = null;
+
+function poll_analyzer_buffer() {
+    if (!analyzer_enabled || analyzer_buffer_name === "") return;
+    var vals = null;
+    try {
+        var b = new Buffer(analyzer_buffer_name);
+        var n = analyzer_buffer_bins > 0 ? analyzer_buffer_bins : 1024;
+        vals = b.peek(1, 0, n);
+    } catch (e) {
+        return;  // buffer~ not instantiated yet; try again next tick
+    }
+    if (vals && vals.length >= 4) update_analyzer_from_fft(vals);
+}
+
+function start_analyzer_poll() {
+    if (analyzer_poll_task !== null) return;
+    if (typeof Task !== "undefined") {
+        analyzer_poll_task = new Task(poll_analyzer_buffer);
+        analyzer_poll_task.interval = 33;
+        analyzer_poll_task.repeat();
+    } else if (typeof setInterval !== "undefined") {
+        analyzer_poll_task = setInterval(poll_analyzer_buffer, 33);
+    }
+}
+
+function set_analyzer_buffer(name, bins) {
+    analyzer_buffer_name = "" + name;
+    analyzer_buffer_bins = bins ? Math.floor(bins) : 0;
+    start_analyzer_poll();
 }
 
 function band_uses_gain(type) {

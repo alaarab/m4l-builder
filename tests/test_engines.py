@@ -994,17 +994,19 @@ class TestFftAnalyzer:
 
         from m4l_builder.engines.fft_analyzer import fft_analyzer_kernel
 
-        data = json.loads(fft_analyzer_kernel(fft_size=2048))
-        boxes = [b["box"]["text"] for b in data["patcher"]["boxes"]]
-        assert "fftin~ 1 blackman" in boxes
-        assert "cartopol~" in boxes
-        assert any(t.startswith("vectral~") for t in boxes)
-        assert any(t.startswith("framesnap~") for t in boxes)
-        assert "out 1" in boxes
+        data = json.loads(fft_analyzer_kernel(buffer_name="t_specbuf", fft_size=2048))
+        boxes = {b["box"]["id"]: b["box"]["text"] for b in data["patcher"]["boxes"]}
+        assert boxes["fft_in"] == "fftin~ 1 blackman"
+        assert boxes["cartopol"] == "cartopol~"
+        assert boxes["spec_poke"] == "poke~ t_specbuf"
         # 2/N normalization constant present.
-        assert any("*~ 0.0009" in t for t in boxes)
+        assert "0.0009" in boxes["mag_scale"]
+        # poke~ gets value from mag_scale and index from fftin~ outlet 2.
+        lines = [ln["patchline"] for ln in data["patcher"]["lines"]]
+        assert {"source": ["mag_scale", 0], "destination": ["spec_poke", 0]} in lines
+        assert {"source": ["fft_in", 2], "destination": ["spec_poke", 1]} in lines
 
-    def test_dsp_wires_kernel_and_frame_feed(self):
+    def test_dsp_wires_kernel_buffer_and_announce(self):
         from m4l_builder.engines.fft_analyzer import fft_analyzer_dsp
 
         device = AudioEffect("FFT Test", width=200, height=120, theme=MIDNIGHT)
@@ -1015,6 +1017,7 @@ class TestFftAnalyzer:
         ids = fft_analyzer_dsp(device, "graph", "src", target_inlet=2,
                                id_prefix="t", samplerate_handshake=True)
         assert ids["pfft"] == "t_pfft"
+        assert ids["buffer"] == "t_buf"
         assert "dspstate" in ids
         texts = [
             b["box"].get("text", "")
@@ -1022,13 +1025,17 @@ class TestFftAnalyzer:
             if "box" in b
         ]
         assert any(t.startswith("pfft~ t_analyzer_core 2048 4") for t in texts)
-        assert "prepend fft_frame" in texts
+        assert "buffer~ t_specbuf" in texts
+        assert "sizeinsamps 2048" in texts
+        assert "set_analyzer_buffer t_specbuf 1024" in texts
         assert "prepend set_samplerate" in texts
 
-    def test_eq_curve_consumes_fft_frame(self):
+    def test_eq_curve_consumes_analyzer_sources(self):
         js = eq_curve_js()
         assert "function fft_frame()" in js
         assert "function set_samplerate(hz)" in js
+        assert "function set_analyzer_buffer(name, bins)" in js
+        assert "function poll_analyzer_buffer()" in js
         assert "update_analyzer_from_fft" in js
 
 
