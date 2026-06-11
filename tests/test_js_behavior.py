@@ -151,3 +151,160 @@ class TestLevelHistoryBehavior:
         """, size=(208, 152))
         assert result.state["cap"] == 30
         assert result.state["count"] == 30  # saturated, wrapped, no crash
+
+
+class TestTransferCurveDrag:
+    def test_drag_down_lowers_threshold_relative(self):
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(), """
+            set_threshold(-12.0);
+            onpointerdown({x: 60, y: 50, buttons: 1});
+            onpointermove({x: 60, y: 80, buttons: 1});
+            var expected = -12.0 - (30.0 / plot_h()) * (MAX_DB - MIN_DB);
+            dump({thr: threshold, expected: expected});
+        """, size=(132, 152))
+        assert abs(result.state["thr"] - result.state["expected"]) < 0.11
+        emits = _named(result.outlets, "threshold")
+        assert len(emits) == 1
+        assert abs(emits[0][2] - result.state["thr"]) < 0.06
+
+    def test_drag_shift_is_fine(self):
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(), """
+            set_threshold(-12.0);
+            onpointerdown({x: 60, y: 50, buttons: 1});
+            onpointermove({x: 60, y: 80, buttons: 1, shiftKey: 1});
+            var coarse = (30.0 / plot_h()) * (MAX_DB - MIN_DB);
+            dump({thr: threshold, fine_expected: -12.0 - coarse * 0.15});
+        """, size=(132, 152))
+        assert abs(result.state["thr"] - result.state["fine_expected"]) < 0.11
+
+    def test_drag_clamps_to_zero_and_floor(self):
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(), """
+            set_threshold(-3.0);
+            onpointerdown({x: 60, y: 100, buttons: 1});
+            onpointermove({x: 60, y: -400, buttons: 1});
+            var top = threshold;
+            onpointermove({x: 60, y: 900, buttons: 1});
+            dump({top: top, floor: threshold});
+        """, size=(132, 152))
+        assert result.state["top"] == 0.0
+        assert result.state["floor"] == -60.0
+
+    def test_wheel_steps_ratio_and_clamps(self):
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(), """
+            set_ratio(2.0);
+            onwheel(60, 60, 0, 1, 0, 0);
+            var up = ratio;
+            onwheel(60, 60, 0, 1, 0, 1);
+            var fine = ratio;
+            for (var i = 0; i < 200; i++) onwheel(60, 60, 0, -1, 0, 0);
+            dump({up: up, fine: fine, floor: ratio});
+        """, size=(132, 152))
+        assert abs(result.state["up"] - 2.2) < 1e-6
+        assert abs(result.state["fine"] - 2.25) < 1e-6
+        assert result.state["floor"] == 1.0
+
+
+class TestWaveshapeDrag:
+    def test_drag_up_adds_drive_at_documented_scale(self):
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_drive(6.0);
+            onpointerdown({x: 60, y: 100, buttons: 1});
+            onpointermove({x: 60, y: 80, buttons: 1});
+            dump({drive: drive_db});
+        """, size=(180, 152))
+        assert abs(result.state["drive"] - 12.0) < 1e-6  # 20px * 0.3
+        emits = _named(result.outlets, "drive")
+        assert len(emits) == 1 and abs(emits[0][2] - 12.0) < 1e-6
+
+    def test_drag_clamps_and_shift_fine(self):
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_drive(6.0);
+            onpointerdown({x: 60, y: 100, buttons: 1});
+            onpointermove({x: 60, y: 80, buttons: 1, shiftKey: 1});
+            var fine = drive_db;
+            onpointermove({x: 60, y: -9000, buttons: 1});
+            var top = drive_db;
+            onpointermove({x: 60, y: 9000, buttons: 1});
+            dump({fine: fine, top: top, floor: drive_db});
+        """, size=(180, 152))
+        assert abs(result.state["fine"] - 6.9) < 1e-6  # 20px * 0.045
+        assert result.state["top"] == 36.0
+        assert result.state["floor"] == 0.0
+
+
+class TestDelayTrailDrag:
+    def test_horizontal_drag_maps_time_and_emits(self):
+        from m4l_builder.engines.delay_trail import delay_trail_js
+        result = run_jsui(delay_trail_js(), """
+            set_time(350.0);
+            onpointerdown({x: 100, y: 60, buttons: 1});
+            onpointermove({x: 150, y: 60, buttons: 1});
+            var expected = 350.0 + (50.0 / plot_w()) * MAX_MS;
+            dump({t: time_ms, expected: expected});
+        """, size=(326, 152))
+        assert abs(result.state["t"] - result.state["expected"]) < 0.6
+        emits = _named(result.outlets, "time")
+        assert len(emits) == 1
+        assert emits[0][2] == round(result.state["t"])
+
+    def test_drag_clamps_and_wheel_feedback(self):
+        from m4l_builder.engines.delay_trail import delay_trail_js
+        result = run_jsui(delay_trail_js(), """
+            set_time(350.0);
+            set_feedback(45.0);
+            onpointerdown({x: 100, y: 60, buttons: 1});
+            onpointermove({x: -4000, y: 60, buttons: 1});
+            var floor_ms = time_ms;
+            onwheel(100, 60, 0, 1);
+            var fb_up = feedback_pct;
+            for (var i = 0; i < 100; i++) onwheel(100, 60, 0, 1);
+            dump({floor_ms: floor_ms, fb_up: fb_up, fb_cap: feedback_pct});
+        """, size=(326, 152))
+        assert result.state["floor_ms"] == 1.0
+        assert result.state["fb_up"] == 47.0
+        assert result.state["fb_cap"] == 110.0
+
+
+class TestLevelHistoryInteractive:
+    def test_default_is_display_only(self):
+        result = run_jsui(level_history_js(ref_db=-20.0), """
+            onpointerdown({x: 60, y: 40, buttons: 1});
+            onpointermove({x: 60, y: 90, buttons: 1});
+            onpointerup({x: 60, y: 90, buttons: 0});
+            dump({ref: ref_db, dragging: dragging});
+        """, size=(208, 152))
+        assert result.outlets == []
+        assert result.state == {"ref": -20.0, "dragging": 0}
+
+    def test_interactive_drag_emits_threshold_with_drag_owns_line(self):
+        result = run_jsui(level_history_js(ref_db=-12.0, interactive=True), """
+            onpointerdown({x: 60, y: 40, buttons: 1});
+            onpointermove({x: 60, y: 70, buttons: 1});
+            var mid = ref_db;
+            set_ref_db(-3.0);              // must be ignored mid-drag
+            var after_echo = ref_db;
+            onpointerup({x: 60, y: 70, buttons: 0});
+            set_ref_db(-3.0);              // applies after release
+            var expected = -12.0 - (30.0 / plot_h()) * (hi_db - lo_db);
+            dump({mid: mid, after_echo: after_echo, final: ref_db,
+                  expected: expected});
+        """, size=(208, 152))
+        assert abs(result.state["mid"] - result.state["expected"]) < 0.11
+        assert result.state["after_echo"] == result.state["mid"]
+        assert result.state["final"] == -3.0
+        emits = _named(result.outlets, "threshold")
+        assert len(emits) == 1
+
+    def test_interactive_clamps_at_zero(self):
+        result = run_jsui(level_history_js(ref_db=-2.0, interactive=True), """
+            onpointerdown({x: 60, y: 100, buttons: 1});
+            onpointermove({x: 60, y: -900, buttons: 1});
+            dump({ref: ref_db});
+        """, size=(208, 152))
+        assert result.state["ref"] == 0.0

@@ -282,9 +282,10 @@ function start_drag(y) {
     drag_start_threshold = threshold;
 }
 
-function drag_to(y) {
+function drag_to(y, fine) {
     if (!dragging) return;
     var dd = (y - drag_start_y) / plot_h() * (MAX_DB - MIN_DB);
+    if (fine) dd *= 0.15;
     threshold = clamp(drag_start_threshold - dd, MIN_DB, 0.0);
     outlet(0, "threshold", Math.round(threshold * 10) / 10);
     mgraphics.redraw();
@@ -298,7 +299,7 @@ function end_drag() {
 
 function onpointerdown(pointerevent) { start_drag(pointerevent.screenY !== undefined ? pointerevent.y : pointerevent.y); }
 function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.y);
+    if (dragging) drag_to(pointerevent.y, pointerevent.shiftKey ? 1 : 0);
     else if (!hovering) { hovering = 1; mgraphics.redraw(); }
 }
 function onpointerup(pointerevent) { end_drag(); }
@@ -306,14 +307,15 @@ function onpointerleave(pointerevent) { hovering = 0; end_drag(); mgraphics.redr
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
-    if (but) drag_to(y);
+    if (but) drag_to(y, shift);
     else end_drag();
 }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }
 function onidleout() { hovering = 0; mgraphics.redraw(); }
 
-function onwheel(x, y, scrollx, scrolly) {
-    ratio = clamp(ratio + (scrolly > 0 ? 0.2 : -0.2), 1.0, 20.0);
+function onwheel(x, y, scrollx, scrolly, cmd, shift) {
+    var step = shift ? 0.05 : 0.2;
+    ratio = clamp(ratio + (scrolly > 0 ? step : -step), 1.0, 20.0);
     outlet(0, "ratio", Math.round(ratio * 10) / 10);
     mgraphics.redraw();
 }
