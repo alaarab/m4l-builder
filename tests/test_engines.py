@@ -988,6 +988,50 @@ class TestSpectrumAnalyzerEngine:
             assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
 
 
+class TestFftAnalyzer:
+    def test_kernel_is_valid_json_patch(self):
+        import json
+
+        from m4l_builder.engines.fft_analyzer import fft_analyzer_kernel
+
+        data = json.loads(fft_analyzer_kernel(fft_size=2048))
+        boxes = [b["box"]["text"] for b in data["patcher"]["boxes"]]
+        assert "fftin~ 1 blackman" in boxes
+        assert "cartopol~" in boxes
+        assert any(t.startswith("vectral~") for t in boxes)
+        assert any(t.startswith("framesnap~") for t in boxes)
+        assert "out 1" in boxes
+        # 2/N normalization constant present.
+        assert any("*~ 0.0009" in t for t in boxes)
+
+    def test_dsp_wires_kernel_and_frame_feed(self):
+        from m4l_builder.engines.fft_analyzer import fft_analyzer_dsp
+
+        device = AudioEffect("FFT Test", width=200, height=120, theme=MIDNIGHT)
+        device.add_jsui("graph", [0, 0, 100, 100], js_code=eq_curve_js(),
+                        numinlets=EQ_CURVE_INLETS, numoutlets=0)
+        device.add_newobj("src", "plugin~", numinlets=1, numoutlets=2,
+                          outlettype=["signal", "signal"])
+        ids = fft_analyzer_dsp(device, "graph", "src", target_inlet=2,
+                               id_prefix="t", samplerate_handshake=True)
+        assert ids["pfft"] == "t_pfft"
+        assert "dspstate" in ids
+        texts = [
+            b["box"].get("text", "")
+            for b in device.boxes
+            if "box" in b
+        ]
+        assert any(t.startswith("pfft~ t_analyzer_core 2048 4") for t in texts)
+        assert "prepend fft_frame" in texts
+        assert "prepend set_samplerate" in texts
+
+    def test_eq_curve_consumes_fft_frame(self):
+        js = eq_curve_js()
+        assert "function fft_frame()" in js
+        assert "function set_samplerate(hz)" in js
+        assert "update_analyzer_from_fft" in js
+
+
 class TestWaveformDisplayEngine:
     def test_returns_string(self):
         js = waveform_display_js()
