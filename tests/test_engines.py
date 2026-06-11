@@ -2572,6 +2572,16 @@ class TestLevelHistory:
         js = level_history_js(gr_line_color="0.9, 0.1, 0.1, 1.0")
         assert "0.9, 0.1, 0.1, 1.0" in js
 
+    def test_reference_line_defaults_off(self):
+        js = level_history_js()
+        assert "var ref_db = null;" in js
+        assert "function set_ref_db(v)" in js
+
+    def test_reference_line_kwarg(self):
+        js = level_history_js(ref_db=-0.3, ref_color="1.0, 0.2, 0.2, 0.9")
+        assert "var ref_db = -0.3;" in js
+        assert "1.0, 0.2, 0.2, 0.9" in js
+
     def test_custom_range_defaults(self):
         js = level_history_js(lo_db=-48.0, hi_db=12.0, gr_scale_db=12.0)
         assert "var lo_db = -48.0;" in js

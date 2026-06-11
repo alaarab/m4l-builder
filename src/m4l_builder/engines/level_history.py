@@ -13,6 +13,8 @@ Messages in (inlet 0):
     set_gr_scale <db>         full-scale GR band depth in dB (default 24)
     set_seconds <s>           history length in seconds (default 6)
     set_rate <hz>             expected frame rate, sizes the ring (default 30)
+    set_ref_db <db>           draw a reference level line (ceiling/threshold);
+                              values outside the window hide it
     clear                     wipe history
 
 Messages out (outlet 0): none in V1 (reserved for threshold drag later).
@@ -45,11 +47,13 @@ def level_history_js(
     gr_line_color="0.95, 0.55, 0.25, 1.0",
     grid_color="0.20, 0.23, 0.27, 0.55",
     text_color="0.55, 0.58, 0.63, 1.0",
+    ref_color="0.95, 0.55, 0.25, 0.9",
     lo_db=-60.0,
     hi_db=6.0,
     gr_scale_db=24.0,
     seconds=6.0,
     rate_hz=30.0,
+    ref_db=None,
 ):
     """Return JavaScript source for the scrolling level/GR history display."""
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
@@ -63,11 +67,13 @@ def level_history_js(
         gr_line_color=gr_line_color,
         grid_color=grid_color,
         text_color=text_color,
+        ref_color=ref_color,
         lo_db=lo_db,
         hi_db=hi_db,
         gr_scale_db=gr_scale_db,
         seconds=seconds,
         rate_hz=rate_hz,
+        ref_db="null" if ref_db is None else ref_db,
     )
 
 
@@ -91,7 +97,9 @@ var GR_FILL     = [$gr_fill_color];
 var GR_LINE     = [$gr_line_color];
 var GRID_CLR    = [$grid_color];
 var TEXT_CLR    = [$text_color];
+var REF_CLR     = [$ref_color];
 
+var ref_db = $ref_db;
 var lo_db = $lo_db;
 var hi_db = $hi_db;
 var gr_scale_db = $gr_scale_db;
@@ -233,6 +241,23 @@ function paint() {
         mgraphics.stroke();
     }
 
+    // Reference level line (ceiling/threshold) on the level scale.
+    if (ref_db !== null && ref_db >= lo_db && ref_db <= hi_db) {
+        y = db_to_y(ref_db);
+        mgraphics.set_source_rgba(REF_CLR);
+        mgraphics.set_line_width(1.2);
+        var dash_x = plot_l();
+        while (dash_x < plot_r()) {
+            mgraphics.move_to(dash_x, y);
+            mgraphics.line_to(Math.min(dash_x + 5, plot_r()), y);
+            mgraphics.stroke();
+            dash_x += 9;
+        }
+        mgraphics.set_font_size(6.5);
+        mgraphics.move_to(plot_r() - 26, y - 3);
+        mgraphics.show_text(ref_db.toFixed(1));
+    }
+
     // Peak GR over the most recent ~1.5 s, as a readout.
     var look = Math.min(count, Math.round(rate_hz * 1.5));
     var peak_gr = 0.0;
@@ -296,6 +321,13 @@ function set_rate(hz) {
     if (!isFinite(hz) || hz < 5.0 || hz > 120.0) return;
     rate_hz = hz;
     rebuild_ring();
+    mgraphics.redraw();
+}
+
+function set_ref_db(v) {
+    v = parseFloat(v);
+    if (!isFinite(v)) { ref_db = null; }
+    else { ref_db = v; }
     mgraphics.redraw();
 }
 
