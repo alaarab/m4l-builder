@@ -29,6 +29,11 @@ from .fft_analyzer import (
 from .filter_curve import filter_curve_js
 from .grain_display import grain_display_js
 from .grid_sequencer_display import grid_sequencer_display_js
+from .level_history import (
+    LEVEL_HISTORY_INLETS,
+    LEVEL_HISTORY_OUTLETS,
+    level_history_js,
+)
 from .lfo_display import lfo_display_js
 from .linear_phase_eq_display import linear_phase_eq_display_js
 from .peaking_eq_display import peaking_eq_display_js
@@ -72,6 +77,9 @@ __all__ = [
     "delay_trail_js",
     "DELAY_TRAIL_INLETS",
     "DELAY_TRAIL_OUTLETS",
+    "level_history_js",
+    "LEVEL_HISTORY_INLETS",
+    "LEVEL_HISTORY_OUTLETS",
     "WAVESHAPE_CURVE_INLETS",
     "WAVESHAPE_CURVE_OUTLETS",
     "FFT_ANALYZER_DEFAULT_SIZE",
