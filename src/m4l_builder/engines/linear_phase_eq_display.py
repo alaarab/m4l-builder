@@ -860,19 +860,39 @@ function draw_empty_state() {
 }
 
 function draw_band_curves() {
-    var points;
+    var points, p, zero_y, fill_a;
+    zero_y = gain_to_y(0.0);
     for (i = 0; i < num_bands; i++) {
         if (!band_cache[i].enabled) continue;
         points = band_curve_points[i];
         if (!points || points.length < 2) continue;
+
+        // Pro-Q-style colored fill for gain bands (peak/shelf): tints each
+        // band's contribution its own color so the EQ reads at a glance and
+        // stays distinct from the analyzer behind. Cuts/notch keep just the
+        // line (filling a full rolloff region reads as noise).
+        if (band_cache[i].uses_gain && Math.abs(band_cache[i].gain) > 0.01) {
+            fill_a = selected_band === i ? 0.22 : 0.12;
+            mgraphics.set_source_rgba(
+                BAND_COLORS[i][0], BAND_COLORS[i][1], BAND_COLORS[i][2], fill_a
+            );
+            mgraphics.move_to(points[0][0], zero_y);
+            for (p = 0; p < points.length; p++) {
+                mgraphics.line_to(points[p][0], points[p][1]);
+            }
+            mgraphics.line_to(points[points.length - 1][0], zero_y);
+            mgraphics.close_path();
+            mgraphics.fill();
+        }
+
         mgraphics.set_source_rgba(
             BAND_COLORS[i][0],
             BAND_COLORS[i][1],
             BAND_COLORS[i][2],
-            selected_band === i ? 0.24 : 0.10
+            selected_band === i ? 0.34 : 0.16
         );
         mgraphics.set_line_width(selected_band === i ? 1.2 : 0.8);
-        for (var p = 0; p < points.length; p++) {
+        for (p = 0; p < points.length; p++) {
             if (p === 0) mgraphics.move_to(points[p][0], points[p][1]);
             else mgraphics.line_to(points[p][0], points[p][1]);
         }
