@@ -407,17 +407,13 @@ function has_motion_animation() {
 }
 
 function animation_tick() {
+    // Driven by a repeating Task (interval+repeat — schedule() no-ops in Live).
     if (!has_motion_animation()) {
+        if (redraw_task && redraw_task_running) redraw_task.cancel();
         redraw_task_running = 0;
         return;
     }
     request_redraw();
-    if (redraw_task) {
-        redraw_task.schedule(REDRAW_INTERVAL_MS);
-        redraw_task_running = 1;
-    } else {
-        redraw_task_running = 0;
-    }
 }
 
 function refresh_animation_task() {
@@ -427,7 +423,8 @@ function refresh_animation_task() {
     if (has_motion_animation()) {
         if (redraw_task && !redraw_task_running) {
             redraw_task_running = 1;
-            redraw_task.schedule(REDRAW_INTERVAL_MS);
+            redraw_task.interval = REDRAW_INTERVAL_MS;
+            redraw_task.repeat();
         }
         return;
     }
@@ -744,6 +741,30 @@ function apply_dyn_to_cache(i) {
     if (!bc || !bc.present || !bc.enabled || !bc.uses_gain) return;
     bc.coeffs = biquad_coeffs(bc.type, bc.freq,
         clamp(bc.gain + bands[i].dynamic_current, MIN_GAIN, MAX_GAIN), bc.q);
+}
+
+// Re-sweep a motion-enabled band's DRAWN coeffs at the LFO-swept frequency (and
+// gain), so the curve bump visibly moves in time with the audio LFO. Called
+// every paint and recomputed from the static cache each rebuild; folds in any
+// dynamic offset so motion + dynamic compose. Returns 1 if it swept (so the
+// caller knows a band is animating).
+function apply_motion_to_cache(i) {
+    var bc = band_cache[i];
+    if (!bc || !bc.present || !bc.enabled || !bc.motion || bc.motion_depth < 0.5) return 0;
+    var dir = motion_direction_components(bc.motion_direction);
+    var swing = Math.sin(motion_phase(i, bc));
+    var f = bc.freq;
+    var g = bc.gain;
+    if (bands[i] && bands[i].dynamic) g = g + bands[i].dynamic_current;
+    if (Math.abs(dir[0]) > 0.001) {
+        f = clamp(bc.freq * Math.pow(2.0, swing * (bc.motion_depth / 100.0) * 1.25 * dir[0]),
+                  MIN_FREQ, MAX_FREQ);
+    }
+    if (Math.abs(dir[1]) > 0.001 && bc.uses_gain) {
+        g = g + swing * (bc.motion_depth / 100.0) * 12.0 * dir[1];
+    }
+    bc.coeffs = biquad_coeffs(bc.type, f, clamp(g, MIN_GAIN, MAX_GAIN), bc.q);
+    return 1;
 }
 
 function type_default_q(type) {
@@ -1129,6 +1150,9 @@ function paint() {
 
     draw_grid();
     draw_analyzer();
+    // Re-sweep each motion band's drawn coeffs so the curve moves with the LFO.
+    var _mi;
+    for (_mi = 0; _mi < num_bands; _mi++) apply_motion_to_cache(_mi);
     draw_band_curves();
     draw_composite_curve();
     draw_motion_guides();
@@ -1425,11 +1449,10 @@ function draw_motion_guides() {
     for (i = 0; i < num_bands; i++) {
         cache = band_cache[i];
         if (!cache.present) continue;
-        if (i !== selected_band) continue;
         if (!cache.enabled || !cache.motion || cache.motion_depth < 0.5) continue;
 
         clr = BAND_COLORS[i % BAND_COLORS.length];
-        alpha = 0.26;
+        alpha = 0.40;
         phase = motion_phase(i, cache);
         swing = Math.sin(phase);
         direction = motion_direction_components(cache.motion_direction);
@@ -2016,6 +2039,7 @@ function set_motion(idx, enabled) {
         bands[idx].motion_rate = default_motion_rate(idx);
     }
     rebuild_band_cache();
+    refresh_animation_task();
     force_redraw();
 }
 
