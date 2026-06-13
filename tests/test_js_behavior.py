@@ -308,3 +308,55 @@ class TestLevelHistoryInteractive:
             dump({ref: ref_db});
         """, size=(208, 152))
         assert result.state["ref"] == 0.0
+
+
+class TestBallisticsCurve:
+    def test_envelope_rises_holds_decays(self):
+        from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+        result = run_jsui(ballistics_curve_js(attack_ms=10, release_ms=120,
+                                              ratio=4), """
+            var sp = spans();
+            var tgt = target_gr();
+            dump({
+                start: env_at(0, sp, tgt),
+                attack_end: env_at(sp.a, sp, tgt),
+                hold: env_at(sp.a + sp.hold * 0.5, sp, tgt),
+                release_end: env_at(sp.T, sp, tgt),
+                tgt: tgt
+            });
+        """, size=(132, 68))
+        s = result.state
+        # GR starts at 0, reaches ~95% of target by attack end, holds at
+        # the target, decays to ~5% by the end of release.
+        assert s["start"] < 0.01
+        assert s["attack_end"] > 0.9 * s["tgt"]
+        assert abs(s["hold"] - s["tgt"]) < 0.01
+        assert s["release_end"] < 0.1 * s["tgt"]
+        # Representative depth = 12 dB-over * (1 - 1/ratio).
+        assert abs(s["tgt"] - 12.0 * (1.0 - 1.0 / 4.0)) < 0.01
+
+    def test_faster_attack_settles_in_less_time(self):
+        from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+        # A slow attack stretches the attack span; a fast one shrinks it.
+        result = run_jsui(ballistics_curve_js(attack_ms=10, release_ms=120,
+                                              ratio=4), """
+            var fast = spans().a;
+            set_attack(200);
+            var slow = spans().a;
+            set_attack(1);
+            var faster = spans().a;
+            dump({fast: fast, slow: slow, faster: faster});
+        """, size=(132, 68))
+        s = result.state
+        assert s["slow"] > s["fast"] > s["faster"]
+
+    def test_target_depth_scales_with_ratio(self):
+        from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+        result = run_jsui(ballistics_curve_js(ratio=2), """
+            var t2 = target_gr();
+            set_ratio(10);
+            var t10 = target_gr();
+            dump({t2: t2, t10: t10});
+        """, size=(132, 68))
+        # Higher ratio -> deeper representative gain reduction.
+        assert result.state["t10"] > result.state["t2"]
