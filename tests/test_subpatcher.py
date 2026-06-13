@@ -195,6 +195,69 @@ class TestDeviceAddSubpatcher:
         assert len(dev.boxes) == 3
 
 
+class TestDeviceAddFlyout:
+    """device.add_flyout() — the expandable fly-out window helper."""
+
+    def _build(self):
+        dev = AudioEffect("flytest", 300, 120)
+        sp = Subpatcher("bigview")
+        sp.add_newobj("content_obj", "comment", numinlets=1, numoutlets=0)
+        dev.add_flyout(sp, expand_rect=[10, 10, 80, 20])
+        return dev, sp
+
+    def _texts(self, container):
+        return {b["box"].get("text") for b in container.boxes}
+
+    def _lines(self, container):
+        return [(tuple(l["patchline"]["source"]), tuple(l["patchline"]["destination"]))
+                for l in container.lines]
+
+    def test_expand_param_toggle_added(self):
+        dev, _ = self._build()
+        btn = next(b["box"] for b in dev.boxes if b["box"]["id"] == "flyout_expand")
+        assert btn["maxclass"] == "live.text"
+        assert btn["mode"] == 1
+        enum = btn["saved_attribute_attributes"]["valueof"]["parameter_enum"]
+        assert enum == ["HIDE", "SHOW"]
+
+    def test_main_view_send_and_sel(self):
+        dev, _ = self._build()
+        texts = self._texts(dev)
+        assert "sel 1 0" in texts
+        assert "s bigview_show" in texts
+        assert "s bigview_hide" in texts
+
+    def test_subpatcher_plumbing_injected(self):
+        _, sp = self._build()
+        texts = self._texts(sp)
+        # opens via the subpatcher's OWN thispatcher `front` (not pcontrol)
+        assert "thispatcher" in texts
+        assert "r bigview_show" in texts
+        assert "front" in texts
+        assert "wclose" in texts
+        assert "window flags float grow" in texts  # floating + resizable
+        assert "window exec" in texts
+
+    def test_open_close_wiring(self):
+        dev, sp = self._build()
+        dlines, slines = self._lines(dev), self._lines(sp)
+        assert (("flyout_expand", 0), ("flyout_expand_sel", 0)) in dlines
+        assert (("flyout_expand_sel", 0), ("flyout_expand_sshow", 0)) in dlines
+        assert (("flyout_expand_sel", 1), ("flyout_expand_shide", 0)) in dlines
+        assert (("_fly_rshow", 0), ("_fly_front", 0)) in slines
+        assert (("_fly_front", 0), ("_fly_this", 0)) in slines
+        # flags set before exec (t b b: right outlet -> flags, left -> exec)
+        assert (("_fly_trig", 1), ("_fly_flags", 0)) in slines
+        assert (("_fly_trig", 0), ("_fly_exec", 0)) in slines
+
+    def test_subpatcher_box_and_full_build(self):
+        dev, _ = self._build()
+        box = next(b["box"] for b in dev.boxes if b["box"]["id"] == "flyout_expand_sp")
+        assert box["text"] == "p bigview"
+        assert "patcher" in box
+        assert len(dev.to_bytes(validate=False)) > 0
+
+
 class TestSubpatcherImport:
     def test_importable_from_package(self):
         from m4l_builder import Subpatcher as S
