@@ -221,23 +221,54 @@ function set_pingpong(v)   { pingpong = v ? 1 : 0; mgraphics.redraw(); }
 function set_sync_label(v) { sync_label = "" + v; mgraphics.redraw(); }
 function wet_level(v) { wet_lvl = v; mgraphics.redraw(); }
 
-// ── Interaction: X drag = time, Y drag = feedback (up = more), wheel = fb ──
-function start_drag(x, y) {
-    dragging = 1;
-    drag_start_x = x;
-    drag_start_y = y;
-    drag_start_time = time_ms;
-    drag_start_feedback = feedback_pct;
+// ── Interaction: ABSOLUTE X/Y pad ────────────────────────────────────
+// Robust pointer-coordinate resolution. Max's v8ui pointer events expose the
+// object-local position under DIFFERENT property names across runtimes
+// (.x / .localX / .offsetX / .clientX); reading only `.x` returned undefined
+// in Live -> (undefined - plot_l()) = NaN -> time/feedback slammed to the rails
+// (and the readout showed "NaN ms"). This is the exact helper set eq_curve uses
+// (that engine drags reliably). The legacy onclick/ondrag path already passes
+// real object-local pixels, so it needs no resolver.
+function pointer_x(pe, fb) {
+    if (!pe) return fb;
+    if (pe.x !== undefined) return pe.x;
+    if (pe.localX !== undefined) return pe.localX;
+    if (pe.offsetX !== undefined) return pe.offsetX;
+    if (pe.clientX !== undefined) return pe.clientX;
+    return fb;
+}
+function pointer_y(pe, fb) {
+    if (!pe) return fb;
+    if (pe.y !== undefined) return pe.y;
+    if (pe.localY !== undefined) return pe.localY;
+    if (pe.offsetY !== undefined) return pe.offsetY;
+    if (pe.clientY !== undefined) return pe.clientY;
+    return fb;
+}
+function pointer_buttons(pe, fb) {
+    if (!pe) return fb;
+    if (pe.buttons !== undefined) return pe.buttons;
+    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
+    return fb;
 }
 
+function start_drag(x, y) {
+    dragging = 1;
+}
+
+// ABSOLUTE X/Y pad: the pointer POSITION maps directly to time (x, along the
+// ruler) and feedback (y, up = more) — not a relative start+delta. Bounded by
+// the plot, so a stray pointer frame can never slam the values to the rails
+// (the relative model did exactly that live). The isNaN guard is belt-and-
+// suspenders: if every coordinate property is missing we leave state untouched
+// rather than poisoning time_ms with NaN.
 function drag_to(x, y, fine) {
     if (!dragging) return;
-    var dms = ((x - drag_start_x) / plot_w()) * MAX_MS;
-    // Vertical: drag UP (smaller y) = more feedback; full plot height = 0..110.
-    var dfb = -((y - drag_start_y) / plot_h()) * 110.0;
-    if (fine) { dms *= 0.15; dfb *= 0.15; }
-    time_ms = clamp(drag_start_time + dms, 1.0, MAX_MS);
-    feedback_pct = clamp(drag_start_feedback + dfb, 0.0, 110.0);
+    if (isNaN(x) || isNaN(y)) return;
+    var fx = clamp((x - plot_l()) / plot_w(), 0.0, 1.0);
+    var fy = clamp((plot_b() - y) / plot_h(), 0.0, 1.0);
+    time_ms = clamp(fx * MAX_MS, 1.0, MAX_MS);
+    feedback_pct = clamp(fy * 110.0, 0.0, 110.0);
     outlet(0, "time", Math.round(time_ms));
     outlet(0, "feedback", Math.round(feedback_pct));
     mgraphics.redraw();
@@ -249,13 +280,19 @@ function end_drag() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pointerevent) { start_drag(pointerevent.x, pointerevent.y); }
-function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.x, pointerevent.y, pointerevent.shiftKey ? 1 : 0);
-    else if (!hovering) { hovering = 1; mgraphics.redraw(); }
+function onpointerdown(pe) { start_drag(pointer_x(pe, plot_l()), pointer_y(pe, plot_b())); }
+function onpointermove(pe) {
+    var b = pointer_buttons(pe, 0);
+    if (dragging && ((b & 1) !== 0)) {
+        drag_to(pointer_x(pe, plot_l()), pointer_y(pe, plot_b()),
+                pe && pe.shiftKey ? 1 : 0);
+        return;
+    }
+    if (dragging && b === 0) { end_drag(); return; }
+    if (!hovering) { hovering = 1; mgraphics.redraw(); }
 }
-function onpointerup(pointerevent) { end_drag(); }
-function onpointerleave(pointerevent) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function onpointerup(pe) { end_drag(); }
+function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x, y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {

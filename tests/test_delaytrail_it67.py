@@ -47,24 +47,40 @@ class TestDelayTrailDiagonalDrag:
         # +x raised time, -y raised feedback (drag up = more).
         assert result.state["t"] > result.state["t0"]
         assert result.state["fb"] > result.state["fb0"]
-        # The emitted ints match the engine's rounded state.
-        assert times[0][2] == round(result.state["t"])
-        assert feedbacks[0][2] == round(result.state["fb"])
+        # The emitted ints track the engine's state (within a half-unit; JS
+        # Math.round rounds .5 up while Python round() banker-rounds, so a value
+        # landing exactly on x.5 can differ by 1 — that's a harness rounding
+        # artifact, not an engine bug).
+        assert abs(times[0][2] - result.state["t"]) <= 0.5
+        assert abs(feedbacks[0][2] - result.state["fb"]) <= 0.5
 
-    def test_pure_horizontal_drag_still_moves_feedback_only_by_zero(self):
-        # Sanity: a horizontal-only move (y unchanged) emits time AND feedback
-        # outlets each move (both axes are always reported), but feedback is
-        # unchanged because dy == 0.
-        result = run_jsui(delay_trail_js(), """
-            set_time(350.0);
-            set_feedback(45.0);
-            onpointerdown({x: 100, y: 80, buttons: 1});
-            onpointermove({x: 150, y: 80, buttons: 1});
-            dump({fb: feedback_pct});
+    def test_absolute_mapping_is_position_not_delta(self):
+        # ABSOLUTE X/Y pad: the pointer POSITION sets the values, independent of
+        # where the drag began. Two drags that END at the same point land on the
+        # same time + feedback even though they STARTED far apart. (The old
+        # relative start+delta model — which slammed the values to the rails on a
+        # stray v8ui frame — would give two different results here.)
+        a = run_jsui(delay_trail_js(), """
+            set_time(350.0); set_feedback(45.0);
+            onpointerdown({x: 40, y: 120, buttons: 1});
+            onpointermove({x: 150, y: 70, buttons: 1});
+            dump({t: time_ms, fb: feedback_pct});
         """, size=(326, 152))
-        assert result.state["fb"] == 45.0
-        assert len(_named(result.outlets, "time")) == 1
-        assert len(_named(result.outlets, "feedback")) == 1
+        b = run_jsui(delay_trail_js(), """
+            set_time(900.0); set_feedback(10.0);
+            onpointerdown({x: 300, y: 30, buttons: 1});
+            onpointermove({x: 150, y: 70, buttons: 1});
+            dump({t: time_ms, fb: feedback_pct});
+        """, size=(326, 152))
+        # Same end point -> same mapped values regardless of start/initial state.
+        assert abs(a.state["t"] - b.state["t"]) < 0.5
+        assert abs(a.state["fb"] - b.state["fb"]) < 0.5
+        # And the mapping matches the plot geometry: x=150 over [8 .. 318].
+        # time = (150-8)/310 * 2000 ~= 916ms; fb = (136-70)/128 * 110 ~= 56.7%.
+        assert 905.0 < a.state["t"] < 925.0
+        assert 55.0 < a.state["fb"] < 58.0
+        assert len(_named(a.outlets, "time")) == 1
+        assert len(_named(a.outlets, "feedback")) == 1
 
     def test_drag_up_increases_feedback_drag_down_decreases(self):
         # Vertical axis polarity: up (smaller y) raises feedback, down lowers.
@@ -82,3 +98,36 @@ class TestDelayTrailDiagonalDrag:
         """, size=(326, 152))
         assert up.state["fb"] > 45.0
         assert down.state["fb"] < 45.0
+
+    def test_pointer_resolver_handles_localxy_property_names(self):
+        # Live's v8ui exposes the object-local coords as .localX/.localY (NOT
+        # .x/.y). The resolver must read those — otherwise the handler got
+        # undefined and mapped to "NaN ms" (the live failure this fix targets).
+        result = run_jsui(delay_trail_js(), """
+            set_time(350.0); set_feedback(45.0);
+            onpointerdown({localX: 100, localY: 90, buttons: 1});
+            onpointermove({localX: 150, localY: 70, buttons: 1});
+            dump({t: time_ms, fb: feedback_pct,
+                  t_finite: isFinite(time_ms) ? 1 : 0,
+                  fb_finite: isFinite(feedback_pct) ? 1 : 0});
+        """, size=(326, 152))
+        assert result.state["t_finite"] == 1
+        assert result.state["fb_finite"] == 1
+        # Same geometry as the .x/.y path: x=150 -> ~916ms, y=70 -> ~56.7%.
+        assert 905.0 < result.state["t"] < 925.0
+        assert 55.0 < result.state["fb"] < 58.0
+        assert len(_named(result.outlets, "time")) == 1
+        assert len(_named(result.outlets, "feedback")) == 1
+
+    def test_missing_coords_never_poison_state_with_nan(self):
+        # Defensive: a pointer frame with NO coordinate property at all must not
+        # write NaN into time_ms/feedback_pct (the isNaN guard + fallback).
+        result = run_jsui(delay_trail_js(), """
+            set_time(350.0); set_feedback(45.0);
+            onpointerdown({buttons: 1});
+            onpointermove({buttons: 1});
+            dump({t_finite: isFinite(time_ms) ? 1 : 0,
+                  fb_finite: isFinite(feedback_pct) ? 1 : 0});
+        """, size=(326, 152))
+        assert result.state["t_finite"] == 1
+        assert result.state["fb_finite"] == 1

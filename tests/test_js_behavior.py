@@ -485,20 +485,25 @@ class TestWaveshapeDrag:
 
 class TestDelayTrailDrag:
     def test_horizontal_drag_maps_time_and_emits(self):
+        # ABSOLUTE pad: pointer x maps directly to time along the ruler.
         from m4l_builder.engines.delay_trail import delay_trail_js
         result = run_jsui(delay_trail_js(), """
             set_time(350.0);
             onpointerdown({x: 100, y: 60, buttons: 1});
             onpointermove({x: 150, y: 60, buttons: 1});
-            var expected = 350.0 + (50.0 / plot_w()) * MAX_MS;
+            var expected = clamp((150 - plot_l()) / plot_w(), 0, 1) * MAX_MS;
             dump({t: time_ms, expected: expected});
         """, size=(326, 152))
         assert abs(result.state["t"] - result.state["expected"]) < 0.6
         emits = _named(result.outlets, "time")
         assert len(emits) == 1
-        assert emits[0][2] == round(result.state["t"])
+        # within a half-unit (JS Math.round vs Python round half-rounding)
+        assert abs(emits[0][2] - result.state["t"]) <= 0.5
 
     def test_drag_clamps_and_wheel_feedback(self):
+        # x far off the left rail clamps time to its 1ms floor; the wheel still
+        # nudges feedback +2/step and caps at 110 (absolute drag sets feedback
+        # from y, so capture the post-move baseline before wheeling).
         from m4l_builder.engines.delay_trail import delay_trail_js
         result = run_jsui(delay_trail_js(), """
             set_time(350.0);
@@ -506,13 +511,15 @@ class TestDelayTrailDrag:
             onpointerdown({x: 100, y: 60, buttons: 1});
             onpointermove({x: -4000, y: 60, buttons: 1});
             var floor_ms = time_ms;
+            var fb_after_move = feedback_pct;
             onwheel(100, 60, 0, 1);
             var fb_up = feedback_pct;
             for (var i = 0; i < 100; i++) onwheel(100, 60, 0, 1);
-            dump({floor_ms: floor_ms, fb_up: fb_up, fb_cap: feedback_pct});
+            dump({floor_ms: floor_ms, fb_after_move: fb_after_move,
+                  fb_up: fb_up, fb_cap: feedback_pct});
         """, size=(326, 152))
         assert result.state["floor_ms"] == 1.0
-        assert result.state["fb_up"] == 47.0
+        assert result.state["fb_up"] == result.state["fb_after_move"] + 2.0
         assert result.state["fb_cap"] == 110.0
 
 
