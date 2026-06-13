@@ -131,6 +131,54 @@ class TestEqCurveGestures:
         assert len(_named(result.outlets, "band_gain")) >= 1
 
 
+class TestEqCurveAnalyzerTilt:
+    def test_slope_and_freeze_never_echo(self):
+        # Display-only messages: must never fire an outlet (no-echo rule).
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_analyzer_slope(4.5);
+            set_analyzer_freeze(1);
+            set_analyzer_freeze(0);
+            update_analyzer_data([-10, -20, -30, -40]);
+            dump({n: __captured.outlets.length});
+        """)
+        assert result.outlets == []
+
+    def test_slope_pivots_at_1k_and_clamps(self):
+        result = run_jsui(eq_curve_js(), """
+            set_analyzer_slope(4.5);
+            var a = {slope: analyzer_slope_db_oct,
+                     at1k: analyzer_slope_at(1000.0),
+                     at2k: analyzer_slope_at(2000.0),
+                     at500: analyzer_slope_at(500.0)};
+            set_analyzer_slope(99.0);
+            a.clamped = analyzer_slope_db_oct;
+            set_analyzer_slope(0.0);
+            a.off = analyzer_slope_at(8000.0);
+            dump(a);
+        """)
+        assert result.state["slope"] == pytest.approx(4.5)
+        assert result.state["at1k"] == pytest.approx(0.0)       # pivot
+        assert result.state["at2k"] == pytest.approx(4.5)       # +1 octave
+        assert result.state["at500"] == pytest.approx(-4.5)     # -1 octave
+        assert result.state["clamped"] == pytest.approx(12.0)   # clamp ceiling
+        assert result.state["off"] == 0.0                       # 0 = fast path
+
+    def test_freeze_holds_the_last_frame(self):
+        result = run_jsui(eq_curve_js(), """
+            update_analyzer_data([-10, -10, -10, -10]);
+            var before = analyzer_display[0];
+            set_analyzer_freeze(1);
+            update_analyzer_data([0, 0, 0, 0]);   // would move toward 0 if live
+            var after = analyzer_display[0];
+            set_analyzer_freeze(0);
+            update_analyzer_data([0, 0, 0, 0]);   // resumes
+            dump({before: before, after: after, thawed: analyzer_display[0]});
+        """)
+        assert result.state["after"] == result.state["before"], "frozen holds"
+        assert result.state["thawed"] > result.state["before"], "thaw resumes"
+
+
 class TestLevelHistoryBehavior:
     def test_levels_never_fire_outlets(self):
         result = run_jsui(level_history_js(), """
