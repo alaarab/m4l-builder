@@ -1069,38 +1069,40 @@ function curve_db_is_visible(db) {
 }
 
 // ── Individual band curves ───────────────────────────────────────────
+// Pro-Q-style band shading: every active gain band tints its own
+// contribution with its band color so the EQ reads at a glance and is
+// distinct from the analyzer behind it. The selected/hovered band gets a
+// stronger fill plus its colored outline.
 function draw_band_curves() {
-    var i, j, f, x, y, db, clr, zero_y, started;
+    var i, j, f, x, y, db, clr, zero_y, started, is_active, fill_a;
+    zero_y = gain_to_y(0);
 
     for (i = 0; i < num_bands; i++) {
         if (!band_cache[i].present) continue;
-        if (i !== selected_band && i !== hover_band) continue;
         if (!band_cache[i].enabled) continue;
-        if (band_cache[i].uses_gain && Math.abs(band_cache[i].gain) < 0.01) continue;
+        if (!band_cache[i].uses_gain) continue;
+        if (Math.abs(band_cache[i].gain) < 0.01) continue;
 
         clr = BAND_COLORS[i % BAND_COLORS.length];
-        zero_y = gain_to_y(0);
+        is_active = (i === selected_band || i === hover_band);
+        fill_a = is_active ? 0.22 : 0.12;
 
-        if ((i === selected_band || i === hover_band) && band_cache[i].uses_gain) {
-            mgraphics.set_source_rgba(clr[0], clr[1], clr[2], 0.08);
-            mgraphics.move_to(freq_to_x(freq_table[0]), zero_y);
-            for (j = 0; j < NUM_POINTS; j++) {
-                f = freq_table[j];
-                db = band_response_db(i, f);
-                x = freq_to_x(f);
-                y = gain_to_y(db);
-                if (j === 0) {
-                    mgraphics.line_to(x, y);
-                } else {
-                    mgraphics.line_to(x, y);
-                }
-            }
-            mgraphics.line_to(freq_to_x(freq_table[NUM_POINTS - 1]), zero_y);
-            mgraphics.close_path();
-            mgraphics.fill();
+        // Filled colored region from the 0 dB line to this band's response
+        // (boost fills upward, cut fills downward — both tinted).
+        mgraphics.set_source_rgba(clr[0], clr[1], clr[2], fill_a);
+        mgraphics.move_to(freq_to_x(freq_table[0]), zero_y);
+        for (j = 0; j < NUM_POINTS; j++) {
+            f = freq_table[j];
+            db = band_response_db(i, f);
+            mgraphics.line_to(freq_to_x(f), gain_to_y(db));
         }
+        mgraphics.line_to(freq_to_x(freq_table[NUM_POINTS - 1]), zero_y);
+        mgraphics.close_path();
+        mgraphics.fill();
 
-        mgraphics.set_source_rgba(clr[0], clr[1], clr[2], 0.45);
+        // Colored outline only on the active band (keeps the rest clean).
+        if (!is_active) continue;
+        mgraphics.set_source_rgba(clr[0], clr[1], clr[2], 0.55);
         mgraphics.set_line_width(1.0);
         started = 0;
         for (j = 0; j < NUM_POINTS; j++) {

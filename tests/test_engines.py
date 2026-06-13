@@ -588,9 +588,14 @@ class TestEqCurveEngine:
         assert "mgraphics.move_to(xs[i], ys[i]);" in js
         assert "mgraphics.line_to(xs[i], ys[i]);" in js
 
-    def test_only_draws_individual_band_curves_for_selected_or_hovered_band(self):
+    def test_pro_q_band_shading_tints_all_active_gain_bands(self):
+        # Every enabled gain band tints its contribution (color-coded EQ);
+        # the active band gets a stronger fill (0.22 vs 0.12) + an outline.
         js = eq_curve_js()
-        assert "if (i !== selected_band && i !== hover_band) continue;" in js
+        assert "is_active = (i === selected_band || i === hover_band);" in js
+        assert "fill_a = is_active ? 0.22 : 0.12;" in js
+        assert "if (!band_cache[i].uses_gain) continue;" in js
+        assert "if (!is_active) continue;" in js
 
     def test_bypass_keeps_nodes_visible_and_no_longer_calls_delete(self):
         js = eq_curve_js()
