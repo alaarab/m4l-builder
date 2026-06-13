@@ -224,15 +224,16 @@ class TestDeviceAddFlyout:
         dev, _ = self._build()
         texts = self._texts(dev)
         assert "sel 1 0" in texts
-        assert "s bigview_show" in texts
-        assert "s bigview_hide" in texts
+        # --- prefix scopes send/receive to this instance (no cross-instance talk)
+        assert "s ---bigview_show" in texts
+        assert "s ---bigview_hide" in texts
 
     def test_subpatcher_plumbing_injected(self):
         _, sp = self._build()
         texts = self._texts(sp)
         # opens via the subpatcher's OWN thispatcher `front` (not pcontrol)
         assert "thispatcher" in texts
-        assert "r bigview_show" in texts
+        assert "r ---bigview_show" in texts
         assert "front" in texts
         assert "wclose" in texts
         assert "window flags float grow" in texts  # floating + resizable
