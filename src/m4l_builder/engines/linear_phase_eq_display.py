@@ -180,6 +180,14 @@ var LOG_MIN = Math.log(MIN_FREQ);
 var LOG_MAX = Math.log(MAX_FREQ);
 var LOG_RANGE = LOG_MAX - LOG_MIN;
 var REDRAW_INTERVAL_MS = 33;
+// Analyzer poll/redraw cadence. Each analyzer frame forces a FULL repaint of
+// this heavy scene (EQ curve + up to 8 nodes + per-band fills + HUD + the
+// 256-bin spectrum), so polling as fast as the interaction redraw (33 ms)
+// overruns the repaint budget and the spectrum stutters. A steady ~20 fps
+// fits the budget; the per-bin ballistics keep the motion fluid. (The light
+// standalone analyzer scene stays smooth at 60 ms — this heavier scene needs
+// a comparable budget.) Interaction redraws still use the snappy 33 ms above.
+var ANALYZER_POLL_MS = 50;
 
 var MARGIN_LEFT = 16;
 var MARGIN_RIGHT = 4;
@@ -1663,10 +1671,10 @@ function start_analyzer_poll() {
     if (analyzer_poll_task !== null) return;
     if (typeof Task !== "undefined") {
         analyzer_poll_task = new Task(poll_analyzer_buffer);
-        analyzer_poll_task.interval = 33;
+        analyzer_poll_task.interval = ANALYZER_POLL_MS;
         analyzer_poll_task.repeat();
     } else if (typeof setInterval !== "undefined") {
-        analyzer_poll_task = setInterval(poll_analyzer_buffer, 33);
+        analyzer_poll_task = setInterval(poll_analyzer_buffer, ANALYZER_POLL_MS);
     }
 }
 
