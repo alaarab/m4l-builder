@@ -234,6 +234,8 @@ for (i = 0; i < MAX_BANDS; i++) {
         motion: 0,
         dynamic: 0,
         dynamic_amount: 0.0,
+        dynamic_current: 0.0,
+        dynamic_env: 0.0,
         motion_rate: default_motion_rate(i),
         motion_depth: default_motion_depth(i),
         motion_direction: default_motion_direction(i)
@@ -564,7 +566,7 @@ var analyzer_buffer_bins = 0;
 var analyzer_poll_task = null;
 
 function poll_analyzer_buffer() {
-    if (!analyzer_enabled || analyzer_buffer_name === "") return;
+    if (analyzer_buffer_name === "") return;
     var vals = null;
     try {
         var b = new Buffer(analyzer_buffer_name);
@@ -573,7 +575,11 @@ function poll_analyzer_buffer() {
     } catch (e) {
         return;  // buffer~ not instantiated yet; try again next tick
     }
-    if (vals && vals.length >= 4) update_analyzer_from_fft(vals);
+    if (!vals || vals.length < 4) return;
+    // Spectrum display follows the enable/freeze toggles; the dynamic detector
+    // runs whenever the buffer exists (dynamic EQ is independent of the view).
+    if (analyzer_enabled) update_analyzer_from_fft(vals);
+    if (update_dynamic_from_fft(vals)) request_redraw();
 }
 
 function start_analyzer_poll() {
@@ -613,6 +619,75 @@ function band_uses_gain(type) {
 
 function band_supports_dynamic(type) {
     return band_uses_gain(type);
+}
+
+// ── Dynamic EQ detector ─────────────────────────────────────────────────
+// For each dynamic-enabled gain band, derive a gain OFFSET that tracks the
+// level in the band's frequency region from the analyzer FFT (same buffer the
+// spectrum polls): offset = dynamic_amount * envelope(level). Negative amount
+// = compress (cut when loud), positive = expand (boost when loud). The offset
+// is emitted as "band_dyngain idx offset" on outlet 0 for the product to ADD
+// to the band's filter gain — kept separate from the static Gain param so the
+// modulation never writes the param. Runs at the analyzer poll rate; biquad
+// coefficient interpolation downstream smooths the steps.
+var DYN_TRIGGER_FLOOR = -42.0;
+var DYN_TRIGGER_RANGE = 24.0;
+var DYN_ATTACK = 0.24;
+var DYN_RELEASE = 0.10;
+var DYN_TRIM_DB = 18.0;
+var DYN_MIN_DB = -72.0;
+
+// Peak dB of the raw FFT magnitudes in the band's region (freq +/- ~1/4 oct).
+function dyn_probe_db(freq, mags) {
+    var m = mags.length;
+    if (m < 4) return DYN_MIN_DB;
+    var hz_per_bin = (sample_rate * 0.5) / m;
+    var klo = Math.floor((freq * 0.84) / hz_per_bin);
+    var khi = Math.ceil((freq * 1.19) / hz_per_bin);
+    if (klo < 0) klo = 0;
+    if (khi >= m) khi = m - 1;
+    if (khi < klo) khi = klo;
+    var peak = 0.0, k, mag;
+    for (k = klo; k <= khi; k++) {
+        mag = mags[k]; if (mag < 0.0) mag = -mag; if (mag !== mag) mag = 0.0;
+        if (mag > peak) peak = mag;
+    }
+    var db = peak > 1e-9 ? (20.0 * Math.log(peak) / Math.LN10) + DYN_TRIM_DB : DYN_MIN_DB;
+    if (db < DYN_MIN_DB) db = DYN_MIN_DB;
+    if (db > 0.0) db = 0.0;
+    return db;
+}
+
+// Update every dynamic band's offset from one raw FFT frame; emit + redraw on
+// change. Returns 1 if any band changed (so the caller can refresh the curve).
+function update_dynamic_from_fft(mags) {
+    var i, b, level, norm, coeff, target;
+    var changed = 0;
+    for (i = 0; i < num_bands; i++) {
+        b = bands[i];
+        if (!b || !b.present) continue;
+        if (!b.enabled || !b.dynamic || !band_supports_dynamic(b.type) ||
+                Math.abs(b.dynamic_amount) < 0.001) {
+            if (Math.abs(b.dynamic_current) > 0.01 || Math.abs(b.dynamic_env) > 0.01) {
+                b.dynamic_env = b.dynamic_env * 0.82;
+                b.dynamic_current = b.dynamic_current * 0.82;
+                outlet(0, "band_dyngain", i, b.dynamic_current);
+                changed = 1;
+            }
+            continue;
+        }
+        level = dyn_probe_db(b.freq, mags);
+        norm = clamp((level - DYN_TRIGGER_FLOOR) / DYN_TRIGGER_RANGE, 0.0, 1.0);
+        coeff = norm > b.dynamic_env ? DYN_ATTACK : DYN_RELEASE;
+        b.dynamic_env = b.dynamic_env * (1.0 - coeff) + norm * coeff;
+        target = Math.round(b.dynamic_amount * b.dynamic_env * 10.0) / 10.0;
+        if (Math.abs(target - b.dynamic_current) >= 0.05) {
+            b.dynamic_current = target;
+            outlet(0, "band_dyngain", i, target);
+            changed = 1;
+        }
+    }
+    return changed;
 }
 
 function type_default_q(type) {
