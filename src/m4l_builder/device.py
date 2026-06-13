@@ -232,8 +232,11 @@ class Device(GraphContainer):
         (``[pcontrol] open`` silently fails in M4L). NOTE: the window only
         opens when Live is the frontmost app. Returns the subpatcher box id.
         """
-        show_send = show_send or f"{content.name}_show"
-        hide_send = hide_send or f"{content.name}_hide"
+        # Prefix with --- so the send/receive names are scoped to THIS device
+        # instance (the patcher hierarchy), not global across every device in the
+        # Live set — otherwise two instances would open each other's windows.
+        show_send = "---" + (show_send or f"{content.name}_show")
+        hide_send = "---" + (hide_send or f"{content.name}_hide")
 
         def _msg(container, mid, text, rect):
             container.add_box({"box": {
