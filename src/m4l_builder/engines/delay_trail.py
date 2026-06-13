@@ -160,27 +160,33 @@ function paint() {
     mgraphics.arc(ms_to_x(0) + 2, lane_y(1), 3.2, 0, Math.PI * 2); mgraphics.fill();
 
     // Echo taps: amplitude decays by feedback per repeat; damping shrinks.
+    // Ping-pong alternates L/R; a normal stereo delay echoes BOTH channels
+    // equally, so each tap is drawn on both lanes (the R lane was dead in
+    // non-ping-pong mode — both channels echo, so both lanes should show it).
     var fb = clamp(feedback_pct / 100.0, 0.0, 1.1);
     var amp = fb;
     var t = time_ms;
     var n = 0;
+    var li, ly, stem, active_lane;
     while (amp > 0.02 && t <= MAX_MS && n < 24) {
-        var right_lane = pingpong ? (n % 2 === 0) : 0;
         var size = (2.0 + amp * 5.0) * (1.0 - (damp_pct / 100.0) * 0.5 * (n / 8.0));
         if (size < 1.0) size = 1.0;
         x = ms_to_x(t);
-        // Stem.
-        mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], amp * 0.35);
-        mgraphics.set_line_width(1.0);
-        mgraphics.move_to(x, lane_y(right_lane) - amp * plot_h() * 0.16);
-        mgraphics.line_to(x, lane_y(right_lane) + amp * plot_h() * 0.16);
-        mgraphics.stroke();
-        // Tap dot.
-        mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], clamp(amp, 0, 1));
-        mgraphics.arc(x, lane_y(right_lane), size, 0, Math.PI * 2);
-        mgraphics.fill();
-        if (pingpong) {
-            // Echo also lands quieter on the other lane next repeat visual.
+        stem = amp * plot_h() * 0.16;
+        active_lane = (n % 2 === 0) ? 1 : 0;  // ping-pong: which lane this repeat
+        for (li = 0; li < 2; li++) {
+            if (pingpong && li !== active_lane) continue;
+            ly = lane_y(li);
+            // Stem.
+            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], amp * 0.35);
+            mgraphics.set_line_width(1.0);
+            mgraphics.move_to(x, ly - stem);
+            mgraphics.line_to(x, ly + stem);
+            mgraphics.stroke();
+            // Tap dot.
+            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], clamp(amp, 0, 1));
+            mgraphics.arc(x, ly, size, 0, Math.PI * 2);
+            mgraphics.fill();
         }
         n += 1;
         t += time_ms;
