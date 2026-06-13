@@ -197,6 +197,34 @@ function paint() {
     mgraphics.close_path();
     mgraphics.fill();
 
+    // Soft-knee glow: a faint band marks the knee width on the input axis
+    // (threshold +/- knee/2) and a soft accent halo glows under the curve
+    // segment inside it (the curve strokes on top) — makes the Knee control
+    // tangible: subtle for a hard-knee limiter, wide for a soft compressor.
+    var half_knee = knee * 0.5;
+    if (knee > 0.1) {
+        var ka = clamp(threshold - half_knee, MIN_DB, MAX_DB);
+        var kb = clamp(threshold + half_knee, MIN_DB, MAX_DB);
+        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.07);
+        mgraphics.rectangle(in_to_x(ka), plot_t(), in_to_x(kb) - in_to_x(ka), plot_h());
+        mgraphics.fill();
+        var gp, gw, ga;
+        for (gp = 0; gp < 2; gp++) {
+            gw = (gp === 0) ? 6.5 : 3.5;
+            ga = (gp === 0) ? 0.13 : 0.27;
+            mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], ga);
+            mgraphics.set_line_width(gw);
+            for (i = 0; i <= 28; i++) {
+                db = ka + (i / 28) * (kb - ka);
+                x = in_to_x(db);
+                y = out_to_y(transfer_out_db(db));
+                if (i === 0) mgraphics.move_to(x, y);
+                else mgraphics.line_to(x, y);
+            }
+            mgraphics.stroke();
+        }
+    }
+
     // Transfer curve.
     mgraphics.set_source_rgba(CURVE_CLR);
     mgraphics.set_line_width(dragging || hovering ? 2.2 : 1.7);
