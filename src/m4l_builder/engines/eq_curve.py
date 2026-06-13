@@ -1928,8 +1928,11 @@ function set_dynamic_amount(idx, amount) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= num_bands) return;
     bands[idx].dynamic_amount = clamp(amount, -MAX_DYNAMIC_RANGE, MAX_DYNAMIC_RANGE);
-    if (Math.abs(bands[idx].dynamic_amount) > 0.001) {
-        bands[idx].dynamic = 1;
+    // A band is dynamic iff its range is non-zero — one param controls both.
+    bands[idx].dynamic = Math.abs(bands[idx].dynamic_amount) > 0.001 ? 1 : 0;
+    if (!bands[idx].dynamic) {
+        bands[idx].dynamic_current = 0.0;
+        bands[idx].dynamic_env = 0.0;
     }
     rebuild_band_cache();
     force_redraw();
