@@ -281,7 +281,9 @@ function paint() {
         mgraphics.set_source_rgba(GR_LINE);
         mgraphics.set_font_size(8.0);
         mgraphics.move_to(plot_l() + 6, plot_t() + 12);
-        mgraphics.show_text(peak_gr.toFixed(1) + " dB GR");
+        // GR as a positive magnitude ("GR 10.8 dB") to match the transfer
+        // inset + Pro-L/Pro-C convention (peak_gr is the deepest, negative).
+        mgraphics.show_text("GR " + (-peak_gr).toFixed(1) + " dB");
     }
 
     // Border.
