@@ -190,6 +190,11 @@ var MARGIN_BOTTOM = 9;
 var sample_rate = DEFAULT_SR;
 var analyzer_enabled = 1;
 var analyzer_mode = 2;
+// Display-domain spectrum tilt around a 1 kHz pivot (SPAN/Pro-Q style):
+// +4.5 dB/oct makes pink read ~flat behind the curve. Render-only; never the
+// audio. Freeze halts the analyzer ballistics and holds the last frame.
+var analyzer_slope_db_oct = 0.0;
+var analyzer_frozen = 0;
 var display_range = 15.0;
 var quality_mode = 1;
 var latency_ms = 0.0;
@@ -362,6 +367,15 @@ function analyzer_bin_freq(idx, count) {
     return Math.exp(LOG_MIN + norm * LOG_RANGE);
 }
 
+// dB offset added to a bin at the draw stage for the display tilt. Zero is the
+// fast path. Pivot at 1 kHz: lows pulled down, highs lifted for a positive
+// slope (or vice versa for a negative one).
+function analyzer_slope_at(freq) {
+    if (analyzer_slope_db_oct === 0.0) return 0.0;
+    return analyzer_slope_db_oct *
+        (Math.log(clamp(freq, MIN_FREQ, MAX_FREQ) / 1000.0) / Math.LN2);
+}
+
 function now_ms() {
     return new Date().getTime();
 }
@@ -374,6 +388,7 @@ function request_redraw() {
 }
 
 function update_analyzer_data(values) {
+    if (analyzer_frozen) return;   // hold the snapshot
     var attack;
     var incoming;
     var n = values.length;
@@ -790,7 +805,7 @@ function draw_grid() {
 }
 
 function draw_analyzer() {
-    var n, x, y, peak_db;
+    var n, x, y, peak_db, f, tilt;
     if (!analyzer_enabled) return;
     n = analyzer_display.length;
     if (n < 2) return;
@@ -803,8 +818,9 @@ function draw_analyzer() {
     mgraphics.set_source_rgba(ANALYZER_FILL_CLR);
     mgraphics.move_to(freq_to_x(analyzer_bin_freq(0, n)), plot_bottom());
     for (i = 0; i < n; i++) {
-        x = freq_to_x(analyzer_bin_freq(i, n));
-        y = analyzer_db_to_y(analyzer_display[i]);
+        f = analyzer_bin_freq(i, n);
+        x = freq_to_x(f);
+        y = analyzer_db_to_y(analyzer_display[i] + analyzer_slope_at(f));
         mgraphics.line_to(x, y);
     }
     mgraphics.line_to(freq_to_x(analyzer_bin_freq(n - 1, n)), plot_bottom());
@@ -814,8 +830,9 @@ function draw_analyzer() {
     mgraphics.set_source_rgba(ANALYZER_LINE_CLR);
     mgraphics.set_line_width(2.0);
     for (i = 0; i < n; i++) {
-        x = freq_to_x(analyzer_bin_freq(i, n));
-        y = analyzer_db_to_y(analyzer_display[i]);
+        f = analyzer_bin_freq(i, n);
+        x = freq_to_x(f);
+        y = analyzer_db_to_y(analyzer_display[i] + analyzer_slope_at(f));
         if (i === 0) mgraphics.move_to(x, y);
         else mgraphics.line_to(x, y);
     }
@@ -823,12 +840,23 @@ function draw_analyzer() {
 
     mgraphics.set_source_rgba(ANALYZER_PEAK_CLR);
     for (i = 0; i < n; i++) {
-        x = freq_to_x(analyzer_bin_freq(i, n));
-        y = analyzer_db_to_y(analyzer_peaks[i]);
         if (analyzer_peaks[i] > ANALYZER_MIN_DB + 1.0) {
+            f = analyzer_bin_freq(i, n);
+            x = freq_to_x(f);
+            y = analyzer_db_to_y(analyzer_peaks[i] + analyzer_slope_at(f));
             mgraphics.rectangle(x - 1.0, y - 0.5, 2.0, 2.0);
             mgraphics.fill();
         }
+    }
+
+    // FROZEN badge — top-right of the plot while the spectrum is held.
+    if (analyzer_frozen) {
+        mgraphics.select_font_face("Arial");
+        mgraphics.set_font_size(8.0);
+        mgraphics.set_source_rgba(ANALYZER_PEAK_CLR[0], ANALYZER_PEAK_CLR[1],
+                                  ANALYZER_PEAK_CLR[2], 0.92);
+        mgraphics.move_to(plot_right() - 44, plot_top() + 11);
+        mgraphics.show_text("FROZEN");
     }
 }
 
@@ -1569,6 +1597,7 @@ function ensure_analyzer_arrays() {
 }
 
 function update_analyzer_from_fft(mags) {
+    if (analyzer_frozen) return;   // hold the snapshot
     var m = mags.length;
     if (m < 4) return;
     ensure_analyzer_arrays();
@@ -1679,6 +1708,20 @@ function set_analyzer_buffer(name, bins) {
     analyzer_buffer_name = "" + name;
     analyzer_buffer_bins = bins ? Math.floor(bins) : 0;
     start_analyzer_poll();
+}
+
+// Display tilt (dB/oct around 1 kHz). Render-only; no outlet, no audio effect.
+function set_analyzer_slope(v) {
+    if (v === undefined || v !== v) return;
+    analyzer_slope_db_oct = clamp(v, -12.0, 12.0);
+    mgraphics.redraw();
+}
+
+// Freeze/thaw the analyzer. Frozen holds the last frame (the update guards
+// no-op) so you can EQ against a captured spectrum; thaw resumes ballistics.
+function set_analyzer_freeze(v) {
+    analyzer_frozen = v ? 1 : 0;
+    mgraphics.redraw();
 }
 
 function pointer_context_click(pointerevent, ctrl, but) {
