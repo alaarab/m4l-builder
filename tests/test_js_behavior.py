@@ -615,3 +615,40 @@ class TestBallisticsCurve:
         """, size=(132, 68))
         # Higher ratio -> deeper representative gain reduction.
         assert result.state["t10"] > result.state["t2"]
+
+    def test_interactive_left_drags_attack_right_drags_release(self):
+        from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+        # Left half = ATTACK, right half = RELEASE (matches the corner labels).
+        result = run_jsui(ballistics_curve_js(attack_ms=10, release_ms=120,
+                                              interactive=True), """
+            onpointerdown({x: 18, y: 30, buttons: 1});
+            onpointermove({x: 40, y: 30, buttons: 1});
+            onpointerup({x: 40, y: 30, buttons: 0});
+            var a1 = attack_ms, r1 = release_ms;
+            onpointerdown({x: 55, y: 30, buttons: 1});  // further right in left half
+            var a2 = attack_ms;
+            onpointerup({x: 55, y: 30, buttons: 0});
+            var a_before = attack_ms;
+            onpointerdown({x: 110, y: 30, buttons: 1}); // right half -> release
+            var r2 = release_ms, a_after = attack_ms;
+            onpointerup({x: 110, y: 30, buttons: 0});
+            dump({a1: a1, r1: r1, a2: a2, r2: r2,
+                  a_unchanged: (a_after === a_before) ? 1 : 0});
+        """, size=(132, 68))
+        s = result.state
+        assert 0.05 <= s["a1"] <= 250.0
+        assert abs(s["r1"] - 120.0) < 1e-6       # release untouched by left drag
+        assert s["a2"] > s["a1"]                  # further right -> larger attack
+        assert 5.0 <= s["r2"] <= 2000.0
+        assert s["a_unchanged"] == 1              # right drag leaves attack alone
+        assert len(_named(result.outlets, "attack")) >= 1
+        assert len(_named(result.outlets, "release")) >= 1
+
+    def test_non_interactive_emits_nothing(self):
+        from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+        result = run_jsui(ballistics_curve_js(), """
+            onpointerdown({x: 18, y: 30, buttons: 1});
+            onpointermove({x: 40, y: 30, buttons: 1});
+            dump({ok: 1});
+        """, size=(132, 68))
+        assert result.outlets == []
