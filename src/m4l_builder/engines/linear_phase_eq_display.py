@@ -1545,7 +1545,7 @@ function msg_int(v) {
 // ── FFT analyzer source (buffer~ polling; see engines/fft_analyzer.py) ──
 // Raw linear FFT magnitudes are rebinned into a fixed set of log-spaced
 // display bins (correct log axis; no blank-out across FFT-size changes).
-var ANALYZER_BINS = 128;
+var ANALYZER_BINS = 256;
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
 var analyzer_buffer_name = "";
 var analyzer_buffer_bins = 0;
@@ -1587,7 +1587,9 @@ function update_analyzer_from_fft(mags) {
             if (mag > peak) peak = mag;
             sum += mag; cnt++;
         }
-        energy = cnt > 0 ? (0.4 * peak + 0.6 * (sum / cnt)) : 0.0;
+        // Peak-dominant for sharp tonal spikes (match eq_curve + the
+        // standalone analyzer); small mean term tames noise jitter.
+        energy = cnt > 0 ? (0.88 * peak + 0.12 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);

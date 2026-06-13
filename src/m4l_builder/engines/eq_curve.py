@@ -175,7 +175,7 @@ var MAX_BANDS       = 8;
 var DEFAULT_SR      = 48000.0;
 var ANALYZER_MIN_DB = -72.0;
 var ANALYZER_MAX_DB = 0.0;
-var ANALYZER_BINS   = 128;        // fixed log-spaced display bins for fft_frame
+var ANALYZER_BINS   = 256;        // fixed log-spaced display bins for fft_frame
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
 var LOG_MIN         = Math.log(MIN_FREQ);
 var LOG_MAX         = Math.log(MAX_FREQ);
@@ -481,8 +481,9 @@ function update_analyzer_from_fft(mags) {
             if (mag > peak) peak = mag;
             sum += mag; cnt++;
         }
-        // Blend peak + mean: peak keeps tonal spikes, mean tames broadband noise.
-        energy = cnt > 0 ? (0.4 * peak + 0.6 * (sum / cnt)) : 0.0;
+        // Peak-dominant so tonal spikes stay sharp and narrow (a heavy mean
+        // weight smears them into a blob); tiny mean term tames noise jitter.
+        energy = cnt > 0 ? (0.88 * peak + 0.12 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
