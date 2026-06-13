@@ -180,6 +180,61 @@ class TestEqCurveAnalyzerTilt:
         assert result.state["thawed"] > result.state["before"], "thaw resumes"
 
 
+class TestEqCurveDynamic:
+    # Dynamic EQ detector: FFT level -> envelope -> gain offset (band_dyngain).
+    _MAGS = ("var mags=[];for(var i=0;i<1024;i++)mags[i]=(i>=40&&i<46)?1.0:0.0;")
+
+    def test_static_band_emits_no_dyngain(self):
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            sample_rate = 48000;
+            """ + self._MAGS + """
+            update_dynamic_from_fft(mags);
+            dump({n: __captured.outlets.length});
+        """)
+        assert result.outlets == []
+
+    def test_dynamic_band_compresses_on_signal(self):
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            bands[0].dynamic = 1; bands[0].dynamic_amount = -6.0;
+            sample_rate = 48000;
+            """ + self._MAGS + """
+            for (var f = 0; f < 40; f++) update_dynamic_from_fft(mags);
+            dump({cur: bands[0].dynamic_current, env: bands[0].dynamic_env});
+        """)
+        assert result.state["env"] > 0.5          # envelope built up under signal
+        assert result.state["cur"] < -1.0         # negative amount -> compressed
+        assert len(_named(result.outlets, "band_dyngain")) >= 1
+
+    def test_dynamic_releases_when_quiet(self):
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            bands[0].dynamic = 1; bands[0].dynamic_amount = -6.0;
+            sample_rate = 48000;
+            """ + self._MAGS + """
+            var quiet = []; for (var i = 0; i < 1024; i++) quiet[i] = 0.0;
+            for (var f = 0; f < 40; f++) update_dynamic_from_fft(mags);
+            var peak = bands[0].dynamic_current;
+            for (var f = 0; f < 80; f++) update_dynamic_from_fft(quiet);
+            dump({peak: peak, after: bands[0].dynamic_current});
+        """)
+        assert result.state["peak"] < -1.0
+        assert result.state["after"] > result.state["peak"]   # released toward 0
+
+    def test_dyn_probe_tracks_level(self):
+        result = run_jsui(eq_curve_js(), """
+            sample_rate = 48000;
+            var lo = []; for (var i = 0; i < 1024; i++) lo[i] = 0.0005;
+            var hi = []; for (var i = 0; i < 1024; i++) hi[i] = (i>=40&&i<46)?1.0:0.0005;
+            dump({lo: dyn_probe_db(1000.0, lo), hi: dyn_probe_db(1000.0, hi)});
+        """)
+        assert result.state["hi"] > result.state["lo"] + 10.0
+
+
 class TestLinearPhaseAnalyzerTilt:
     # Same tilt/freeze contract as eq_curve, ported to the LP display engine.
     def test_slope_and_freeze_never_echo(self):
