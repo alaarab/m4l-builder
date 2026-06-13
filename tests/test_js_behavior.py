@@ -534,7 +534,8 @@ class TestLevelHistoryInteractive:
         assert result.outlets == []
         assert result.state == {"ref": -20.0, "dragging": 0}
 
-    def test_interactive_drag_emits_threshold_with_drag_owns_line(self):
+    def test_interactive_drag_sets_threshold_absolute_with_drag_owns_line(self):
+        # ABSOLUTE: the line follows the cursor's level (y -> dB), not a delta.
         result = run_jsui(level_history_js(ref_db=-12.0, interactive=True), """
             onpointerdown({x: 60, y: 40, buttons: 1});
             onpointermove({x: 60, y: 70, buttons: 1});
@@ -543,7 +544,7 @@ class TestLevelHistoryInteractive:
             var after_echo = ref_db;
             onpointerup({x: 60, y: 70, buttons: 0});
             set_ref_db(-3.0);              // applies after release
-            var expected = -12.0 - (30.0 / plot_h()) * (hi_db - lo_db);
+            var expected = clamp(y_to_db(70), lo_db, Math.min(hi_db, 0.0));
             dump({mid: mid, after_echo: after_echo, final: ref_db,
                   expected: expected});
         """, size=(208, 152))
@@ -551,7 +552,9 @@ class TestLevelHistoryInteractive:
         assert result.state["after_echo"] == result.state["mid"]
         assert result.state["final"] == -3.0
         emits = _named(result.outlets, "threshold")
-        assert len(emits) == 1
+        # press (click-to-set) + move = two emits in the absolute model
+        assert len(emits) == 2
+        assert abs(emits[-1][2] - result.state["mid"]) < 0.06
 
     def test_interactive_clamps_at_zero(self):
         result = run_jsui(level_history_js(ref_db=-2.0, interactive=True), """

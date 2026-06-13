@@ -17,10 +17,13 @@ Messages in (inlet 0):
                               values outside the window hide it
     clear                     wipe history
 
-With interactive=True the reference line becomes draggable (Pro-C style:
-threshold on the main view): vertical drag emits "threshold <db>" on
-outlet 0 (shift = fine), clamped to [lo_db, min(hi_db, 0)]. While
-dragging, inbound set_ref_db is ignored (drag owns the line).
+With interactive=True the reference line becomes draggable (Pro-C/Pro-L
+style: threshold/ceiling on the main view): click or drag and the line
+follows the cursor's level (ABSOLUTE mapping), emitting "threshold <db>"
+on outlet 0, clamped to [lo_db, min(hi_db, 0)]. Coordinates resolve via a
+.y/.localY/.offsetY/.clientY fallback (raw pointerevent.y is undefined in
+Live's v8ui). While dragging, inbound set_ref_db is ignored (drag owns the
+line).
 
 Messages out (outlet 0): none in V1 (reserved for threshold drag later).
 """
@@ -346,20 +349,47 @@ function set_ref_db(v) {
 }
 
 // ── Interaction (interactive=True): drag the reference line ──────────
+// Robust pointer-coordinate resolver: v8ui exposes the object-local position
+// under different property names (.y / .localY / .offsetY / .clientY); reading
+// only `.y` returned undefined in Live -> NaN -> the line mis-scaled and jumped
+// (the it38 bug). Mirrors eq_curve / delay_trail. The mapping is ABSOLUTE — the
+// line follows the cursor's level on the dB scale (robust to any v8ui frame
+// quirk), not a relative start+delta.
+function pointer_y(pe, fb) {
+    if (!pe) return fb;
+    if (pe.y !== undefined) return pe.y;
+    if (pe.localY !== undefined) return pe.localY;
+    if (pe.offsetY !== undefined) return pe.offsetY;
+    if (pe.clientY !== undefined) return pe.clientY;
+    return fb;
+}
+function pointer_buttons(pe, fb) {
+    if (!pe) return fb;
+    if (pe.buttons !== undefined) return pe.buttons;
+    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
+    return fb;
+}
+
+function y_to_db(y) {
+    return lo_db + ((plot_b() - y) / plot_h()) * (hi_db - lo_db);
+}
+
+function apply_ref(y) {
+    if (isNaN(y)) return;
+    ref_db = clamp(y_to_db(y), lo_db, Math.min(hi_db, 0.0));
+    outlet(0, "threshold", Math.round(ref_db * 10) / 10);
+    mgraphics.redraw();
+}
+
 function start_drag(y) {
     if (!INTERACTIVE) return;
     dragging = 1;
-    drag_start_y = y;
-    drag_start_ref = ref_db === null ? 0.0 : ref_db;
+    apply_ref(y);
 }
 
 function drag_to(y, fine) {
     if (!dragging) return;
-    var dd = (y - drag_start_y) / plot_h() * (hi_db - lo_db);
-    if (fine) dd *= 0.15;
-    ref_db = clamp(drag_start_ref - dd, lo_db, Math.min(hi_db, 0.0));
-    outlet(0, "threshold", Math.round(ref_db * 10) / 10);
-    mgraphics.redraw();
+    apply_ref(y);
 }
 
 function end_drag() {
@@ -368,12 +398,16 @@ function end_drag() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pointerevent) { start_drag(pointerevent.y); }
-function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.y, pointerevent.shiftKey ? 1 : 0);
+function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b())); }
+function onpointermove(pe) {
+    if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
+        drag_to(pointer_y(pe, plot_b()), 0);
+    } else if (dragging) {
+        end_drag();
+    }
 }
-function onpointerup(pointerevent) { end_drag(); }
-function onpointerleave(pointerevent) { end_drag(); }
+function onpointerup(pe) { end_drag(); }
+function onpointerleave(pe) { end_drag(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
