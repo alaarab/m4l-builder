@@ -11,6 +11,7 @@ import pytest
 
 from m4l_builder.engines.eq_curve import eq_curve_js
 from m4l_builder.engines.level_history import level_history_js
+from m4l_builder.engines.linear_phase_eq_display import linear_phase_eq_display_js
 
 from .js_harness import NODE, run_jsui
 
@@ -177,6 +178,46 @@ class TestEqCurveAnalyzerTilt:
         """)
         assert result.state["after"] == result.state["before"], "frozen holds"
         assert result.state["thawed"] > result.state["before"], "thaw resumes"
+
+
+class TestLinearPhaseAnalyzerTilt:
+    # Same tilt/freeze contract as eq_curve, ported to the LP display engine.
+    def test_slope_and_freeze_never_echo(self):
+        result = run_jsui(linear_phase_eq_display_js(), """
+            set_analyzer_slope(4.5);
+            set_analyzer_freeze(1);
+            set_analyzer_freeze(0);
+            update_analyzer_data([-10, -20, -30, -40]);
+            dump({n: __captured.outlets.length});
+        """)
+        assert result.outlets == []
+
+    def test_slope_pivots_at_1k_and_clamps(self):
+        result = run_jsui(linear_phase_eq_display_js(), """
+            set_analyzer_slope(4.5);
+            var a = {at1k: analyzer_slope_at(1000.0),
+                     at2k: analyzer_slope_at(2000.0),
+                     at500: analyzer_slope_at(500.0)};
+            set_analyzer_slope(99.0); a.clamped = analyzer_slope_db_oct;
+            set_analyzer_slope(0.0); a.off = analyzer_slope_at(8000.0);
+            dump(a);
+        """)
+        assert result.state["at1k"] == pytest.approx(0.0)
+        assert result.state["at2k"] == pytest.approx(4.5)
+        assert result.state["at500"] == pytest.approx(-4.5)
+        assert result.state["clamped"] == pytest.approx(12.0)
+        assert result.state["off"] == 0.0
+
+    def test_freeze_holds_the_last_frame(self):
+        result = run_jsui(linear_phase_eq_display_js(), """
+            update_analyzer_data([-10, -10, -10, -10]);
+            var before = analyzer_display[0];
+            set_analyzer_freeze(1);
+            update_analyzer_data([0, 0, 0, 0]);
+            var after = analyzer_display[0];
+            dump({before: before, after: after});
+        """)
+        assert result.state["after"] == result.state["before"]
 
 
 class TestLevelHistoryBehavior:
