@@ -16,6 +16,9 @@ Inlet 0 messages:
     set_motion_rate band_idx hz
     set_motion_depth band_idx percent
     set_motion_direction band_idx degrees
+    set_analyzer_buffer name bins   (spectrum DISPLAY polls this buffer~)
+    set_dyn_buffer name [bins]      (dynamic DETECTOR polls this pre-EQ buffer~;
+                                     empty/none = fall back to the display buffer)
 
 Inlet 1:
     sample-rate float (typically from dspstate~ outlet 1)
@@ -565,21 +568,38 @@ var analyzer_buffer_name = "";
 var analyzer_buffer_bins = 0;
 var analyzer_poll_task = null;
 
-function poll_analyzer_buffer() {
-    if (analyzer_buffer_name === "") return;
-    var vals = null;
+// Optional DEDICATED detector buffer (a pre-EQ tap). When set via
+// set_dyn_buffer, the dynamic detector reads THIS buffer instead of the
+// post-EQ display buffer, so a dynamic cut does not pull down the level it
+// reacts to. Empty = fall back to the display buffer (other devices unchanged).
+var dyn_buffer_name = "";
+var dyn_buffer_bins = 0;
+
+// Read fft_size/2 linear magnitudes from a named buffer~. Returns null if the
+// name is empty or the buffer~ is not instantiated yet (retry next tick).
+function read_buffer_frame(nm, bins) {
+    if (nm === "") return null;
     try {
-        var b = new Buffer(analyzer_buffer_name);
-        var n = analyzer_buffer_bins > 0 ? analyzer_buffer_bins : 1024;
-        vals = b.peek(1, 0, n);
+        var b = new Buffer(nm);
+        var n = bins > 0 ? bins : 1024;
+        return b.peek(1, 0, n);
     } catch (e) {
-        return;  // buffer~ not instantiated yet; try again next tick
+        return null;
     }
-    if (!vals || vals.length < 4) return;
-    // Spectrum display follows the enable/freeze toggles; the dynamic detector
-    // runs whenever the buffer exists (dynamic EQ is independent of the view).
-    if (analyzer_enabled) update_analyzer_from_fft(vals);
-    if (update_dynamic_from_fft(vals)) request_redraw();
+}
+
+function poll_analyzer_buffer() {
+    if (analyzer_buffer_name === "" && dyn_buffer_name === "") return;
+    var vals = read_buffer_frame(analyzer_buffer_name, analyzer_buffer_bins);
+    // Spectrum display reads ONLY the (post-EQ) display buffer, gated by enable.
+    if (vals && vals.length >= 4 && analyzer_enabled) update_analyzer_from_fft(vals);
+    // Dynamic detector: read the DEDICATED pre-EQ buffer when one is set, else
+    // fall back to the display buffer so other eq_curve devices are unchanged.
+    var dyn_vals = dyn_buffer_name !== "" ? read_buffer_frame(dyn_buffer_name, dyn_buffer_bins) : null;
+    if (dyn_vals === null) dyn_vals = vals;
+    if (dyn_vals && dyn_vals.length >= 4) {
+        if (update_dynamic_from_fft(dyn_vals)) request_redraw();
+    }
 }
 
 function start_analyzer_poll() {
@@ -596,6 +616,17 @@ function start_analyzer_poll() {
 function set_analyzer_buffer(name, bins) {
     analyzer_buffer_name = "" + name;
     analyzer_buffer_bins = bins ? Math.floor(bins) : 0;
+    start_analyzer_poll();
+}
+
+// Point the DYNAMIC detector at its own (pre-EQ) buffer~, separate from the
+// post-EQ spectrum display buffer. Send with no name (or 'none'/'0') to clear
+// it and fall back to the display buffer. Shares the one analyzer poll Task.
+function set_dyn_buffer(name, bins) {
+    var nm = (name === undefined) ? "" : "" + name;
+    if (nm === "none" || nm === "0") nm = "";
+    dyn_buffer_name = nm;
+    dyn_buffer_bins = bins ? Math.floor(bins) : 0;
     start_analyzer_poll();
 }
 
@@ -623,8 +654,9 @@ function band_supports_dynamic(type) {
 
 // ── Dynamic EQ detector ─────────────────────────────────────────────────
 // For each dynamic-enabled gain band, derive a gain OFFSET that tracks the
-// level in the band's frequency region from the analyzer FFT (same buffer the
-// spectrum polls): offset = dynamic_amount * envelope(level). Negative amount
+// level in the band's frequency region from the FFT magnitudes (a dedicated
+// pre-EQ detector buffer when set via set_dyn_buffer, else the spectrum buffer):
+// offset = dynamic_amount * envelope(level). Negative amount
 // = compress (cut when loud), positive = expand (boost when loud). The offset
 // is emitted as "band_dyngain idx offset" on outlet 0 for the product to ADD
 // to the band's filter gain — kept separate from the static Gain param so the

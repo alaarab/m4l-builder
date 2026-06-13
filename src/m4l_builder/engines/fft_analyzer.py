@@ -125,6 +125,7 @@ def fft_analyzer_dsp(
     id_prefix: str = "fft",
     kernel_filename: str | None = None,
     samplerate_handshake: bool = True,
+    announce_selector: str = "set_analyzer_buffer",
     loadbang_id: str | None = None,
     patch_x: int = 80,
     patch_y: int = 560,
@@ -133,10 +134,12 @@ def fft_analyzer_dsp(
 
     Emits the kernel support file, instantiates ``pfft~`` writing magnitudes
     into a device-local ``buffer~``, and tells the consumer where to look via
-    ``set_analyzer_buffer <name> <bins>`` at load. When
-    ``samplerate_handshake`` is set, also wires ``dspstate~ ->
-    prepend set_samplerate`` into the same inlet so the consumer can map bins
-    to Hz. Returns the created object ids.
+    ``<announce_selector> <name> <bins>`` at load (default
+    ``set_analyzer_buffer``; pass ``announce_selector="set_dyn_buffer"`` for a
+    second, detector-only analyzer that drives a dynamic detector instead of the
+    spectrum display). When ``samplerate_handshake`` is set, also wires
+    ``dspstate~ -> prepend set_samplerate`` into the same inlet so the consumer
+    can map bins to Hz. Returns the created object ids.
     """
     kernel_filename = kernel_filename or f"{id_prefix}_analyzer_core.maxpat"
     stem = kernel_filename[:-len(".maxpat")] if kernel_filename.endswith(".maxpat") else kernel_filename
@@ -198,7 +201,7 @@ def fft_analyzer_dsp(
         "box": {
             "id": bufmsg_id,
             "maxclass": "message",
-            "text": f"set_analyzer_buffer {buffer_name} {bins}",
+            "text": f"{announce_selector} {buffer_name} {bins}",
             "numinlets": 2,
             "numoutlets": 1,
             "outlettype": [""],

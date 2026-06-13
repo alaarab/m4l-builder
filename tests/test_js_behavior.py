@@ -235,6 +235,91 @@ class TestEqCurveDynamic:
         assert result.state["hi"] > result.state["lo"] + 10.0
 
 
+class TestEqCurveDynBufferSplit:
+    # The detector reads a DEDICATED pre-EQ buffer (set_dyn_buffer) separate
+    # from the post-EQ spectrum display buffer (set_analyzer_buffer), so a
+    # dynamic cut can't soften itself via the post-EQ level it carved.
+    _BUF = """
+        var __frames = {};
+        Buffer = function (nm) {
+            this.peek = function () { return __frames[nm] || []; };
+            this.poke = function () {};
+            this.framecount = function () { return 0; };
+        };
+        function _fill(n, v) { var a = [], i; for (i = 0; i < n; i++) a[i] = v; return a; }
+    """
+
+    def test_detector_reads_dyn_buffer_not_display(self):
+        # pre-EQ dyn buffer LOUD, post-EQ display buffer SILENT -> compresses.
+        result = run_jsui(eq_curve_js(), self._BUF + """
+            __frames["pre"] = _fill(512, 0.6);
+            __frames["post"] = _fill(1024, 0.0005);
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            bands[0].dynamic = 1; bands[0].dynamic_amount = -8.0;
+            sample_rate = 48000; analyzer_enabled = 0;
+            set_analyzer_buffer("post", 1024);
+            set_dyn_buffer("pre", 512);
+            for (var f = 0; f < 40; f++) poll_analyzer_buffer();
+            dump({cur: bands[0].dynamic_current});
+        """)
+        assert result.state["cur"] < -1.0
+
+    def test_detector_falls_back_to_display_when_no_dyn_buffer(self):
+        # No dyn buffer; display buffer LOUD -> still compresses (fallback).
+        # Guarantees backward compatibility for other eq_curve devices.
+        result = run_jsui(eq_curve_js(), self._BUF + """
+            __frames["post"] = _fill(1024, 0.6);
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            bands[0].dynamic = 1; bands[0].dynamic_amount = -8.0;
+            sample_rate = 48000; analyzer_enabled = 0;
+            set_analyzer_buffer("post", 1024);
+            for (var f = 0; f < 40; f++) poll_analyzer_buffer();
+            dump({cur: bands[0].dynamic_current, dynname: dyn_buffer_name});
+        """)
+        assert result.state["dynname"] == ""
+        assert result.state["cur"] < -1.0
+
+    def test_set_dyn_buffer_clear_restores_fallback(self):
+        # Setting then clearing ('none') falls back to the display buffer.
+        result = run_jsui(eq_curve_js(), self._BUF + """
+            __frames["post"] = _fill(1024, 0.6);
+            __frames["pre"] = _fill(512, 0.0005);
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            bands[0].dynamic = 1; bands[0].dynamic_amount = -8.0;
+            sample_rate = 48000; analyzer_enabled = 0;
+            set_analyzer_buffer("post", 1024);
+            set_dyn_buffer("pre", 512);
+            var nameSet = dyn_buffer_name;
+            set_dyn_buffer("none");
+            for (var f = 0; f < 40; f++) poll_analyzer_buffer();
+            dump({nameSet: nameSet, nameCleared: dyn_buffer_name,
+                  cur: bands[0].dynamic_current});
+        """)
+        assert result.state["nameSet"] == "pre"
+        assert result.state["nameCleared"] == ""
+        assert result.state["cur"] < -1.0   # fell back to the loud display buffer
+
+    def test_detector_ignores_loud_display_when_dyn_buffer_silent(self):
+        # Inverse cross-check: post-EQ display LOUD, pre-EQ dyn SILENT -> the
+        # detector stays quiet (it is NOT cross-wired onto the display buffer).
+        result = run_jsui(eq_curve_js(), self._BUF + """
+            __frames["post"] = _fill(1024, 0.6);
+            __frames["pre"] = _fill(512, 0.0005);
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            bands[0].dynamic = 1; bands[0].dynamic_amount = -8.0;
+            sample_rate = 48000; analyzer_enabled = 1;
+            set_analyzer_buffer("post", 1024);
+            set_dyn_buffer("pre", 512);
+            for (var f = 0; f < 40; f++) poll_analyzer_buffer();
+            dump({cur: bands[0].dynamic_current});
+        """)
+        assert result.state["cur"] > -0.5   # silent pre buffer -> no compression
+
+
 class TestLinearPhaseAnalyzerTilt:
     # Same tilt/freeze contract as eq_curve, ported to the LP display engine.
     def test_slope_and_freeze_never_echo(self):
