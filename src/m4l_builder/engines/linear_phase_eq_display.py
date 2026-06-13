@@ -857,7 +857,7 @@ function draw_empty_state() {
     mgraphics.set_font_size(7.2);
     mgraphics.set_source_rgba(0.55, 0.61, 0.68, 0.92);
     mgraphics.move_to(cx - 52, cy + 30);
-    mgraphics.show_text("Enable a node or click to place one.");
+    mgraphics.show_text("Double-click the graph to add a band.");
 }
 
 function draw_band_curves() {

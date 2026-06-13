@@ -188,6 +188,9 @@ var analyzer_enabled = 1;
 var num_bands = 0;
 var selected_band = -1;
 var hover_band = -1;
+var hover_x = -1.0;
+var hover_y = -1.0;
+var hover_in_plot = 0;
 var dragging = 0;
 var drag_mode = 0;
 var drag_start_freq = 0;
@@ -943,6 +946,7 @@ function paint() {
     draw_band_curves();
     draw_composite_curve();
     draw_motion_guides();
+    draw_hover_crosshair();
     draw_dynamic_handles();
     draw_nodes();
     draw_tooltip();
@@ -2244,17 +2248,58 @@ function handle_hover(x, y) {
     } else {
         menu_hover = "";
     }
-    if (hover_band !== prev || menu_hover !== prev_menu) {
-        mgraphics.redraw();
+    var prev_in = hover_in_plot;
+    hover_x = x;
+    hover_y = y;
+    hover_in_plot = (!dragging && x >= plot_left() && x <= plot_right() &&
+                     y >= plot_top() && y <= plot_bottom()) ? 1 : 0;
+    if (hover_band !== prev || menu_hover !== prev_menu ||
+            hover_in_plot || prev_in) {
+        request_redraw();
     }
 }
 
 function clear_hover_state() {
-    if (hover_band >= 0 || menu_hover) {
+    if (hover_band >= 0 || menu_hover || hover_in_plot) {
         hover_band = -1;
         menu_hover = "";
+        hover_in_plot = 0;
         mgraphics.redraw();
     }
+}
+
+// Pro-Q-style hover crosshair: faint guides from the cursor to the axes,
+// with the exact frequency in the bottom gutter and gain in the left gutter.
+function draw_hover_crosshair() {
+    if (!hover_in_plot) return;
+    var x = clamp(hover_x, plot_left(), plot_right());
+    var y = clamp(hover_y, plot_top(), plot_bottom());
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.46);
+    mgraphics.set_line_width(1.0);
+    mgraphics.move_to(x, plot_top()); mgraphics.line_to(x, plot_bottom()); mgraphics.stroke();
+    mgraphics.move_to(plot_left(), y); mgraphics.line_to(plot_right(), y); mgraphics.stroke();
+
+    mgraphics.select_font_face("Arial");
+    mgraphics.set_font_size(8.0);
+    // Frequency under the cursor (bottom gutter).
+    var ftxt = format_freq_text(x_to_freq(x));
+    var fw = ftxt.length * 4.6 + 4;
+    var fx = clamp(x - fw * 0.5, 0.0, mgraphics.size[0] - fw);
+    mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);
+    mgraphics.rectangle(fx, plot_bottom() + 1.0, fw, 10.0);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.98);
+    mgraphics.move_to(fx + 2.0, plot_bottom() + 8.5);
+    mgraphics.show_text(ftxt);
+    // Gain at the cursor (left gutter).
+    var gv = y_to_gain(y);
+    var gtxt = (gv >= 0 ? "+" : "") + gv.toFixed(1);
+    mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);
+    mgraphics.rectangle(0.0, y - 5.0, MARGIN_LEFT - 1.0, 10.0);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.98);
+    mgraphics.move_to(1.0, y + 2.5);
+    mgraphics.show_text(gtxt);
 }
 
 function onpointerdown(pointerevent) {
