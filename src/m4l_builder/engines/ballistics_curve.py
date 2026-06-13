@@ -136,6 +136,11 @@ function gr_to_y(gr) {
     return plot_t() + clamp(gr, 0.0, FULL_DB) / FULL_DB * plot_h();
 }
 
+function fmt_ms(v) {
+    if (v < 10.0) return (Math.round(v * 10) / 10) + "ms";
+    return Math.round(v) + "ms";
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
@@ -172,7 +177,11 @@ function paint() {
     // Envelope: filled area from the 0-GR line down to the curve, + stroke.
     var N = 128;
     var y0 = gr_to_y(0.0);
-    mgraphics.set_source_rgba(FILL_CLR);
+    // Fill opacity scales with the GR depth: a light squeeze reads subtle,
+    // a heavy one bold (the "intensity" cue).
+    var fill_intensity = clamp(tgt / FULL_DB, 0.0, 1.0);
+    mgraphics.set_source_rgba(FILL_CLR[0], FILL_CLR[1], FILL_CLR[2],
+                              0.10 + fill_intensity * 0.34);
     mgraphics.move_to(plot_l(), y0);
     for (i = 0; i <= N; i++) {
         x = plot_l() + (i / N) * plot_w();
@@ -197,10 +206,11 @@ function paint() {
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(7.0);
     mgraphics.set_source_rgba(TEXT_CLR);
+    var al = "ATK " + fmt_ms(attack_ms);
     mgraphics.move_to(plot_l() + 2, plot_b() - 2);
-    mgraphics.show_text("ATK");
-    var rl = "REL";
-    mgraphics.move_to(plot_r() - 16, plot_b() - 2);
+    mgraphics.show_text(al);
+    var rl = "REL " + fmt_ms(release_ms);
+    mgraphics.move_to(plot_r() - (rl.length * 4.4 + 2), plot_b() - 2);
     mgraphics.show_text(rl);
 }
 
