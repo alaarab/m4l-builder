@@ -225,6 +225,22 @@ class TestEqCurveDynamic:
         assert result.state["peak"] < -1.0
         assert result.state["after"] > result.state["peak"]   # released toward 0
 
+    def test_dynamic_handle_drag_emits_band_dynamic_amount(self):
+        # Dragging the dynamic ring (drag_mode 2) emits band_dynamic_amount so
+        # the product can route it to the Dyn param (the Pro-Q ring-drag).
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            selected_band = 0; dragging = 1; drag_mode = 2;
+            // drag the ring below the node's gain -> a negative (compress) range
+            handle_drag_at(freq_to_x(1000.0), gain_to_y(-6.0), 1, 0, 0);
+            dump({amt: bands[0].dynamic_amount});
+        """)
+        amts = _named(result.outlets, "band_dynamic_amount")
+        assert len(amts) >= 1
+        assert amts[-1][3] < 0.0                     # a compress range was emitted
+        assert result.state["amt"] == amts[-1][3]    # engine state matches the emit
+
     def test_dyn_probe_tracks_level(self):
         result = run_jsui(eq_curve_js(), """
             sample_rate = 48000;
