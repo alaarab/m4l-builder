@@ -197,6 +197,9 @@ var collision_mode = 1;
 var num_bands = MAX_BANDS;
 var selected_band = -1;
 var hover_band = -1;
+var hover_x = -1.0;
+var hover_y = -1.0;
+var hover_in_plot = 0;
 var dragging = 0;
 var drag_mode = 0;
 var curve_dirty = 1;
@@ -1380,6 +1383,7 @@ function paint() {
         draw_band_curves();
         draw_composite_curve();
     }
+    draw_hover_crosshair();
     if (enabled_band_count() >= 1) {
         draw_dynamic_handles();
     }
@@ -2001,7 +2005,12 @@ function handle_hover(x, y) {
     }
     dynamic_hover = dynamic_hit_test(x, y);
     hover_band = dynamic_hover >= 0 ? dynamic_hover : hit_test(x, y);
-    if (hover_band !== prev) mgraphics.redraw();
+    var prev_in = hover_in_plot;
+    hover_x = x;
+    hover_y = y;
+    hover_in_plot = (!dragging && x >= plot_left() && x <= plot_right() &&
+                     y >= plot_top() && y <= plot_bottom()) ? 1 : 0;
+    if (hover_band !== prev || hover_in_plot || prev_in) request_redraw();
 }
 
 function clear_hover_state() {
@@ -2010,10 +2019,44 @@ function clear_hover_state() {
         mgraphics.redraw();
         return;
     }
-    if (hover_band >= 0) {
+    if (hover_band >= 0 || hover_in_plot) {
         hover_band = -1;
+        hover_in_plot = 0;
         mgraphics.redraw();
     }
+}
+
+// Pro-Q-style hover crosshair (mirrors eq_curve): faint guides from the
+// cursor with the exact frequency in the bottom gutter + gain in the left.
+function draw_hover_crosshair() {
+    if (!hover_in_plot) return;
+    var x = clamp(hover_x, plot_left(), plot_right());
+    var y = clamp(hover_y, plot_top(), plot_bottom());
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.46);
+    mgraphics.set_line_width(1.0);
+    mgraphics.move_to(x, plot_top()); mgraphics.line_to(x, plot_bottom()); mgraphics.stroke();
+    mgraphics.move_to(plot_left(), y); mgraphics.line_to(plot_right(), y); mgraphics.stroke();
+
+    mgraphics.select_font_face("Arial");
+    mgraphics.set_font_size(8.0);
+    var ftxt = format_freq(x_to_freq(x));
+    var fw = ftxt.length * 4.6 + 4;
+    var fx = clamp(x - fw * 0.5, 0.0, mgraphics.size[0] - fw);
+    mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);
+    mgraphics.rectangle(fx, plot_bottom() + 0.5, fw, 9.0);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.98);
+    mgraphics.move_to(fx + 2.0, plot_bottom() + 7.5);
+    mgraphics.show_text(ftxt);
+
+    var gv = y_to_gain(y);
+    var gtxt = (gv >= 0 ? "+" : "") + gv.toFixed(1);
+    mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);
+    mgraphics.rectangle(0.0, y - 5.0, MARGIN_LEFT - 1.0, 10.0);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.98);
+    mgraphics.move_to(1.0, y + 2.5);
+    mgraphics.show_text(gtxt);
 }
 
 function onpointerdown(pointerevent) {
