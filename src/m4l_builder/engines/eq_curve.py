@@ -463,7 +463,7 @@ function update_analyzer_from_fft(mags) {
     ensure_analyzer_arrays();
     var hz_per_bin = (sample_rate * 0.5) / m;   // mags = FFT_SIZE/2 bins -> Nyquist
     var half = 0.5 / (ANALYZER_BINS - 1);
-    var i, k, klo, khi, norm, f_lo, f_hi, peak, sum, cnt, mag, energy, db, atk, rel;
+    var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db, atk, rel;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
         f_lo = Math.exp(LOG_MIN + (norm - half) * LOG_RANGE);
@@ -473,6 +473,35 @@ function update_analyzer_from_fft(mags) {
         if (klo < 0) klo = 0;
         if (khi >= m) khi = m - 1;
         if (khi < klo) khi = klo;
+        if (khi - klo <= 1) {
+            // Sparse low-freq cell: interpolate the magnitude at the cell
+            // centre between the two nearest FFT bins so the log low end
+            // is a smooth curve, not blocky stair-steps (bins are far
+            // apart down here). Dense high cells stay peak-dominant.
+            fc = Math.exp(LOG_MIN + norm * LOG_RANGE);
+            kf = fc / hz_per_bin;
+            k0 = Math.floor(kf);
+            if (k0 < 0) k0 = 0;
+            if (k0 > m - 2) k0 = m - 2;
+            fr = kf - k0;
+            m0 = mags[k0]; if (m0 < 0.0) m0 = -m0; if (m0 !== m0) m0 = 0.0;
+            m1 = mags[k0 + 1]; if (m1 < 0.0) m1 = -m1; if (m1 !== m1) m1 = 0.0;
+            energy = m0 * (1.0 - fr) + m1 * fr;
+            db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
+            db += ANALYZER_TRIM_DB;
+            db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
+            if (db > analyzer_display[i]) {
+                analyzer_display[i] = analyzer_display[i] * 0.35 + db * 0.65;
+            } else {
+                analyzer_display[i] = analyzer_display[i] * 0.82 + db * 0.18;
+            }
+            if (analyzer_display[i] > analyzer_peaks[i]) {
+                analyzer_peaks[i] = analyzer_display[i];
+            } else {
+                analyzer_peaks[i] = Math.max(ANALYZER_MIN_DB, analyzer_peaks[i] - 0.22);
+            }
+            continue;
+        }
         peak = 0.0; sum = 0.0; cnt = 0;
         for (k = klo; k <= khi; k++) {
             mag = mags[k];
