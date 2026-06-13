@@ -6,14 +6,20 @@ live IO dot riding the shape at the program level. Drag vertically to set
 drive. Outlets fire only on user gestures (no-echo rule).
 
 The shape math mirrors the gen~ core exactly — keep both in sync:
-    0 TAPE  tanh(d*x)/tanh(d)
-    1 TUBE  asymmetric tanh (positive half driven harder) — DC-blocked in DSP
-    2 CLIP  hard clip at 1/d'
-    3 FOLD  sine fold sin(d*x*pi/2)
+    0 TAPE   tanh(d*x)/tanh(d)
+    1 TUBE   asymmetric tanh (positive half driven harder) — DC-blocked in DSP
+    2 CLIP   hard clip at 1/d'
+    3 FOLD   sine fold sin(d*x*pi/2)
+    4 DIODE  asymmetric soft clip (negative half softened, drive-scaled)
+    5 WRAP   triangle wavefolder (2/pi * asin(sin(.)))
+    6 SOFT   cubic soft-clip 1.5u - 0.5u^3
+All 7 are near-unity at drive 0 so the dry/wet null holds. Bias shifts the
+operating point into the curve (even harmonics), recentered so bias 0 == raw.
 
 Messages in (inlet 0):
     set_drive <db>          0..36 (drive amount in dB)
-    set_character <idx>     0..3
+    set_character <idx>     0..6
+    set_bias <amt>          -1..1 (asymmetry / even harmonics)
     set_mix <pct>           readout only
     io_level <env_lin>      live |input| 0..1 (~30ms)
 
@@ -88,11 +94,13 @@ var GRID_CLR   = [$grid_color];
 var TEXT_CLR   = [$text_color];
 var ACCENT_CLR = [$accent_color];
 
-var CHAR_NAMES = ["TAPE", "TUBE", "CLIP", "FOLD"];
+var CHAR_NAMES = ["TAPE", "TUBE", "CLIP", "FOLD", "DIODE", "WRAP", "SOFT"];
+var NUM_CHARS = 7;
 
 var MARGIN = 10;
 var drive_db = 0.0;
 var character = 0;
+var bias = 0.0;
 var mix_pct = 100;
 var env_lin = 0.0;
 var dragging = 0;
@@ -117,22 +125,40 @@ function drive_lin() {
     return 0.05 + (drive_db / 36.0) * 8.0;
 }
 
-// Mirrors the gen~ core — keep in sync.
-function shape(x) {
+// Mirrors the gen~ core shape(x, d, ch) — keep in sync. Pure/stateless.
+function shape_raw(x) {
     var d = drive_lin();
-    var v;
-    if (character === 0) {
+    var v, dn, nf, u, dp;
+    if (character === 0) {                       // TAPE
         v = Math.tanh(d * x) / Math.tanh(d);
-    } else if (character === 1) {
-        var dp = x >= 0 ? d * 1.6 : d * 0.9;
-        v = Math.tanh(dp * x) / Math.tanh(d * 1.25);
-        v = clamp(v, -1.0, 1.0);
-    } else if (character === 2) {
+    } else if (character === 1) {                // TUBE
+        dp = x >= 0 ? d * 1.6 : d * 0.9;
+        v = clamp(Math.tanh(dp * x) / Math.tanh(d * 1.25), -1.0, 1.0);
+    } else if (character === 2) {                // CLIP
         v = clamp(x * (1.0 + (d - 1.0) * 0.6), -1.0, 1.0);
-    } else {
+    } else if (character === 3) {                // FOLD
         v = Math.sin(x * d * Math.PI * 0.5);
+    } else if (character === 4) {                // DIODE
+        dn = clamp((d - 0.05) * 0.125, 0.0, 1.0);
+        nf = 1.0 - 0.6 * dn;
+        v = x >= 0 ? Math.tanh(d * x) / Math.tanh(d)
+                   : Math.tanh(d * nf * x) / Math.tanh(d);
+    } else if (character === 5) {                // WRAP
+        v = 0.63661977 * Math.asin(Math.sin(x * (1.0 + d * 0.6) * Math.PI * 0.5));
+    } else {                                     // SOFT
+        dn = clamp((d - 0.05) * 0.125, 0.0, 1.0);
+        u = clamp(x * (0.667 + dn * 0.9), -1.0, 1.0);
+        v = 1.5 * u - 0.5 * u * u * u;
     }
     return v;
+}
+
+// Biased transfer: shift into the curve + recenter (even harmonics). Matches
+// the gen's shape(s + b, d, ch) - shape(b, d, ch). bias 0 => exact shape_raw.
+function shape(x) {
+    var b = clamp(bias, -1.0, 1.0) * 0.5;
+    if (b === 0.0) return shape_raw(x);
+    return clamp(shape_raw(x + b) - shape_raw(b), -1.0, 1.0);
 }
 
 function paint() {
@@ -217,7 +243,8 @@ function paint() {
 
 // ── Messages ─────────────────────────────────────────────────────────
 function set_drive(v)     { drive_db = clamp(v, 0.0, 36.0); mgraphics.redraw(); }
-function set_character(v) { character = clamp(Math.floor(v), 0, 3); mgraphics.redraw(); }
+function set_character(v) { character = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
+function set_bias(v)      { bias = clamp(v, -1.0, 1.0); mgraphics.redraw(); }
 function set_mix(v)       { mix_pct = clamp(v, 0, 100); mgraphics.redraw(); }
 function io_level(e)      { env_lin = e; mgraphics.redraw(); }
 
