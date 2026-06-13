@@ -167,6 +167,17 @@ var HIT_RADIUS      = 18;
 var DYNAMIC_HANDLE_RADIUS = 5.2;
 var DYNAMIC_HIT_RADIUS = 15.0;
 var MAX_DYNAMIC_RANGE = 18.0;
+// When a band is dynamic-enabled but its range is ~0 the ring would sit exactly
+// on the node, making node-vs-ring grabs ambiguous (the drag_mode flicker). Draw
+// + hit-test the ring at this visible default offset (dB) from the node so it is
+// reliably grabbable and visually distinct. Sign is opposite the node gain (a
+// boost band previews a downward/compress ring; a cut previews an upward ring) —
+// the same convention the menu's Dynamic-enable default uses.
+var DYNAMIC_DEFAULT_OFFSET = 6.0;
+// Ring vs node arbitration dead-zone (px^2). The ring only wins a press when it
+// is hit AND it is at least this much closer (squared) than the node — small
+// mouse jitter near the node can no longer flip drag_mode between gain and ring.
+var DYNAMIC_GRAB_BIAS_SQ = 9.0;
 var MAX_BANDS       = 8;
 var DEFAULT_SR      = 48000.0;
 var ANALYZER_MIN_DB = -72.0;
@@ -244,6 +255,7 @@ for (i = 0; i < MAX_BANDS; i++) {
         motion_direction: default_motion_direction(i)
     };
     band_cache[i] = {
+        idx: i,
         present: 0,
         enabled: 0,
         freq: 1000,
@@ -783,8 +795,28 @@ function band_node_gain(b) {
     return 0.0;
 }
 
+// Effective ring offset (dB) used for drawing AND hit-testing. With a real
+// non-zero range it is the range itself; at ~0 it falls back to a signed visible
+// default so the ring never overlaps the node (which is what made the grab
+// ambiguous). Direction defaults opposite the node gain so a boost previews a
+// compress ring and a cut previews an expand ring.
+function dynamic_handle_offset(cache) {
+    var amt = cache.dynamic_amount;
+    // Mid-drag the ring must follow the cursor continuously through 0 (the
+    // default-offset snap would make it jump at the sign flip).
+    if (cache.idx !== undefined && is_active_ring_drag(cache.idx)) return amt;
+    if (Math.abs(amt) >= 0.05) return amt;
+    return cache.node_gain >= 0.0 ? -DYNAMIC_DEFAULT_OFFSET : DYNAMIC_DEFAULT_OFFSET;
+}
+
 function dynamic_handle_gain(cache) {
-    return clamp(cache.node_gain + cache.dynamic_amount, MIN_GAIN, MAX_GAIN);
+    return clamp(cache.node_gain + dynamic_handle_offset(cache), MIN_GAIN, MAX_GAIN);
+}
+
+// True while a ring-drag (drag_mode 2) is in flight on this band, so the ring
+// stays visible/hittable across the amount==0 sign flip.
+function is_active_ring_drag(idx) {
+    return dragging && drag_mode === 2 && idx === selected_band;
 }
 
 function find_free_band() {
@@ -1033,7 +1065,11 @@ function rebuild_band_cache() {
         band_cache[i].q = clamp(bands[i].q, MIN_Q, MAX_Q);
         band_cache[i].type = Math.floor(bands[i].type);
         band_cache[i].motion = bands[i].motion ? 1 : 0;
-        band_cache[i].dynamic = bands[i].dynamic ? 1 : 0;
+        // While the ring of this band is actively being dragged, keep it
+        // "dynamic" even as the live amount sweeps through 0 — otherwise the
+        // ring would vanish mid-drag at the sign flip and the gesture glitches
+        // (the reported bug). Drag owns the band; the flag is restored on release.
+        band_cache[i].dynamic = (bands[i].dynamic || is_active_ring_drag(i)) ? 1 : 0;
         band_cache[i].dynamic_amount = clamp(bands[i].dynamic_amount || 0.0, -MAX_DYNAMIC_RANGE, MAX_DYNAMIC_RANGE);
         band_cache[i].motion_rate = clamp(bands[i].motion_rate || default_motion_rate(i), 0.05, 12.0);
         band_cache[i].motion_depth = clamp(bands[i].motion_depth || 0.0, 0.0, 100.0);
@@ -1826,22 +1862,38 @@ function draw_tooltip() {
     }
 }
 
+function ring_is_grabbable(i) {
+    if (!band_cache[i].present) return 0;
+    if (!band_cache[i].enabled) return 0;
+    if (!band_cache[i].dynamic) return 0;
+    if (!band_supports_dynamic(band_cache[i].type)) return 0;
+    return 1;
+}
+
+// Squared pixel distance from (mx,my) to band i's ring handle (or a large
+// sentinel when the band has no grabbable ring).
+function ring_dist_sq(i, mx, my) {
+    var x, y, dx, dy;
+    if (!ring_is_grabbable(i)) return 1.0e12;
+    x = freq_to_x(band_cache[i].freq);
+    y = gain_to_y(dynamic_handle_gain(band_cache[i]));
+    dx = mx - x;
+    dy = my - y;
+    return dx * dx + dy * dy;
+}
+
+// Closest grabbable ring within the hit radius (was first-match — now nearest,
+// so two nearby rings resolve deterministically).
 function dynamic_hit_test(mx, my) {
-    var i, x, y, dx, dy;
+    var i, d, best = -1, best_d = DYNAMIC_HIT_RADIUS * DYNAMIC_HIT_RADIUS;
     for (i = 0; i < num_bands; i++) {
-        if (!band_cache[i].present) continue;
-        if (!band_cache[i].enabled) continue;
-        if (!band_cache[i].dynamic) continue;
-        if (!band_supports_dynamic(band_cache[i].type)) continue;
-        x = freq_to_x(band_cache[i].freq);
-        y = gain_to_y(dynamic_handle_gain(band_cache[i]));
-        dx = mx - x;
-        dy = my - y;
-        if (dx * dx + dy * dy <= DYNAMIC_HIT_RADIUS * DYNAMIC_HIT_RADIUS) {
-            return i;
+        d = ring_dist_sq(i, mx, my);
+        if (d <= best_d) {
+            best_d = d;
+            best = i;
         }
     }
-    return -1;
+    return best;
 }
 
 // ── Hit-testing ──────────────────────────────────────────────────────
@@ -1863,6 +1915,18 @@ function hit_test(mx, my) {
         }
     }
     return best;
+}
+
+// Squared pixel distance from (mx,my) to band idx's node dot (large sentinel
+// when the band is absent). Used to arbitrate ring-vs-node presses.
+function node_dist_sq(idx, mx, my) {
+    var x, y, dx, dy;
+    if (idx < 0 || idx >= num_bands || !band_cache[idx].present) return 1.0e12;
+    x = freq_to_x(band_cache[idx].freq);
+    y = node_y_for_band(idx);
+    dx = mx - x;
+    dy = my - y;
+    return dx * dx + dy * dy;
 }
 
 // ── Message handlers (inlet 0 messages, inlet 1 sample rate) ────────
@@ -1972,9 +2036,14 @@ function set_dynamic_amount(idx, amount) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= num_bands) return;
     bands[idx].dynamic_amount = clamp(amount, -MAX_DYNAMIC_RANGE, MAX_DYNAMIC_RANGE);
-    // A band is dynamic iff its range is non-zero — one param controls both.
-    bands[idx].dynamic = Math.abs(bands[idx].dynamic_amount) > 0.001 ? 1 : 0;
-    if (!bands[idx].dynamic) {
+    // A non-zero range turns dynamic mode ON. A zero range does NOT force it
+    // back OFF: a band the user explicitly put into Dynamic mode keeps its
+    // grabbable ring (drawn at a visible default offset) even at amount 0, so
+    // dragging the ring through 0 doesn't make the handle disappear. The load
+    // default is amount 0 with dynamic already 0, so no rings show on load.
+    if (Math.abs(bands[idx].dynamic_amount) > 0.001) {
+        bands[idx].dynamic = 1;
+    } else {
         bands[idx].dynamic_current = 0.0;
         bands[idx].dynamic_env = 0.0;
     }
@@ -1985,10 +2054,11 @@ function set_dynamic_amount(idx, amount) {
 function set_motion_rate(idx, value) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= num_bands) return;
+    // Echo-safe: rate/depth NEVER toggle the enable flag. set_motion owns it.
+    // (When the graph disables motion it also emits the band's current
+    // rate/depth; if those re-enabled motion here the disable would bounce back
+    // through the product's reverse route — an echo fight.)
     bands[idx].motion_rate = clamp(value, 0.05, 12.0);
-    if (bands[idx].motion_rate > 0.0) {
-        bands[idx].motion = 1;
-    }
     rebuild_band_cache();
     force_redraw();
 }
@@ -1997,9 +2067,6 @@ function set_motion_depth(idx, value) {
     idx = Math.floor(idx);
     if (idx < 0 || idx >= num_bands) return;
     bands[idx].motion_depth = clamp(value, 0.0, 100.0);
-    if (bands[idx].motion_depth > 0.0) {
-        bands[idx].motion = 1;
-    }
     rebuild_band_cache();
     force_redraw();
 }
@@ -2153,6 +2220,22 @@ function should_ignore_pointer_click(x, y) {
 function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     var hit = hit_test(x, y);
     var dynamic_hit = dynamic_hit_test(x, y);
+    // Deterministic ring-vs-node arbitration. The ring only wins a drag-start
+    // when it is genuinely closer than its band's node by a dead-zone margin
+    // (DYNAMIC_GRAB_BIAS_SQ) — so tiny mouse jitter near a node that has its
+    // dynamic ring nearby (e.g. a small/zero range) can no longer flip the
+    // drag_mode between a gain edit and a ring edit. A ring with no competing
+    // node (hit < 0) is always grabbable.
+    var ring_wins = 0;
+    if (dynamic_hit >= 0) {
+        if (hit < 0) {
+            ring_wins = 1;
+        } else {
+            ring_wins = ring_dist_sq(dynamic_hit, x, y) + DYNAMIC_GRAB_BIAS_SQ
+                <= node_dist_sq(hit, x, y) ? 1 : 0;
+        }
+    }
+    if (!ring_wins) dynamic_hit = -1;
     var clicked_band = dynamic_hit >= 0 ? dynamic_hit : hit;
     var menu_hit = node_menu_hit_test(x, y);
     var now_ms = new Date().getTime();

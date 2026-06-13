@@ -92,7 +92,9 @@ var wet_lvl = 0.0;
 var dragging = 0;
 var hovering = 0;
 var drag_start_x = 0;
+var drag_start_y = 0;
 var drag_start_time = 0.0;
+var drag_start_feedback = 0.0;
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -219,19 +221,25 @@ function set_pingpong(v)   { pingpong = v ? 1 : 0; mgraphics.redraw(); }
 function set_sync_label(v) { sync_label = "" + v; mgraphics.redraw(); }
 function wet_level(v) { wet_lvl = v; mgraphics.redraw(); }
 
-// ── Interaction: horizontal drag = time, wheel = feedback ───────────
-function start_drag(x) {
+// ── Interaction: X drag = time, Y drag = feedback (up = more), wheel = fb ──
+function start_drag(x, y) {
     dragging = 1;
     drag_start_x = x;
+    drag_start_y = y;
     drag_start_time = time_ms;
+    drag_start_feedback = feedback_pct;
 }
 
-function drag_to(x, fine) {
+function drag_to(x, y, fine) {
     if (!dragging) return;
     var dms = ((x - drag_start_x) / plot_w()) * MAX_MS;
-    if (fine) dms *= 0.15;
+    // Vertical: drag UP (smaller y) = more feedback; full plot height = 0..110.
+    var dfb = -((y - drag_start_y) / plot_h()) * 110.0;
+    if (fine) { dms *= 0.15; dfb *= 0.15; }
     time_ms = clamp(drag_start_time + dms, 1.0, MAX_MS);
+    feedback_pct = clamp(drag_start_feedback + dfb, 0.0, 110.0);
     outlet(0, "time", Math.round(time_ms));
+    outlet(0, "feedback", Math.round(feedback_pct));
     mgraphics.redraw();
 }
 
@@ -241,17 +249,17 @@ function end_drag() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pointerevent) { start_drag(pointerevent.x); }
+function onpointerdown(pointerevent) { start_drag(pointerevent.x, pointerevent.y); }
 function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.x, pointerevent.shiftKey ? 1 : 0);
+    if (dragging) drag_to(pointerevent.x, pointerevent.y, pointerevent.shiftKey ? 1 : 0);
     else if (!hovering) { hovering = 1; mgraphics.redraw(); }
 }
 function onpointerup(pointerevent) { end_drag(); }
 function onpointerleave(pointerevent) { hovering = 0; end_drag(); mgraphics.redraw(); }
 
-function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x); }
+function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x, y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
-    if (but) drag_to(x, shift);
+    if (but) drag_to(x, y, shift);
     else end_drag();
 }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }
