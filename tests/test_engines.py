@@ -359,6 +359,31 @@ class TestEqBandColumnEngine:
         assert "var MAX_FREQ = 22000.0;" in js
 
 
+class TestBandPaletteSingleSource:
+    """Both flagship EQ displays must share one band palette (it43: they had
+    drifted at band 5). They now inject BAND_PALETTE from _graph_colors, so
+    the generated `var BAND_COLORS` declaration must be byte-identical."""
+
+    @staticmethod
+    def _band_colors(js):
+        import re
+        m = re.search(r"var BAND_COLORS = (\[.*?\]);", js, re.S)
+        assert m, "BAND_COLORS not found"
+        return m.group(1)
+
+    def test_both_eqs_use_the_shared_palette(self):
+        from m4l_builder.engines._graph_colors import band_palette_js
+        eq = self._band_colors(eq_curve_js())
+        lp = self._band_colors(linear_phase_eq_display_js())
+        assert eq == lp
+        assert eq == band_palette_js()
+
+    def test_palette_has_eight_bands(self):
+        from m4l_builder.engines._graph_colors import BAND_PALETTE
+        assert len(BAND_PALETTE) == 8
+        assert all(len(c) == 4 for c in BAND_PALETTE)
+
+
 class TestEqCurveEngine:
     def test_returns_string(self):
         js = eq_curve_js()

@@ -46,6 +46,7 @@ from string import Template
 from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_BORDER_COLOR,
     DEFAULT_GRAPH_PLOT_COLOR,
+    band_palette_js,
     resolve_graph_panel_color,
 )
 
@@ -97,6 +98,7 @@ def linear_phase_eq_display_js(
         show_hud_badges="1" if show_hud_badges else "0",
         show_selection_readout="1" if show_selection_readout else "0",
         analyzer_trim_db=analyzer_trim_db,
+        band_colors=band_palette_js(),
     )
 
 
@@ -128,16 +130,7 @@ var SHOW_DYNAMIC = $show_dynamic;
 var SHOW_HUD_BADGES = $show_hud_badges;
 var SHOW_SELECTION_READOUT = $show_selection_readout;
 
-var BAND_COLORS = [
-    [0.92, 0.36, 0.34, 1.0],
-    [0.94, 0.62, 0.24, 1.0],
-    [0.88, 0.84, 0.28, 1.0],
-    [0.36, 0.80, 0.46, 1.0],
-    [0.26, 0.84, 0.92, 1.0],
-    [0.38, 0.56, 0.92, 1.0],
-    [0.66, 0.46, 0.88, 1.0],
-    [0.90, 0.42, 0.66, 1.0]
-];
+var BAND_COLORS = $band_colors;
 
 var TYPE_PEAK = 0;
 var TYPE_LOSHELF = 1;

@@ -57,6 +57,7 @@ from string import Template
 from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_BORDER_COLOR,
     DEFAULT_GRAPH_PLOT_COLOR,
+    band_palette_js,
     resolve_graph_panel_color,
 )
 
@@ -99,6 +100,7 @@ def eq_curve_js(
         text_color=text_color,
         zero_line_color=zero_line_color,
         analyzer_trim_db=analyzer_trim_db,
+        band_colors=band_palette_js(),
     )
 
 
@@ -126,16 +128,7 @@ var GRID_CLR       = [$grid_color];
 var TEXT_CLR       = [$text_color];
 var ZERO_LINE_CLR  = [$zero_line_color];
 
-var BAND_COLORS = [
-    [0.92, 0.36, 0.34, 1.0],
-    [0.94, 0.62, 0.24, 1.0],
-    [0.88, 0.84, 0.28, 1.0],
-    [0.36, 0.80, 0.46, 1.0],
-    [0.32, 0.76, 0.86, 1.0],
-    [0.38, 0.56, 0.92, 1.0],
-    [0.66, 0.46, 0.88, 1.0],
-    [0.90, 0.42, 0.66, 1.0]
-];
+var BAND_COLORS = $band_colors;
 var MOTION_CLR = [0.34, 0.88, 0.96, 1.0];
 var DYNAMIC_CLR = [0.98, 0.72, 0.26, 1.0];
 var MENU_BG_CLR = [0.09, 0.10, 0.12, 0.96];
