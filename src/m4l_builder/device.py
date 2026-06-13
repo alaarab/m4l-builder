@@ -203,6 +203,95 @@ class Device(GraphContainer):
         )
         return self.add_box(box_dict)
 
+    def add_flyout(
+        self,
+        content,
+        *,
+        expand_rect: list,
+        param_name: str = "Expand",
+        button_id: str = "flyout_expand",
+        text_on: str = "EXPAND",
+        text_off: str = "EXPAND",
+        show_send: str = None,
+        hide_send: str = None,
+        window_flags: str = "float grow",
+        box_rect: list = None,
+        button_kwargs: dict = None,
+    ) -> str:
+        """Add an expandable fly-out window (the M4L "fly-out" pattern).
+
+        `content` is a Subpatcher holding the big UI — build it with a profile
+        that sets ``subpatch_openinpresentation=1`` and your window rect
+        (``subpatch_rect`` = [left, top, width, height]), and put a big jsui in
+        it (jsui renders reliably; presentation panels/comments do not). This
+        method injects the open/close/floating plumbing into `content` and adds
+        an EXPAND live.text param toggle to the main view that shows/hides a
+        resizable floating window.
+
+        The window opens via the subpatcher's own ``[thispatcher] front``
+        (``[pcontrol] open`` silently fails in M4L). NOTE: the window only
+        opens when Live is the frontmost app. Returns the subpatcher box id.
+        """
+        show_send = show_send or f"{content.name}_show"
+        hide_send = hide_send or f"{content.name}_hide"
+
+        def _msg(container, mid, text, rect):
+            container.add_box({"box": {
+                "id": mid, "maxclass": "message", "text": text,
+                "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+                "patching_rect": rect}})
+
+        # --- Plumbing inside the content subpatcher (hidden in patching view) ---
+        content.add_newobj("_fly_this", "thispatcher", numinlets=1, numoutlets=1,
+                           outlettype=[""], patching_rect=[40, 380, 70, 20])
+        content.add_newobj("_fly_rshow", f"r {show_send}", numinlets=0, numoutlets=1,
+                           outlettype=["bang"], patching_rect=[40, 300, 90, 20])
+        content.add_newobj("_fly_rhide", f"r {hide_send}", numinlets=0, numoutlets=1,
+                           outlettype=["bang"], patching_rect=[200, 300, 90, 20])
+        _msg(content, "_fly_front", "front", [40, 330, 50, 20])
+        _msg(content, "_fly_wclose", "wclose", [200, 330, 60, 20])
+        content.add_line("_fly_rshow", 0, "_fly_front", 0)
+        content.add_line("_fly_rhide", 0, "_fly_wclose", 0)
+        content.add_line("_fly_front", 0, "_fly_this", 0)
+        content.add_line("_fly_wclose", 0, "_fly_this", 0)
+        # floating + resizable, set on load (flags before exec)
+        content.add_newobj("_fly_lb", "loadbang", numinlets=0, numoutlets=1,
+                           outlettype=["bang"], patching_rect=[40, 410, 60, 20])
+        content.add_newobj("_fly_trig", "t b b", numinlets=1, numoutlets=2,
+                           outlettype=["bang", "bang"], patching_rect=[40, 440, 50, 20])
+        _msg(content, "_fly_flags", f"window flags {window_flags}", [40, 470, 200, 20])
+        _msg(content, "_fly_exec", "window exec", [260, 470, 110, 20])
+        content.add_line("_fly_lb", 0, "_fly_trig", 0)
+        content.add_line("_fly_trig", 1, "_fly_flags", 0)
+        content.add_line("_fly_trig", 0, "_fly_exec", 0)
+        content.add_line("_fly_flags", 0, "_fly_this", 0)
+        content.add_line("_fly_exec", 0, "_fly_this", 0)
+
+        # --- Main view: EXPAND param toggle -> sel -> send show/hide ---
+        bkw = {"text_on": text_on, "text_off": text_off, "rounded": 4,
+               "fontsize": 7.5, "mode": 1}
+        if button_kwargs:
+            bkw.update(button_kwargs)
+        self.add_live_text(button_id, param_name, expand_rect,
+                           parameter=ParameterSpec(
+                               name=param_name, parameter_type=2,
+                               enum=["HIDE", "SHOW"], initial=[0],
+                               initial_enable=True),
+                           **bkw)
+        self.add_newobj(f"{button_id}_sel", "sel 1 0", numinlets=1, numoutlets=3,
+                        outlettype=["bang", "bang", ""], patching_rect=[700, 1400, 60, 20])
+        self.add_newobj(f"{button_id}_sshow", f"s {show_send}", numinlets=1,
+                        numoutlets=0, patching_rect=[700, 1430, 90, 20])
+        self.add_newobj(f"{button_id}_shide", f"s {hide_send}", numinlets=1,
+                        numoutlets=0, patching_rect=[800, 1430, 90, 20])
+        self.add_line(button_id, 0, f"{button_id}_sel", 0)
+        self.add_line(f"{button_id}_sel", 0, f"{button_id}_sshow", 0)
+        self.add_line(f"{button_id}_sel", 1, f"{button_id}_shide", 0)
+
+        return self.add_subpatcher(content, f"{button_id}_sp",
+                                   box_rect or [700, 1460, 90, 22],
+                                   numinlets=0, numoutlets=0)
+
     def row(self, x, y, *, spacing=8, height=None, width=None):
         return Row(self, x, y, spacing=spacing, height=height, width=width)
 
