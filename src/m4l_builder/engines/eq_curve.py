@@ -672,6 +672,7 @@ function update_dynamic_from_fft(mags) {
                 b.dynamic_env = b.dynamic_env * 0.82;
                 b.dynamic_current = b.dynamic_current * 0.82;
                 outlet(0, "band_dyngain", i, b.dynamic_current);
+                apply_dyn_to_cache(i);
                 changed = 1;
             }
             continue;
@@ -684,10 +685,21 @@ function update_dynamic_from_fft(mags) {
         if (Math.abs(target - b.dynamic_current) >= 0.05) {
             b.dynamic_current = target;
             outlet(0, "band_dyngain", i, target);
+            apply_dyn_to_cache(i);
             changed = 1;
         }
     }
     return changed;
+}
+
+// Reflect a band's live dynamic offset in the DRAWN curve: recompute its biquad
+// response at the effective gain (static + dynamic_current). The node dot stays
+// at the static gain (Pro-Q style — the ring shows the range, the curve moves).
+function apply_dyn_to_cache(i) {
+    var bc = band_cache[i];
+    if (!bc || !bc.present || !bc.enabled || !bc.uses_gain) return;
+    bc.coeffs = biquad_coeffs(bc.type, bc.freq,
+        clamp(bc.gain + bands[i].dynamic_current, MIN_GAIN, MAX_GAIN), bc.q);
 }
 
 function type_default_q(type) {
