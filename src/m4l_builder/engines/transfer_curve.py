@@ -278,16 +278,23 @@ function paint() {
     mgraphics.line_to(tx, plot_b());
     mgraphics.stroke();
 
-    // Live IO dot riding the curve.
+    // Live IO dot riding the curve — a glowing "operating point" (Pro-C/Pro-L).
+    // The radial glow IGNITES with gain reduction: a calm dot at rest, a bright
+    // pulsing light with a white-hot core as the compressor digs in, so the
+    // hero gives immediate signal-driven feedback. Uses the design-system glow.
     if (env_db > MIN_DB + 0.5) {
         var dx = in_to_x(clamp(env_db, MIN_DB, MAX_DB));
         var dy = out_to_y(transfer_out_db(clamp(env_db, MIN_DB, MAX_DB)));
-        mgraphics.set_source_rgba(DOT_CLR[0], DOT_CLR[1], DOT_CLR[2], 0.25);
-        mgraphics.arc(dx, dy, 7.5, 0, Math.PI * 2);
-        mgraphics.fill();
+        var gr_amt = clamp(-gr_db / 12.0, 0.0, 1.0);
+        ds_node_glow(dx, dy, DOT_CLR, 9.0 + gr_amt * 9.0, 0.42 + gr_amt * 0.34);
         mgraphics.set_source_rgba(DOT_CLR);
         mgraphics.arc(dx, dy, 3.2, 0, Math.PI * 2);
         mgraphics.fill();
+        if (gr_amt > 0.04) {
+            mgraphics.set_source_rgba(1.0, 1.0, 1.0, 0.45 + gr_amt * 0.5);
+            mgraphics.arc(dx, dy, 1.6, 0, Math.PI * 2);
+            mgraphics.fill();
+        }
     }
 
     // Right-edge gain-reduction bar (top-down).
