@@ -581,6 +581,31 @@ class TestWaveshapeDrag:
         emits = _named(result.outlets, "dmode")
         assert any(e[2] == 3 for e in emits)
 
+    def test_zone_strips_cycle_and_emit_per_third(self):
+        # The input axis is split into thirds; clicking a zone strip cycles that
+        # third's mode (AUTO->PRISM->...) and emits "zmode_*"; set_zmode syncs.
+        # zone_mode 0=AUTO (follows dmode); v -> effective mode v-1.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            paint();
+            onpointerdown({x: 43, y: 119});   // click LOW (zone 0) strip -> 1
+            var z0 = zone_mode[0];
+            var eff0 = zone_eff(0);           // value 1 -> mode 0 (PRISM)
+            set_zmode(2, 4);                  // HIGH zone -> SHRED
+            var z2 = zone_mode[2];
+            var eff2 = zone_eff(2);
+            paint();                          // renders zone_grad (painted)
+            dump({z0: z0, eff0: eff0, z2: z2, eff2: eff2,
+                  painted: any_zone_painted()});
+        """, size=(180, 152))
+        assert result.state["z0"] == 1
+        assert result.state["eff0"] == 0
+        assert result.state["z2"] == 4
+        assert result.state["eff2"] == 3
+        assert result.state["painted"] == 1
+        los = _named(result.outlets, "zmode_lo")
+        assert any(e[2] == 1 for e in los)
+
 
 class TestDelayTrailDrag:
     def test_horizontal_drag_maps_time_and_emits(self):
