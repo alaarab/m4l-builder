@@ -490,17 +490,12 @@ function draw_sample_transfer() {
     }
     mgraphics.stroke();
 
-    // Live IO dots riding the sample transfer (symmetric pair).
+    // Live IO: lit reached-segment + glowing dot pair on the sample transfer.
     if (env_lin > 0.003) {
         var e = clamp(env_lin, 0.0, 1.0);
-        var dxp = x_of(e), dyp = y_of(sample_transfer(e));
-        var dxn = x_of(-e), dyn = y_of(sample_transfer(-e));
-        mgraphics.set_source_rgba(DOT_CLR[0], DOT_CLR[1], DOT_CLR[2], 0.22);
-        mgraphics.arc(dxp, dyp, 7.0, 0, Math.PI * 2); mgraphics.fill();
-        mgraphics.arc(dxn, dyn, 7.0, 0, Math.PI * 2); mgraphics.fill();
-        mgraphics.set_source_rgba(DOT_CLR);
-        mgraphics.arc(dxp, dyp, 3.0, 0, Math.PI * 2); mgraphics.fill();
-        mgraphics.arc(dxn, dyn, 3.0, 0, Math.PI * 2); mgraphics.fill();
+        draw_lit_segment(1, e);
+        draw_io_dot(x_of(e), y_of(sample_transfer(e)), e);
+        draw_io_dot(x_of(-e), y_of(sample_transfer(-e)), e);
     }
 
     // Label.
@@ -619,6 +614,34 @@ function cycle_zone(z) {
     mgraphics.redraw();
 }
 
+// A glowing IO dot that IGNITES with the live program level (e = |env| 0..1):
+// a radial glow (design-system) + bright core + white-hot center, so the hero
+// pulses as the signal drives it. Pure display (rides the io_level stream).
+function draw_io_dot(dx, dy, e) {
+    ds_node_glow(dx, dy, DOT_CLR, 6.0 + e * 9.0, 0.26 + e * 0.42);
+    mgraphics.set_source_rgba(DOT_CLR[0], DOT_CLR[1], DOT_CLR[2], 0.95);
+    mgraphics.arc(dx, dy, 2.8, 0, Math.PI * 2); mgraphics.fill();
+    mgraphics.set_source_rgba(1.0, 1.0, 1.0, 0.30 + e * 0.5);
+    mgraphics.arc(dx, dy, 1.3, 0, Math.PI * 2); mgraphics.fill();
+}
+
+// A soft luminous overlay on the portion of the curve the signal is currently
+// reaching (-e..+e), so the colored curve lights up brighter with the audio
+// (Pro-C "lit segment" feel, kept low-alpha so the palette shows through).
+function draw_lit_segment(transfer_is_sample, e) {
+    var le = clamp(e, 0.0, 1.0), st, i, lv;
+    if (le <= 0.006) return;
+    mgraphics.set_source_rgba(1.0, 1.0, 1.0, 0.10 + le * 0.16);
+    mgraphics.set_line_width(4.5);
+    st = Math.max(2, Math.round(72 * le));
+    for (i = 0; i <= st; i++) {
+        lv = -le + (i / st) * (2.0 * le);
+        if (i === 0) mgraphics.move_to(x_of(lv), y_of(transfer_is_sample ? sample_transfer(lv) : shape(lv)));
+        else mgraphics.line_to(x_of(lv), y_of(transfer_is_sample ? sample_transfer(lv) : shape(lv)));
+    }
+    mgraphics.stroke();
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
@@ -676,17 +699,13 @@ function paint() {
     }
     mgraphics.stroke();
 
-    // Live IO dots (symmetric pair at the program level).
+    // Live IO: the reached portion of the curve lights up + a glowing dot pair
+    // ignites at the program level, so the hero pulses with the audio.
     if (env_lin > 0.003) {
         var e = clamp(env_lin, 0.0, 1.0);
-        var dxp = x_of(e), dyp = y_of(shape(e));
-        var dxn = x_of(-e), dyn = y_of(shape(-e));
-        mgraphics.set_source_rgba(DOT_CLR[0], DOT_CLR[1], DOT_CLR[2], 0.22);
-        mgraphics.arc(dxp, dyp, 7.0, 0, Math.PI * 2); mgraphics.fill();
-        mgraphics.arc(dxn, dyn, 7.0, 0, Math.PI * 2); mgraphics.fill();
-        mgraphics.set_source_rgba(DOT_CLR);
-        mgraphics.arc(dxp, dyp, 3.0, 0, Math.PI * 2); mgraphics.fill();
-        mgraphics.arc(dxn, dyn, 3.0, 0, Math.PI * 2); mgraphics.fill();
+        draw_lit_segment(0, e);
+        draw_io_dot(x_of(e), y_of(shape(e)), e);
+        draw_io_dot(x_of(-e), y_of(shape(-e)), e);
     }
     }
 
