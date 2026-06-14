@@ -28,6 +28,7 @@ from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_COLOR,
     resolve_graph_panel_color,
 )
+from .design_system import design_system_js
 
 DELAY_TRAIL_INLETS = 1
 DELAY_TRAIL_OUTLETS = 1
@@ -55,7 +56,7 @@ def delay_trail_js(
     to (reset_time_ms, reset_feedback_pct).
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return _JS_TEMPLATE.substitute(
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -165,11 +166,16 @@ function paint() {
     mgraphics.move_to(plot_l() + 3, lane_y(1) - 7);
     mgraphics.show_text("R");
 
-    // Input pulse at t=0 on both lanes (glows with the live wet level).
-    var glow = 0.35 + clamp(wet_lvl, 0, 1) * 0.6;
-    mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], glow);
-    mgraphics.arc(ms_to_x(0) + 2, lane_y(0), 3.2, 0, Math.PI * 2); mgraphics.fill();
-    mgraphics.arc(ms_to_x(0) + 2, lane_y(1), 3.2, 0, Math.PI * 2); mgraphics.fill();
+    // Input pulse at t=0 on both lanes — a real radial glow (design-system)
+    // that swells with the live wet level, then a bright core dot on top.
+    var wet = clamp(wet_lvl, 0, 1);
+    var in_x = ms_to_x(0) + 2;
+    var li0;
+    for (li0 = 0; li0 < 2; li0++) {
+        ds_node_glow(in_x, lane_y(li0), ACCENT_CLR, 6.0 + wet * 11.0, 0.30 + wet * 0.45);
+        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.55 + wet * 0.45);
+        mgraphics.arc(in_x, lane_y(li0), 3.2, 0, Math.PI * 2); mgraphics.fill();
+    }
 
     // Echo taps: amplitude decays by feedback per repeat; damping shrinks.
     // Ping-pong alternates L/R; a normal stereo delay echoes BOTH channels
@@ -195,7 +201,11 @@ function paint() {
             mgraphics.move_to(x, ly - stem);
             mgraphics.line_to(x, ly + stem);
             mgraphics.stroke();
-            // Tap dot.
+            // Glowing tap: a radial glow (design-system) that fades with the
+            // echo amplitude, then a solid dot core — louder/earlier taps read
+            // as brighter lights fading down the trail.
+            ds_node_glow(x, ly, TAP_CLR, size + 5.0 + amp * 6.0,
+                         0.20 + clamp(amp, 0, 1) * 0.45);
             mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], clamp(amp, 0, 1));
             mgraphics.arc(x, ly, size, 0, Math.PI * 2);
             mgraphics.fill();
