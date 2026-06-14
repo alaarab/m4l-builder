@@ -30,6 +30,7 @@ Messages in (inlet 0):
     set_mix <pct>           readout only
     io_level <env_lin>      live |input| 0..1 (~30ms)
     set_mode <0|1>          0 = curve view, 1 = scope view
+    set_dmode <idx>         active color/distortion mode (syncs the swatches)
     draw_sample <bufname>   load the dropped buffer as the shaper table
     scope_tick              advance the scope window (patcher metro)
 
@@ -39,6 +40,7 @@ Messages out (outlet 0):
     sample <0|1>            sample loaded / cleared (arms the DSP shaper)
     wt_start <frame>        current wavetable window start (gen~ reads here)
     wt_gain <factor>        per-window normalize gain (gen~ scales the lookup)
+    dmode <idx>             color/distortion mode picked from a hero swatch
 """
 
 from __future__ import annotations
@@ -157,6 +159,25 @@ var SCAN_MS = 33;
 var WT_MAX_GAIN = 8.0;
 var WT_MIN_PEAK = 0.02;
 var wt_gain_val = 1.0;
+
+// MODES: each is a color THEME (palette) + an extra distortion the gen~ layers
+// after the wavetable/character (Ala: "modes that change colors" + "modes that
+// further distort it"). The hero recolors per mode; clickable swatches at the
+// bottom pick the mode (interactive) and drive the gen~ "dmode" param. Each
+// palette is a list of [t, r, g, b] gradient stops across the input axis.
+var PALETTES = [
+    [[0.00,0.96,0.28,0.32],[0.17,0.97,0.62,0.18],[0.34,0.95,0.88,0.25],
+     [0.50,0.42,0.88,0.42],[0.67,0.28,0.78,0.95],[0.84,0.55,0.48,0.97],
+     [1.00,0.92,0.42,0.92]],                                   // 0 PRISM (rainbow)
+    [[0.00,0.45,0.04,0.02],[0.40,0.93,0.26,0.06],[0.72,0.98,0.62,0.12],
+     [1.00,0.99,0.92,0.55]],                                   // 1 FOLD (fire)
+    [[0.00,0.05,0.16,0.50],[0.45,0.10,0.55,0.93],[0.78,0.38,0.86,0.98],
+     [1.00,0.86,0.98,1.00]],                                   // 2 CRUSH (ice)
+    [[0.00,0.95,0.12,0.62],[0.40,0.62,0.10,0.94],[0.72,0.28,0.82,0.55],
+     [1.00,0.22,0.94,0.86]],                                   // 3 SHRED (neon)
+];
+var PALETTE_NAMES = ["PRISM", "FOLD", "CRUSH", "SHRED"];
+var dmode = 0;
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -316,20 +337,30 @@ function shape(x) {
     return clamp(shape_raw(x + b) - shape_raw(b), -1.0, 1.0);
 }
 
-// Horizontal RAINBOW gradient across the plot: the wavetable / transfer curve is
-// colored by input position, so different colors land on different parts of the
-// curve (Ala: "the colors affect different parts of the curve" / "rainbow with
-// multiple colors"). One gradient source -> one stroke/fill (cheap).
-function rainbow_grad(a) {
+// Horizontal gradient across the plot from the ACTIVE mode's palette: the
+// wavetable / transfer / character curve is colored by input position, so
+// different colors land on different parts of the curve (Ala: "the colors affect
+// different parts of the curve" / "rainbow with multiple colors"). One gradient
+// source -> one stroke/fill (cheap). Mode 0 = PRISM rainbow.
+function palette_grad(a) {
+    var p = PALETTES[dmode] || PALETTES[0];
     var g = mgraphics.pattern_create_linear(plot_l(), 0, plot_r(), 0);
-    g.add_color_stop_rgba(0.00, 0.96, 0.28, 0.32, a);   // red
-    g.add_color_stop_rgba(0.17, 0.97, 0.62, 0.18, a);   // orange
-    g.add_color_stop_rgba(0.34, 0.95, 0.88, 0.25, a);   // yellow
-    g.add_color_stop_rgba(0.50, 0.42, 0.88, 0.42, a);   // green
-    g.add_color_stop_rgba(0.67, 0.28, 0.78, 0.95, a);   // cyan
-    g.add_color_stop_rgba(0.84, 0.55, 0.48, 0.97, a);   // indigo
-    g.add_color_stop_rgba(1.00, 0.92, 0.42, 0.92, a);   // violet
+    for (var i = 0; i < p.length; i++) {
+        g.add_color_stop_rgba(p[i][0], p[i][1], p[i][2], p[i][3], a);
+    }
     return g;
+}
+
+// Mid color of a palette (for the swatches), as [r,g,b].
+function palette_mid(idx) {
+    var p = PALETTES[idx] || PALETTES[0];
+    var m = p[(p.length / 2) | 0];
+    return [m[1], m[2], m[3]];
+}
+
+function set_dmode(i) {
+    dmode = clamp(Math.floor(i), 0, PALETTES.length - 1);
+    mgraphics.redraw();
 }
 
 // Oscilloscope of the CURRENT wavetable: the WAVE_WIN window scanning the file.
@@ -348,7 +379,7 @@ function draw_scope() {
     mgraphics.move_to(l, cy); mgraphics.line_to(r, cy); mgraphics.stroke();
 
     // Rainbow fill under the wavetable (low alpha).
-    mgraphics.set_source(rainbow_grad(0.16));
+    mgraphics.set_source(palette_grad(0.16));
     mgraphics.move_to(l, cy);
     for (c = 0; c < n; c++) {
         xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
@@ -359,7 +390,7 @@ function draw_scope() {
     mgraphics.fill();
 
     // The wavetable trace, rainbow-colored by position.
-    mgraphics.set_source(rainbow_grad(0.97));
+    mgraphics.set_source(palette_grad(0.97));
     mgraphics.set_line_width(1.7);
     for (c = 0; c < n; c++) {
         xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
@@ -389,7 +420,7 @@ function draw_sample_transfer() {
     mgraphics.stroke();
 
     // The sample transfer curve, rainbow-colored by input position.
-    mgraphics.set_source(rainbow_grad(0.97));
+    mgraphics.set_source(palette_grad(0.97));
     mgraphics.set_line_width(dragging || hovering ? 2.4 : 1.7);
     for (i = 0; i < n; i++) {
         x = plot_l() + (i / (n - 1)) * plot_w();
@@ -416,6 +447,59 @@ function draw_sample_transfer() {
     mgraphics.set_font_size(7.5);
     mgraphics.move_to(plot_l() + 4, plot_b() - 4);
     mgraphics.show_text("SAMPLE SHAPER  -  dbl-click to clear");
+}
+
+// ── Mode swatches (bottom-right): click one to pick the color theme + extra
+// distortion. The active swatch is ringed; clicking emits "dmode <i>".
+function swatch_count() { return PALETTES.length; }
+function swatch_w() { return 17; }
+function swatch_h() { return 9; }
+function swatch_gap() { return 3; }
+function swatch_y() { return plot_b() - swatch_h() - 3; }
+function swatch_x(i) {
+    var step = swatch_w() + swatch_gap();
+    return plot_r() - (swatch_count() - i) * step - 2;
+}
+
+function draw_swatches() {
+    var i, sx, sy = swatch_y(), sw = swatch_w(), sh = swatch_h(), c;
+    // Active mode name above the row.
+    mgraphics.set_source_rgba(TEXT_CLR);
+    mgraphics.set_font_size(6.5);
+    mgraphics.move_to(swatch_x(0), sy - 3);
+    mgraphics.show_text(PALETTE_NAMES[dmode]);
+    for (i = 0; i < swatch_count(); i++) {
+        sx = swatch_x(i);
+        c = palette_mid(i);
+        mgraphics.set_source_rgba(c[0], c[1], c[2], (i === dmode) ? 0.95 : 0.45);
+        mgraphics.rectangle(sx, sy, sw, sh);
+        mgraphics.fill();
+        if (i === dmode) {
+            mgraphics.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+            mgraphics.set_line_width(1.0);
+            mgraphics.rectangle(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
+            mgraphics.stroke();
+        }
+    }
+}
+
+// Which swatch (if any) is under a point. -1 = none.
+function swatch_hit(px, py) {
+    if (isNaN(px) || isNaN(py)) return -1;
+    var sy = swatch_y(), sh = swatch_h(), sw = swatch_w(), i, sx;
+    if (py < sy - 3 || py > sy + sh + 3) return -1;
+    for (i = 0; i < swatch_count(); i++) {
+        sx = swatch_x(i);
+        if (px >= sx - 1 && px <= sx + sw + 1) return i;
+    }
+    return -1;
+}
+
+// Click a swatch -> set the mode locally + drive the gen/param via "dmode".
+function pick_mode(idx) {
+    dmode = clamp(Math.floor(idx), 0, PALETTES.length - 1);
+    outlet(0, "dmode", dmode);
+    mgraphics.redraw();
 }
 
 function paint() {
@@ -451,8 +535,8 @@ function paint() {
     mgraphics.line_to(x_of(1), y_of(1));
     mgraphics.stroke();
 
-    // Heat fill: area between unity and the shape (the "added harmonics").
-    mgraphics.set_source_rgba(HEAT_CLR);
+    // Heat fill: area between unity and the shape, tinted by the active palette.
+    mgraphics.set_source(palette_grad(0.16));
     mgraphics.move_to(x_of(-1), y_of(-1));
     for (i = 0; i <= 96; i++) {
         v = -1.0 + (i / 96) * 2.0;
@@ -462,8 +546,8 @@ function paint() {
     mgraphics.close_path();
     mgraphics.fill();
 
-    // The shape curve.
-    mgraphics.set_source_rgba(CURVE_CLR);
+    // The shape curve, colored by the active palette across the input axis.
+    mgraphics.set_source(palette_grad(0.97));
     mgraphics.set_line_width(dragging || hovering ? 2.3 : 1.8);
     for (i = 0; i <= 128; i++) {
         v = -1.0 + (i / 128) * 2.0;
@@ -502,6 +586,9 @@ function paint() {
     mgraphics.set_source_rgba(TEXT_CLR);
     mgraphics.move_to(plot_l() + 5, plot_t() + 21);
     mgraphics.show_text("MIX " + Math.round(mix_pct) + "%");
+
+    // Mode swatches on top of everything (always pickable).
+    draw_swatches();
 }
 
 // ── Messages ─────────────────────────────────────────────────────────
@@ -521,6 +608,14 @@ function pointer_y(pe, fb) {
     if (pe.localY !== undefined) return pe.localY;
     if (pe.offsetY !== undefined) return pe.offsetY;
     if (pe.clientY !== undefined) return pe.clientY;
+    return fb;
+}
+function pointer_x(pe, fb) {
+    if (!pe) return fb;
+    if (pe.x !== undefined) return pe.x;
+    if (pe.localX !== undefined) return pe.localX;
+    if (pe.offsetX !== undefined) return pe.offsetX;
+    if (pe.clientX !== undefined) return pe.clientX;
     return fb;
 }
 function pointer_buttons(pe, fb) {
@@ -552,7 +647,11 @@ function end_drag() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pe) { start_drag(pointer_y(pe, drag_start_y)); }
+function onpointerdown(pe) {
+    var hit = swatch_hit(pointer_x(pe, -1), pointer_y(pe, -1));
+    if (hit >= 0) { pick_mode(hit); return; }   // swatch wins over a drive drag
+    start_drag(pointer_y(pe, drag_start_y));
+}
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
         drag_to(pointer_y(pe, drag_start_y), pe && pe.shiftKey ? 1 : 0);
@@ -565,7 +664,11 @@ function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { clear_sample(); }
 
-function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
+function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+    var hit = swatch_hit(x, y);
+    if (hit >= 0) { pick_mode(hit); return; }
+    start_drag(y);
+}
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
     if (but) drag_to(y, shift);
     else end_drag();
