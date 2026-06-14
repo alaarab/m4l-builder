@@ -205,6 +205,17 @@ var hover_band = -1;
 var hover_x = -1.0;
 var hover_y = -1.0;
 var hover_in_plot = 0;
+// Mouse-cursor feedback (mirrors eq_curve): pointing hand over a grabbable
+// node, grab hand while dragging, crosshair over the open plot. Max
+// t_jmouse_cursortype enum; guarded so it only fires on a transition and can't
+// wedge the handler if the runtime lacks setcursor.
+var CUR_ARROW = 1, CUR_CROSS = 4, CUR_HAND = 6, CUR_GRAB = 7;
+var cur_cursor = -1;
+function set_cursor(c) {
+    if (c === cur_cursor) return;
+    cur_cursor = c;
+    try { setcursor(c); } catch (e) {}
+}
 var dragging = 0;
 var drag_mode = 0;
 var curve_dirty = 1;
@@ -2093,6 +2104,7 @@ function handle_hover(x, y) {
     var dynamic_hover;
     if (context_menu_open) {
         context_menu_hover = context_menu_hit(x, y);
+        set_cursor(context_menu_hover >= 0 ? CUR_HAND : CUR_ARROW);
         if (context_menu_hover !== prev_menu) mgraphics.redraw();
         return;
     }
@@ -2103,10 +2115,13 @@ function handle_hover(x, y) {
     hover_y = y;
     hover_in_plot = (!dragging && x >= plot_left() && x <= plot_right() &&
                      y >= plot_top() && y <= plot_bottom()) ? 1 : 0;
+    set_cursor(hover_band >= 0 ? CUR_HAND
+               : (hover_in_plot ? CUR_CROSS : CUR_ARROW));
     if (hover_band !== prev || hover_in_plot || prev_in) request_redraw();
 }
 
 function clear_hover_state() {
+    set_cursor(CUR_ARROW);
     if (context_menu_open && context_menu_hover >= 0) {
         context_menu_hover = -1;
         mgraphics.redraw();
@@ -2182,6 +2197,7 @@ function onpointermove(pointerevent) {
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
     if (dragging && ((buttons & 1) !== 0)) {
+        set_cursor(CUR_GRAB);
         handle_drag_at(
             x,
             y,
