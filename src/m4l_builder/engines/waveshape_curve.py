@@ -142,6 +142,8 @@ var scope_frames = 0;
 var scope_pos = 0;
 var scope = [];            // current window of samples
 var mode = 0;              // 0 = transfer curve, 1 = sample scope
+var live_scope = [];       // live OUTPUT waveform window (Phase-4 oscilloscope)
+var live_scope_name = "";  // named buffer~ the device records the output into
 
 // The CURRENT wavetable = the WAVE_WIN window at scope_pos (== `scope`): drawn
 // as the transfer curve (input -1..1 -> window sample -> output) and applied,
@@ -243,6 +245,21 @@ function read_window() {
     curve_n = norm.length;
     outlet(0, "wt_gain", wt_gain_val);   // gen applies the same normalize gain
     mgraphics.redraw();
+}
+
+// Phase-4 live oscilloscope: the device records its OUTPUT into a named buffer~
+// (a parallel tap, no DSP change); the SCOPE view reads a window of it so you
+// watch the actual shaped waveform. Shown at TRUE amplitude (no normalize) so a
+// driven/clipped output reads hot. (Buffer/peek are Max-only -> no-ops in Node.)
+function set_live_scope(name) { live_scope_name = "" + name; }
+function live_read() {
+    if (typeof Buffer === "undefined" || live_scope_name === "") return;
+    var b = new Buffer(live_scope_name);
+    var f = b.framecount();
+    if (!f || f < 2) { live_scope = []; return; }
+    var count = (f < WAVE_WIN) ? f : WAVE_WIN;
+    var chunk = b.peek(1, 0, count);
+    live_scope = (chunk.length === undefined) ? [chunk] : chunk;
 }
 
 // Interpolated transfer lookup: input x in -1..1 -> current-window value
@@ -466,6 +483,44 @@ function draw_scope() {
     mgraphics.show_text("WAVETABLE  -  dbl-click to clear");
 }
 
+// Live OUTPUT oscilloscope: the recorded output waveform at TRUE amplitude,
+// rainbow-traced over a center line. This is what Heat is actually doing to the
+// audio right now (Rift-style) — drive/character/bias visibly reshape it.
+function draw_live_scope() {
+    var n = live_scope.length;
+    if (n < 2) return;
+    var l = plot_l(), r = plot_r(), t = plot_t(), b = plot_b();
+    var w = r - l, cy = (t + b) * 0.5, amp = (b - t) * 0.5 - 1.0;
+    var c, xx, yy;
+
+    mgraphics.set_source_rgba(GRID_CLR);
+    mgraphics.set_line_width(1.0);
+    mgraphics.move_to(l, cy); mgraphics.line_to(r, cy); mgraphics.stroke();
+
+    mgraphics.set_source(zone_grad(0.14));
+    mgraphics.move_to(l, cy);
+    for (c = 0; c < n; c++) {
+        xx = l + (c / (n - 1)) * w; yy = cy - clamp(live_scope[c], -1.0, 1.0) * amp;
+        mgraphics.line_to(xx, yy);
+    }
+    mgraphics.line_to(r, cy);
+    mgraphics.close_path();
+    mgraphics.fill();
+
+    mgraphics.set_source(zone_grad(0.97));
+    mgraphics.set_line_width(1.6);
+    for (c = 0; c < n; c++) {
+        xx = l + (c / (n - 1)) * w; yy = cy - clamp(live_scope[c], -1.0, 1.0) * amp;
+        if (c === 0) mgraphics.move_to(xx, yy); else mgraphics.line_to(xx, yy);
+    }
+    mgraphics.stroke();
+
+    mgraphics.set_source_rgba(ACCENT_CLR);
+    mgraphics.set_font_size(7.5);
+    mgraphics.move_to(l + 4, b - 4);
+    mgraphics.show_text("LIVE OUTPUT");
+}
+
 // The sample-as-transfer-function: curve_tbl plotted input->output, with the
 // unity reference and the live IO dot riding it. This is exactly what the gen~
 // core does to the incoming signal (drop a sample -> the wave distorts it).
@@ -669,6 +724,8 @@ function paint() {
         draw_scope();
     } else if (sample_loaded && curve_n > 1) {
         draw_sample_transfer();
+    } else if (mode === 1 && live_scope.length > 1) {
+        draw_live_scope();   // SCOPE view, no sample -> the live output waveform
     } else {
     // Unity diagonal.
     mgraphics.set_source_rgba(UNITY_CLR);
@@ -734,7 +791,13 @@ function set_drive(v)     { drive_db = clamp(v, 0.0, 36.0); mgraphics.redraw(); 
 function set_character(v) { character = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
 function set_bias(v)      { bias = clamp(v, -1.0, 1.0); mgraphics.redraw(); }
 function set_mix(v)       { mix_pct = clamp(v, 0, 100); mgraphics.redraw(); }
-function io_level(e)      { env_lin = e; mgraphics.redraw(); }
+function io_level(e)      {
+    env_lin = e;
+    // Re-read the live output buffer on this proven 33ms message tick (patcher
+    // metros silently fail to tick this display; io_level reliably arrives).
+    if (mode === 1 && !sample_loaded && live_scope_name !== "") live_read();
+    mgraphics.redraw();
+}
 
 // ── Interaction: vertical drag = drive; double-click clears the sample ──
 // Robust v8ui pointer resolver (.y/.localY/.offsetY/.clientY); raw .y is
