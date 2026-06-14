@@ -12,6 +12,23 @@ PARAM_VISIBLE = 1
 LIVE_NATIVE_INT_MIN = 0
 LIVE_NATIVE_INT_MAX = 255
 
+# Max for Live "Parameter Visibility" (the `parameter_invisible` valueof attr).
+# This is DISTINCT from `visible` above, which is Push parameter-bank membership.
+#   AUTOMATED_AND_STORED (0): default — stored in the set/presets AND exposed to
+#       Live's automation + MIDI/key mapping. A parameter driven continuously by
+#       patch logic (a metro-fed probe dial, a meter snapshot) at this setting
+#       floods Live's undo history with a constant stream of the same action —
+#       Ableton's own production guidelines call this out as making undo unusable.
+#   STORED_ONLY (1): value is saved with the set/preset but is NOT shown to
+#       automation. Good for state you want recalled but not automatable.
+#   HIDDEN (2): neither stored nor automatable — the right setting for diagnostic
+#       / DSP-probe parameters that exist only to be read back via the Live API
+#       (get_device_parameters still enumerates them; they just leave no undo or
+#       automation footprint).
+PARAM_VIS_AUTOMATED_AND_STORED = 0
+PARAM_VIS_STORED_ONLY = 1
+PARAM_VIS_HIDDEN = 2
+
 
 def _normalize_label(value: Any, *, field_name: str) -> str:
     text = str(value).strip()
@@ -43,6 +60,7 @@ class ParameterSpec:
     exponent: float | None = None
     enum: list[str] | None = None
     visible: int = 1
+    invisible: int | None = None
     bank: int | None = None
     position: int | None = None
     bank_name: str | None = None
@@ -60,6 +78,13 @@ class ParameterSpec:
             self.visible = int(self.visible)
         if self.visible < 0:
             raise ValueError("parameter visible must be >= 0")
+        if self.invisible is not None:
+            self.invisible = int(self.invisible)
+            if self.invisible not in (0, 1, 2):
+                raise ValueError(
+                    "parameter invisible must be 0 (Automated and Stored), "
+                    "1 (Stored Only), or 2 (Hidden)"
+                )
         if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
             raise ValueError("parameter minimum cannot exceed maximum")
         if self.bank is not None and self.bank < 0:
@@ -115,6 +140,8 @@ class ParameterSpec:
             valueof["parameter_exponent"] = self.exponent
         if self.enum is not None:
             valueof["parameter_enum"] = list(self.enum)
+        if self.invisible is not None:
+            valueof["parameter_invisible"] = self.invisible
         return valueof
 
     def to_saved_attributes(self) -> dict:
@@ -257,6 +284,7 @@ class ParameterSpec:
             unitstyle=valueof.get("parameter_unitstyle"),
             exponent=valueof.get("parameter_exponent"),
             enum=list(valueof["parameter_enum"]) if "parameter_enum" in valueof else None,
+            invisible=valueof.get("parameter_invisible"),
             bank=bank,
             position=position,
             bank_name=bank_name,

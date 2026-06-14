@@ -278,6 +278,17 @@ class TestDial:
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_exponent"] == 3.0
 
+    def test_parameter_invisible_omitted_by_default(self):
+        result = dial("d-1", "cutoff", [10, 10, 45, 45])
+        valueof = result["box"]["saved_attribute_attributes"]["valueof"]
+        assert "parameter_invisible" not in valueof
+
+    def test_parameter_invisible_passthrough(self):
+        # PARAM_VIS_HIDDEN == 2; verify dial() forwards it to the valueof payload.
+        result = dial("d-1", "probe", [10, 10, 45, 45], invisible=2)
+        valueof = result["box"]["saved_attribute_attributes"]["valueof"]
+        assert valueof["parameter_invisible"] == 2
+
     def test_triangle_default_is_1(self):
         result = dial("d-1", "cutoff", [10, 10, 45, 45])
         assert result["box"]["triangle"] == 1

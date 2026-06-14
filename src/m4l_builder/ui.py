@@ -26,6 +26,7 @@ def _resolve_parameter_spec(
     unitstyle=None,
     exponent=None,
     enum=None,
+    invisible=None,
 ):
     """Build a ParameterSpec from legacy UI args or a first-class spec."""
     base = parameter or varname_or_spec
@@ -54,6 +55,8 @@ def _resolve_parameter_spec(
         updates["exponent"] = exponent
     if enum is not None and (not provided_spec or spec.enum is None):
         updates["enum"] = list(enum)
+    if invisible is not None and (not provided_spec or spec.invisible is None):
+        updates["invisible"] = invisible
     return spec.copy(**updates)
 
 
@@ -109,13 +112,17 @@ def dial(id: str, varname: str, rect: list, *,
          activeneedlecolor: list = None, showname: int = 1,
          shownumber: int = 1, parameter_exponent: float = 1.0,
          triangle: int = 1, focusbordercolor: list = None,
-         parameter: ParameterSpec = None,
+         parameter: ParameterSpec = None, invisible: int = None,
          **kwargs) -> dict:
     """Create a live.dial with parameter storage.
 
     appearance: 0=Vertical, 1=Tiny, 2=Panel, 3=Large.
     parameter_exponent: log scaling, use 3.0 for frequency knobs.
     unitstyle: see constants.py UNITSTYLE_* values.
+    invisible: Max "Parameter Visibility" (PARAM_VIS_* in parameters.py). Pass
+        PARAM_VIS_HIDDEN (2) for DSP-probe / diagnostic dials read only via the
+        Live API — keeps them out of automation and Live's undo history (a
+        metro-fed probe at the default 0 floods undo per Ableton's guidelines).
     """
     spec = _resolve_parameter_spec(
         varname,
@@ -128,6 +135,7 @@ def dial(id: str, varname: str, rect: list, *,
         initial_enable=True,
         unitstyle=unitstyle,
         exponent=parameter_exponent,
+        invisible=invisible,
     )
     box = {
         "id": id,
