@@ -563,6 +563,45 @@ class TestTransferCurveDrag:
         assert abs(result.state["fine"] - 2.25) < 1e-6
         assert result.state["floor"] == 1.0
 
+    def test_horizontal_drag_sets_ratio(self):
+        # 2-axis pad: horizontal drag = ratio (relative to the press point).
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(), """
+            set_ratio(2.0);
+            onpointerdown({x: 40, y: 60, buttons: 1});
+            onpointermove({x: 90, y: 60, buttons: 1});   // drag right -> more ratio
+            var up = ratio;
+            onpointermove({x: 10, y: 60, buttons: 1});   // drag left -> less ratio
+            dump({up: up, down: ratio});
+        """, size=(132, 152))
+        assert result.state["up"] > 2.0
+        assert result.state["down"] < result.state["up"]
+        assert len(_named(result.outlets, "ratio")) >= 1
+
+    def test_vertical_drag_leaves_ratio_untouched(self):
+        # A pure vertical (threshold) drag must not nudge ratio.
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(), """
+            set_ratio(4.0);
+            onpointerdown({x: 60, y: 40, buttons: 1});
+            onpointermove({x: 60, y: 110, buttons: 1});
+            dump({after: ratio});
+        """, size=(132, 152))
+        assert result.state["after"] == 4.0
+        assert len(_named(result.outlets, "ratio")) == 0
+
+    def test_ratio_drag_disabled_for_limiter(self):
+        # Limiters (fixed ratio) pass ratio_drag=False -> horizontal drag inert.
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(ratio_drag=False), """
+            set_ratio(20.0);
+            onpointerdown({x: 40, y: 60, buttons: 1});
+            onpointermove({x: 100, y: 60, buttons: 1});
+            dump({after: ratio});
+        """, size=(132, 152))
+        assert result.state["after"] == 20.0
+        assert len(_named(result.outlets, "ratio")) == 0
+
 
 class TestWaveshapeDrag:
     def test_drag_up_adds_drive_at_documented_scale(self):
