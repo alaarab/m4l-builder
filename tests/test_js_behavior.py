@@ -165,6 +165,20 @@ class TestEqCurveAnalyzerTilt:
         assert result.state["clamped"] == pytest.approx(12.0)   # clamp ceiling
         assert result.state["off"] == 0.0                       # 0 = fast path
 
+    def test_floor_bins_ignore_tilt(self):
+        # A bin at the noise floor STAYS at the floor (so the tilt can't lift the
+        # empty floor into a fake rising diagonal with no audio); a bin with real
+        # energy gets the tilt added.
+        result = run_jsui(eq_curve_js(), """
+            dump({floor: analyzer_tilted_db(ANALYZER_MIN_DB, 30.0),
+                  nearfloor: analyzer_tilted_db(ANALYZER_MIN_DB + 0.2, 30.0),
+                  signal: analyzer_tilted_db(-30.0, 10.0),
+                  min: ANALYZER_MIN_DB});
+        """)
+        assert result.state["floor"] == result.state["min"]      # floor stays put
+        assert result.state["nearfloor"] == result.state["min"]  # within the gate
+        assert result.state["signal"] == pytest.approx(-20.0)    # -30 + 10 tilt
+
     def test_freeze_holds_the_last_frame(self):
         result = run_jsui(eq_curve_js(), """
             update_analyzer_data([-10, -10, -10, -10]);

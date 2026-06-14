@@ -382,6 +382,13 @@ function analyzer_slope_at(freq) {
         (Math.log(clamp(freq, MIN_FREQ, MAX_FREQ) / 1000.0) / Math.LN2);
 }
 
+// Display dB for a bin: a bin at the noise floor (no signal) STAYS at the floor
+// so the tilt can't lift the empty floor into a fake rising diagonal; a bin with
+// real energy gets the display tilt added.
+function analyzer_tilted_db(raw_db, tilt) {
+    return (raw_db <= ANALYZER_MIN_DB + 0.5) ? ANALYZER_MIN_DB : raw_db + tilt;
+}
+
 function now_ms() {
     return new Date().getTime();
 }
@@ -1245,12 +1252,14 @@ function draw_analyzer() {
     var top = plot_top();
 
     var tilt;
+    // Floor bins (no real signal) stay at the floor (analyzer_tilted_db) so the
+    // tilt can't lift the empty floor into a fake rising diagonal.
     for (i = 0; i < n; i++) {
         freq = analyzer_bin_freq(i, n);
         tilt = analyzer_slope_at(freq);
         xs[i] = freq_to_x(freq);
-        ys[i] = analyzer_db_to_y(analyzer_display[i] + tilt);
-        py[i] = analyzer_db_to_y(analyzer_peaks[i] + tilt);
+        ys[i] = analyzer_db_to_y(analyzer_tilted_db(analyzer_display[i], tilt));
+        py[i] = analyzer_db_to_y(analyzer_tilted_db(analyzer_peaks[i], tilt));
     }
 
     // Filled area under the spectrum, with a vertical gradient that fades
