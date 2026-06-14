@@ -295,6 +295,64 @@ class Device(GraphContainer):
                                    box_rect or [700, 1460, 90, 22],
                                    numinlets=0, numoutlets=0)
 
+    def add_width_collapse(
+        self,
+        *,
+        full_width: int,
+        mini_width: int,
+        rect: list,
+        param_name: str = "Size",
+        button_id: str = "width_collapse",
+        text_full: str = "FULL",
+        text_mini: str = "MINI",
+        button_kwargs: dict = None,
+    ) -> str:
+        """Add a FULL/MINI width-collapse toggle (runtime device resize).
+
+        Sends ``setwidth <px>`` to ``[live.thisdevice]`` so Live narrows the
+        inline device strip to ``mini_width`` (essentials only) or expands it to
+        ``full_width``. Only WIDTH resizes at runtime — Live fixes the height at
+        169px. The toggle is a real Live param (enum ``[text_full, text_mini]``,
+        FULL=0 default) so it's automatable + recalled with the set.
+
+        PLACE THE BUTTON ON THE LEFT: a MINI width clips the right side off (it
+        does not reflow), so the toggle must sit inside ``mini_width`` to stay
+        clickable, and the device's essentials should live on the left.
+
+        Returns the toggle button id.
+        """
+        bkw = {"text_on": text_mini, "text_off": text_full, "rounded": 4,
+               "fontsize": 7.5, "mode": 1}
+        if button_kwargs:
+            bkw.update(button_kwargs)
+        self.add_live_text(button_id, param_name, rect,
+                           parameter=ParameterSpec(
+                               name=param_name, parameter_type=2,
+                               enum=[text_full, text_mini], initial=[0],
+                               initial_enable=True),
+                           **bkw)
+        self.add_newobj(f"{button_id}_thisdev", "live.thisdevice", numinlets=1,
+                        numoutlets=3, outlettype=["bang", "", ""],
+                        patching_rect=[700, 1500, 90, 20])
+        self.add_newobj(f"{button_id}_sel", "sel 0 1", numinlets=1, numoutlets=3,
+                        outlettype=["bang", "bang", ""],
+                        patching_rect=[700, 1530, 60, 20])
+
+        def _setwidth_msg(mid, w, x):
+            self.add_box({"box": {
+                "id": mid, "maxclass": "message", "text": f"setwidth {w}",
+                "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+                "patching_rect": [x, 1560, 110, 20]}})
+
+        _setwidth_msg(f"{button_id}_msgfull", full_width, 700)
+        _setwidth_msg(f"{button_id}_msgmini", mini_width, 820)
+        self.add_line(button_id, 0, f"{button_id}_sel", 0)
+        self.add_line(f"{button_id}_sel", 0, f"{button_id}_msgfull", 0)  # 0 = FULL
+        self.add_line(f"{button_id}_sel", 1, f"{button_id}_msgmini", 0)  # 1 = MINI
+        self.add_line(f"{button_id}_msgfull", 0, f"{button_id}_thisdev", 0)
+        self.add_line(f"{button_id}_msgmini", 0, f"{button_id}_thisdev", 0)
+        return button_id
+
     def row(self, x, y, *, spacing=8, height=None, width=None):
         return Row(self, x, y, spacing=spacing, height=height, width=width)
 

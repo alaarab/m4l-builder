@@ -259,6 +259,52 @@ class TestDeviceAddFlyout:
         assert len(dev.to_bytes(validate=False)) > 0
 
 
+class TestDeviceAddWidthCollapse:
+    """device.add_width_collapse() — runtime FULL/MINI inline width toggle."""
+
+    def _build(self):
+        dev = AudioEffect("widthtest", 700, 120)
+        dev.add_width_collapse(full_width=700, mini_width=180, rect=[10, 10, 70, 14])
+        return dev
+
+    def _texts(self, dev):
+        return {b["box"].get("text") for b in dev.boxes}
+
+    def _lines(self, dev):
+        return [(tuple(l["patchline"]["source"]), tuple(l["patchline"]["destination"]))
+                for l in dev.lines]
+
+    def test_toggle_param_added(self):
+        dev = self._build()
+        btn = next(b["box"] for b in dev.boxes if b["box"]["id"] == "width_collapse")
+        assert btn["maxclass"] == "live.text"
+        assert btn["mode"] == 1
+        enum = btn["saved_attribute_attributes"]["valueof"]["parameter_enum"]
+        assert enum == ["FULL", "MINI"]
+
+    def test_setwidth_messages_and_thisdevice(self):
+        dev = self._build()
+        texts = self._texts(dev)
+        assert "live.thisdevice" in texts
+        assert "sel 0 1" in texts
+        assert "setwidth 700" in texts
+        assert "setwidth 180" in texts
+
+    def test_wiring(self):
+        dev = self._build()
+        lines = self._lines(dev)
+        assert (("width_collapse", 0), ("width_collapse_sel", 0)) in lines
+        # value 0 = FULL -> setwidth full; value 1 = MINI -> setwidth mini.
+        assert (("width_collapse_sel", 0), ("width_collapse_msgfull", 0)) in lines
+        assert (("width_collapse_sel", 1), ("width_collapse_msgmini", 0)) in lines
+        assert (("width_collapse_msgfull", 0), ("width_collapse_thisdev", 0)) in lines
+        assert (("width_collapse_msgmini", 0), ("width_collapse_thisdev", 0)) in lines
+
+    def test_full_build(self):
+        dev = self._build()
+        assert len(dev.to_bytes(validate=False)) > 0
+
+
 class TestSubpatcherImport:
     def test_importable_from_package(self):
         from m4l_builder import Subpatcher as S
