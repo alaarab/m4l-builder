@@ -49,6 +49,7 @@ from ._graph_colors import (
     band_palette_js,
     resolve_graph_panel_color,
 )
+from .design_system import design_system_js
 
 LINEAR_PHASE_EQ_DISPLAY_INLETS = 3
 LINEAR_PHASE_EQ_DISPLAY_OUTLETS = 4
@@ -80,7 +81,7 @@ def linear_phase_eq_display_js(
     -72..0 dB display window (see engines/fft_analyzer.py contract).
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return _JS_TEMPLATE.substitute(
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -205,17 +206,8 @@ var hover_band = -1;
 var hover_x = -1.0;
 var hover_y = -1.0;
 var hover_in_plot = 0;
-// Mouse-cursor feedback (mirrors eq_curve): pointing hand over a grabbable
-// node, grab hand while dragging, crosshair over the open plot. Max
-// t_jmouse_cursortype enum; guarded so it only fires on a transition and can't
-// wedge the handler if the runtime lacks setcursor.
-var CUR_ARROW = 1, CUR_CROSS = 4, CUR_HAND = 6, CUR_GRAB = 7;
-var cur_cursor = -1;
-function set_cursor(c) {
-    if (c === cur_cursor) return;
-    cur_cursor = c;
-    try { setcursor(c); } catch (e) {}
-}
+// Cursor feedback + node glow come from the shared design-system snippet
+// (ds_set_cursor / DS_CUR_* / ds_node_glow), prepended to this script.
 var dragging = 0;
 var drag_mode = 0;
 var curve_dirty = 1;
@@ -998,17 +990,6 @@ function label_overlaps(bounds, used) {
     return 0;
 }
 
-// Soft radial-gradient halo behind a node (Pro-Q "lit node" look): bright band
-// color at the center fading to transparent at the rim, one pattern fill.
-function draw_node_glow(x, y, clr, radius, inner_alpha) {
-    var g = mgraphics.pattern_create_radial(x, y, 0.0, x, y, radius);
-    g.add_color_stop_rgba(0.0, clr[0], clr[1], clr[2], inner_alpha);
-    g.add_color_stop_rgba(1.0, clr[0], clr[1], clr[2], 0.0);
-    mgraphics.set_source(g);
-    mgraphics.arc(x, y, radius, 0, Math.PI * 2);
-    mgraphics.fill();
-}
-
 function draw_nodes() {
     var used_labels = [];
     var compact = compact_mode();
@@ -1047,12 +1028,12 @@ function draw_nodes() {
                 mgraphics.stroke();
             }
 
-            draw_node_glow(x, y, color, radius + (compact ? 9.0 : 12.0),
+            ds_node_glow(x, y, color, radius + (compact ? 9.0 : 12.0),
                            (band_cache[i].enabled ? 0.46 : 0.16));
         }
 
         // Ambient radial glow on every enabled node (subtle "lit" base).
-        if (band_cache[i].enabled) draw_node_glow(x, y, color, radius + 6.0, 0.12);
+        if (band_cache[i].enabled) ds_node_glow(x, y, color, radius + 6.0, 0.12);
 
         mgraphics.set_source_rgba(0.03, 0.04, 0.05, shell_alpha);
         circle_path(x, y, radius + (compact ? 1.9 : 1.2));
@@ -2111,7 +2092,7 @@ function handle_hover(x, y) {
     var dynamic_hover;
     if (context_menu_open) {
         context_menu_hover = context_menu_hit(x, y);
-        set_cursor(context_menu_hover >= 0 ? CUR_HAND : CUR_ARROW);
+        ds_set_cursor(context_menu_hover >= 0 ? DS_CUR_HAND : DS_CUR_ARROW);
         if (context_menu_hover !== prev_menu) mgraphics.redraw();
         return;
     }
@@ -2122,13 +2103,13 @@ function handle_hover(x, y) {
     hover_y = y;
     hover_in_plot = (!dragging && x >= plot_left() && x <= plot_right() &&
                      y >= plot_top() && y <= plot_bottom()) ? 1 : 0;
-    set_cursor(hover_band >= 0 ? CUR_HAND
-               : (hover_in_plot ? CUR_CROSS : CUR_ARROW));
+    ds_set_cursor(hover_band >= 0 ? DS_CUR_HAND
+               : (hover_in_plot ? DS_CUR_CROSS : DS_CUR_ARROW));
     if (hover_band !== prev || hover_in_plot || prev_in) request_redraw();
 }
 
 function clear_hover_state() {
-    set_cursor(CUR_ARROW);
+    ds_set_cursor(DS_CUR_ARROW);
     if (context_menu_open && context_menu_hover >= 0) {
         context_menu_hover = -1;
         mgraphics.redraw();
@@ -2204,7 +2185,7 @@ function onpointermove(pointerevent) {
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
     if (dragging && ((buttons & 1) !== 0)) {
-        set_cursor(CUR_GRAB);
+        ds_set_cursor(DS_CUR_GRAB);
         handle_drag_at(
             x,
             y,

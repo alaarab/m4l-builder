@@ -63,6 +63,7 @@ from ._graph_colors import (
     band_palette_js,
     resolve_graph_panel_color,
 )
+from .design_system import design_system_js
 
 EQ_CURVE_INLETS = 3
 EQ_CURVE_OUTLETS = 4
@@ -90,7 +91,7 @@ def eq_curve_js(
     well below 0 dB). Ignored for the legacy dB-list analyzer path.
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return _JS_TEMPLATE.substitute(
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -211,18 +212,8 @@ var hover_band = -1;
 var hover_x = -1.0;
 var hover_y = -1.0;
 var hover_in_plot = 0;
-// Mouse-cursor feedback (FabFilter-style): a pointing hand over a grabbable
-// node, a grab/closed hand while dragging, a crosshair over the open plot.
-// Values are Max's t_jmouse_cursortype enum (jsui/v8ui setcursor). cur_cursor
-// guards so setcursor only fires on a transition (never per frame), and the
-// call is wrapped so a runtime that lacks it can't wedge the hover handler.
-var CUR_ARROW = 1, CUR_CROSS = 4, CUR_HAND = 6, CUR_GRAB = 7;
-var cur_cursor = -1;
-function set_cursor(c) {
-    if (c === cur_cursor) return;
-    cur_cursor = c;
-    try { setcursor(c); } catch (e) {}
-}
+// Cursor feedback + node glow come from the shared design-system snippet
+// (ds_set_cursor / DS_CUR_* / ds_node_glow), prepended to this script.
 var dragging = 0;
 var drag_mode = 0;
 var drag_start_freq = 0;
@@ -1539,17 +1530,6 @@ function node_y_for_band(idx) {
 }
 
 // ── Draggable nodes ──────────────────────────────────────────────────
-// Soft radial-gradient halo behind a node (Pro-Q "lit node" look). Bright band
-// color at the center fading to transparent at the rim — one pattern fill.
-function draw_node_glow(x, y, clr, radius, inner_alpha) {
-    var g = mgraphics.pattern_create_radial(x, y, 0.0, x, y, radius);
-    g.add_color_stop_rgba(0.0, clr[0], clr[1], clr[2], inner_alpha);
-    g.add_color_stop_rgba(1.0, clr[0], clr[1], clr[2], 0.0);
-    mgraphics.set_source(g);
-    mgraphics.arc(x, y, radius, 0, Math.PI * 2);
-    mgraphics.fill();
-}
-
 function draw_nodes() {
     var i, x, y, r, clr, enabled_alpha, ring_alpha, core_alpha, center_alpha;
 
@@ -1567,9 +1547,9 @@ function draw_nodes() {
 
         // Radial glow: a soft ambient halo on every enabled node + a brighter
         // one on the selected/hovered node (replaces the old flat disc).
-        if (band_cache[i].enabled) draw_node_glow(x, y, clr, r + 6.0, 0.13);
+        if (band_cache[i].enabled) ds_node_glow(x, y, clr, r + 6.0, 0.13);
         if (i === selected_band || i === hover_band) {
-            draw_node_glow(x, y, clr, r + 11.0, band_cache[i].enabled ? 0.42 : 0.16);
+            ds_node_glow(x, y, clr, r + 11.0, band_cache[i].enabled ? 0.42 : 0.16);
         }
 
         mgraphics.set_source_rgba(0.02, 0.02, 0.03, band_cache[i].enabled ? (i === selected_band ? 0.78 : 0.58) : 0.28);
@@ -2578,8 +2558,8 @@ function handle_hover(x, y) {
     // Cursor: pointing hand over a grabbable node/ring/menu-chip, crosshair over
     // the open plot, default arrow otherwise. (Drag uses the grab hand, set at
     // press/drag time since onpointermove skips hover while a button is down.)
-    set_cursor((hover_band >= 0 || menu_hover) ? CUR_HAND
-               : (hover_in_plot ? CUR_CROSS : CUR_ARROW));
+    ds_set_cursor((hover_band >= 0 || menu_hover) ? DS_CUR_HAND
+               : (hover_in_plot ? DS_CUR_CROSS : DS_CUR_ARROW));
     if (hover_band !== prev || menu_hover !== prev_menu ||
             hover_in_plot || prev_in) {
         request_redraw();
@@ -2587,7 +2567,7 @@ function handle_hover(x, y) {
 }
 
 function clear_hover_state() {
-    set_cursor(CUR_ARROW);
+    ds_set_cursor(DS_CUR_ARROW);
     if (hover_band >= 0 || menu_hover || hover_in_plot) {
         hover_band = -1;
         menu_hover = "";
@@ -2644,7 +2624,7 @@ function onpointerdown(pointerevent) {
         pointer_control_key(pointerevent, 0),
         pointerevent
     );
-    if (dragging) set_cursor(CUR_GRAB);
+    if (dragging) ds_set_cursor(DS_CUR_GRAB);
 }
 
 function onpointermove(pointerevent) {
@@ -2652,7 +2632,7 @@ function onpointermove(pointerevent) {
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
     if (dragging && ((buttons & 1) !== 0)) {
-        set_cursor(CUR_GRAB);
+        ds_set_cursor(DS_CUR_GRAB);
         handle_drag_at(
             x,
             y,
