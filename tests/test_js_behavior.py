@@ -494,6 +494,33 @@ class TestWaveshapeDrag:
         assert result.state["top"] == 36.0
         assert result.state["floor"] == 0.0
 
+    def test_dropped_sample_renders_and_clears(self):
+        # draw_sample() needs Max's Buffer (absent in Node) so it no-ops; the
+        # sample-mode paint (raw envelope + saturated overlay) must render
+        # without error, and double-click must clear back to the transfer curve.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            draw_sample("nope");            // no Buffer -> stays display-only
+            var after_nobuf = sample_loaded;
+            set_drive(18.0); set_character(2);
+            smin = []; smax = [];
+            for (var i = 0; i < SAMPLE_COLS; i++) {
+                var s = Math.sin(i * 0.13) * 0.8;
+                smin[i] = -Math.abs(s); smax[i] = Math.abs(s);
+            }
+            sample_loaded = 1;
+            paint();                        // renders sample + saturated overlay
+            var drew = sample_loaded;
+            ondblclick(60, 60, 1, 0, 0, 0, 0, 0);
+            paint();                        // back to the transfer curve
+            dump({after_nobuf: after_nobuf, drew: drew,
+                  after_clear: sample_loaded, n: smin.length});
+        """, size=(180, 152))
+        assert result.state["after_nobuf"] == 0
+        assert result.state["drew"] == 1
+        assert result.state["after_clear"] == 0
+        assert result.state["n"] == 0
+
 
 class TestDelayTrailDrag:
     def test_horizontal_drag_maps_time_and_emits(self):

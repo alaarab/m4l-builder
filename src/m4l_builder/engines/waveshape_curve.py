@@ -108,7 +108,50 @@ var hovering = 0;
 var drag_start_y = 0;
 var drag_start_drive = 0.0;
 
+// Dropped-sample waveform: a min/max envelope read from a buffer~. When a
+// sample is loaded the hero shows the sample's waveform PLUS its saturated
+// version (shape() applied), so the saturation is visible on real audio.
+var SAMPLE_COLS = 320;
+var sample_loaded = 0;
+var sample_name = "";
+var smin = [];
+var smax = [];
+
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+// Read a buffer~ into a SAMPLE_COLS-wide min/max envelope (Max-only: new
+// Buffer/peek don't exist in the Node harness, so this no-ops there).
+function draw_sample(name) {
+    if (typeof Buffer === "undefined") return;
+    var b = new Buffer("" + name);
+    var frames = b.framecount();
+    // Not loaded yet (an early/empty read) — leave the prior view untouched
+    // rather than wiping it; a later trigger redraws once the file is in.
+    if (!frames || frames < 2) { return; }
+    var per = Math.floor(frames / SAMPLE_COLS);
+    if (per < 1) per = 1;
+    smin = []; smax = [];
+    var c, k, s, mn, mx, chunk, n;
+    for (c = 0; c < SAMPLE_COLS; c++) {
+        chunk = b.peek(1, c * per, per < 8192 ? per : 8192);
+        mn = 1.0; mx = -1.0;
+        n = chunk.length;
+        if (n === undefined) { s = chunk; mn = s; mx = s; }
+        else { for (k = 0; k < n; k++) { s = chunk[k]; if (s < mn) mn = s; if (s > mx) mx = s; } }
+        if (mn > mx) { mn = 0.0; mx = 0.0; }
+        smin[c] = clamp(mn, -1.0, 1.0);
+        smax[c] = clamp(mx, -1.0, 1.0);
+    }
+    sample_name = "" + name;
+    sample_loaded = 1;
+    mgraphics.redraw();
+}
+
+function clear_sample() {
+    sample_loaded = 0;
+    smin = []; smax = [];
+    mgraphics.redraw();
+}
 
 function plot_l() { return MARGIN + 8; }
 function plot_r() { return mgraphics.size[0] - MARGIN; }
@@ -161,6 +204,53 @@ function shape(x) {
     return clamp(shape_raw(x + b) - shape_raw(b), -1.0, 1.0);
 }
 
+// Draw the dropped sample: its raw waveform envelope (dim) + the SATURATED
+// envelope (accent) = shape() applied through the dry/wet mix. Drag drive /
+// switch character and the saturated trace reshapes over the real audio.
+function draw_sample_waveform() {
+    var n = smin.length;
+    if (n < 2) return;
+    var l = plot_l(), r = plot_r(), t = plot_t(), b = plot_b();
+    var w = r - l, cy = (t + b) * 0.5, amp = (b - t) * 0.5 - 1.0;
+    var mixf = clamp(mix_pct, 0, 100) * 0.01;
+    var c, xx, sv, yy;
+
+    // Center line.
+    mgraphics.set_source_rgba(GRID_CLR);
+    mgraphics.set_line_width(1.0);
+    mgraphics.move_to(l, cy); mgraphics.line_to(r, cy); mgraphics.stroke();
+
+    // Raw sample envelope (dim filled band: max on top, min on bottom).
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.28);
+    mgraphics.move_to(l, cy - smax[0] * amp);
+    for (c = 0; c < n; c++) { xx = l + (c / (n - 1)) * w; mgraphics.line_to(xx, cy - smax[c] * amp); }
+    for (c = n - 1; c >= 0; c--) { xx = l + (c / (n - 1)) * w; mgraphics.line_to(xx, cy - smin[c] * amp); }
+    mgraphics.close_path();
+    mgraphics.fill();
+
+    // Saturated envelope (accent): top edge (shaped max) then bottom (shaped min).
+    mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.95);
+    mgraphics.set_line_width(1.3);
+    for (c = 0; c < n; c++) {
+        sv = smax[c]; sv = sv + (shape(sv) - sv) * mixf;
+        xx = l + (c / (n - 1)) * w; yy = cy - clamp(sv, -1.0, 1.0) * amp;
+        if (c === 0) mgraphics.move_to(xx, yy); else mgraphics.line_to(xx, yy);
+    }
+    mgraphics.stroke();
+    for (c = 0; c < n; c++) {
+        sv = smin[c]; sv = sv + (shape(sv) - sv) * mixf;
+        xx = l + (c / (n - 1)) * w; yy = cy - clamp(sv, -1.0, 1.0) * amp;
+        if (c === 0) mgraphics.move_to(xx, yy); else mgraphics.line_to(xx, yy);
+    }
+    mgraphics.stroke();
+
+    // Label.
+    mgraphics.set_source_rgba(ACCENT_CLR);
+    mgraphics.set_font_size(7.5);
+    mgraphics.move_to(l + 4, t + 10);
+    mgraphics.show_text("SAMPLE  -  dbl-click to clear");
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
@@ -183,6 +273,9 @@ function paint() {
         mgraphics.move_to(plot_l(), y); mgraphics.line_to(plot_r(), y); mgraphics.stroke();
     }
 
+    if (sample_loaded) {
+        draw_sample_waveform();
+    } else {
     // Unity diagonal.
     mgraphics.set_source_rgba(UNITY_CLR);
     mgraphics.move_to(x_of(-1), y_of(-1));
@@ -224,6 +317,7 @@ function paint() {
         mgraphics.arc(dxp, dyp, 3.0, 0, Math.PI * 2); mgraphics.fill();
         mgraphics.arc(dxn, dyn, 3.0, 0, Math.PI * 2); mgraphics.fill();
     }
+    }
 
     // Border + readout.
     mgraphics.set_source_rgba(BORDER_CLR);
@@ -248,15 +342,34 @@ function set_bias(v)      { bias = clamp(v, -1.0, 1.0); mgraphics.redraw(); }
 function set_mix(v)       { mix_pct = clamp(v, 0, 100); mgraphics.redraw(); }
 function io_level(e)      { env_lin = e; mgraphics.redraw(); }
 
-// ── Interaction: vertical drag = drive ───────────────────────────────
+// ── Interaction: vertical drag = drive; double-click clears the sample ──
+// Robust v8ui pointer resolver (.y/.localY/.offsetY/.clientY); raw .y is
+// undefined in Live. Relative feel kept (0.3 dB/px, 0.045 with shift) so
+// dragging drive reshapes the saturated overlay over a dropped sample live.
+function pointer_y(pe, fb) {
+    if (!pe) return fb;
+    if (pe.y !== undefined) return pe.y;
+    if (pe.localY !== undefined) return pe.localY;
+    if (pe.offsetY !== undefined) return pe.offsetY;
+    if (pe.clientY !== undefined) return pe.clientY;
+    return fb;
+}
+function pointer_buttons(pe, fb) {
+    if (!pe) return fb;
+    if (pe.buttons !== undefined) return pe.buttons;
+    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
+    return fb;
+}
+
 function start_drag(y) {
+    if (isNaN(y)) return;
     dragging = 1;
     drag_start_y = y;
     drag_start_drive = drive_db;
 }
 
 function drag_to(y, fine) {
-    if (!dragging) return;
+    if (!dragging || isNaN(y)) return;
     // Up = more drive. 1 px = 0.3 dB (0.045 with shift).
     var dd = (drag_start_y - y) * (fine ? 0.045 : 0.3);
     drive_db = clamp(drag_start_drive + dd, 0.0, 36.0);
@@ -270,13 +383,18 @@ function end_drag() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pointerevent) { start_drag(pointerevent.y); }
-function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.y, pointerevent.shiftKey ? 1 : 0);
-    else if (!hovering) { hovering = 1; mgraphics.redraw(); }
+function onpointerdown(pe) { start_drag(pointer_y(pe, drag_start_y)); }
+function onpointermove(pe) {
+    if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
+        drag_to(pointer_y(pe, drag_start_y), pe && pe.shiftKey ? 1 : 0);
+        return;
+    }
+    if (dragging) { end_drag(); return; }
+    if (!hovering) { hovering = 1; mgraphics.redraw(); }
 }
-function onpointerup(pointerevent) { end_drag(); }
-function onpointerleave(pointerevent) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function onpointerup(pe) { end_drag(); }
+function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { clear_sample(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
