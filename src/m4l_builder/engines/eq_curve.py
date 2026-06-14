@@ -519,7 +519,10 @@ function update_analyzer_from_fft(mags) {
     if (m < 4) return;
     ensure_analyzer_arrays();
     var hz_per_bin = (sample_rate * 0.5) / m;   // mags = FFT_SIZE/2 bins -> Nyquist
-    var half = 0.5 / (ANALYZER_BINS - 1);
+    // Wider, overlapping cells (~2.8x the point spacing) average dense high
+    // harmonics into a clean envelope instead of a comb of needles (matches the
+    // smoothed standalone analyzer; the old 0.5 half-cell was over-sharp).
+    var half = 1.4 / (ANALYZER_BINS - 1);
     var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db, atk, rel;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
@@ -567,9 +570,9 @@ function update_analyzer_from_fft(mags) {
             if (mag > peak) peak = mag;
             sum += mag; cnt++;
         }
-        // Peak-dominant so tonal spikes stay sharp and narrow (a heavy mean
-        // weight smears them into a blob); tiny mean term tames noise jitter.
-        energy = cnt > 0 ? (0.88 * peak + 0.12 * (sum / cnt)) : 0.0;
+        // Balanced peak/mean: resolves tonal lines but averages dense harmonics
+        // into a clean envelope (the old 0.88/0.12 read as grassy needles).
+        energy = cnt > 0 ? (0.5 * peak + 0.5 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
@@ -1349,6 +1352,17 @@ function note_name(freq) {
     return NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
 }
 
+// Note + cents detune (e.g. "A3 +16c"); cents hidden when essentially in tune.
+function note_label(freq) {
+    if (freq <= 0.0) return "";
+    var midi = 69 + 12 * (Math.log(freq / 440.0) / Math.LN2);
+    var ni = Math.round(midi);
+    var cents = Math.round((midi - ni) * 100);
+    var nm = NOTE_NAMES[((ni % 12) + 12) % 12] + (Math.floor(ni / 12) - 1);
+    if (cents >= -1 && cents <= 1) return nm;
+    return nm + " " + (cents >= 0 ? "+" : "") + cents + "c";
+}
+
 function band_response_db(idx, freq) {
     if (!band_cache[idx].enabled) return 0.0;
     return response_db(band_cache[idx].coeffs, freq);
@@ -1872,7 +1886,7 @@ function draw_tooltip() {
     var line2;
     var line3 = "";
 
-    var freq_str = format_freq_text(b.freq) + " · " + note_name(b.freq);
+    var freq_str = format_freq_text(b.freq) + " · " + note_label(b.freq);
 
     if (b.uses_gain) {
         var gain_str = (b.gain >= 0 ? "+" : "") + b.gain.toFixed(1) + " dB";
@@ -2635,7 +2649,7 @@ function draw_hover_crosshair() {
     mgraphics.set_font_size(8.0);
     // Frequency (+ musical note) under the cursor (bottom gutter).
     var hover_freq = x_to_freq(x);
-    var ftxt = format_freq_text(hover_freq) + " " + note_name(hover_freq);
+    var ftxt = format_freq_text(hover_freq) + " " + note_label(hover_freq);
     var fw = ftxt.length * 4.6 + 4;
     var fx = clamp(x - fw * 0.5, 0.0, mgraphics.size[0] - fw);
     mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);
