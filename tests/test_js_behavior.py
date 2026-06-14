@@ -591,8 +591,9 @@ class TestLevelHistoryInteractive:
         assert result.state["after_echo"] == result.state["mid"]
         assert result.state["final"] == -3.0
         emits = _named(result.outlets, "threshold")
-        # press (click-to-set) + move = two emits in the absolute model
-        assert len(emits) == 2
+        # press only arms (no apply); the move sets it -> one emit. (Press-apply
+        # was dropped so a double-click's clicks don't pre-empt reset_ref.)
+        assert len(emits) == 1
         assert abs(emits[-1][2] - result.state["mid"]) < 0.06
 
     def test_interactive_clamps_at_zero(self):
@@ -602,6 +603,27 @@ class TestLevelHistoryInteractive:
             dump({ref: ref_db});
         """, size=(208, 152))
         assert result.state["ref"] == 0.0
+
+    def test_double_click_resets_ref(self):
+        # Ceiling's history resets its ceiling line to -0.3 on double-click.
+        result = run_jsui(level_history_js(ref_db=-0.3, interactive=True,
+                                           reset_db=-0.3), """
+            onpointerdown({x: 60, y: 120, buttons: 1});
+            onpointermove({x: 60, y: 120, buttons: 1});   // drag it away
+            var moved = ref_db;
+            ondblclick(60, 60, 1, 0, 0, 0, 0, 0);
+            dump({moved: moved, after: ref_db});
+        """, size=(208, 152))
+        assert abs(result.state["moved"] - (-0.3)) > 0.5    # drag moved it
+        assert abs(result.state["after"] - (-0.3)) < 1e-6   # reset to -0.3
+        emits = _named(result.outlets, "threshold")
+        assert abs(emits[-1][2] - (-0.3)) < 0.06
+        # non-interactive build never resets/emits
+        r2 = run_jsui(level_history_js(ref_db=-12.0, reset_db=0.0), """
+            ondblclick(60, 60, 1, 0, 0, 0, 0, 0);
+            dump({ref: ref_db});
+        """, size=(208, 152))
+        assert r2.state["ref"] == -12.0 and r2.outlets == []
 
 
 class TestBallisticsCurve:
