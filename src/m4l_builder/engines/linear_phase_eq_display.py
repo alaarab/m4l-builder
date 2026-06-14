@@ -376,6 +376,26 @@ function analyzer_slope_at(freq) {
         (Math.log(clamp(freq, MIN_FREQ, MAX_FREQ) / 1000.0) / Math.LN2);
 }
 
+// A floor bin (no signal) stays at the floor so the tilt can't lift the empty
+// floor into a fake rising diagonal; a bin with energy gets the tilt added.
+function analyzer_tilted_db(raw_db, tilt) {
+    return (raw_db <= ANALYZER_MIN_DB + 0.5) ? ANALYZER_MIN_DB : raw_db + tilt;
+}
+
+// A PERFECTLY FLAT spectrum (tiny bin-to-bin range) is a no-signal artifact
+// (silence FFT / unfed buffer) that the tilt turns into a fake diagonal — real
+// audio always has peaks/rolloff. 1 = flat (draw nothing, read empty).
+function analyzer_is_flat() {
+    var n = analyzer_display.length, k;
+    if (n < 2) return 1;
+    var lo = analyzer_display[0], hi = analyzer_display[0];
+    for (k = 1; k < n; k++) {
+        if (analyzer_display[k] < lo) lo = analyzer_display[k];
+        if (analyzer_display[k] > hi) hi = analyzer_display[k];
+    }
+    return (hi - lo < 1.5) ? 1 : 0;
+}
+
 function now_ms() {
     return new Date().getTime();
 }
@@ -814,13 +834,14 @@ function draw_analyzer() {
         if (analyzer_display[i] > peak_db) peak_db = analyzer_display[i];
     }
     if (peak_db <= ANALYZER_MIN_DB + 1.0) return;
+    if (analyzer_is_flat()) return;   // flat = no real signal -> read empty
 
     mgraphics.set_source_rgba(ANALYZER_FILL_CLR);
     mgraphics.move_to(freq_to_x(analyzer_bin_freq(0, n)), plot_bottom());
     for (i = 0; i < n; i++) {
         f = analyzer_bin_freq(i, n);
         x = freq_to_x(f);
-        y = analyzer_db_to_y(analyzer_display[i] + analyzer_slope_at(f));
+        y = analyzer_db_to_y(analyzer_tilted_db(analyzer_display[i], analyzer_slope_at(f)));
         mgraphics.line_to(x, y);
     }
     mgraphics.line_to(freq_to_x(analyzer_bin_freq(n - 1, n)), plot_bottom());
@@ -832,7 +853,7 @@ function draw_analyzer() {
     for (i = 0; i < n; i++) {
         f = analyzer_bin_freq(i, n);
         x = freq_to_x(f);
-        y = analyzer_db_to_y(analyzer_display[i] + analyzer_slope_at(f));
+        y = analyzer_db_to_y(analyzer_tilted_db(analyzer_display[i], analyzer_slope_at(f)));
         if (i === 0) mgraphics.move_to(x, y);
         else mgraphics.line_to(x, y);
     }
@@ -843,7 +864,7 @@ function draw_analyzer() {
         if (analyzer_peaks[i] > ANALYZER_MIN_DB + 1.0) {
             f = analyzer_bin_freq(i, n);
             x = freq_to_x(f);
-            y = analyzer_db_to_y(analyzer_peaks[i] + analyzer_slope_at(f));
+            y = analyzer_db_to_y(analyzer_tilted_db(analyzer_peaks[i], analyzer_slope_at(f)));
             mgraphics.rectangle(x - 1.0, y - 0.5, 2.0, 2.0);
             mgraphics.fill();
         }
