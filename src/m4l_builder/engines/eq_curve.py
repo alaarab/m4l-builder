@@ -185,6 +185,10 @@ var ANALYZER_MIN_DB = -72.0;
 var ANALYZER_MAX_DB = 0.0;
 var ANALYZER_BINS   = 256;        // fixed log-spaced display bins for fft_frame
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
+// Spectrum Grab (Pro-Q): a plain press over an analyzer peak louder than this
+// spawns a band right at that frequency and starts dragging it. The floor sits
+// near ANALYZER_MIN_DB so this cleanly distinguishes a real resonance.
+var SPECTRUM_GRAB_DB = -48.0;
 var LOG_MIN         = Math.log(MIN_FREQ);
 var LOG_MAX         = Math.log(MAX_FREQ);
 var LOG_RANGE       = LOG_MAX - LOG_MIN;
@@ -2270,6 +2274,20 @@ function should_ignore_pointer_click(x, y) {
     return 1;
 }
 
+// Analyzer magnitude (dB) under a plot x — the display bins are log-spaced over
+// [MIN_FREQ, MAX_FREQ] with the same norm as freq_to_x, so x maps straight to a
+// bin. Used by Spectrum Grab to detect a peak under the cursor.
+function analyzer_db_at_x(x) {
+    var n = analyzer_display.length;
+    if (n < 2) return ANALYZER_MIN_DB;
+    var norm = (x - plot_left()) / Math.max(1.0, plot_right() - plot_left());
+    if (norm < 0.0 || norm > 1.0) return ANALYZER_MIN_DB;
+    var bin = Math.round(norm * (n - 1));
+    if (bin < 0) bin = 0;
+    else if (bin >= n) bin = n - 1;
+    return analyzer_display[bin];
+}
+
 // ── Mouse interaction ────────────────────────────────────────────────
 function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     var hit = hit_test(x, y);
@@ -2371,6 +2389,24 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     }
 
     if (hit < 0 && dynamic_hit < 0) {
+        // Spectrum Grab: a plain press on a prominent analyzer peak (behind the
+        // curve) spawns a band right at that frequency and immediately drags it
+        // — grab the resonance and pull it down to cut. Plain presses on empty
+        // space just deselect (below).
+        if (!option_click && !context_click && !command_click && !control_click &&
+                x >= plot_left() && x <= plot_right() &&
+                y >= plot_top() && y <= plot_bottom() &&
+                analyzer_db_at_x(x) > SPECTRUM_GRAB_DB &&
+                find_free_band() >= 0) {
+            if (create_band_at(x, y)) {
+                dragging = 1;
+                drag_mode = 1;
+                drag_start_freq = bands[selected_band].freq;
+                drag_start_gain = bands[selected_band].gain;
+                drag_start_q = bands[selected_band].q;
+                return;
+            }
+        }
         selected_band = -1;
         dragging = 0;
         drag_mode = 0;
