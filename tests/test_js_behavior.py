@@ -399,30 +399,42 @@ class TestLevelHistoryBehavior:
 
 
 class TestTransferCurveDrag:
-    def test_drag_down_lowers_threshold_relative(self):
+    def test_drag_sets_threshold_absolute(self):
+        # ABSOLUTE: the threshold follows the cursor's output-axis level.
         from m4l_builder.engines.transfer_curve import transfer_curve_js
         result = run_jsui(transfer_curve_js(), """
             set_threshold(-12.0);
             onpointerdown({x: 60, y: 50, buttons: 1});
             onpointermove({x: 60, y: 80, buttons: 1});
-            var expected = -12.0 - (30.0 / plot_h()) * (MAX_DB - MIN_DB);
-            dump({thr: threshold, expected: expected});
+            var lo_y = threshold;
+            onpointermove({x: 60, y: 30, buttons: 1});   // higher on screen
+            var hi_y = threshold;
+            var expected80 = clamp(MIN_DB + ((plot_b() - 80) / plot_h()) * (MAX_DB - MIN_DB), MIN_DB, 0.0);
+            dump({lo_y: lo_y, hi_y: hi_y, expected80: expected80});
         """, size=(132, 152))
-        assert abs(result.state["thr"] - result.state["expected"]) < 0.11
+        assert abs(result.state["lo_y"] - result.state["expected80"]) < 0.11
+        assert result.state["hi_y"] > result.state["lo_y"]   # drag up -> higher thr
         emits = _named(result.outlets, "threshold")
-        assert len(emits) == 1
-        assert abs(emits[0][2] - result.state["thr"]) < 0.06
+        assert len(emits) == 2
+        assert abs(emits[-1][2] - result.state["hi_y"]) < 0.06
 
-    def test_drag_shift_is_fine(self):
+    def test_double_click_resets_threshold(self):
         from m4l_builder.engines.transfer_curve import transfer_curve_js
-        result = run_jsui(transfer_curve_js(), """
-            set_threshold(-12.0);
-            onpointerdown({x: 60, y: 50, buttons: 1});
-            onpointermove({x: 60, y: 80, buttons: 1, shiftKey: 1});
-            var coarse = (30.0 / plot_h()) * (MAX_DB - MIN_DB);
-            dump({thr: threshold, fine_expected: -12.0 - coarse * 0.15});
+        result = run_jsui(transfer_curve_js(reset_db=0.0), """
+            set_threshold(-30.0);
+            ondblclick(60, 80, 1, 0, 0, 0, 0, 0);
+            dump({after: threshold});
         """, size=(132, 152))
-        assert abs(result.state["thr"] - result.state["fine_expected"]) < 0.11
+        assert result.state["after"] == 0.0
+        emits = _named(result.outlets, "threshold")
+        assert len(emits) == 1 and emits[0][2] == 0.0
+        # configurable reset target (Ceiling resets its ceiling to -0.3)
+        r2 = run_jsui(transfer_curve_js(reset_db=-0.3), """
+            set_threshold(-30.0);
+            ondblclick(60, 80, 1, 0, 0, 0, 0, 0);
+            dump({after: threshold});
+        """, size=(132, 152))
+        assert abs(r2.state["after"] - (-0.3)) < 1e-6
 
     def test_drag_clamps_to_zero_and_floor(self):
         from m4l_builder.engines.transfer_curve import transfer_curve_js
