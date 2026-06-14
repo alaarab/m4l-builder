@@ -211,6 +211,18 @@ var hover_band = -1;
 var hover_x = -1.0;
 var hover_y = -1.0;
 var hover_in_plot = 0;
+// Mouse-cursor feedback (FabFilter-style): a pointing hand over a grabbable
+// node, a grab/closed hand while dragging, a crosshair over the open plot.
+// Values are Max's t_jmouse_cursortype enum (jsui/v8ui setcursor). cur_cursor
+// guards so setcursor only fires on a transition (never per frame), and the
+// call is wrapped so a runtime that lacks it can't wedge the hover handler.
+var CUR_ARROW = 1, CUR_CROSS = 4, CUR_HAND = 6, CUR_GRAB = 7;
+var cur_cursor = -1;
+function set_cursor(c) {
+    if (c === cur_cursor) return;
+    cur_cursor = c;
+    try { setcursor(c); } catch (e) {}
+}
 var dragging = 0;
 var drag_mode = 0;
 var drag_start_freq = 0;
@@ -2551,6 +2563,11 @@ function handle_hover(x, y) {
     hover_y = y;
     hover_in_plot = (!dragging && x >= plot_left() && x <= plot_right() &&
                      y >= plot_top() && y <= plot_bottom()) ? 1 : 0;
+    // Cursor: pointing hand over a grabbable node/ring/menu-chip, crosshair over
+    // the open plot, default arrow otherwise. (Drag uses the grab hand, set at
+    // press/drag time since onpointermove skips hover while a button is down.)
+    set_cursor((hover_band >= 0 || menu_hover) ? CUR_HAND
+               : (hover_in_plot ? CUR_CROSS : CUR_ARROW));
     if (hover_band !== prev || menu_hover !== prev_menu ||
             hover_in_plot || prev_in) {
         request_redraw();
@@ -2558,6 +2575,7 @@ function handle_hover(x, y) {
 }
 
 function clear_hover_state() {
+    set_cursor(CUR_ARROW);
     if (hover_band >= 0 || menu_hover || hover_in_plot) {
         hover_band = -1;
         menu_hover = "";
@@ -2614,6 +2632,7 @@ function onpointerdown(pointerevent) {
         pointer_control_key(pointerevent, 0),
         pointerevent
     );
+    if (dragging) set_cursor(CUR_GRAB);
 }
 
 function onpointermove(pointerevent) {
@@ -2621,6 +2640,7 @@ function onpointermove(pointerevent) {
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
     if (dragging && ((buttons & 1) !== 0)) {
+        set_cursor(CUR_GRAB);
         handle_drag_at(
             x,
             y,
