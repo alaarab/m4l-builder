@@ -494,32 +494,70 @@ class TestWaveshapeDrag:
         assert result.state["top"] == 36.0
         assert result.state["floor"] == 0.0
 
-    def test_dropped_sample_renders_and_clears(self):
-        # draw_sample() needs Max's Buffer (absent in Node) so it no-ops; the
-        # sample-mode paint (raw envelope + saturated overlay) must render
-        # without error, and double-click must clear back to the transfer curve.
+    def test_dropped_sample_scope_renders_toggles_and_clears(self):
+        # draw_sample()/read_window() need Max's Buffer (absent in Node) so they
+        # no-op; the scope paint (input line + saturated overlay) must render,
+        # set_mode flips curve<->scope, and double-click clears back to the curve.
         from m4l_builder.engines.waveshape_curve import waveshape_curve_js
         result = run_jsui(waveshape_curve_js(), """
             draw_sample("nope");            // no Buffer -> stays display-only
             var after_nobuf = sample_loaded;
             set_drive(18.0); set_character(2);
-            smin = []; smax = [];
-            for (var i = 0; i < SAMPLE_COLS; i++) {
-                var s = Math.sin(i * 0.13) * 0.8;
-                smin[i] = -Math.abs(s); smax[i] = Math.abs(s);
-            }
-            sample_loaded = 1;
-            paint();                        // renders sample + saturated overlay
-            var drew = sample_loaded;
+            scope = [];
+            for (var i = 0; i < WAVE_WIN; i++) scope[i] = Math.sin(i * 0.13) * 0.8;
+            sample_loaded = 1; mode = 1; scope_frames = 100000;
+            paint();                        // renders the scope + saturated line
+            var scoped = mode;
+            set_mode(0); paint();           // toggled back to the transfer curve
+            var curved = mode;
+            set_mode(1);
+            scope_tick();                   // advances pos (no-ops the buffer read)
+            var pos = scope_pos;
             ondblclick(60, 60, 1, 0, 0, 0, 0, 0);
-            paint();                        // back to the transfer curve
-            dump({after_nobuf: after_nobuf, drew: drew,
-                  after_clear: sample_loaded, n: smin.length});
+            paint();
+            dump({after_nobuf: after_nobuf, scoped: scoped, curved: curved,
+                  pos: pos, after_clear: sample_loaded, mode_after: mode});
         """, size=(180, 152))
         assert result.state["after_nobuf"] == 0
-        assert result.state["drew"] == 1
+        assert result.state["scoped"] == 1
+        assert result.state["curved"] == 0
+        assert result.state["pos"] > 0          # scope_tick advanced the window
         assert result.state["after_clear"] == 0
-        assert result.state["n"] == 0
+        assert result.state["mode_after"] == 0  # clear returns to the curve
+        # the auto-switch + clear emit "mode" so the rail toggle stays in sync
+        modes = _named(result.outlets, "mode")
+        assert any(m[2] == 0 for m in modes)
+
+    def test_sample_transfer_table_drives_curve_and_arms_dsp(self):
+        # The dropped sample IS the transfer function: a 256-pt table plotted
+        # input->output. sample_transfer() interpolates it (the same lookup the
+        # gen~ core runs); the curve view renders it; clear emits "sample 0" so
+        # the DSP shaper disarms.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            // Inject a known table: a clean -1..1 ramp (identity transfer).
+            curve_tbl = [];
+            for (var i = 0; i < 256; i++) curve_tbl.push(-1 + (i / 255) * 2);
+            curve_n = curve_tbl.length;
+            sample_loaded = 1; mode = 0; env_lin = 0.5;
+            var mid = sample_transfer(0.0);     // ramp midpoint ~ 0
+            var top = sample_transfer(1.0);     // ramp top ~ +1
+            var bot = sample_transfer(-1.0);    // ramp bottom ~ -1
+            paint();                            // draw_sample_transfer path
+            // clearing disarms the DSP shaper and drops the table
+            clear_sample();
+            dump({mid: mid, top: top, bot: bot, curved: mode,
+                  n_after: curve_n, loaded_after: sample_loaded});
+        """, size=(180, 152))
+        assert abs(result.state["mid"]) < 0.01      # identity at 0
+        assert abs(result.state["top"] - 1.0) < 0.01
+        assert abs(result.state["bot"] + 1.0) < 0.01
+        assert result.state["curved"] == 0
+        assert result.state["n_after"] == 0         # table dropped on clear
+        assert result.state["loaded_after"] == 0
+        # drop arms ("sample 1"), clear disarms ("sample 0")
+        samples = _named(result.outlets, "sample")
+        assert any(s[2] == 0 for s in samples)
 
 
 class TestDelayTrailDrag:
