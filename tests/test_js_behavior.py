@@ -394,6 +394,27 @@ class TestLinearPhaseAnalyzerTilt:
         assert result.state["clamped"] == pytest.approx(12.0)
         assert result.state["off"] == 0.0
 
+    def test_floor_gate_and_flat_suppress(self):
+        # Same no-signal fixes as the Parametric: a floor bin stays at the floor
+        # (no tilted-diagonal), and a perfectly flat spectrum is flagged so it can
+        # be skipped (reads empty) instead of drawn as a fake diagonal.
+        result = run_jsui(linear_phase_eq_display_js(), """
+            var a = {floor: analyzer_tilted_db(ANALYZER_MIN_DB, 30.0),
+                     signal: analyzer_tilted_db(-30.0, 10.0),
+                     min: ANALYZER_MIN_DB};
+            analyzer_display = [];
+            for (var i = 0; i < 40; i++) analyzer_display.push(-40.0);
+            a.flat = analyzer_is_flat();
+            analyzer_display = [];
+            for (i = 0; i < 40; i++) analyzer_display.push(-60.0 + (i % 7) * 4.0);
+            a.shaped = analyzer_is_flat();
+            dump(a);
+        """)
+        assert result.state["floor"] == result.state["min"]
+        assert result.state["signal"] == pytest.approx(-20.0)
+        assert result.state["flat"] == 1
+        assert result.state["shaped"] == 0
+
     def test_freeze_holds_the_last_frame(self):
         result = run_jsui(linear_phase_eq_display_js(), """
             update_analyzer_data([-10, -10, -10, -10]);
