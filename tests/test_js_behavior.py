@@ -577,6 +577,29 @@ class TestWaveshapeDrag:
         emits = _named(result.outlets, "drive")
         assert len(emits) == 1 and abs(emits[0][2] - 12.0) < 1e-6
 
+    def test_horizontal_drag_sets_bias_vertical_leaves_it(self):
+        # it107: the hero is a 2-axis pad — vertical = drive, horizontal = bias.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        # Pure horizontal drag (y constant): bias moves, drive stays.
+        result = run_jsui(waveshape_curve_js(), """
+            set_drive(0.0); set_bias(0.0);
+            onpointerdown({x: 80, y: 70, buttons: 1});
+            onpointermove({x: 180, y: 70, buttons: 1});
+            dump({drive: drive_db, bias: bias});
+        """, size=(296, 152))
+        assert abs(result.state["drive"]) < 1e-6           # vertical untouched
+        assert abs(result.state["bias"] - 0.8) < 1e-6      # 100px * 0.008
+        assert len(_named(result.outlets, "bias")) >= 1
+        # Pure vertical drag (x constant): drive moves, bias stays.
+        result2 = run_jsui(waveshape_curve_js(), """
+            set_drive(0.0); set_bias(0.0);
+            onpointerdown({x: 150, y: 100, buttons: 1});
+            onpointermove({x: 150, y: 40, buttons: 1});
+            dump({drive: drive_db, bias: bias});
+        """, size=(296, 152))
+        assert abs(result2.state["drive"] - 18.0) < 1e-6   # 60px * 0.3
+        assert abs(result2.state["bias"]) < 1e-6           # horizontal untouched
+
     def test_drag_clamps_and_shift_fine(self):
         from m4l_builder.engines.waveshape_curve import waveshape_curve_js
         result = run_jsui(waveshape_curve_js(), """

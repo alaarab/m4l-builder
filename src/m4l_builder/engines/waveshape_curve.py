@@ -125,6 +125,8 @@ var dragging = 0;
 var hovering = 0;
 var drag_start_y = 0;
 var drag_start_drive = 0.0;
+var drag_start_x = 0;
+var drag_start_bias = 0.0;
 
 // Dropped sample as a scrolling OSCILLOSCOPE: a window of the sample's actual
 // samples (a line trace, not a min/max blob) plus the SATURATED version
@@ -741,19 +743,28 @@ function pointer_buttons(pe, fb) {
     return fb;
 }
 
-function start_drag(y) {
+function start_drag(x, y) {
     if (isNaN(y)) return;
     dragging = 1;
     drag_start_y = y;
     drag_start_drive = drive_db;
+    drag_start_x = isNaN(x) ? 0 : x;
+    drag_start_bias = bias;
 }
 
-function drag_to(y, fine) {
+function drag_to(x, y, fine) {
     if (!dragging || isNaN(y)) return;
-    // Up = more drive. 1 px = 0.3 dB (0.045 with shift).
+    // 2-axis pad: vertical = DRIVE (up = more, 0.3 dB/px; 0.045 with shift),
+    // horizontal = BIAS (right = more asymmetry/even harmonics, 0.008/px;
+    // 0.0015 with shift). A pure vertical drag leaves bias untouched.
     var dd = (drag_start_y - y) * (fine ? 0.045 : 0.3);
     drive_db = clamp(drag_start_drive + dd, 0.0, 36.0);
     outlet(0, "drive", Math.round(drive_db * 10) / 10);
+    if (!isNaN(x)) {
+        var bd = (x - drag_start_x) * (fine ? 0.0015 : 0.008);
+        bias = clamp(drag_start_bias + bd, -1.0, 1.0);
+        outlet(0, "bias", Math.round(bias * 100) / 100);
+    }
     mgraphics.redraw();
 }
 
@@ -769,11 +780,11 @@ function onpointerdown(pe) {
     if (sh >= 0) { pick_mode(sh); return; }     // swatch wins over a drive drag
     var zh = zone_hit(px, py);
     if (zh >= 0) { cycle_zone(zh); return; }     // zone strip wins too
-    start_drag(pointer_y(pe, drag_start_y));
+    start_drag(pointer_x(pe, drag_start_x), pointer_y(pe, drag_start_y));
 }
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
-        drag_to(pointer_y(pe, drag_start_y), pe && pe.shiftKey ? 1 : 0);
+        drag_to(pointer_x(pe, drag_start_x), pointer_y(pe, drag_start_y), pe && pe.shiftKey ? 1 : 0);
         return;
     }
     if (dragging) { end_drag(); return; }
@@ -793,10 +804,10 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     if (sh >= 0) { pick_mode(sh); return; }
     var zh = zone_hit(x, y);
     if (zh >= 0) { cycle_zone(zh); return; }
-    start_drag(y);
+    start_drag(x, y);
 }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
-    if (but) drag_to(y, shift);
+    if (but) drag_to(x, y, shift);
     else end_drag();
 }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }
