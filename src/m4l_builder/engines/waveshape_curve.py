@@ -54,6 +54,7 @@ from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_COLOR,
     resolve_graph_panel_color,
 )
+from .design_system import design_system_js
 
 WAVESHAPE_CURVE_INLETS = 1
 WAVESHAPE_CURVE_OUTLETS = 1
@@ -76,7 +77,7 @@ def waveshape_curve_js(
 ):
     """Return JavaScript source for the waveshape display."""
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return _JS_TEMPLATE.substitute(
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -746,6 +747,7 @@ function pointer_buttons(pe, fb) {
 function start_drag(x, y) {
     if (isNaN(y)) return;
     dragging = 1;
+    ds_set_cursor(DS_CUR_GRAB);
     drag_start_y = y;
     drag_start_drive = drive_db;
     drag_start_x = isNaN(x) ? 0 : x;
@@ -771,6 +773,7 @@ function drag_to(x, y, fine) {
 function end_drag() {
     if (!dragging) return;
     dragging = 0;
+    ds_set_cursor(hovering ? DS_CUR_HAND : DS_CUR_ARROW);
     mgraphics.redraw();
 }
 
@@ -789,9 +792,10 @@ function onpointermove(pe) {
     }
     if (dragging) { end_drag(); return; }
     if (!hovering) { hovering = 1; mgraphics.redraw(); }
+    ds_set_cursor(DS_CUR_HAND);
 }
 function onpointerup(pe) { end_drag(); }
-function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function onpointerleave(pe) { hovering = 0; end_drag(); ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     // Don't clear when double-clicking the bottom controls (swatches / zone
     // strips) — only an empty-plot double-click clears the sample.
