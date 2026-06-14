@@ -154,6 +154,8 @@ var curve_n = 0;
 var scan_task = null;
 var scan_running = 0;
 var SCAN_MS = 33;
+var SCAN_TRAVERSE_SEC = 12;   // scan the WHOLE file in ~this many seconds,
+                              // so long samples morph at a usable rate.
 
 // Per-window normalize: scale each window so its peak fills the range, so even
 // a quiet slice is a usable full-range wavetable (and visibly distorts). Capped
@@ -278,7 +280,11 @@ function draw_sample(name) {
 // scan Task (and accepted as a message for completeness).
 function scope_tick() {
     if (!sample_loaded) return;
-    scope_pos += (WAVE_WIN >> 2);
+    // Step scales with file length so the whole sample traverses in ~TRAVERSE
+    // seconds regardless of size (a fixed step crawls through long files).
+    var step = Math.floor(scope_frames / (SCAN_TRAVERSE_SEC * 30));
+    if (step < 64) step = 64;
+    scope_pos += step;
     if (scope_pos + WAVE_WIN >= scope_frames) scope_pos = 0;
     outlet(0, "wt_start", scope_pos);
     read_window();
@@ -775,7 +781,12 @@ function onpointermove(pe) {
 }
 function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
-function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { clear_sample(); }
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+    // Don't clear when double-clicking the bottom controls (swatches / zone
+    // strips) — only an empty-plot double-click clears the sample.
+    if (swatch_hit(x, y) >= 0 || zone_hit(x, y) >= 0) return;
+    clear_sample();
+}
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
     var sh = swatch_hit(x, y);
