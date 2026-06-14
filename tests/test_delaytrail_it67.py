@@ -131,3 +131,19 @@ class TestDelayTrailDiagonalDrag:
         """, size=(326, 152))
         assert result.state["t_finite"] == 1
         assert result.state["fb_finite"] == 1
+
+    def test_double_click_resets_both_time_and_feedback(self):
+        # Double-click the X/Y pad -> both time and feedback snap to defaults,
+        # each emitted once so the routed Time/Feedback dials both reset.
+        result = run_jsui(delay_trail_js(reset_time_ms=350.0,
+                                         reset_feedback_pct=35.0), """
+            set_time(1200.0); set_feedback(90.0);
+            ondblclick(60, 60, 1, 0, 0, 0, 0, 0);
+            dump({t: time_ms, fb: feedback_pct});
+        """, size=(326, 152))
+        assert abs(result.state["t"] - 350.0) < 1e-6
+        assert abs(result.state["fb"] - 35.0) < 1e-6
+        assert len(_named(result.outlets, "time")) == 1
+        assert _named(result.outlets, "time")[0][2] == 350
+        assert len(_named(result.outlets, "feedback")) == 1
+        assert _named(result.outlets, "feedback")[0][2] == 35
