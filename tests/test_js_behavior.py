@@ -12,6 +12,7 @@ import pytest
 from m4l_builder.engines.eq_curve import eq_curve_js
 from m4l_builder.engines.level_history import level_history_js
 from m4l_builder.engines.linear_phase_eq_display import linear_phase_eq_display_js
+from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
 
 from .js_harness import NODE, run_jsui
 
@@ -848,4 +849,48 @@ class TestBallisticsCurve:
             onpointermove({x: 40, y: 30, buttons: 1});
             dump({ok: 1});
         """, size=(132, 68))
+        assert result.outlets == []
+
+
+class TestLoopFilterCurve:
+    """The loop DAMP/TONE response display (Echotide's filter panel)."""
+
+    def test_set_damp_tone_do_not_echo(self):
+        result = run_jsui(loop_filter_curve_js(interactive=True), """
+            set_samplerate(44100);
+            set_damp(60);
+            set_tone(40);
+            dump({damp: damp_pct, tone: tone_pct});
+        """)
+        assert result.outlets == []
+        assert abs(result.state["damp"] - 60) < 1e-6
+        assert abs(result.state["tone"] - 40) < 1e-6
+
+    def test_drag_emits_damp_and_tone(self):
+        result = run_jsui(loop_filter_curve_js(interactive=True), """
+            set_samplerate(44100);
+            onpointerdown({x: 300, y: 50, buttons: 1});
+            dump({dragging: dragging});
+        """)
+        assert result.state["dragging"] == 1
+        assert len(_named(result.outlets, "damp")) >= 1
+        assert len(_named(result.outlets, "tone")) >= 1
+
+    def test_dc_is_unity_and_damp_darkens_highs(self):
+        result = run_jsui(loop_filter_curve_js(interactive=True), """
+            set_samplerate(44100);
+            set_tone(0);
+            set_damp(20); var lo20 = response_db(20.0); var hi20 = response_db(15000.0);
+            set_damp(80); var hi80 = response_db(15000.0);
+            dump({dc: lo20, hi20: hi20, hi80: hi80});
+        """)
+        assert abs(result.state["dc"]) < 0.5          # ~0 dB at DC
+        assert result.state["hi80"] < result.state["hi20"] - 3.0  # more damp = darker
+
+    def test_not_interactive_does_not_drag(self):
+        result = run_jsui(loop_filter_curve_js(interactive=False), """
+            onpointerdown({x: 300, y: 50, buttons: 1});
+            dump({dragging: dragging});
+        """)
+        assert result.state["dragging"] == 0
         assert result.outlets == []
