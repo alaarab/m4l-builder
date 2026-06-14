@@ -5,11 +5,12 @@ Research mined from the leading distortion/saturation plugins, split into **engi
 and a possible new graphics-first distortion device. Companion to
 `ui_goodies_and_graphics_pipeline.md`.
 
-> NOTE: "a boutique distortion device" (Ala's pick) could not be positively identified online.
-> Closest candidates to confirm: **Audio Damage**'s distortion line (Kombinat /
-> Grind), **Audec "Shape"** (free waveshaper), a HOFA "decide-where-the-Damage-
-> happens" saturator, or the M4L **"B.S Waveshaper"** on Gumroad. Tell me the
-> developer and I'll pull its exact feature set.
+> **a boutique distortion device = a boutique distortion device** (confirmed by Ala). It is itself a
+> **Max for Live** distortion device (Ableton Live Suite 11+): **algorithmic +
+> waveshaping modes** spanning subtle coloration to "extremely trashy," aimed at
+> industrial techno / experimental breakbeat sound design. Notable that a
+> well-regarded M4L peer pairs an *algorithmic* path with a *waveshaping* path —
+> validates Heat's direction and the dual-engine idea below.
 
 ---
 
@@ -102,5 +103,5 @@ and a possible new graphics-first distortion device. Companion to
 
 *Sources:* A motion-first distortion plugin (product + "Future of Distortion" deep-dive +
 SoundOnSound/MusicTech reviews); A dual-engine distortion plugin; A curve-centric waveshaper plugin;
-a multi-algorithm distortion plugin; a dual-waveshaper plugin; a free waveshaper; plugin stores
-distortion roundups. "a boutique distortion device" unconfirmed — pending Ala's developer name.
+a multi-algorithm distortion plugin; a dual-waveshaper plugin; a free waveshaper; a boutique distortion device (M4L);
+plugin stores distortion roundups.
