@@ -31,6 +31,7 @@ Messages in (inlet 0):
     io_level <env_lin>      live |input| 0..1 (~30ms)
     set_mode <0|1>          0 = curve view, 1 = scope view
     set_dmode <idx>         active color/distortion mode (syncs the swatches)
+    set_zmode <z> <v>       set a zone's mode override (0 AUTO, 1..4 = mode+1)
     draw_sample <bufname>   load the dropped buffer as the shaper table
     scope_tick              advance the scope window (patcher metro)
 
@@ -41,6 +42,7 @@ Messages out (outlet 0):
     wt_start <frame>        current wavetable window start (gen~ reads here)
     wt_gain <factor>        per-window normalize gain (gen~ scales the lookup)
     dmode <idx>             color/distortion mode picked from a hero swatch
+    zmode_lo/mid/hi <v>     a zone strip cycled (per-third mode override)
 """
 
 from __future__ import annotations
@@ -179,7 +181,31 @@ var PALETTES = [
 var PALETTE_NAMES = ["PRISM", "FOLD", "CRUSH", "SHRED"];
 var dmode = 0;
 
+// ZONES: the input axis is split into thirds (LOW/MID/HIGH). Each zone has its
+// own mode override (0 = AUTO = follow the global brush dmode; 1..4 = a specific
+// mode +1). Click a zone strip (bottom of the hero) to cycle that third's mode,
+// so different PARTS of the wave get different colors + distortion (Ala: "select
+// parts of the wave and the color affects that part"). The gen~ mirrors this.
+var NUM_ZONES = 3;
+var zone_mode = [0, 0, 0];
+
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+// Effective mode (0..3) of a zone: AUTO follows the global brush.
+function zone_eff(z) {
+    var v = zone_mode[z];
+    return (v === 0) ? dmode : clamp(v - 1, 0, PALETTES.length - 1);
+}
+function any_zone_painted() {
+    var i;
+    for (i = 0; i < NUM_ZONES; i++) { if (zone_mode[i] !== 0) return 1; }
+    return 0;
+}
+function set_zmode(z, v) {
+    if (z < 0 || z >= NUM_ZONES) return;
+    zone_mode[z] = clamp(Math.floor(v), 0, PALETTES.length);
+    mgraphics.redraw();
+}
 
 // Read WAVE_WIN consecutive samples at the current scroll position. This window
 // IS the live wavetable: `scope` (drawn as the oscilloscope) and `curve_tbl`
@@ -363,6 +389,32 @@ function set_dmode(i) {
     mgraphics.redraw();
 }
 
+// Gradient with HARD zone boundaries: each input third is colored by its zone's
+// effective mode (PRISM spreads the rainbow within the third; other modes use a
+// solid theme color). Falls back to the smooth global palette when nothing is
+// painted, so the default look is unchanged.
+function zone_grad(a) {
+    if (!any_zone_painted()) return palette_grad(a);
+    var g = mgraphics.pattern_create_linear(plot_l(), 0, plot_r(), 0);
+    var z, t0, t1, eff, pal, k, tt, c;
+    for (z = 0; z < NUM_ZONES; z++) {
+        t0 = z / NUM_ZONES; t1 = (z + 1) / NUM_ZONES;
+        eff = zone_eff(z);
+        if (eff === 0) {
+            pal = PALETTES[0];
+            for (k = 0; k < pal.length; k++) {
+                tt = t0 + pal[k][0] * (t1 - t0);
+                g.add_color_stop_rgba(tt, pal[k][1], pal[k][2], pal[k][3], a);
+            }
+        } else {
+            c = palette_mid(eff);
+            g.add_color_stop_rgba(t0 + 0.0005, c[0], c[1], c[2], a);
+            g.add_color_stop_rgba(t1 - 0.0005, c[0], c[1], c[2], a);
+        }
+    }
+    return g;
+}
+
 // Oscilloscope of the CURRENT wavetable: the WAVE_WIN window scanning the file.
 // This is exactly the slice the gen~ uses as the transfer function, so watching
 // it scroll IS watching the distortion shape morph. Rainbow fill + trace.
@@ -379,7 +431,7 @@ function draw_scope() {
     mgraphics.move_to(l, cy); mgraphics.line_to(r, cy); mgraphics.stroke();
 
     // Rainbow fill under the wavetable (low alpha).
-    mgraphics.set_source(palette_grad(0.16));
+    mgraphics.set_source(zone_grad(0.16));
     mgraphics.move_to(l, cy);
     for (c = 0; c < n; c++) {
         xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
@@ -390,7 +442,7 @@ function draw_scope() {
     mgraphics.fill();
 
     // The wavetable trace, rainbow-colored by position.
-    mgraphics.set_source(palette_grad(0.97));
+    mgraphics.set_source(zone_grad(0.97));
     mgraphics.set_line_width(1.7);
     for (c = 0; c < n; c++) {
         xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
@@ -420,7 +472,7 @@ function draw_sample_transfer() {
     mgraphics.stroke();
 
     // The sample transfer curve, rainbow-colored by input position.
-    mgraphics.set_source(palette_grad(0.97));
+    mgraphics.set_source(zone_grad(0.97));
     mgraphics.set_line_width(dragging || hovering ? 2.4 : 1.7);
     for (i = 0; i < n; i++) {
         x = plot_l() + (i / (n - 1)) * plot_w();
@@ -502,6 +554,62 @@ function pick_mode(idx) {
     mgraphics.redraw();
 }
 
+// ── Zone strips: a row of three click-to-cycle bars (one per input third) just
+// above the swatches. Each shows its zone's effective mode color; clicking
+// cycles AUTO -> PRISM -> FOLD -> CRUSH -> SHRED -> AUTO and emits "zmode_*".
+var ZONE_MSGS = ["zmode_lo", "zmode_mid", "zmode_hi"];
+function zone_strip_h() { return 7; }
+function zone_strip_y() { return swatch_y() - zone_strip_h() - 3; }
+function zone_x0(z) { return plot_l() + (z / NUM_ZONES) * plot_w() + 2; }
+function zone_x1(z) { return plot_l() + ((z + 1) / NUM_ZONES) * plot_w() - 2; }
+
+function draw_zone_strips() {
+    var z, x0, x1, sy = zone_strip_y(), sh = zone_strip_h(), eff, c;
+    for (z = 0; z < NUM_ZONES; z++) {
+        x0 = zone_x0(z); x1 = zone_x1(z);
+        eff = zone_eff(z);
+        c = palette_mid(eff);
+        // AUTO (unpainted) reads dim; a painted zone reads bright.
+        mgraphics.set_source_rgba(c[0], c[1], c[2], zone_mode[z] === 0 ? 0.30 : 0.9);
+        mgraphics.rectangle(x0, sy, x1 - x0, sh);
+        mgraphics.fill();
+        if (zone_mode[z] !== 0) {
+            mgraphics.set_source_rgba(1.0, 1.0, 1.0, 0.85);
+            mgraphics.set_line_width(1.0);
+            mgraphics.rectangle(x0 + 0.5, sy + 0.5, x1 - x0 - 1, sh - 1);
+            mgraphics.stroke();
+        }
+    }
+}
+
+// Faint vertical dividers at the zone boundaries on the plot.
+function draw_zone_dividers() {
+    var z, x;
+    mgraphics.set_source_rgba(GRID_CLR[0], GRID_CLR[1], GRID_CLR[2], 0.5);
+    mgraphics.set_line_width(1.0);
+    for (z = 1; z < NUM_ZONES; z++) {
+        x = plot_l() + (z / NUM_ZONES) * plot_w();
+        mgraphics.move_to(x, plot_t()); mgraphics.line_to(x, plot_b()); mgraphics.stroke();
+    }
+}
+
+function zone_hit(px, py) {
+    if (isNaN(px) || isNaN(py)) return -1;
+    var sy = zone_strip_y(), sh = zone_strip_h(), z;
+    if (py < sy - 2 || py > sy + sh + 2) return -1;
+    for (z = 0; z < NUM_ZONES; z++) {
+        if (px >= zone_x0(z) - 1 && px <= zone_x1(z) + 1) return z;
+    }
+    return -1;
+}
+
+function cycle_zone(z) {
+    if (z < 0 || z >= NUM_ZONES) return;
+    zone_mode[z] = (zone_mode[z] + 1) % (PALETTES.length + 1);  // +1 for AUTO
+    outlet(0, ZONE_MSGS[z], zone_mode[z]);
+    mgraphics.redraw();
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
@@ -523,6 +631,7 @@ function paint() {
         mgraphics.move_to(x, plot_t()); mgraphics.line_to(x, plot_b()); mgraphics.stroke();
         mgraphics.move_to(plot_l(), y); mgraphics.line_to(plot_r(), y); mgraphics.stroke();
     }
+    draw_zone_dividers();
 
     if (sample_loaded && mode === 1) {
         draw_scope();
@@ -536,7 +645,7 @@ function paint() {
     mgraphics.stroke();
 
     // Heat fill: area between unity and the shape, tinted by the active palette.
-    mgraphics.set_source(palette_grad(0.16));
+    mgraphics.set_source(zone_grad(0.16));
     mgraphics.move_to(x_of(-1), y_of(-1));
     for (i = 0; i <= 96; i++) {
         v = -1.0 + (i / 96) * 2.0;
@@ -547,7 +656,7 @@ function paint() {
     mgraphics.fill();
 
     // The shape curve, colored by the active palette across the input axis.
-    mgraphics.set_source(palette_grad(0.97));
+    mgraphics.set_source(zone_grad(0.97));
     mgraphics.set_line_width(dragging || hovering ? 2.3 : 1.8);
     for (i = 0; i <= 128; i++) {
         v = -1.0 + (i / 128) * 2.0;
@@ -587,7 +696,8 @@ function paint() {
     mgraphics.move_to(plot_l() + 5, plot_t() + 21);
     mgraphics.show_text("MIX " + Math.round(mix_pct) + "%");
 
-    // Mode swatches on top of everything (always pickable).
+    // Zone strips + mode swatches on top of everything (always pickable).
+    draw_zone_strips();
     draw_swatches();
 }
 
@@ -648,8 +758,11 @@ function end_drag() {
 }
 
 function onpointerdown(pe) {
-    var hit = swatch_hit(pointer_x(pe, -1), pointer_y(pe, -1));
-    if (hit >= 0) { pick_mode(hit); return; }   // swatch wins over a drive drag
+    var px = pointer_x(pe, -1), py = pointer_y(pe, -1);
+    var sh = swatch_hit(px, py);
+    if (sh >= 0) { pick_mode(sh); return; }     // swatch wins over a drive drag
+    var zh = zone_hit(px, py);
+    if (zh >= 0) { cycle_zone(zh); return; }     // zone strip wins too
     start_drag(pointer_y(pe, drag_start_y));
 }
 function onpointermove(pe) {
@@ -665,8 +778,10 @@ function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { clear_sample(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
-    var hit = swatch_hit(x, y);
-    if (hit >= 0) { pick_mode(hit); return; }
+    var sh = swatch_hit(x, y);
+    if (sh >= 0) { pick_mode(sh); return; }
+    var zh = zone_hit(x, y);
+    if (zh >= 0) { cycle_zone(zh); return; }
     start_drag(y);
 }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
