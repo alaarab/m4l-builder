@@ -156,6 +156,10 @@ var MIN_Q = 0.1;
 var MAX_Q = 30.0;
 var ANALYZER_MIN_DB = -72.0;
 var ANALYZER_MAX_DB = 0.0;
+// Spectrum Grab (Pro-Q): a plain press over an analyzer peak louder than this
+// spawns a band right at that frequency and starts dragging it. The floor sits
+// near ANALYZER_MIN_DB so this cleanly distinguishes a real resonance.
+var SPECTRUM_GRAB_DB = -48.0;
 var MAX_BANDS = 8;
 var DEFAULT_FREQS = [30.0, 200.0, 1000.0, 5000.0, 3600.0, 7200.0, 12000.0, 18000.0];
 var DEFAULT_GAINS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
@@ -1848,6 +1852,20 @@ function consume_pending_context_click(x, y) {
     return 1;
 }
 
+// Analyzer magnitude (dB) under a plot x — the display bins are log-spaced over
+// [MIN_FREQ, MAX_FREQ] (analyzer_bin_freq's norm == freq_to_x's norm), so x maps
+// straight to a bin. Used by Spectrum Grab to detect a peak under the cursor.
+function analyzer_db_at_x(x) {
+    var n = analyzer_display.length;
+    if (n < 2) return ANALYZER_MIN_DB;
+    var norm = (x - plot_left()) / Math.max(1.0, plot_w());
+    if (norm < 0.0 || norm > 1.0) return ANALYZER_MIN_DB;
+    var bin = Math.round(norm * (n - 1));
+    if (bin < 0) bin = 0;
+    else if (bin >= n) bin = n - 1;
+    return analyzer_display[bin];
+}
+
 function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     var badge_hit = hud_badge_hit(x, y);
     var hit = hit_test(x, y);
@@ -1983,9 +2001,24 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
         drag_start_q = bands[hit].q;
         outlet(0, "selected_band", hit);
     } else {
-        selected_band = -1;
-        dragging = 0;
-        drag_mode = 0;
+        // Spectrum Grab: a plain press on a prominent analyzer peak (behind the
+        // curve) spawns a band right at that frequency and immediately drags it
+        // — grab the resonance and pull it down to cut. opt/context presses are
+        // handled above, so this is a plain press on empty space; without a peak
+        // it just deselects.
+        if (!context_click && !opt && !cmd && !ctrl && analyzer_enabled &&
+                point_in_plot(x, y) && analyzer_db_at_x(x) > SPECTRUM_GRAB_DB &&
+                find_free_band() >= 0 && create_band_at(x, y)) {
+            dragging = 1;
+            drag_mode = 1;
+            drag_start_freq = bands[selected_band].freq;
+            drag_start_gain = bands[selected_band].gain;
+            drag_start_q = bands[selected_band].q;
+        } else {
+            selected_band = -1;
+            dragging = 0;
+            drag_mode = 0;
+        }
     }
     mgraphics.redraw();
 }
