@@ -15,7 +15,14 @@ from m4l_builder.engines.eq_band_column import (
     EQ_BAND_COLUMN_OUTLETS,
     eq_band_column_js,
 )
+from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+from m4l_builder.engines.design_system import (
+    DESIGN_SYSTEM_VERSION,
+    design_system_js,
+    version_tag,
+)
 from m4l_builder.engines.eq_curve import EQ_CURVE_INLETS, eq_curve_js
+from m4l_builder.engines.transfer_curve import transfer_curve_js
 from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, filter_curve_js
 from m4l_builder.engines.grain_display import (
     GRAIN_DISPLAY_INLETS,
@@ -126,7 +133,20 @@ ALL_JSUI_FACTORIES = [
     spectral_vocoder_display_js,
     slice_overview_js,
     slice_pattern_display_js,
+    transfer_curve_js,
+    ballistics_curve_js,
 ]
+
+
+def test_design_system_snippet_is_es5_clean():
+    """The shared snippet must carry no forbidden ES6 constructs (it lacks the
+    paint/init bootstrap, so test the forbidden half, not the full contract)."""
+    snippet = design_system_js()
+    for bad in ("`", "=>", " let ", " const ", "class "):
+        assert bad not in snippet, bad
+    assert "function ds_node_glow" in snippet
+    assert "function ds_set_cursor" in snippet
+    assert version_tag() == "ds" + str(DESIGN_SYSTEM_VERSION)
 
 MINIMAL_JSUI_CODE = """\
 mgraphics.init();
