@@ -53,14 +53,18 @@ def transfer_curve_js(
     live_color="1.0, 0.96, 0.76, 1.0",
     min_db=-60.0,
     reset_db=0.0,
+    ratio_drag=True,
 ):
     """Return JavaScript source for the transfer-curve display.
 
-    Drag = threshold (ABSOLUTE: the line follows the cursor's level), wheel =
-    ratio, double-click resets the threshold to ``reset_db``.
+    Drag is a 2-axis pad: VERTICAL = threshold (ABSOLUTE: the line follows the
+    cursor's level), HORIZONTAL = ratio (relative, when ``ratio_drag``). Wheel
+    also = ratio; double-click resets the threshold to ``reset_db``. Limiters
+    (fixed ratio) pass ``ratio_drag=False`` so horizontal drag is inert.
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
+        ratio_drag=1 if ratio_drag else 0,
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -105,6 +109,8 @@ var ACCENT_CLR  = [$accent_color];
 var MIN_DB = $min_db;
 var MAX_DB = 0.0;
 var RESET_DB = $reset_db;
+var RATIO_DRAG = $ratio_drag;   // 1 = horizontal drag sets ratio (compressors)
+var RATIO_PER_PX = 0.12;        // ratio units per px of horizontal drag
 var GR_BAR_W = 10;
 var MARGIN_L = 24;
 var MARGIN_R = 8;
@@ -121,6 +127,8 @@ var dragging = 0;
 var hovering = 0;
 var drag_start_y = 0;
 var drag_start_threshold = 0.0;
+var drag_start_x = 0.0;
+var drag_start_ratio = 2.0;
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -355,6 +363,14 @@ function pointer_y(pe, fb) {
     if (pe.clientY !== undefined) return pe.clientY;
     return fb;
 }
+function pointer_x(pe, fb) {
+    if (!pe) return fb;
+    if (pe.x !== undefined) return pe.x;
+    if (pe.localX !== undefined) return pe.localX;
+    if (pe.offsetX !== undefined) return pe.offsetX;
+    if (pe.clientX !== undefined) return pe.clientX;
+    return fb;
+}
 function pointer_buttons(pe, fb) {
     if (!pe) return fb;
     if (pe.buttons !== undefined) return pe.buttons;
@@ -373,10 +389,26 @@ function apply_threshold(y) {
     mgraphics.redraw();
 }
 
-// Cursor: a subtle grab ONLY while actively dragging the threshold/ceiling line
-// (no hover-hand over the whole plot — it doesn't need it).
-function start_drag(y) { dragging = 1; ds_set_cursor(DS_CUR_GRAB); }
-function drag_to(y, fine) { if (dragging) apply_threshold(y); }
+// Horizontal drag = ratio (relative to the press), for compressors. A pure
+// vertical drag (x unchanged) leaves ratio alone; limiters set RATIO_DRAG = 0.
+function apply_ratio(x) {
+    if (!RATIO_DRAG || isNaN(x)) return;
+    var nr = clamp(drag_start_ratio + (x - drag_start_x) * RATIO_PER_PX, 1.0, 20.0);
+    if (Math.abs(nr - ratio) < 0.01) return;
+    ratio = nr;
+    outlet(0, "ratio", Math.round(ratio * 10) / 10);
+    mgraphics.redraw();
+}
+
+// Cursor: a subtle grab ONLY while actively dragging (no hover-hand over the
+// whole plot — it doesn't need it). The press anchors the relative ratio drag.
+function start_drag(y, x) {
+    dragging = 1;
+    drag_start_x = isNaN(x) ? 0.0 : x;
+    drag_start_ratio = ratio;
+    ds_set_cursor(DS_CUR_GRAB);
+}
+function drag_to(y, x, fine) { if (dragging) { apply_threshold(y); apply_ratio(x); } }
 function end_drag() {
     if (!dragging) return;
     dragging = 0;
@@ -390,9 +422,11 @@ function reset_threshold() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b())); }
+function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b()), pointer_x(pe, 0.0)); }
 function onpointermove(pe) {
-    if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) { drag_to(pointer_y(pe, plot_b())); return; }
+    if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
+        drag_to(pointer_y(pe, plot_b()), pointer_x(pe, drag_start_x)); return;
+    }
     if (dragging) { end_drag(); return; }
     if (!hovering) { hovering = 1; mgraphics.redraw(); }
     ds_set_cursor(DS_CUR_HAND);
@@ -401,9 +435,9 @@ function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { hovering = 0; end_drag(); ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_threshold(); }
 
-function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
+function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y, x); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
-    if (but) drag_to(y, shift);
+    if (but) drag_to(y, x, shift);
     else end_drag();
 }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } ds_set_cursor(DS_CUR_HAND); }
