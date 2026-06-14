@@ -5,11 +5,12 @@ Research mined from the leading distortion/saturation plugins, split into **engi
 and a possible new Rift-class distortion device. Companion to
 `ui_goodies_and_graphics_pipeline.md`.
 
-> NOTE: "AS Damage" (Ala's pick) could not be positively identified online.
-> Closest candidates to confirm: **Audio Damage**'s distortion line (Kombinat /
-> Grind), **Audec "Shape"** (free waveshaper), a HOFA "decide-where-the-Damage-
-> happens" saturator, or the M4L **"B.S Waveshaper"** on Gumroad. Tell me the
-> developer and I'll pull its exact feature set.
+> **AS Damage = SABROI "AS Damage 1.0"** (confirmed by Ala). It is itself a
+> **Max for Live** distortion device (Ableton Live Suite 11+): **algorithmic +
+> waveshaping modes** spanning subtle coloration to "extremely trashy," aimed at
+> industrial techno / experimental breakbeat sound design. Notable that a
+> well-regarded M4L peer pairs an *algorithmic* path with a *waveshaping* path —
+> validates Heat's direction and the dual-engine idea below. (sabroi.com/damage)
 
 ---
 
@@ -102,5 +103,5 @@ and a possible new Rift-class distortion device. Companion to
 
 *Sources:* Minimal Audio Rift (product + "Future of Distortion" deep-dive +
 SoundOnSound/MusicTech reviews); Arturia Dist COLDFIRE; Sound Particles inShaper;
-iZotope Trash 2; AudioThing Wave Box; Audec Shape; Plugin Boutique / Gumroad
-distortion roundups. "AS Damage" unconfirmed — pending Ala's developer name.
+iZotope Trash 2; AudioThing Wave Box; Audec Shape; SABROI "AS Damage" (M4L);
+Plugin Boutique / Gumroad distortion roundups.

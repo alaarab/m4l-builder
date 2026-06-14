@@ -47,6 +47,9 @@ def transfer_curve_js(
     grid_color="0.20, 0.23, 0.27, 0.55",
     text_color="0.55, 0.58, 0.63, 1.0",
     accent_color="0.95, 0.62, 0.28, 1.0",
+    # The Pro-C "lit" segment that brightens the curve up to the live input
+    # level. A hot near-white reads as "energy" against any theme curve color.
+    live_color="1.0, 0.96, 0.76, 1.0",
     min_db=-60.0,
     reset_db=0.0,
 ):
@@ -68,6 +71,7 @@ def transfer_curve_js(
         grid_color=grid_color,
         text_color=text_color,
         accent_color=accent_color,
+        live_color=live_color,
         min_db=min_db,
         reset_db=reset_db,
     )
@@ -88,6 +92,7 @@ var BG_CLR      = [$bg_color];
 var PANEL_CLR   = [$panel_color];
 var BORDER_CLR  = [$plot_border_color];
 var CURVE_CLR   = [$curve_color];
+var LIVE_CLR    = [$live_color];
 var UNITY_CLR   = [$unity_color];
 var GRFILL_CLR  = [$gr_fill_color];
 var DOT_CLR     = [$dot_color];
@@ -243,6 +248,25 @@ function paint() {
         else mgraphics.line_to(x, y);
     }
     mgraphics.stroke();
+
+    // Live "lit" segment (Pro-C style): the transfer curve brightens from the
+    // floor up to the CURRENT input level, so you see exactly how far the signal
+    // is reaching along the curve right now. Driven by the same env_db the IO dot
+    // rides (io_level message) — display-only, no extra DSP.
+    if (env_db > MIN_DB + 0.5) {
+        var lit_to = clamp(env_db, MIN_DB, MAX_DB);
+        var lit_n = Math.max(2, Math.round(96 * (lit_to - MIN_DB) / (MAX_DB - MIN_DB)));
+        mgraphics.set_source_rgba(LIVE_CLR[0], LIVE_CLR[1], LIVE_CLR[2], LIVE_CLR[3]);
+        mgraphics.set_line_width(2.6);
+        for (i = 0; i <= lit_n; i++) {
+            db = MIN_DB + (i / lit_n) * (lit_to - MIN_DB);
+            x = in_to_x(db);
+            y = out_to_y(transfer_out_db(db));
+            if (i === 0) mgraphics.move_to(x, y);
+            else mgraphics.line_to(x, y);
+        }
+        mgraphics.stroke();
+    }
 
     // Threshold marker (vertical accent tick on the curve).
     var tx = in_to_x(threshold);
