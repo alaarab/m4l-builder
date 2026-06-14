@@ -1179,7 +1179,7 @@ function tooltip_band_idx() {
 }
 
 function tooltip_value_text(band) {
-    var fn = format_freq(band.freq) + " · " + note_name(band.freq);
+    var fn = format_freq(band.freq) + " · " + note_label(band.freq);
     if (band.uses_gain) {
         return fn
             + "   "
@@ -1360,6 +1360,17 @@ function note_name(freq) {
     return NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
 }
 
+// Note + cents detune (e.g. "A3 +16c"); cents hidden when essentially in tune.
+function note_label(freq) {
+    if (freq <= 0.0) return "";
+    var midi = 69 + 12 * (Math.log(freq / 440.0) / Math.LN2);
+    var ni = Math.round(midi);
+    var cents = Math.round((midi - ni) * 100);
+    var nm = NOTE_NAMES[((ni % 12) + 12) % 12] + (Math.floor(ni / 12) - 1);
+    if (cents >= -1 && cents <= 1) return nm;
+    return nm + " " + (cents >= 0 ? "+" : "") + cents + "c";
+}
+
 function format_gain(gain) {
     var prefix = gain > 0 ? "+" : "";
     return prefix + (Math.round(gain * 10.0) / 10.0).toFixed(1) + " dB";
@@ -1399,7 +1410,7 @@ function draw_hud() {
 
     title = "Band " + (selected_band + 1) + "  " + TYPE_NAMES[band_cache[selected_band].type];
     subtitle = format_freq(band_cache[selected_band].freq)
-        + " · " + note_name(band_cache[selected_band].freq)
+        + " · " + note_label(band_cache[selected_band].freq)
         + "   "
         + (band_cache[selected_band].uses_gain ? format_gain(band_cache[selected_band].gain) : SLOPE_NAMES[band_cache[selected_band].slope])
         + "   Q " + format_q(band_cache[selected_band].q)
@@ -1636,7 +1647,9 @@ function update_analyzer_from_fft(mags) {
     if (m < 4) return;
     ensure_analyzer_arrays();
     var hz_per_bin = (sample_rate * 0.5) / m;
-    var half = 0.5 / (ANALYZER_BINS - 1);
+    // Wider overlapping cells -> dense harmonics average into a clean envelope
+    // (matches the standalone analyzer; the old 0.5 half-cell was over-sharp).
+    var half = 1.4 / (ANALYZER_BINS - 1);
     var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
@@ -1684,7 +1697,7 @@ function update_analyzer_from_fft(mags) {
         }
         // Peak-dominant for sharp tonal spikes (match eq_curve + the
         // standalone analyzer); small mean term tames noise jitter.
-        energy = cnt > 0 ? (0.88 * peak + 0.12 * (sum / cnt)) : 0.0;
+        energy = cnt > 0 ? (0.5 * peak + 0.5 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
@@ -2179,7 +2192,7 @@ function draw_hover_crosshair() {
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(8.0);
     var hover_freq = x_to_freq(x);
-    var ftxt = format_freq(hover_freq) + " " + note_name(hover_freq);
+    var ftxt = format_freq(hover_freq) + " " + note_label(hover_freq);
     var fw = ftxt.length * 4.6 + 4;
     var fx = clamp(x - fw * 0.5, 0.0, mgraphics.size[0] - fw);
     mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);

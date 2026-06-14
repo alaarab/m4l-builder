@@ -37,6 +37,16 @@ class TestEqCurveNoteNames:
         assert result.state["c4"] == "C4"
         assert result.state["low"] == ""
 
+    def test_note_label_adds_cents_when_detuned(self):
+        # it132: note_label appends cents when off-pitch, hides them when in tune.
+        result = run_jsui(eq_curve_js(), """
+            dump({inTune: note_label(220.0), sharp: note_label(222.0),
+                  low: note_label(0.0)});
+        """)
+        assert result.state["inTune"] == "A3"        # exact pitch -> just the note
+        assert result.state["sharp"] == "A3 +16c"    # 222 Hz is ~16 cents sharp
+        assert result.state["low"] == ""
+
 
 class TestEqCurveGestures:
     def test_set_band_does_not_echo(self):
