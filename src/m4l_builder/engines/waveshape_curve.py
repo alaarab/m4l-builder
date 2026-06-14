@@ -38,6 +38,7 @@ Messages out (outlet 0):
     mode <0|1>              view auto-switch (syncs the rail toggle)
     sample <0|1>            sample loaded / cleared (arms the DSP shaper)
     wt_start <frame>        current wavetable window start (gen~ reads here)
+    wt_gain <factor>        per-window normalize gain (gen~ scales the lookup)
 """
 
 from __future__ import annotations
@@ -150,6 +151,13 @@ var scan_task = null;
 var scan_running = 0;
 var SCAN_MS = 33;
 
+// Per-window normalize: scale each window so its peak fills the range, so even
+// a quiet slice is a usable full-range wavetable (and visibly distorts). Capped
+// so near-silence isn't blown up into noise; the gen~ applies the same wt_gain.
+var WT_MAX_GAIN = 8.0;
+var WT_MIN_PEAK = 0.02;
+var wt_gain_val = 1.0;
+
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 // Read WAVE_WIN consecutive samples at the current scroll position. This window
@@ -169,9 +177,19 @@ function read_window() {
     if (start + count > f) start = f - count;
     if (start < 0) start = 0;
     var chunk = b.peek(1, start, count);
-    scope = (chunk.length === undefined) ? [chunk] : chunk;
-    curve_tbl = scope;
-    curve_n = scope.length;
+    var raw = (chunk.length === undefined) ? [chunk] : chunk;
+
+    // Peak-normalize the window (capped) so quiet slices still fill the table.
+    var i, a, pk = 0.0;
+    for (i = 0; i < raw.length; i++) { a = raw[i] < 0 ? -raw[i] : raw[i]; if (a > pk) pk = a; }
+    wt_gain_val = (pk > WT_MIN_PEAK) ? Math.min(1.0 / pk, WT_MAX_GAIN) : 1.0;
+    var norm = [];
+    for (i = 0; i < raw.length; i++) norm.push(raw[i] * wt_gain_val);
+
+    scope = norm;
+    curve_tbl = norm;
+    curve_n = norm.length;
+    outlet(0, "wt_gain", wt_gain_val);   // gen applies the same normalize gain
     mgraphics.redraw();
 }
 
@@ -298,9 +316,25 @@ function shape(x) {
     return clamp(shape_raw(x + b) - shape_raw(b), -1.0, 1.0);
 }
 
+// Horizontal RAINBOW gradient across the plot: the wavetable / transfer curve is
+// colored by input position, so different colors land on different parts of the
+// curve (Ala: "the colors affect different parts of the curve" / "rainbow with
+// multiple colors"). One gradient source -> one stroke/fill (cheap).
+function rainbow_grad(a) {
+    var g = mgraphics.pattern_create_linear(plot_l(), 0, plot_r(), 0);
+    g.add_color_stop_rgba(0.00, 0.96, 0.28, 0.32, a);   // red
+    g.add_color_stop_rgba(0.17, 0.97, 0.62, 0.18, a);   // orange
+    g.add_color_stop_rgba(0.34, 0.95, 0.88, 0.25, a);   // yellow
+    g.add_color_stop_rgba(0.50, 0.42, 0.88, 0.42, a);   // green
+    g.add_color_stop_rgba(0.67, 0.28, 0.78, 0.95, a);   // cyan
+    g.add_color_stop_rgba(0.84, 0.55, 0.48, 0.97, a);   // indigo
+    g.add_color_stop_rgba(1.00, 0.92, 0.42, 0.92, a);   // violet
+    return g;
+}
+
 // Oscilloscope of the CURRENT wavetable: the WAVE_WIN window scanning the file.
 // This is exactly the slice the gen~ uses as the transfer function, so watching
-// it scroll IS watching the distortion shape morph. A soft fill + accent trace.
+// it scroll IS watching the distortion shape morph. Rainbow fill + trace.
 function draw_scope() {
     var n = scope.length;
     if (n < 2) return;
@@ -313,8 +347,8 @@ function draw_scope() {
     mgraphics.set_line_width(1.0);
     mgraphics.move_to(l, cy); mgraphics.line_to(r, cy); mgraphics.stroke();
 
-    // Soft fill under the wavetable.
-    mgraphics.set_source_rgba(HEAT_CLR);
+    // Rainbow fill under the wavetable (low alpha).
+    mgraphics.set_source(rainbow_grad(0.16));
     mgraphics.move_to(l, cy);
     for (c = 0; c < n; c++) {
         xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
@@ -324,9 +358,9 @@ function draw_scope() {
     mgraphics.close_path();
     mgraphics.fill();
 
-    // The wavetable trace (accent).
-    mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.95);
-    mgraphics.set_line_width(1.6);
+    // The wavetable trace, rainbow-colored by position.
+    mgraphics.set_source(rainbow_grad(0.97));
+    mgraphics.set_line_width(1.7);
     for (c = 0; c < n; c++) {
         xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
         if (c === 0) mgraphics.move_to(xx, yy); else mgraphics.line_to(xx, yy);
@@ -354,9 +388,9 @@ function draw_sample_transfer() {
     mgraphics.line_to(x_of(1), y_of(1));
     mgraphics.stroke();
 
-    // The sample transfer curve.
-    mgraphics.set_source_rgba(CURVE_CLR);
-    mgraphics.set_line_width(dragging || hovering ? 2.3 : 1.6);
+    // The sample transfer curve, rainbow-colored by input position.
+    mgraphics.set_source(rainbow_grad(0.97));
+    mgraphics.set_line_width(dragging || hovering ? 2.4 : 1.7);
     for (i = 0; i < n; i++) {
         x = plot_l() + (i / (n - 1)) * plot_w();
         y = y_of(clamp(curve_tbl[i], -1.0, 1.0));
