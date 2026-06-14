@@ -366,12 +366,14 @@ function apply_threshold(y) {
     mgraphics.redraw();
 }
 
+// Cursor: a subtle grab ONLY while actively dragging the threshold/ceiling line
+// (no hover-hand over the whole plot — it doesn't need it).
 function start_drag(y) { dragging = 1; ds_set_cursor(DS_CUR_GRAB); }
 function drag_to(y, fine) { if (dragging) apply_threshold(y); }
 function end_drag() {
     if (!dragging) return;
     dragging = 0;
-    ds_set_cursor(hovering ? DS_CUR_HAND : DS_CUR_ARROW);
+    ds_set_cursor(DS_CUR_ARROW);
     mgraphics.redraw();
 }
 

@@ -773,7 +773,7 @@ function drag_to(x, y, fine) {
 function end_drag() {
     if (!dragging) return;
     dragging = 0;
-    ds_set_cursor(hovering ? DS_CUR_HAND : DS_CUR_ARROW);
+    ds_set_cursor(DS_CUR_ARROW);
     mgraphics.redraw();
 }
 
@@ -792,7 +792,7 @@ function onpointermove(pe) {
     }
     if (dragging) { end_drag(); return; }
     if (!hovering) { hovering = 1; mgraphics.redraw(); }
-    ds_set_cursor(DS_CUR_HAND);
+    // No hover-hand over the drive/bias pad — only a grab while actively dragging.
 }
 function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { hovering = 0; end_drag(); ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
