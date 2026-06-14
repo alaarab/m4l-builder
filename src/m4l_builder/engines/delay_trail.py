@@ -46,8 +46,14 @@ def delay_trail_js(
     text_color="0.55, 0.58, 0.63, 1.0",
     accent_color="0.30, 0.75, 0.95, 1.0",
     max_ms=2000.0,
+    reset_time_ms=350.0,
+    reset_feedback_pct=35.0,
 ):
-    """Return JavaScript source for the delay trail display."""
+    """Return JavaScript source for the delay trail display.
+
+    Drag is an absolute X/Y pad (x=time, y=feedback); double-click resets both
+    to (reset_time_ms, reset_feedback_pct).
+    """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
         bg_color=bg_color,
@@ -59,6 +65,8 @@ def delay_trail_js(
         text_color=text_color,
         accent_color=accent_color,
         max_ms=max_ms,
+        reset_time_ms=reset_time_ms,
+        reset_feedback_pct=reset_feedback_pct,
     )
 
 
@@ -82,6 +90,8 @@ var GRID_CLR   = [$grid_color];
 var TEXT_CLR   = [$text_color];
 var ACCENT_CLR = [$accent_color];
 var MAX_MS     = $max_ms;
+var RESET_TIME = $reset_time_ms;
+var RESET_FB   = $reset_feedback_pct;
 
 var time_ms = 350.0;
 var feedback_pct = 45.0;
@@ -280,6 +290,15 @@ function end_drag() {
     mgraphics.redraw();
 }
 
+// Double-click resets the X/Y pad to its defaults (both time and feedback).
+function reset_pad() {
+    time_ms = clamp(RESET_TIME, 1.0, MAX_MS);
+    feedback_pct = clamp(RESET_FB, 0.0, 110.0);
+    outlet(0, "time", Math.round(time_ms));
+    outlet(0, "feedback", Math.round(feedback_pct));
+    mgraphics.redraw();
+}
+
 function onpointerdown(pe) { start_drag(pointer_x(pe, plot_l()), pointer_y(pe, plot_b())); }
 function onpointermove(pe) {
     var b = pointer_buttons(pe, 0);
@@ -293,6 +312,7 @@ function onpointermove(pe) {
 }
 function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_pad(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x, y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
