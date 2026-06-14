@@ -1954,7 +1954,18 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
 
     if (opt && (dynamic_hit >= 0 || hit >= 0)) {
         hit = dynamic_hit >= 0 ? dynamic_hit : hit;
-        delete_band_at(hit);
+        // Parity with the Parametric EQ: opt/alt-click TOGGLES enable (not
+        // delete). Delete lives in the right-click context menu, so a stray
+        // opt-click can't nuke a band.
+        band = bands[hit];
+        band.present = 1;
+        band.enabled = band.enabled ? 0 : 1;
+        if (!band.enabled) { band.solo = 0; band.dynamic_current = 0.0; }
+        rebuild_band_cache();
+        selected_band = hit;
+        outlet(0, "context_enable", hit, band.enabled);
+        outlet(0, "selected_band", hit);
+        mgraphics.redraw();
         return;
     }
 
@@ -1983,13 +1994,31 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
 function handle_double_click(x, y) {
     var hit = hit_test(x, y);
     var dynamic_hit = dynamic_hit_test(x, y);
+    var bidx, bd;
     if (context_menu_open) {
         close_context_menu();
         mgraphics.redraw();
         return;
     }
     if (dynamic_hit >= 0 || hit >= 0) {
-        delete_band_at(dynamic_hit >= 0 ? dynamic_hit : hit);
+        // Parity with the Parametric EQ: double-click on a node RESETS it (gain
+        // bands -> 0 dB; cut/notch -> neutral Q) instead of deleting. Delete is
+        // the right-click context menu, so an accidental double-click can't lose
+        // a band.
+        bidx = dynamic_hit >= 0 ? dynamic_hit : hit;
+        bd = bands[bidx];
+        selected_band = bidx;
+        if (band_cache[bidx].uses_gain) {
+            bd.gain = 0.0;
+            rebuild_band_cache();
+            outlet(0, "band_drag_gain", bidx, bd.freq, 0.0);
+        } else {
+            bd.q = 1.0;
+            rebuild_band_cache();
+            outlet(0, "band_drag_q", bidx, bd.freq, 1.0);
+        }
+        outlet(0, "selected_band", bidx);
+        mgraphics.redraw();
         return;
     }
     if (create_band_at(x, y)) return;

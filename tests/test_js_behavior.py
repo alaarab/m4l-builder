@@ -367,6 +367,53 @@ class TestEqCurveDynBufferSplit:
         assert result.state["cur"] > -0.5   # silent pre buffer -> no compression
 
 
+class TestLinearPhaseGestureParity:
+    # it106: bring the LP display's node gestures to Parametric-EQ parity —
+    # double-click RESETS (gain bands -> 0, cut/notch -> neutral Q) and opt-click
+    # TOGGLES enable, instead of both deleting. Delete stays in the right-click menu.
+    _SETUP = ("set_num_bands(8);\n"
+              "set_band(0, 1000.0, 6.0, 1.0, 1, 1, 0, 0, 0, 0.0, 0.0);\n"
+              "rebuild_band_cache();\n"
+              "var nx = freq_to_x(1000.0), ny = gain_to_y(6.0);\n")
+
+    def test_double_click_resets_gain_not_delete(self):
+        result = run_jsui(linear_phase_eq_display_js(), self._SETUP + """
+            handle_double_click(nx, ny);
+            dump({present: bands[0].present, gain: bands[0].gain});
+        """)
+        assert result.state["present"] == 1, "double-click must NOT delete"
+        assert result.state["gain"] == 0.0, "double-click resets gain"
+        assert len(_named(result.outlets, "band_drag_gain")) >= 1
+        assert _named(result.outlets, "delete_band") == []
+
+    def test_opt_click_toggles_enable_not_delete(self):
+        result = run_jsui(linear_phase_eq_display_js(), self._SETUP + """
+            handle_press(nx, ny, 1, 0, 0, 1, 0, {altKey: 1, buttons: 1});
+            var first = bands[0].enabled;
+            handle_press(nx, ny, 1, 0, 0, 1, 0, {altKey: 1, buttons: 1});
+            dump({present: bands[0].present, first: first, second: bands[0].enabled});
+        """)
+        assert result.state["present"] == 1, "opt-click must NOT delete"
+        assert result.state["first"] == 0, "first opt-click disables"
+        assert result.state["second"] == 1, "second opt-click re-enables"
+        # emit is [outlet, "context_enable", band_idx, enabled] -> check enabled.
+        enables = _named(result.outlets, "context_enable")
+        assert [e[3] for e in enables] == [0, 1]
+        assert _named(result.outlets, "delete_band") == []
+
+    def test_double_click_empty_still_creates_band(self):
+        result = run_jsui(linear_phase_eq_display_js(), """
+            set_num_bands(8);
+            for (var i = 0; i < 8; i++) { bands[i].present = 0; bands[i].enabled = 0; }
+            rebuild_band_cache();
+            handle_double_click(freq_to_x(2000.0), gain_to_y(0.0));
+            var n = 0;
+            for (i = 0; i < num_bands; i++) if (bands[i].present) n += 1;
+            dump({present_count: n});
+        """)
+        assert result.state["present_count"] >= 1
+
+
 class TestLinearPhaseAnalyzerTilt:
     # Same tilt/freeze contract as eq_curve, ported to the LP display engine.
     def test_slope_and_freeze_never_echo(self):
