@@ -16,15 +16,28 @@ The shape math mirrors the gen~ core exactly — keep both in sync:
 All 7 are near-unity at drive 0 so the dry/wet null holds. Bias shifts the
 operating point into the curve (even harmonics), recentered so bias 0 == raw.
 
+Drop a sample on the hero and ITS waveform becomes the transfer function:
+the dropped buffer is read into a 256-point table spanning the whole file,
+which is plotted as the input->output curve (the live IO dot rides it) and —
+in the gen~ core — is what actually waveshapes the incoming signal (each input
+amplitude indexes the table). The SCOPE view still shows the raw scrolling
+waveform. Clearing (double-click) returns to the built-in character curves.
+
 Messages in (inlet 0):
     set_drive <db>          0..36 (drive amount in dB)
     set_character <idx>     0..6
     set_bias <amt>          -1..1 (asymmetry / even harmonics)
     set_mix <pct>           readout only
     io_level <env_lin>      live |input| 0..1 (~30ms)
+    set_mode <0|1>          0 = curve view, 1 = scope view
+    draw_sample <bufname>   load the dropped buffer as the shaper table
+    scope_tick              advance the scope window (patcher metro)
 
 Messages out (outlet 0):
     drive <db>              while dragging
+    mode <0|1>              view auto-switch (syncs the rail toggle)
+    sample <0|1>            sample loaded / cleared (arms the DSP shaper)
+    wt_start <frame>        current wavetable window start (gen~ reads here)
 """
 
 from __future__ import annotations
@@ -108,48 +121,129 @@ var hovering = 0;
 var drag_start_y = 0;
 var drag_start_drive = 0.0;
 
-// Dropped-sample waveform: a min/max envelope read from a buffer~. When a
-// sample is loaded the hero shows the sample's waveform PLUS its saturated
-// version (shape() applied), so the saturation is visible on real audio.
-var SAMPLE_COLS = 320;
+// Dropped sample as a scrolling OSCILLOSCOPE: a window of the sample's actual
+// samples (a line trace, not a min/max blob) plus the SATURATED version
+// (shape() applied through the mix) so you watch the distortion on real audio.
+// A metro in the patcher advances the window via scope_tick. `mode` (0 =
+// transfer curve, 1 = sample scope) is driven by the SCOPE/CURVE rail toggle;
+// a fresh drop auto-switches to scope (emitting "mode 1" to sync the toggle).
+var WAVE_WIN = 512;        // samples shown at once (a couple of cycles)
 var sample_loaded = 0;
 var sample_name = "";
-var smin = [];
-var smax = [];
+var scope_frames = 0;
+var scope_pos = 0;
+var scope = [];            // current window of samples
+var mode = 0;              // 0 = transfer curve, 1 = sample scope
+
+// The CURRENT wavetable = the WAVE_WIN window at scope_pos (== `scope`): drawn
+// as the transfer curve (input -1..1 -> window sample -> output) and applied,
+// for the same window, by the gen~ core. It scans the file as scope_pos scrolls
+// so the table morphs; the gen~ follows via the wt_start it is sent.
+var curve_tbl = [];
+var curve_n = 0;
+
+// Self-clocking scan: a repeating Task advances the window from INSIDE the v8ui
+// (proven in eq_curve — Task.repeat() runs in Live where a patcher metro auto-
+// start and snapshot~ clock both failed to tick this display). schedule() no-ops
+// in Live, so use interval+repeat. Absent in the Node harness (guarded).
+var scan_task = null;
+var scan_running = 0;
+var SCAN_MS = 33;
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-// Read a buffer~ into a SAMPLE_COLS-wide min/max envelope (Max-only: new
-// Buffer/peek don't exist in the Node harness, so this no-ops there).
+// Read WAVE_WIN consecutive samples at the current scroll position. This window
+// IS the live wavetable: `scope` (drawn as the oscilloscope) and `curve_tbl`
+// (drawn as the transfer curve + interpolated by sample_transfer) are the same
+// data, and the gen~ core reads the same window via wt_start. (Max-only: new
+// Buffer/peek are absent in the Node harness, so this no-ops there, leaving any
+// test-injected `scope`/`curve_tbl` intact.)
+function read_window() {
+    if (typeof Buffer === "undefined") return;
+    var b = new Buffer("" + sample_name);
+    var f = b.framecount();
+    if (!f || f < 2) return;
+    scope_frames = f;
+    var count = (f < WAVE_WIN) ? f : WAVE_WIN;
+    var start = scope_pos;
+    if (start + count > f) start = f - count;
+    if (start < 0) start = 0;
+    var chunk = b.peek(1, start, count);
+    scope = (chunk.length === undefined) ? [chunk] : chunk;
+    curve_tbl = scope;
+    curve_n = scope.length;
+    mgraphics.redraw();
+}
+
+// Interpolated transfer lookup: input x in -1..1 -> current-window value
+// (mirrors the gen~ peek). Identity when no table so the IO dot still rides.
+function sample_transfer(x) {
+    var n = curve_n;
+    if (n < 2) return x;
+    var idx = (clamp(x, -1.0, 1.0) + 1.0) * 0.5 * (n - 1);
+    var i0 = Math.floor(idx), fr = idx - i0;
+    if (i0 >= n - 1) return curve_tbl[n - 1];
+    return curve_tbl[i0] * (1.0 - fr) + curve_tbl[i0 + 1] * fr;
+}
+
+// A dropped sample becomes the live wavetable: read the first window, show it
+// as the scrolling oscilloscope (the current wave table), arm the DSP shaper
+// ("sample 1") and tell the gen~ which window to read ("wt_start 0"). Empty/
+// early reads no-op (a later trigger redraws + re-emits).
 function draw_sample(name) {
     if (typeof Buffer === "undefined") return;
     var b = new Buffer("" + name);
     var frames = b.framecount();
-    // Not loaded yet (an early/empty read) — leave the prior view untouched
-    // rather than wiping it; a later trigger redraws once the file is in.
     if (!frames || frames < 2) { return; }
-    var per = Math.floor(frames / SAMPLE_COLS);
-    if (per < 1) per = 1;
-    smin = []; smax = [];
-    var c, k, s, mn, mx, chunk, n;
-    for (c = 0; c < SAMPLE_COLS; c++) {
-        chunk = b.peek(1, c * per, per < 8192 ? per : 8192);
-        mn = 1.0; mx = -1.0;
-        n = chunk.length;
-        if (n === undefined) { s = chunk; mn = s; mx = s; }
-        else { for (k = 0; k < n; k++) { s = chunk[k]; if (s < mn) mn = s; if (s > mx) mx = s; } }
-        if (mn > mx) { mn = 0.0; mx = 0.0; }
-        smin[c] = clamp(mn, -1.0, 1.0);
-        smax[c] = clamp(mx, -1.0, 1.0);
-    }
     sample_name = "" + name;
+    scope_frames = frames;
+    scope_pos = 0;
     sample_loaded = 1;
-    mgraphics.redraw();
+    mode = 1;                 // show the oscilloscope (the current wave table)
+    outlet(0, "sample", 1);   // arm the gen~ sample shaper
+    outlet(0, "mode", 1);     // sync the rail toggle to SCOPE
+    outlet(0, "wt_start", 0); // gen reads the same window
+    read_window();
+    start_scan();             // begin scanning the window (the table morphs)
 }
 
+// Advance the wavetable window WHENEVER a sample is loaded — independent of
+// which view is showing — so the table scans/morphs and the gen~ follows. Loops
+// at the end; emits the new window start to the gen. Called by the repeating
+// scan Task (and accepted as a message for completeness).
+function scope_tick() {
+    if (!sample_loaded) return;
+    scope_pos += (WAVE_WIN >> 2);
+    if (scope_pos + WAVE_WIN >= scope_frames) scope_pos = 0;
+    outlet(0, "wt_start", scope_pos);
+    read_window();
+}
+
+// Start/stop the self-clocking scan (no-ops in the Node harness: Task absent).
+function start_scan() {
+    if (typeof Task === "undefined") return;
+    if (!scan_task) scan_task = new Task(scope_tick, this);
+    if (!scan_running) {
+        scan_running = 1;
+        scan_task.interval = SCAN_MS;
+        scan_task.repeat();
+    }
+}
+function stop_scan() {
+    if (scan_task && scan_running) { scan_task.cancel(); scan_running = 0; }
+}
+
+function set_mode(m) { mode = (m > 0.5) ? 1 : 0; mgraphics.redraw(); }
+
 function clear_sample() {
+    stop_scan();
     sample_loaded = 0;
-    smin = []; smax = [];
+    mode = 0;
+    scope = [];
+    curve_tbl = [];
+    curve_n = 0;
+    outlet(0, "sample", 0);   // disarm the gen~ sample shaper
+    outlet(0, "mode", 0);
     mgraphics.redraw();
 }
 
@@ -204,42 +298,37 @@ function shape(x) {
     return clamp(shape_raw(x + b) - shape_raw(b), -1.0, 1.0);
 }
 
-// Draw the dropped sample: its raw waveform envelope (dim) + the SATURATED
-// envelope (accent) = shape() applied through the dry/wet mix. Drag drive /
-// switch character and the saturated trace reshapes over the real audio.
-function draw_sample_waveform() {
-    var n = smin.length;
+// Oscilloscope of the CURRENT wavetable: the WAVE_WIN window scanning the file.
+// This is exactly the slice the gen~ uses as the transfer function, so watching
+// it scroll IS watching the distortion shape morph. A soft fill + accent trace.
+function draw_scope() {
+    var n = scope.length;
     if (n < 2) return;
     var l = plot_l(), r = plot_r(), t = plot_t(), b = plot_b();
     var w = r - l, cy = (t + b) * 0.5, amp = (b - t) * 0.5 - 1.0;
-    var mixf = clamp(mix_pct, 0, 100) * 0.01;
-    var c, xx, sv, yy;
+    var c, xx, yy;
 
     // Center line.
     mgraphics.set_source_rgba(GRID_CLR);
     mgraphics.set_line_width(1.0);
     mgraphics.move_to(l, cy); mgraphics.line_to(r, cy); mgraphics.stroke();
 
-    // Raw sample envelope (dim filled band: max on top, min on bottom).
-    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.28);
-    mgraphics.move_to(l, cy - smax[0] * amp);
-    for (c = 0; c < n; c++) { xx = l + (c / (n - 1)) * w; mgraphics.line_to(xx, cy - smax[c] * amp); }
-    for (c = n - 1; c >= 0; c--) { xx = l + (c / (n - 1)) * w; mgraphics.line_to(xx, cy - smin[c] * amp); }
+    // Soft fill under the wavetable.
+    mgraphics.set_source_rgba(HEAT_CLR);
+    mgraphics.move_to(l, cy);
+    for (c = 0; c < n; c++) {
+        xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
+        mgraphics.line_to(xx, yy);
+    }
+    mgraphics.line_to(r, cy);
     mgraphics.close_path();
     mgraphics.fill();
 
-    // Saturated envelope (accent): top edge (shaped max) then bottom (shaped min).
+    // The wavetable trace (accent).
     mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.95);
-    mgraphics.set_line_width(1.3);
+    mgraphics.set_line_width(1.6);
     for (c = 0; c < n; c++) {
-        sv = smax[c]; sv = sv + (shape(sv) - sv) * mixf;
-        xx = l + (c / (n - 1)) * w; yy = cy - clamp(sv, -1.0, 1.0) * amp;
-        if (c === 0) mgraphics.move_to(xx, yy); else mgraphics.line_to(xx, yy);
-    }
-    mgraphics.stroke();
-    for (c = 0; c < n; c++) {
-        sv = smin[c]; sv = sv + (shape(sv) - sv) * mixf;
-        xx = l + (c / (n - 1)) * w; yy = cy - clamp(sv, -1.0, 1.0) * amp;
+        xx = l + (c / (n - 1)) * w; yy = cy - clamp(scope[c], -1.0, 1.0) * amp;
         if (c === 0) mgraphics.move_to(xx, yy); else mgraphics.line_to(xx, yy);
     }
     mgraphics.stroke();
@@ -247,8 +336,52 @@ function draw_sample_waveform() {
     // Label.
     mgraphics.set_source_rgba(ACCENT_CLR);
     mgraphics.set_font_size(7.5);
-    mgraphics.move_to(l + 4, t + 10);
-    mgraphics.show_text("SAMPLE  -  dbl-click to clear");
+    mgraphics.move_to(l + 4, b - 4);
+    mgraphics.show_text("WAVETABLE  -  dbl-click to clear");
+}
+
+// The sample-as-transfer-function: curve_tbl plotted input->output, with the
+// unity reference and the live IO dot riding it. This is exactly what the gen~
+// core does to the incoming signal (drop a sample -> the wave distorts it).
+function draw_sample_transfer() {
+    var n = curve_n;
+    if (n < 2) return;
+    var i, x, y;
+
+    // Unity reference.
+    mgraphics.set_source_rgba(UNITY_CLR);
+    mgraphics.move_to(x_of(-1), y_of(-1));
+    mgraphics.line_to(x_of(1), y_of(1));
+    mgraphics.stroke();
+
+    // The sample transfer curve.
+    mgraphics.set_source_rgba(CURVE_CLR);
+    mgraphics.set_line_width(dragging || hovering ? 2.3 : 1.6);
+    for (i = 0; i < n; i++) {
+        x = plot_l() + (i / (n - 1)) * plot_w();
+        y = y_of(clamp(curve_tbl[i], -1.0, 1.0));
+        if (i === 0) mgraphics.move_to(x, y); else mgraphics.line_to(x, y);
+    }
+    mgraphics.stroke();
+
+    // Live IO dots riding the sample transfer (symmetric pair).
+    if (env_lin > 0.003) {
+        var e = clamp(env_lin, 0.0, 1.0);
+        var dxp = x_of(e), dyp = y_of(sample_transfer(e));
+        var dxn = x_of(-e), dyn = y_of(sample_transfer(-e));
+        mgraphics.set_source_rgba(DOT_CLR[0], DOT_CLR[1], DOT_CLR[2], 0.22);
+        mgraphics.arc(dxp, dyp, 7.0, 0, Math.PI * 2); mgraphics.fill();
+        mgraphics.arc(dxn, dyn, 7.0, 0, Math.PI * 2); mgraphics.fill();
+        mgraphics.set_source_rgba(DOT_CLR);
+        mgraphics.arc(dxp, dyp, 3.0, 0, Math.PI * 2); mgraphics.fill();
+        mgraphics.arc(dxn, dyn, 3.0, 0, Math.PI * 2); mgraphics.fill();
+    }
+
+    // Label.
+    mgraphics.set_source_rgba(ACCENT_CLR);
+    mgraphics.set_font_size(7.5);
+    mgraphics.move_to(plot_l() + 4, plot_b() - 4);
+    mgraphics.show_text("SAMPLE SHAPER  -  dbl-click to clear");
 }
 
 function paint() {
@@ -273,8 +406,10 @@ function paint() {
         mgraphics.move_to(plot_l(), y); mgraphics.line_to(plot_r(), y); mgraphics.stroke();
     }
 
-    if (sample_loaded) {
-        draw_sample_waveform();
+    if (sample_loaded && mode === 1) {
+        draw_scope();
+    } else if (sample_loaded && curve_n > 1) {
+        draw_sample_transfer();
     } else {
     // Unity diagonal.
     mgraphics.set_source_rgba(UNITY_CLR);
