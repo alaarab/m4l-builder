@@ -72,18 +72,29 @@ steal Live shortcuts while focused.
 
 ---
 
-## 4. `setcursor(n)` — pointer cursors over draggable elements (opportunity)
+## 4. `setcursor(n)` — pointer cursors over draggable elements (SHIPPED + VERIFIED)
 
-`this.box.setcursor(n)` sets the OS cursor while the mouse is over the v8ui.
-Commercial EQs change the cursor to a move/resize glyph over a node and a
-crosshair over the curve — a cheap, high-perceived-quality polish that applies
-to **every** interactive hero. The numeric cursor enum is **not** cleanly
-published by Cycling '74; determine it empirically in Live (it's small, ~0..15)
-and pin the values once confirmed. Verify visually with `screencapture -C`
-(the `-C` flag composites the cursor into the capture; our window-id capture
-helpers do **not** include it). Call from `onidle`/`onpointermove` after a
-hit-test: cursor = move-glyph over a node, crosshair over the plot, default
-elsewhere.
+Bare `setcursor(n)` (a jsthis method, callable directly in the v8ui script) sets
+the OS cursor while the mouse is over the object. **VERIFIED LIVE (it114)** on the
+Parametric pop-out via `screencapture -C` (the `-C` flag composites the cursor;
+our window-id helpers do NOT): it works in Live's v8ui, and the Max
+`t_jmouse_cursortype` enum holds — the **confirmed** values we use:
+
+| n | cursor | use |
+|--:|--------|-----|
+| 1 | arrow | default / off-object |
+| 4 | crosshair | over the open plot ✓ confirmed |
+| 6 | pointing hand | over a grabbable node/ring/chip ✓ confirmed |
+| 7 | grab hand | while dragging |
+| (10 fourway, 8/9 resize L-R/U-D — by-analogy, unconfirmed) | | X/Y pads, edges |
+
+Shipped in `eq_curve` + `linear_phase_eq_display` (both EQ heroes). Pattern: a
+guarded `set_cursor(c)` that equality-gates (fires `setcursor` only on a
+transition, never per frame) and `try/catch`-wraps it (a runtime without it can't
+wedge the hover handler); call it from `handle_hover` after the hit-test and from
+the drag branch. **Reusable — port to every interactive hero** (Heat pad →
+fourway, Pressure/Ceiling threshold line → up-down resize, Spectrum marker →
+crosshair).
 
 ---
 
@@ -160,10 +171,68 @@ now emit `parameter_invisible`, with named constants
 
 ---
 
+## 8. MGraphics drawing surface — the "interesting UI shapes" toolbox
+
+Source: <https://docs.cycling74.com/apiref/js/mgraphics/>. Everything our heroes
+draw goes through `mgraphics`. Beyond rectangles/lines we mostly use today, the
+surface supports a lot we DON'T — the raw material for non-rectangular,
+animated, "looks-expensive" UI:
+
+- **Arcs / rings / pie slices** — `arc`, `arc_negative`, `ovalarc`, `ellipse`.
+  → circular gauges, ring meters, radial drive/mix indicators, donut readouts.
+- **Bezier paths** — `curve_to` / `rel_curve_to`, `close_path`, `path_roundcorners`.
+  → smooth blobs, custom envelopes, organic curve shapes.
+- **Arbitrary polygons + real hit-testing** — build a path with `move_to`/`line_to`,
+  then **`in_fill([x,y])`** returns 1 if a point is inside the *actual* path. This
+  is the key to INTERESTING interactive SHAPES: hexagons, triangles, hand-drawn
+  zones, isometric tiles — hit-test the true shape, not a bounding box. (The
+  article's "ringtone.tools" uses polygon note-triggering exactly this way.)
+- **Transforms** — `save`/`restore`, `rotate`, `scale`, `translate`, `transform`,
+  `set_matrix`. → rotary knobs drawn by rotating one needle path; isometric/skew
+  projections (the article's "Bumps"); mirrored layouts from one draw fn.
+- **Radial + linear gradients** — `pattern_create_radial` / `pattern_create_linear`
+  / `pattern_create_rgba` → `set_source(pattern)`. We use linear fills already;
+  **radial** gives glowing nodes, vignettes, spotlight selection halos.
+- **SVG vector art** — `svg_render(svgStringOrFile, x, y, w, h, opacity)` draws an
+  SVG straight into the context. → crisp resolution-independent icons/logos
+  shipped as a string (no bitmap assets to freeze). `MGraphicsSVG` to preparse.
+- **Text as a path** — `text_path(str)` turns text into a transformable/fillable
+  path (gradient-filled or rotated labels); `text_measure`/`font_extents` for
+  precise layout; `getfontlist` to check a font exists.
+- **Images / textures** — `Image`, `image_surface_draw`, `set_source_surface`,
+  `pattern_create_for_surface` (tiled texture fills).
+- **Offscreen caching (perf)** — `new MGraphics(w,h)` renders to an offscreen
+  buffer; or `push_group()`/`pop_group_to_source()` capture a path group as a
+  reusable Pattern. → render the static grid/labels ONCE, blit each frame; a real
+  fix lever for the LP-EQ "spectrum stutter" (heavy full-scene repaints).
+- **Line styling** — `set_dash([...])` dashed strokes, `set_line_cap`/`set_line_join`
+  (round/bevel) for softer, more premium strokes.
+
+These compose: a circular gauge = `arc` path + `pattern_create_radial` fill +
+`in_fill` hit-test + `rotate` for the needle. None require new framework plumbing
+— they're all callable from any existing `*_curve_js` / display engine.
+
+## 9. Duplication MUST carry param values — VERIFIED
+
+The user's hard requirement: duplicating a track/device keeps every setting.
+**VERIFIED LIVE (it114):** set Parametric EQ Gain B3 → +9 dB and enabled band 5
+(On5), `duplicate_track`, and the copy read back Gain B3 = 9.0 dB + On5 = 1 with
+all bands intact. This works because the Parametric stores band state in **real,
+visible per-band live.* params** (Freq/Gain/Q/On/Type) — Live duplicates those
+natively. It cross-validates §7: those params MUST stay at visibility 0
+(Automated and Stored) — that's simultaneously why they (a) survive duplication
+and (b) stay API-readable. Do NOT move duplication-critical state to Stored
+Only/Hidden without re-running this test (Stored Only persists but leaves the
+API; Hidden persists nothing). Loadbang-default stomping is the classic way this
+breaks — keep fresh-insert defaults in `parameter_initial`, never a
+`loadbang → message → live.*` chain (see the pitfalls memory).
+
 ## Prioritised opportunities (for future iterations)
 
-1. **`setcursor` hover cursors** on every interactive hero (§4) — highest polish/effort ratio; pin the enum live first.
-2. **`onidle`/`onidleout` hover** (§2) — robustness + auto-clear; verify the handlers fire in Live's v8ui.
-3. **Keyboard nudge/delete on a focused hero** (§3) — a new modality; manual verification.
-4. **Stored-Only for internal state hosts** (§7) — declutters automation lanes + fixes undo flood; re-run duplication safety.
-5. **Pixel-perfect + balanced-margin sweep** (§6) — quick visual-quality pass.
+1. **Port `setcursor` to the remaining heroes** (§4) — Heat pad (fourway), Pressure/Ceiling threshold lines (up-down), Spectrum marker (crosshair), Echotide pad. Pattern proven; ~10 lines each.
+2. **Radial-gradient glow + ring on the selected node** (§8) — `pattern_create_radial`, screenshot-verifiable; cheap "expensive" look.
+3. **SVG icons** (§8) — replace hand-drawn rail glyphs with `svg_render` strings; crisp at any size, nothing to freeze.
+4. **Offscreen grid caching** (§8) — render static grid/labels once; targets the LP-EQ spectrum-stutter pitfall.
+5. **`onidle`/`onidleout` hover** (§2) — robustness + auto-clear; the EQ engines already define them.
+6. **Keyboard nudge/delete on a focused hero** (§3) — new modality; manual verify.
+7. **Pixel-perfect + balanced-margin sweep** (§6) — quick visual-quality pass.
