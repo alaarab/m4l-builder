@@ -63,8 +63,13 @@ def level_history_js(
     rate_hz=30.0,
     ref_db=None,
     interactive=False,
+    reset_db=0.0,
 ):
-    """Return JavaScript source for the scrolling level/GR history display."""
+    """Return JavaScript source for the scrolling level/GR history display.
+
+    interactive=True makes the reference line draggable (emits ``threshold``);
+    double-click resets it to ``reset_db``.
+    """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
         bg_color=bg_color,
@@ -84,6 +89,7 @@ def level_history_js(
         rate_hz=rate_hz,
         ref_db="null" if ref_db is None else ref_db,
         interactive=1 if interactive else 0,
+        reset_db=reset_db,
     )
 
 
@@ -111,6 +117,7 @@ var REF_CLR     = [$ref_color];
 
 var ref_db = $ref_db;
 var INTERACTIVE = $interactive;
+var RESET_DB = $reset_db;
 var dragging = 0;
 var drag_start_y = 0.0;
 var drag_start_ref = 0.0;
@@ -384,7 +391,8 @@ function apply_ref(y) {
 function start_drag(y) {
     if (!INTERACTIVE) return;
     dragging = 1;
-    apply_ref(y);
+    // Arm only (don't apply on press) so the first click of a double-click
+    // doesn't jump the line before reset_ref() runs. The drag sets it on move.
 }
 
 function drag_to(y, fine) {
@@ -398,6 +406,14 @@ function end_drag() {
     mgraphics.redraw();
 }
 
+// Double-click resets the reference line to its default (RESET_DB).
+function reset_ref() {
+    if (!INTERACTIVE) return;
+    ref_db = clamp(RESET_DB, lo_db, Math.min(hi_db, 0.0));
+    outlet(0, "threshold", Math.round(ref_db * 10) / 10);
+    mgraphics.redraw();
+}
+
 function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b())); }
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
@@ -408,6 +424,7 @@ function onpointermove(pe) {
 }
 function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { end_drag(); }
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_ref(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
