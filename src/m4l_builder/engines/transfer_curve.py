@@ -48,8 +48,13 @@ def transfer_curve_js(
     text_color="0.55, 0.58, 0.63, 1.0",
     accent_color="0.95, 0.62, 0.28, 1.0",
     min_db=-60.0,
+    reset_db=0.0,
 ):
-    """Return JavaScript source for the transfer-curve display."""
+    """Return JavaScript source for the transfer-curve display.
+
+    Drag = threshold (ABSOLUTE: the line follows the cursor's level), wheel =
+    ratio, double-click resets the threshold to ``reset_db``.
+    """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
         bg_color=bg_color,
@@ -64,6 +69,7 @@ def transfer_curve_js(
         text_color=text_color,
         accent_color=accent_color,
         min_db=min_db,
+        reset_db=reset_db,
     )
 
 
@@ -92,6 +98,7 @@ var ACCENT_CLR  = [$accent_color];
 
 var MIN_DB = $min_db;
 var MAX_DB = 0.0;
+var RESET_DB = $reset_db;
 var GR_BAR_W = 10;
 var MARGIN_L = 24;
 var MARGIN_R = 8;
@@ -303,35 +310,60 @@ function io_level(e, g) {
     mgraphics.redraw();
 }
 
-// ── Interaction: drag = threshold, wheel = ratio ─────────────────────
-function start_drag(y) {
-    dragging = 1;
-    drag_start_y = y;
-    drag_start_threshold = threshold;
+// ── Interaction: drag = threshold, wheel = ratio, dbl-click = reset ───
+// Robust v8ui pointer resolver (.y/.localY/.offsetY/.clientY); raw .y is
+// undefined in Live and the old relative model mis-scaled (the it38 latent
+// bug, masked here by the small dB range). ABSOLUTE: the threshold follows the
+// cursor's level on the output axis. Double-click resets to RESET_DB.
+function pointer_y(pe, fb) {
+    if (!pe) return fb;
+    if (pe.y !== undefined) return pe.y;
+    if (pe.localY !== undefined) return pe.localY;
+    if (pe.offsetY !== undefined) return pe.offsetY;
+    if (pe.clientY !== undefined) return pe.clientY;
+    return fb;
+}
+function pointer_buttons(pe, fb) {
+    if (!pe) return fb;
+    if (pe.buttons !== undefined) return pe.buttons;
+    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
+    return fb;
 }
 
-function drag_to(y, fine) {
-    if (!dragging) return;
-    var dd = (y - drag_start_y) / plot_h() * (MAX_DB - MIN_DB);
-    if (fine) dd *= 0.15;
-    threshold = clamp(drag_start_threshold - dd, MIN_DB, 0.0);
+function y_to_threshold(y) {
+    return clamp(MIN_DB + ((plot_b() - y) / plot_h()) * (MAX_DB - MIN_DB), MIN_DB, 0.0);
+}
+
+function apply_threshold(y) {
+    if (isNaN(y)) return;
+    threshold = y_to_threshold(y);
     outlet(0, "threshold", Math.round(threshold * 10) / 10);
     mgraphics.redraw();
 }
 
+function start_drag(y) { dragging = 1; }
+function drag_to(y, fine) { if (dragging) apply_threshold(y); }
 function end_drag() {
     if (!dragging) return;
     dragging = 0;
     mgraphics.redraw();
 }
 
-function onpointerdown(pointerevent) { start_drag(pointerevent.screenY !== undefined ? pointerevent.y : pointerevent.y); }
-function onpointermove(pointerevent) {
-    if (dragging) drag_to(pointerevent.y, pointerevent.shiftKey ? 1 : 0);
-    else if (!hovering) { hovering = 1; mgraphics.redraw(); }
+function reset_threshold() {
+    threshold = clamp(RESET_DB, MIN_DB, 0.0);
+    outlet(0, "threshold", Math.round(threshold * 10) / 10);
+    mgraphics.redraw();
 }
-function onpointerup(pointerevent) { end_drag(); }
-function onpointerleave(pointerevent) { hovering = 0; end_drag(); mgraphics.redraw(); }
+
+function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b())); }
+function onpointermove(pe) {
+    if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) { drag_to(pointer_y(pe, plot_b())); return; }
+    if (dragging) { end_drag(); return; }
+    if (!hovering) { hovering = 1; mgraphics.redraw(); }
+}
+function onpointerup(pe) { end_drag(); }
+function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_threshold(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
