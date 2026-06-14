@@ -60,18 +60,27 @@ def loop_filter_curve_js(
     db_hi=9.0,
     db_lo=-24.0,
     interactive=False,
+    reset_damp_pct=None,
+    reset_tone_pct=None,
 ):
     """Return JavaScript source for the loop damping/tilt response display.
 
     With interactive=True the panel is a 2-axis pad: horizontal position sets
     DAMP (0..100), vertical sets TONE (+100 top .. -100 bottom), emitted as
     ``damp <pct>`` / ``tone <pct>`` on outlet 0 (no-echo: outlet fires only on a
-    user gesture; inbound set_* is ignored mid-drag). ``damp_scale``,
-    ``pivot_hz`` and ``tilt_db`` mirror the host's loop DSP so the curve is
-    truthful.
+    user gesture; inbound set_* is ignored mid-drag). A double-click resets both
+    to ``reset_damp_pct`` / ``reset_tone_pct`` (default = the initial damp_pct /
+    tone_pct). ``damp_scale``, ``pivot_hz`` and ``tilt_db`` mirror the host's loop
+    DSP so the curve is truthful.
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
+    if reset_damp_pct is None:
+        reset_damp_pct = damp_pct
+    if reset_tone_pct is None:
+        reset_tone_pct = tone_pct
     return _JS_TEMPLATE.substitute(
+        reset_damp_pct=reset_damp_pct,
+        reset_tone_pct=reset_tone_pct,
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -118,6 +127,7 @@ var DB_HI = $db_hi, DB_LO = $db_lo;
 var samplerate = 44100.0;
 
 var INTERACTIVE = $interactive;
+var RESET_DAMP = $reset_damp_pct, RESET_TONE = $reset_tone_pct;
 var dragging = 0;
 
 var FMIN = 20.0, FMAX = 20000.0;
@@ -282,6 +292,18 @@ function start_drag(x, y) { if (!INTERACTIVE) return; dragging = 1; apply_drag(x
 function drag_to(x, y) { if (dragging) apply_drag(x, y); }
 function end_drag() { if (dragging) { dragging = 0; mgraphics.redraw(); } }
 
+// Double-click resets DAMP + TONE to their defaults (consistency with the other
+// interactive displays). Emits on outlet 0 (no-echo).
+function reset_filter() {
+    if (!INTERACTIVE) return;
+    dragging = 0;
+    damp_pct = RESET_DAMP;
+    tone_pct = RESET_TONE;
+    outlet(0, "damp", damp_pct);
+    outlet(0, "tone", tone_pct);
+    mgraphics.redraw();
+}
+
 function onpointerdown(pe) { start_drag(pointer_x(pe, plot_l()), pointer_y(pe, plot_t())); }
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) drag_to(pointer_x(pe, plot_l()), pointer_y(pe, plot_t()));
@@ -291,6 +313,7 @@ function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { end_drag(); }
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x, y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) { if (but) drag_to(x, y); else end_drag(); }
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_filter(); }
 
 function onresize(w, h) { mgraphics.redraw(); }
 """)
