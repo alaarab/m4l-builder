@@ -603,6 +603,37 @@ class TestTransferCurveDrag:
         assert len(_named(result.outlets, "ratio")) == 0
 
 
+class TestWaveshapeScopeTrigger:
+    def test_trigger_slice_starts_at_rising_zero_cross(self):
+        # it130: the live scope triggers on a rising zero-crossing so the trace
+        # is phase-stable. trigger_slice is pure (no Buffer) -> Node-testable.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            // A sine phase-shifted so its first rising zero-cross is a few
+            // samples in (raw[2]<0, raw[3]>=0). Length > WAVE_WIN so we slice.
+            var raw = [], k;
+            for (k = 0; k < WAVE_WIN + 80; k++) raw.push(Math.sin((k - 3) * 0.05));
+            var sl = trigger_slice(raw);
+            dump({len: sl.length, first: sl[0], second: sl[1], startNeg: raw[2]});
+        """, size=(296, 152))
+        assert result.state["len"] == 512                 # sliced to WAVE_WIN
+        assert result.state["startNeg"] < 0.0             # the sample before is negative
+        assert result.state["first"] >= 0.0               # slice starts at/after the cross
+        assert abs(result.state["first"]) < 0.06          # ...right at zero
+        assert result.state["second"] > result.state["first"]   # rising
+
+    def test_trigger_slice_falls_back_when_no_cross(self):
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            var raw = [], k;
+            for (k = 0; k < WAVE_WIN + 80; k++) raw.push(0.5);  // all positive
+            var sl = trigger_slice(raw);
+            dump({len: sl.length, first: sl[0]});
+        """, size=(296, 152))
+        assert result.state["len"] == 512
+        assert abs(result.state["first"] - 0.5) < 1e-9     # started at index 0
+
+
 class TestWaveshapeDrag:
     def test_drag_up_adds_drive_at_documented_scale(self):
         from m4l_builder.engines.waveshape_curve import waveshape_curve_js

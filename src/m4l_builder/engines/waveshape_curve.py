@@ -136,6 +136,7 @@ var drag_start_bias = 0.0;
 // transfer curve, 1 = sample scope) is driven by the SCOPE/CURVE rail toggle;
 // a fresh drop auto-switches to scope (emitting "mode 1" to sync the toggle).
 var WAVE_WIN = 512;        // samples shown at once (a couple of cycles)
+var TRIG_SEARCH = 700;     // samples scanned for a rising zero-cross (scope trigger)
 var sample_loaded = 0;
 var sample_name = "";
 var scope_frames = 0;
@@ -257,9 +258,29 @@ function live_read() {
     var b = new Buffer(live_scope_name);
     var f = b.framecount();
     if (!f || f < 2) { live_scope = []; return; }
-    var count = (f < WAVE_WIN) ? f : WAVE_WIN;
-    var chunk = b.peek(1, 0, count);
-    live_scope = (chunk.length === undefined) ? [chunk] : chunk;
+    // Read a search window + a display window, then TRIGGER: start the trace at
+    // the first rising zero-crossing so the waveform is phase-stable (a free-
+    // running ring buffer otherwise scrolls). Falls back to 0 if none is found.
+    var want = WAVE_WIN + TRIG_SEARCH;
+    var rd = (f < want) ? f : want;
+    var chunk = b.peek(1, 0, rd);
+    live_scope = trigger_slice((chunk.length === undefined) ? [chunk] : chunk);
+}
+
+// Trigger + slice: find the first rising zero-crossing in the search region and
+// return WAVE_WIN samples from there (phase-stable trace); fall back to index 0.
+// Pure (no Buffer) so it's unit-testable in the Node harness.
+function trigger_slice(raw) {
+    var n = raw.length, start = 0, i, lim = n - WAVE_WIN;
+    if (n < 2) return raw;
+    if (lim < 0) lim = 0;
+    if (lim > TRIG_SEARCH) lim = TRIG_SEARCH;
+    for (i = 1; i <= lim; i++) {
+        if (raw[i - 1] < 0.0 && raw[i] >= 0.0) { start = i; break; }
+    }
+    var out = [], cnt = (n - start < WAVE_WIN) ? (n - start) : WAVE_WIN;
+    for (i = 0; i < cnt; i++) out.push(raw[start + i]);
+    return out;
 }
 
 // Interpolated transfer lookup: input x in -1..1 -> current-window value
