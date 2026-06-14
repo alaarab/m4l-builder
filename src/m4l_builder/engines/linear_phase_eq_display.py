@@ -998,12 +998,23 @@ function label_overlaps(bounds, used) {
     return 0;
 }
 
+// Soft radial-gradient halo behind a node (Pro-Q "lit node" look): bright band
+// color at the center fading to transparent at the rim, one pattern fill.
+function draw_node_glow(x, y, clr, radius, inner_alpha) {
+    var g = mgraphics.pattern_create_radial(x, y, 0.0, x, y, radius);
+    g.add_color_stop_rgba(0.0, clr[0], clr[1], clr[2], inner_alpha);
+    g.add_color_stop_rgba(1.0, clr[0], clr[1], clr[2], 0.0);
+    mgraphics.set_source(g);
+    mgraphics.arc(x, y, radius, 0, Math.PI * 2);
+    mgraphics.fill();
+}
+
 function draw_nodes() {
     var used_labels = [];
     var compact = compact_mode();
     var x, y, size, radius, color, label, bounds;
     var enabled_alpha, ring_alpha, fill_alpha, text_alpha, cross_alpha;
-    var center_alpha, shell_alpha, halo_alpha;
+    var center_alpha, shell_alpha;
     for (i = 0; i < num_bands; i++) {
         if (!band_cache[i] || !band_cache[i].present) continue;
         x = freq_to_x(band_cache[i].freq);
@@ -1020,9 +1031,6 @@ function draw_nodes() {
         cross_alpha = band_cache[i].enabled ? 0.0 : 0.34;
         center_alpha = band_cache[i].enabled ? (compact ? 0.78 : 0.0) : 0.0;
         shell_alpha = band_cache[i].enabled ? (selected_band === i ? 0.82 : 0.60) : 0.28;
-        halo_alpha = band_cache[i].enabled
-            ? (selected_band === i ? (compact ? 0.22 : 0.18) : (compact ? 0.14 : 0.12))
-            : (selected_band === i ? 0.10 : 0.06);
 
         if (selected_band === i || hover_band === i) {
             mgraphics.set_source_rgba(
@@ -1039,13 +1047,12 @@ function draw_nodes() {
                 mgraphics.stroke();
             }
 
-            mgraphics.set_source_rgba(
-                color[0], color[1], color[2],
-                halo_alpha
-            );
-            circle_path(x, y, radius + (compact ? 6.8 : 5.5));
-            mgraphics.fill();
+            draw_node_glow(x, y, color, radius + (compact ? 9.0 : 12.0),
+                           (band_cache[i].enabled ? 0.46 : 0.16));
         }
+
+        // Ambient radial glow on every enabled node (subtle "lit" base).
+        if (band_cache[i].enabled) draw_node_glow(x, y, color, radius + 6.0, 0.12);
 
         mgraphics.set_source_rgba(0.03, 0.04, 0.05, shell_alpha);
         circle_path(x, y, radius + (compact ? 1.9 : 1.2));

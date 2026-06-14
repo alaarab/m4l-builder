@@ -1539,6 +1539,17 @@ function node_y_for_band(idx) {
 }
 
 // ── Draggable nodes ──────────────────────────────────────────────────
+// Soft radial-gradient halo behind a node (Pro-Q "lit node" look). Bright band
+// color at the center fading to transparent at the rim — one pattern fill.
+function draw_node_glow(x, y, clr, radius, inner_alpha) {
+    var g = mgraphics.pattern_create_radial(x, y, 0.0, x, y, radius);
+    g.add_color_stop_rgba(0.0, clr[0], clr[1], clr[2], inner_alpha);
+    g.add_color_stop_rgba(1.0, clr[0], clr[1], clr[2], 0.0);
+    mgraphics.set_source(g);
+    mgraphics.arc(x, y, radius, 0, Math.PI * 2);
+    mgraphics.fill();
+}
+
 function draw_nodes() {
     var i, x, y, r, clr, enabled_alpha, ring_alpha, core_alpha, center_alpha;
 
@@ -1554,10 +1565,11 @@ function draw_nodes() {
         core_alpha = band_cache[i].enabled ? 0.92 : 0.18;
         center_alpha = band_cache[i].enabled ? 0.75 : 0.0;
 
+        // Radial glow: a soft ambient halo on every enabled node + a brighter
+        // one on the selected/hovered node (replaces the old flat disc).
+        if (band_cache[i].enabled) draw_node_glow(x, y, clr, r + 6.0, 0.13);
         if (i === selected_band || i === hover_band) {
-            mgraphics.set_source_rgba(clr[0], clr[1], clr[2], band_cache[i].enabled ? 0.18 : 0.10);
-            mgraphics.arc(x, y, r + 7.0, 0, Math.PI * 2);
-            mgraphics.fill();
+            draw_node_glow(x, y, clr, r + 11.0, band_cache[i].enabled ? 0.42 : 0.16);
         }
 
         mgraphics.set_source_rgba(0.02, 0.02, 0.03, band_cache[i].enabled ? (i === selected_band ? 0.78 : 0.58) : 0.28);
