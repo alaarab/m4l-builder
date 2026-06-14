@@ -27,6 +27,7 @@ from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_COLOR,
     resolve_graph_panel_color,
 )
+from .design_system import design_system_js
 
 TRANSFER_CURVE_INLETS = 1
 TRANSFER_CURVE_OUTLETS = 1
@@ -59,7 +60,7 @@ def transfer_curve_js(
     ratio, double-click resets the threshold to ``reset_db``.
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return _JS_TEMPLATE.substitute(
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -365,11 +366,12 @@ function apply_threshold(y) {
     mgraphics.redraw();
 }
 
-function start_drag(y) { dragging = 1; }
+function start_drag(y) { dragging = 1; ds_set_cursor(DS_CUR_GRAB); }
 function drag_to(y, fine) { if (dragging) apply_threshold(y); }
 function end_drag() {
     if (!dragging) return;
     dragging = 0;
+    ds_set_cursor(hovering ? DS_CUR_HAND : DS_CUR_ARROW);
     mgraphics.redraw();
 }
 
@@ -384,9 +386,10 @@ function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) { drag_to(pointer_y(pe, plot_b())); return; }
     if (dragging) { end_drag(); return; }
     if (!hovering) { hovering = 1; mgraphics.redraw(); }
+    ds_set_cursor(DS_CUR_HAND);
 }
 function onpointerup(pe) { end_drag(); }
-function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function onpointerleave(pe) { hovering = 0; end_drag(); ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_threshold(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }
@@ -394,8 +397,8 @@ function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
     if (but) drag_to(y, shift);
     else end_drag();
 }
-function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }
-function onidleout() { hovering = 0; mgraphics.redraw(); }
+function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } ds_set_cursor(DS_CUR_HAND); }
+function onidleout() { hovering = 0; ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
 
 function onwheel(x, y, scrollx, scrolly, cmd, shift) {
     var step = shift ? 0.05 : 0.2;
