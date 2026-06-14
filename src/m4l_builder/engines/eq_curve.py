@@ -1341,6 +1341,14 @@ function format_freq_text(freq) {
     return Math.round(freq) + " Hz";
 }
 
+// Nearest musical note for a frequency (Pro-Q style: identify a band by pitch).
+var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function note_name(freq) {
+    if (freq <= 0.0) return "";
+    var midi = Math.round(69 + 12 * (Math.log(freq / 440.0) / Math.LN2));
+    return NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+}
+
 function band_response_db(idx, freq) {
     if (!band_cache[idx].enabled) return 0.0;
     return response_db(band_cache[idx].coeffs, freq);
@@ -1864,7 +1872,7 @@ function draw_tooltip() {
     var line2;
     var line3 = "";
 
-    var freq_str = format_freq_text(b.freq);
+    var freq_str = format_freq_text(b.freq) + " · " + note_name(b.freq);
 
     if (b.uses_gain) {
         var gain_str = (b.gain >= 0 ? "+" : "") + b.gain.toFixed(1) + " dB";
@@ -2625,8 +2633,9 @@ function draw_hover_crosshair() {
 
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(8.0);
-    // Frequency under the cursor (bottom gutter).
-    var ftxt = format_freq_text(x_to_freq(x));
+    // Frequency (+ musical note) under the cursor (bottom gutter).
+    var hover_freq = x_to_freq(x);
+    var ftxt = format_freq_text(hover_freq) + " " + note_name(hover_freq);
     var fw = ftxt.length * 4.6 + 4;
     var fx = clamp(x - fw * 0.5, 0.0, mgraphics.size[0] - fw);
     mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);

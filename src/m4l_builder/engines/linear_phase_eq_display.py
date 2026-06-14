@@ -1179,14 +1179,15 @@ function tooltip_band_idx() {
 }
 
 function tooltip_value_text(band) {
+    var fn = format_freq(band.freq) + " · " + note_name(band.freq);
     if (band.uses_gain) {
-        return format_freq(band.freq)
+        return fn
             + "   "
             + format_gain(band.gain)
             + (band.dynamic_enabled ? "   Dyn " + format_dynamic(band.dynamic_amount) : "")
             + "   Q " + format_q(band.q);
     }
-    return format_freq(band.freq) + "   " + SLOPE_NAMES[band.slope] + "   Q " + format_q(band.q);
+    return fn + "   " + SLOPE_NAMES[band.slope] + "   Q " + format_q(band.q);
 }
 
 function draw_tooltip() {
@@ -1351,6 +1352,14 @@ function format_freq(freq) {
     return Math.round(freq) + " Hz";
 }
 
+// Nearest musical note for a frequency (Pro-Q style: identify a band by pitch).
+var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function note_name(freq) {
+    if (freq <= 0.0) return "";
+    var midi = Math.round(69 + 12 * (Math.log(freq / 440.0) / Math.LN2));
+    return NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+}
+
 function format_gain(gain) {
     var prefix = gain > 0 ? "+" : "";
     return prefix + (Math.round(gain * 10.0) / 10.0).toFixed(1) + " dB";
@@ -1390,6 +1399,7 @@ function draw_hud() {
 
     title = "Band " + (selected_band + 1) + "  " + TYPE_NAMES[band_cache[selected_band].type];
     subtitle = format_freq(band_cache[selected_band].freq)
+        + " · " + note_name(band_cache[selected_band].freq)
         + "   "
         + (band_cache[selected_band].uses_gain ? format_gain(band_cache[selected_band].gain) : SLOPE_NAMES[band_cache[selected_band].slope])
         + "   Q " + format_q(band_cache[selected_band].q)
@@ -2168,7 +2178,8 @@ function draw_hover_crosshair() {
 
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(8.0);
-    var ftxt = format_freq(x_to_freq(x));
+    var hover_freq = x_to_freq(x);
+    var ftxt = format_freq(hover_freq) + " " + note_name(hover_freq);
     var fw = ftxt.length * 4.6 + 4;
     var fx = clamp(x - fw * 0.5, 0.0, mgraphics.size[0] - fw);
     mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.92);

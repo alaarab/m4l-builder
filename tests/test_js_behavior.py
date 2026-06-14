@@ -25,6 +25,19 @@ def _named(outlets, name):
     return [o for o in outlets if len(o) > 1 and o[1] == name]
 
 
+class TestEqCurveNoteNames:
+    def test_note_name_maps_known_pitches(self):
+        # it131: frequency readouts show the nearest musical note (Pro-Q style).
+        result = run_jsui(eq_curve_js(), """
+            dump({a3: note_name(220.0), a4: note_name(440.0),
+                  c4: note_name(261.63), low: note_name(0.0)});
+        """)
+        assert result.state["a3"] == "A3"
+        assert result.state["a4"] == "A4"
+        assert result.state["c4"] == "C4"
+        assert result.state["low"] == ""
+
+
 class TestEqCurveGestures:
     def test_set_band_does_not_echo(self):
         # The no-echo rule: inbound state never fires outlets.
