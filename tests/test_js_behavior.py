@@ -559,6 +559,28 @@ class TestWaveshapeDrag:
         samples = _named(result.outlets, "sample")
         assert any(s[2] == 0 for s in samples)
 
+    def test_mode_swatches_pick_palette_and_emit_dmode(self):
+        # The bottom-right swatch row picks a color/distortion MODE: clicking the
+        # last swatch sets dmode + emits "dmode <i>" (drives the gen + Mode param);
+        # set_dmode syncs + clamps to the palette count.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_dmode(2);
+            var m2 = dmode;
+            paint();                       // renders palette 2 + the swatch row
+            onpointerdown({x: 150, y: 130});  // click the last swatch (mode 3)
+            var picked = dmode;
+            paint();
+            set_dmode(99);                 // clamps to the last palette
+            var clamped = dmode;
+            dump({m2: m2, picked: picked, clamped: clamped});
+        """, size=(180, 152))
+        assert result.state["m2"] == 2
+        assert result.state["picked"] == 3
+        assert result.state["clamped"] == 3
+        emits = _named(result.outlets, "dmode")
+        assert any(e[2] == 3 for e in emits)
+
 
 class TestDelayTrailDrag:
     def test_horizontal_drag_maps_time_and_emits(self):
