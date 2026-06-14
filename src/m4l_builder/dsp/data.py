@@ -100,6 +100,15 @@ def gen_codebox(id_prefix: str, gen_code: str, numinlets: int = 1,
 
     Wire audio into {prefix}_gen inlet 0.
     Output from {prefix}_gen outlets 0..N.
+
+    PITFALL (verified live in Live 12, 2026-06): a gen~ codebox that DEFINES a
+    user function — any ``name(args) { ... return ... }`` — fails to compile and
+    the object outputs pure SILENCE (no console error surfaces in the M4L run).
+    This held even for a single trivial single-return function. Inline the math
+    instead (branch on a constant into a pre-initialized variable); see the
+    Heat flagship kernel for the 7-character shaper inlined this way. Symptom to
+    watch for: device passes audio with a bare/passthrough kernel but silences
+    the moment a function definition is added.
     """
     if outlettype is None:
         outlettype = ["signal"] * numoutlets
