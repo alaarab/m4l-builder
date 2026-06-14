@@ -389,6 +389,22 @@ function analyzer_tilted_db(raw_db, tilt) {
     return (raw_db <= ANALYZER_MIN_DB + 0.5) ? ANALYZER_MIN_DB : raw_db + tilt;
 }
 
+// A real spectrum always has structure (peaks, rolloff); a PERFECTLY FLAT line
+// across all bins is a no-signal artifact (digital-silence FFT or an unfed/
+// uninitialized analyzer buffer) — drawn through the tilt it becomes a fake
+// rising diagonal. Detect it (tiny bin-to-bin range) so the spectrum can be
+// skipped entirely (reads empty, like Pro-Q with no audio).
+function analyzer_is_flat() {
+    var n = analyzer_display.length, i;
+    if (n < 2) return 1;
+    var lo = analyzer_display[0], hi = analyzer_display[0];
+    for (i = 1; i < n; i++) {
+        if (analyzer_display[i] < lo) lo = analyzer_display[i];
+        if (analyzer_display[i] > hi) hi = analyzer_display[i];
+    }
+    return (hi - lo < 1.5) ? 1 : 0;
+}
+
 function now_ms() {
     return new Date().getTime();
 }
@@ -1245,6 +1261,7 @@ function draw_analyzer() {
     if (!analyzer_enabled) return;
     n = analyzer_display.length;
     if (n < 2) return;
+    if (analyzer_is_flat()) return;   // no real signal -> draw nothing (empty)
 
     var left = plot_left();
     var right = plot_right();

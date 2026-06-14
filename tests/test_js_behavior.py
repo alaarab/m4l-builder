@@ -179,6 +179,22 @@ class TestEqCurveAnalyzerTilt:
         assert result.state["nearfloor"] == result.state["min"]  # within the gate
         assert result.state["signal"] == pytest.approx(-20.0)    # -30 + 10 tilt
 
+    def test_flat_spectrum_is_suppressed(self):
+        # A perfectly flat line across all bins is a no-signal artifact (drawn
+        # through the tilt it becomes a fake diagonal), so analyzer_is_flat()
+        # flags it; a spectrum with real structure is NOT flat.
+        result = run_jsui(eq_curve_js(), """
+            analyzer_display = [];
+            for (var i = 0; i < 40; i++) analyzer_display.push(-40.0);  // flat
+            var flat = analyzer_is_flat();
+            analyzer_display = [];
+            for (i = 0; i < 40; i++) analyzer_display.push(-60.0 + (i % 7) * 4.0);
+            var shaped = analyzer_is_flat();   // has structure -> not flat
+            dump({flat: flat, shaped: shaped});
+        """)
+        assert result.state["flat"] == 1
+        assert result.state["shaped"] == 0
+
     def test_freeze_holds_the_last_frame(self):
         result = run_jsui(eq_curve_js(), """
             update_analyzer_data([-10, -10, -10, -10]);
