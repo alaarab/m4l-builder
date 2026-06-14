@@ -64,6 +64,8 @@ def ballistics_curve_js(
     attack_max_ms=250.0,
     release_min_ms=5.0,
     release_max_ms=2000.0,
+    reset_attack_ms=None,
+    reset_release_ms=None,
 ):
     """Return JavaScript source for the attack/release step-response display.
 
@@ -71,10 +73,18 @@ def ballistics_curve_js(
     the left half sets ATTACK, the right half sets RELEASE (matching the
     bottom-corner labels), log-mapped over [min,max] ms and emitted as
     ``attack <ms>`` / ``release <ms>`` on outlet 0 (no-echo: outlet fires only
-    on user gestures; inbound set_* is ignored mid-drag).
+    on user gestures; inbound set_* is ignored mid-drag). A double-click resets
+    both to ``reset_attack_ms`` / ``reset_release_ms`` (default = the initial
+    attack_ms / release_ms).
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
+    if reset_attack_ms is None:
+        reset_attack_ms = attack_ms
+    if reset_release_ms is None:
+        reset_release_ms = release_ms
     return _JS_TEMPLATE.substitute(
+        reset_attack_ms=reset_attack_ms,
+        reset_release_ms=reset_release_ms,
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -123,6 +133,7 @@ var FULL_DB = $full_scale_db;
 var INTERACTIVE = $interactive;
 var ATK_MIN = $attack_min_ms, ATK_MAX = $attack_max_ms;
 var REL_MIN = $release_min_ms, REL_MAX = $release_max_ms;
+var RESET_ATK = $reset_attack_ms, RESET_REL = $reset_release_ms;
 var dragging = 0;
 var drag_zone = 0;     // 0 = attack (left half), 1 = release (right half)
 
@@ -299,6 +310,18 @@ function start_drag(x) {
 function drag_to(x) { if (dragging) apply_drag(x); }
 function end_drag() { if (dragging) { dragging = 0; mgraphics.redraw(); } }
 
+// Double-click resets BOTH attack + release to their defaults (consistency with
+// the transfer/level-history displays). Emits on outlet 0 (no-echo).
+function reset_ballistics() {
+    if (!INTERACTIVE) return;
+    dragging = 0;
+    attack_ms = RESET_ATK;
+    release_ms = RESET_REL;
+    outlet(0, "attack", attack_ms);
+    outlet(0, "release", release_ms);
+    mgraphics.redraw();
+}
+
 function onpointerdown(pe) { start_drag(pointer_x(pe, plot_l())); }
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) drag_to(pointer_x(pe, plot_l()));
@@ -308,6 +331,7 @@ function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { end_drag(); }
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) { if (but) drag_to(x); else end_drag(); }
+function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_ballistics(); }
 
 function onresize(w, h) { mgraphics.redraw(); }
 """)

@@ -921,6 +921,28 @@ class TestBallisticsCurve:
         """, size=(132, 68))
         assert result.outlets == []
 
+    def test_double_click_resets_attack_and_release(self):
+        # it108: double-click resets BOTH attack + release to defaults, emits both.
+        from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+        result = run_jsui(ballistics_curve_js(interactive=True, attack_ms=10,
+                                              release_ms=120), """
+            set_attack(99); set_release(900);
+            ondblclick(50, 30, 1, 0, 0, 0, 0, 0);
+            dump({attack: attack_ms, release: release_ms});
+        """, size=(132, 68))
+        assert result.state["attack"] == 10.0
+        assert result.state["release"] == 120.0
+        assert [o[2] for o in _named(result.outlets, "attack")][-1] == 10.0
+        assert [o[2] for o in _named(result.outlets, "release")][-1] == 120.0
+
+    def test_double_click_non_interactive_inert(self):
+        from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+        result = run_jsui(ballistics_curve_js(interactive=False), """
+            ondblclick(50, 30, 1, 0, 0, 0, 0, 0);
+            dump({ok: 1});
+        """, size=(132, 68))
+        assert result.outlets == []
+
 
 class TestLoopFilterCurve:
     """The loop DAMP/TONE response display (Echotide's filter panel)."""
@@ -964,3 +986,16 @@ class TestLoopFilterCurve:
         """)
         assert result.state["dragging"] == 0
         assert result.outlets == []
+
+    def test_double_click_resets_damp_and_tone(self):
+        # it108: double-click resets DAMP+TONE to their defaults, emits both.
+        result = run_jsui(loop_filter_curve_js(interactive=True, damp_pct=20.0,
+                                               tone_pct=0.0), """
+            set_damp(77); set_tone(55);
+            ondblclick(50, 50, 1, 0, 0, 0, 0, 0);
+            dump({damp: damp_pct, tone: tone_pct});
+        """)
+        assert result.state["damp"] == 20.0
+        assert result.state["tone"] == 0.0
+        assert [o[2] for o in _named(result.outlets, "damp")][-1] == 20.0
+        assert [o[2] for o in _named(result.outlets, "tone")][-1] == 0.0
