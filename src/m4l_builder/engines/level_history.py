@@ -179,6 +179,13 @@ function paint() {
     var h = mgraphics.size[1];
     var i, idx, x, y;
 
+    // Smoothed gain-reduction intensity (fast attack / slow release), shared by
+    // the GR-band hot edge and the reference-line flare — the Pro-L/Pro-C
+    // "active reduction" read. Zero cost when nothing is reducing.
+    var cur_gr = (count > 0) ? -gr_ring[frame_at(count - 1)] : 0.0;
+    var ftarget = clamp(cur_gr / 6.0, 0.0, 1.0);
+    flare_env = (ftarget > flare_env) ? ftarget : (flare_env * 0.85 + ftarget * 0.15);
+
     mgraphics.set_source_rgba(PANEL_CLR);
     mgraphics.rectangle(0, 0, w, h);
     mgraphics.fill();
@@ -261,6 +268,31 @@ function paint() {
             else mgraphics.line_to(x, y);
         }
         mgraphics.stroke();
+
+        // Hot edge: under heavy reduction the GR band's leading edge IGNITES
+        // white-hot (layered passes widening + brightening toward a hot core),
+        // so "how hard it's crushing" reads at a glance. Guarded -> no cost idle.
+        if (flare_env > 0.01) {
+            var ge, gw, ga, mixw;
+            for (ge = 0; ge < 3; ge++) {
+                gw = (1.3 + 5.0 * flare_env) * (1.0 - ge * 0.30);
+                ga = (0.10 + 0.30 * flare_env) * (1.0 + ge * 0.40);
+                mixw = ge * 0.33 * flare_env;   // innermost pass tends white-hot
+                mgraphics.set_source_rgba(
+                    GR_LINE[0] + (1.0 - GR_LINE[0]) * mixw,
+                    GR_LINE[1] + (1.0 - GR_LINE[1]) * mixw,
+                    GR_LINE[2] + (1.0 - GR_LINE[2]) * mixw, ga);
+                mgraphics.set_line_width(gw);
+                for (i = 0; i < count; i++) {
+                    idx = frame_at(i);
+                    x = x0 + i * px;
+                    y = plot_t() + gr_to_depth(gr_ring[idx]);
+                    if (i === 0) mgraphics.move_to(x, y);
+                    else mgraphics.line_to(x, y);
+                }
+                mgraphics.stroke();
+            }
+        }
     }
 
     // Reference level line (ceiling/threshold) on the level scale, with a dB
@@ -273,11 +305,8 @@ function paint() {
 
         // Flare: the reference line IGNITES with gain reduction (the Pro-L/Pro-C
         // signature — the threshold/ceiling lights up as the signal slams it).
-        // Fast attack / slow release so it glows briefly after each transient;
-        // fully guarded so there is zero extra drawing when nothing is reducing.
-        var cur_gr = (count > 0) ? -gr_ring[frame_at(count - 1)] : 0.0;
-        var ftarget = clamp(cur_gr / 6.0, 0.0, 1.0);
-        flare_env = (ftarget > flare_env) ? ftarget : (flare_env * 0.85 + ftarget * 0.15);
+        // flare_env is computed once at the top of paint (shared with the
+        // GR-band hot edge); fully guarded so idle draws nothing extra.
         if (flare_env > 0.01) {
             var fk;
             for (fk = 0; fk < 3; fk++) {
