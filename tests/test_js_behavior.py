@@ -190,6 +190,25 @@ class TestEqCurveGestures:
         assert result.state["n"] == 1, "node gestures still work when sketch is off"
         assert result.state["sketching"] == 0
 
+    def test_sketch_descending_stroke_fits_a_low_shelf(self):
+        # A stroke high at the low-freq end that returns to 0 reads as a LOW SHELF
+        # (TYPE_LOSHELF=1), not a pair of edge bells — the common bass-boost move.
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_sketch(1);
+            onpointerdown({x: freq_to_x(30.0), y: gain_to_y(9.0)});
+            onpointermove({x: freq_to_x(120.0), y: gain_to_y(7.0), buttons: 1});
+            onpointermove({x: freq_to_x(500.0), y: gain_to_y(2.0), buttons: 1});
+            onpointermove({x: freq_to_x(3000.0), y: gain_to_y(0.0), buttons: 1});
+            onpointerup({x: freq_to_x(3000.0), y: gain_to_y(0.0)});
+            var idx = -1, n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) { n += 1; if (idx < 0) idx = i; }
+            dump({n: n, type: bands[idx].type, gain: bands[idx].gain});
+        """)
+        assert result.state["n"] == 1, "a clean step makes one shelf, not edge bells"
+        assert result.state["type"] == 1, "low-end step -> LOW SHELF (type 1)"
+        assert result.state["gain"] > 6.0, "shelf carries the step gain"
+
     def test_option_click_toggles_enable_not_delete(self):
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
@@ -599,6 +618,23 @@ class TestLinearPhaseGestureParity:
         """)
         assert result.state["n"] >= 1, "node gestures still work when sketch is off"
         assert result.state["sketching"] == 0
+
+    def test_sketch_rising_stroke_fits_a_high_shelf(self):
+        # A stroke high at the HIGH-freq end (and ~0 at the low end) reads as a
+        # HIGH SHELF (TYPE_HISHELF=2) — the common "air" move. (LP engine.)
+        result = run_jsui(linear_phase_eq_display_js(), self._SK + """
+            onpointerdown({x: freq_to_x(200.0), y: gain_to_y(0.0)});
+            onpointermove({x: freq_to_x(2000.0), y: gain_to_y(2.0), buttons: 1});
+            onpointermove({x: freq_to_x(8000.0), y: gain_to_y(7.0), buttons: 1});
+            onpointermove({x: freq_to_x(18000.0), y: gain_to_y(9.0), buttons: 1});
+            onpointerup({x: freq_to_x(18000.0), y: gain_to_y(9.0)});
+            var idx = -1, n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) { n += 1; if (idx < 0) idx = i; }
+            dump({n: n, type: bands[idx].type, gain: bands[idx].gain});
+        """)
+        assert result.state["n"] == 1, "a clean step makes one shelf"
+        assert result.state["type"] == 2, "high-end step -> HIGH SHELF (type 2)"
+        assert result.state["gain"] > 6.0, "shelf carries the step gain"
 
 
 class TestLinearPhaseAnalyzerTilt:
