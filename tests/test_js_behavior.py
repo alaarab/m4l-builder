@@ -98,6 +98,43 @@ class TestEqCurveGestures:
         assert result.state["present_count"] == 1
         assert len(_named(result.outlets, "band_freq")) == 1
 
+    def test_spectrum_grab_snaps_new_band_to_analyzer_peak(self):
+        # Build an analyzer peak at 1 kHz, double-click NEAR it (850 Hz):
+        # the new band should snap onto the 1 kHz resonance (Pro-Q grab).
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            analyzer_enabled = 1;
+            ensure_analyzer_arrays();
+            var N = analyzer_display.length;
+            for (var i = 0; i < N; i++) analyzer_display[i] = ANALYZER_MIN_DB;
+            var pbin = Math.round((Math.log(1000.0) - LOG_MIN) / LOG_RANGE * (N - 1));
+            analyzer_display[pbin] = -6.0;
+            analyzer_display[pbin-1] = -14.0; analyzer_display[pbin+1] = -14.0;
+            analyzer_display[pbin-2] = -26.0; analyzer_display[pbin+2] = -26.0;
+            ondblclick(freq_to_x(850.0), gain_to_y(0.0), 1, 0, 0, 0, 0, 0);
+            var idx = -1;
+            for (var j = 0; j < num_bands; j++) if (bands[j].present) { idx = j; break; }
+            dump({created_freq: bands[idx].freq});
+        """)
+        assert abs(result.state["created_freq"] - 1000.0) < 60.0, \
+            "double-click near a peak must snap the band onto it"
+
+    def test_spectrum_grab_no_snap_on_flat_spectrum(self):
+        # No clear peak -> exact placement at the click frequency (no surprise).
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            analyzer_enabled = 1;
+            ensure_analyzer_arrays();
+            var N = analyzer_display.length;
+            for (var i = 0; i < N; i++) analyzer_display[i] = ANALYZER_MIN_DB;
+            ondblclick(freq_to_x(2000.0), gain_to_y(0.0), 1, 0, 0, 0, 0, 0);
+            var idx = -1;
+            for (var j = 0; j < num_bands; j++) if (bands[j].present) { idx = j; break; }
+            dump({created_freq: bands[idx].freq});
+        """)
+        assert abs(result.state["created_freq"] - 2000.0) < 120.0, \
+            "flat spectrum must place the band exactly at the click"
+
     def test_option_click_toggles_enable_not_delete(self):
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
@@ -435,6 +472,29 @@ class TestLinearPhaseGestureParity:
             dump({present_count: n});
         """)
         assert result.state["present_count"] >= 1
+
+    def test_spectrum_grab_snaps_new_band_to_analyzer_peak(self):
+        # Parity with the Parametric EQ: a band created near a prominent analyzer
+        # peak snaps onto it (double-click at 850 Hz lands on the 1 kHz bump).
+        result = run_jsui(linear_phase_eq_display_js(), """
+            set_num_bands(8);
+            for (var i = 0; i < 8; i++) { bands[i].present = 0; bands[i].enabled = 0; }
+            rebuild_band_cache();
+            analyzer_enabled = 1;
+            var N = 256;
+            analyzer_display = [];
+            for (i = 0; i < N; i++) analyzer_display.push(ANALYZER_MIN_DB);
+            var pbin = Math.round((Math.log(1000.0) - LOG_MIN) / LOG_RANGE * (N - 1));
+            analyzer_display[pbin] = -6.0;
+            analyzer_display[pbin-1] = -14.0; analyzer_display[pbin+1] = -14.0;
+            analyzer_display[pbin-2] = -26.0; analyzer_display[pbin+2] = -26.0;
+            handle_double_click(freq_to_x(850.0), gain_to_y(0.0));
+            var idx = -1;
+            for (i = 0; i < num_bands; i++) if (bands[i].present) { idx = i; break; }
+            dump({created_freq: bands[idx].freq});
+        """)
+        assert abs(result.state["created_freq"] - 1000.0) < 60.0, \
+            "LP band created near a peak must snap onto it"
 
 
 class TestLinearPhaseAnalyzerTilt:

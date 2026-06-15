@@ -958,6 +958,10 @@ function create_band_at(x, y) {
     if (created_idx < 0) return 0;
 
     created_freq = x_to_freq(x);
+    // SPECTRUM GRAB: if a clear analyzer peak sits near the click, snap the new
+    // band onto it (Pro-Q "grab the resonance"). No peak -> exact placement.
+    var snap_freq = analyzer_peak_near_x(x);
+    if (snap_freq > 0.0) created_freq = snap_freq;
     created_gain = y_to_gain(y);
     created_gain = Math.round(created_gain * 10.0) / 10.0;
     bands[created_idx].freq = clamp(created_freq, MIN_FREQ, MAX_FREQ);
@@ -2330,6 +2334,39 @@ function analyzer_db_at_x(x) {
     return analyzer_display[bin];
 }
 
+// SPECTRUM GRAB (Pro-Q): find a prominent analyzer peak near plot-x and return
+// its frequency, or -1 when there's no clear resonance to grab. Used so a
+// double-click to ADD a band snaps onto the visible peak (you click the bump,
+// the band lands on it), and so the hover affordance can mark the grab target.
+// Conservative on purpose: on a flat/quiet spectrum it returns -1 (no snap), so
+// placement away from peaks stays exactly where you clicked.
+var GRAB_WIN = 10;            // +/- display bins searched (~0.45 octave each way)
+var GRAB_FLOOR_OVER = 18.0;   // peak must sit this far above the analyzer floor
+var GRAB_PROMINENCE = 4.0;    // ...and this far above the local window average
+function analyzer_peak_near_x(x) {
+    var n = analyzer_display.length;
+    if (n < 4 || !analyzer_enabled) return -1.0;
+    var left = plot_left(), right = plot_right();
+    var norm = (x - left) / Math.max(1.0, right - left);
+    if (norm < 0.0 || norm > 1.0) return -1.0;
+    var center = Math.round(norm * (n - 1));
+    var lo = center - GRAB_WIN; if (lo < 0) lo = 0;
+    var hi = center + GRAB_WIN; if (hi >= n) hi = n - 1;
+    var best = -1, bestdb = ANALYZER_MIN_DB, sum = 0.0, cnt = 0, i;
+    for (i = lo; i <= hi; i++) {
+        var d = analyzer_display[i];
+        sum += d; cnt++;
+        if (d > bestdb) { bestdb = d; best = i; }
+    }
+    if (best < 0 || cnt < 3) return -1.0;
+    if (bestdb < ANALYZER_MIN_DB + GRAB_FLOOR_OVER) return -1.0;
+    if (bestdb - (sum / cnt) < GRAB_PROMINENCE) return -1.0;   // not a real bump
+    // require a genuine local maximum (don't snap to a window edge sloping up)
+    if (best > 0 && analyzer_display[best] < analyzer_display[best - 1]) return -1.0;
+    if (best < n - 1 && analyzer_display[best] < analyzer_display[best + 1]) return -1.0;
+    return Math.exp(LOG_MIN + (best / (n - 1)) * LOG_RANGE);
+}
+
 // ── Mouse interaction ────────────────────────────────────────────────
 function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     var hit = hit_test(x, y);
@@ -2665,10 +2702,25 @@ function draw_hover_crosshair() {
     mgraphics.move_to(x, plot_top()); mgraphics.line_to(x, plot_bottom()); mgraphics.stroke();
     mgraphics.move_to(plot_left(), y); mgraphics.line_to(plot_right(), y); mgraphics.stroke();
 
+    // SPECTRUM GRAB affordance: if a clear analyzer peak is near the cursor, ring
+    // it (this is where a double-click-add will snap) and read out its frequency.
+    var snap_freq = analyzer_peak_near_x(x);
+    if (snap_freq > 0.0) {
+        var sx = freq_to_x(snap_freq);
+        var sy = analyzer_db_to_y(analyzer_tilted_db(
+            analyzer_db_at_x(sx), analyzer_slope_at(snap_freq)));
+        mgraphics.set_source_rgba(ANALYZER_LINE_CLR[0], ANALYZER_LINE_CLR[1], ANALYZER_LINE_CLR[2], 0.95);
+        mgraphics.set_line_width(1.4);
+        mgraphics.arc(sx, sy, 4.2, 0.0, 6.2832); mgraphics.stroke();
+        mgraphics.move_to(sx - 2.6, sy); mgraphics.line_to(sx + 2.6, sy); mgraphics.stroke();
+        mgraphics.move_to(sx, sy - 2.6); mgraphics.line_to(sx, sy + 2.6); mgraphics.stroke();
+    }
+
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(8.0);
-    // Frequency (+ musical note) under the cursor (bottom gutter).
-    var hover_freq = x_to_freq(x);
+    // Frequency (+ musical note) under the cursor (bottom gutter); when grabbing a
+    // peak, show the SNAP target frequency instead of the raw cursor frequency.
+    var hover_freq = (snap_freq > 0.0) ? snap_freq : x_to_freq(x);
     var ftxt = format_freq_text(hover_freq) + " " + note_label(hover_freq);
     var fw = ftxt.length * 4.6 + 4;
     var fx = clamp(x - fw * 0.5, 0.0, mgraphics.size[0] - fw);
