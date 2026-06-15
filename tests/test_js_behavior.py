@@ -1000,6 +1000,30 @@ class TestDelayTrailDrag:
         # within a half-unit (JS Math.round vs Python round half-rounding)
         assert abs(emits[0][2] - result.state["t"]) <= 0.5
 
+    def test_shift_fine_adjust_time_and_feedback(self):
+        # Shift = fine-adjust: time AND feedback move 1/5th of the cursor
+        # distance from the press anchor, STABLE over many move events
+        # (relative-to-start, completing the suite-wide tactile grammar).
+        from m4l_builder.engines.delay_trail import delay_trail_js
+        plain = run_jsui(delay_trail_js(), """
+            set_time(200.0); set_feedback(20.0);
+            onpointerdown({x: 60, y: 120, buttons: 1});
+            for (var i = 0; i < 20; i++) onpointermove({x: 280, y: 40, buttons: 1});
+            dump({t: time_ms, f: feedback_pct});
+        """, size=(326, 152))
+        fine = run_jsui(delay_trail_js(), """
+            set_time(200.0); set_feedback(20.0);
+            onpointerdown({x: 60, y: 120, buttons: 1, shiftKey: 1});
+            for (var i = 0; i < 20; i++) onpointermove({x: 280, y: 40, buttons: 1, shiftKey: 1});
+            dump({t: time_ms, f: feedback_pct});
+        """, size=(326, 152))
+        dpt = plain.state["t"] - 200.0
+        dft = fine.state["t"] - 200.0
+        assert abs(dft) < abs(dpt) and 0.15 < (dft / dpt) < 0.25
+        dpf = plain.state["f"] - 20.0
+        dff = fine.state["f"] - 20.0
+        assert abs(dff) < abs(dpf) and 0.15 < (dff / dpf) < 0.25
+
     def test_drag_clamps_and_wheel_feedback(self):
         # x far off the left rail clamps time to its 1ms floor; the wheel still
         # nudges feedback +2/step and caps at 110 (absolute drag sets feedback

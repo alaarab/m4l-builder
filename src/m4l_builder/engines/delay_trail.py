@@ -274,6 +274,9 @@ function pointer_buttons(pe, fb) {
 
 function start_drag(x, y) {
     dragging = 1;
+    // Anchor for shift=fine (relative-to-press, clamped — cannot slam).
+    drag_start_time = time_ms;
+    drag_start_feedback = feedback_pct;
 }
 
 // ABSOLUTE X/Y pad: the pointer POSITION maps directly to time (x, along the
@@ -287,8 +290,17 @@ function drag_to(x, y, fine) {
     if (isNaN(x) || isNaN(y)) return;
     var fx = clamp((x - plot_l()) / plot_w(), 0.0, 1.0);
     var fy = clamp((plot_b() - y) / plot_h(), 0.0, 1.0);
-    time_ms = clamp(fx * MAX_MS, 1.0, MAX_MS);
-    feedback_pct = clamp(fy * 110.0, 0.0, 110.0);
+    var t_target = clamp(fx * MAX_MS, 1.0, MAX_MS);
+    var f_target = clamp(fy * 110.0, 0.0, 110.0);
+    // Shift = fine-adjust (suite-wide tactile grammar): move 1/5th of the cursor
+    // distance from the press anchor — a stable 5x-finer drag for precise time /
+    // feedback. Plain drag stays absolute (the pad follows the cursor).
+    if (fine) {
+        t_target = drag_start_time + (t_target - drag_start_time) * 0.20;
+        f_target = drag_start_feedback + (f_target - drag_start_feedback) * 0.20;
+    }
+    time_ms = clamp(t_target, 1.0, MAX_MS);
+    feedback_pct = clamp(f_target, 0.0, 110.0);
     outlet(0, "time", Math.round(time_ms));
     outlet(0, "feedback", Math.round(feedback_pct));
     mgraphics.redraw();
