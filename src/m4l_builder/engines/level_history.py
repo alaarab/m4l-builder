@@ -64,11 +64,18 @@ def level_history_js(
     ref_db=None,
     interactive=False,
     reset_db=0.0,
+    loudness_target=False,
 ):
     """Return JavaScript source for the scrolling level/GR history display.
 
     interactive=True makes the reference line draggable (emits ``threshold``);
     double-click resets it to ``reset_db``.
+
+    loudness_target=True (limiter use) draws a momentary-LUFS readout in the
+    top-right that color-codes against a clickable loudness target: clicking the
+    readout block cycles OFF -> -14 -> -16 -> -23 LUFS, emitting ``loudtarget
+    <idx>`` on outlet 0 (green on-target / amber under / red over). Feed it
+    ``set_lufs <db>`` and echo ``set_loudtarget <idx>`` back (no-echo rule).
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return _JS_TEMPLATE.substitute(
@@ -90,6 +97,7 @@ def level_history_js(
         ref_db="null" if ref_db is None else ref_db,
         interactive=1 if interactive else 0,
         reset_db=reset_db,
+        loudness_target=1 if loudness_target else 0,
     )
 
 
@@ -118,6 +126,14 @@ var REF_CLR     = [$ref_color];
 var ref_db = $ref_db;
 var INTERACTIVE = $interactive;
 var RESET_DB = $reset_db;
+var LOUD_ENABLED = $loudness_target;
+// Momentary LUFS + clickable loudness target (limiter use). Click the readout
+// block to cycle OFF -> -14 (streaming) -> -16 (Apple) -> -23 (EBU R128); the M
+// value color-codes against it (green on-target / amber under / red over).
+var lufs = -70.0;
+var loud_target = 0;
+var LOUD_TARGETS = [0.0, -14.0, -16.0, -23.0];
+var LOUD_LABELS = ["", "-14", "-16", "-23"];
 var dragging = 0;
 var flare_env = 0.0;   // smoothed gain-reduction glow on the reference line
 var drag_start_y = 0.0;
@@ -366,6 +382,10 @@ function paint() {
         mgraphics.show_text("GR " + (-peak_gr).toFixed(1) + " dB");
     }
 
+    // Only on the spacious view (pop-out): the narrow inline hero has no room
+    // for it without colliding the ceiling pill + GR readout.
+    if (LOUD_ENABLED && plot_w() > 300) draw_loudness();
+
     // Border.
     mgraphics.set_source_rgba(BORDER_CLR);
     mgraphics.set_line_width(1.0);
@@ -373,7 +393,51 @@ function paint() {
     mgraphics.stroke();
 }
 
+// Momentary-LUFS readout + clickable loudness-target chip (top-right), drawn
+// only when LOUD_ENABLED. A limiter's natural loudness compliance read: the M
+// value goes green on-target, amber under, red over the active streaming target.
+function draw_loudness() {
+    var rx = plot_r() - 6;        // right edge for right-aligned text
+    var ty = plot_t() + 12;
+    mgraphics.select_font_face("Arial");
+    mgraphics.set_font_size(8.0);
+    var ltxt = (lufs <= -70.0) ? "M -inf LUFS"
+        : ("M " + ((lufs >= 0 ? "+" : "") + lufs.toFixed(1)) + " LUFS");
+    var lw = ltxt.length * 4.4;
+    var mr = TEXT_CLR[0], mg = TEXT_CLR[1], mb = TEXT_CLR[2];
+    if (loud_target > 0 && lufs > -70.0) {
+        var tgt = LOUD_TARGETS[loud_target];
+        if (lufs > tgt + 1.0) { mr = 0.95; mg = 0.43; mb = 0.39; }        // over -> red
+        else if (lufs >= tgt - 1.0) { mr = 0.36; mg = 0.86; mb = 0.56; }  // on target -> green
+        else { mr = 0.96; mg = 0.78; mb = 0.36; }                        // under -> amber
+    }
+    mgraphics.set_source_rgba(mr, mg, mb, 0.95);
+    mgraphics.move_to(rx - lw, ty);
+    mgraphics.show_text(ltxt);
+    var gtxt = (loud_target > 0) ? ("TGT " + LOUD_LABELS[loud_target] + " <") : "TGT OFF <";
+    var gw = gtxt.length * 4.0;
+    mgraphics.set_font_size(7.0);
+    if (loud_target > 0) mgraphics.set_source_rgba(0.70, 0.76, 0.85, 0.85);
+    else mgraphics.set_source_rgba(0.46, 0.51, 0.59, 0.72);
+    mgraphics.move_to(rx - gw, ty + 11.0);
+    mgraphics.show_text(gtxt);
+}
+
 // ── Messages ─────────────────────────────────────────────────────────
+function set_lufs(v) {
+    v = parseFloat(v);
+    if (!isFinite(v)) v = -70.0;   // NaN guard (per-frame handler)
+    lufs = clamp(v, -70.0, 0.0);
+    mgraphics.redraw();
+}
+
+function set_loudtarget(v) {
+    var gi = parseInt(v, 10);
+    if (!(gi >= 0)) gi = 0; else if (gi > 3) gi = 3;
+    loud_target = gi;
+    mgraphics.redraw();
+}
+
 function levels(env_db, gr_db) {
     // Guard: a per-frame TypeError flood wedges Max's UI thread Live-wide.
     var e = parseFloat(env_db);
@@ -440,11 +504,29 @@ function pointer_y(pe, fb) {
     if (pe.clientY !== undefined) return pe.clientY;
     return fb;
 }
+function pointer_x(pe, fb) {
+    if (!pe) return fb;
+    if (pe.x !== undefined) return pe.x;
+    if (pe.localX !== undefined) return pe.localX;
+    if (pe.offsetX !== undefined) return pe.offsetX;
+    if (pe.clientX !== undefined) return pe.clientX;
+    return fb;
+}
 function pointer_buttons(pe, fb) {
     if (!pe) return fb;
     if (pe.buttons !== undefined) return pe.buttons;
     if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
     return fb;
+}
+
+// Hit-test the top-right loudness readout block (M + TGT chip). A press there
+// cycles the loudness target instead of grabbing the reference line.
+function loud_hit(pe) {
+    if (!LOUD_ENABLED || plot_w() <= 300) return 0;
+    var px = pointer_x(pe, NaN), py = pointer_y(pe, NaN);
+    if (isNaN(px) || isNaN(py)) return 0;
+    var rx = plot_r() - 6, ty = plot_t() + 12;
+    return (px >= rx - 86 && px <= rx + 2 && py >= ty - 9 && py <= ty + 14) ? 1 : 0;
 }
 function pointer_shift_key(pe) {
     return (pe && pe.shiftKey) ? 1 : 0;
@@ -499,7 +581,15 @@ function reset_ref() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b())); }
+function onpointerdown(pe) {
+    if (loud_hit(pe)) {
+        loud_target = (loud_target + 1) & 3;   // cycle 0..3
+        outlet(0, "loudtarget", loud_target);
+        mgraphics.redraw();
+        return;
+    }
+    start_drag(pointer_y(pe, plot_b()));
+}
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
         drag_to(pointer_y(pe, plot_b()), pointer_shift_key(pe));
