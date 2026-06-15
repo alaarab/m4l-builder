@@ -586,6 +586,27 @@ class TestLevelHistoryBehavior:
         assert result.state["cap"] == 30
         assert result.state["count"] == 30  # saturated, wrapped, no crash
 
+    def test_shift_fine_adjust_ref_line(self):
+        # Shift = fine-adjust: the ceiling/threshold line eases ~15% toward the
+        # cursor instead of snapping (Pro-L/Pro-C precision placement).
+        plain = run_jsui(level_history_js(interactive=True, lo_db=-48, hi_db=6,
+                                          ref_db=-0.3), """
+            onpointerdown({y: 20, buttons: 1});
+            for (var i = 0; i < 20; i++) onpointermove({y: 80, buttons: 1});
+            dump({ref: ref_db});
+        """, size=(208, 152))
+        fine = run_jsui(level_history_js(interactive=True, lo_db=-48, hi_db=6,
+                                         ref_db=-0.3), """
+            onpointerdown({y: 20, buttons: 1, shiftKey: 1});
+            for (var i = 0; i < 20; i++) onpointermove({y: 80, buttons: 1, shiftKey: 1});
+            dump({ref: ref_db});
+        """, size=(208, 152))
+        start = -0.3
+        dp = plain.state["ref"] - start
+        df = fine.state["ref"] - start
+        assert abs(df) < abs(dp)
+        assert 0.15 < (df / dp) < 0.25   # ~1/5th, STABLE after 20 moves
+
 
 class TestTransferCurveDrag:
     def test_drag_sets_threshold_absolute(self):
@@ -667,6 +688,49 @@ class TestTransferCurveDrag:
         assert result.state["up"] > 2.0
         assert result.state["down"] < result.state["up"]
         assert len(_named(result.outlets, "ratio")) >= 1
+
+    def test_shift_fine_adjust_threshold(self):
+        # Shift = fine-adjust: the threshold moves 1/5th of the cursor distance
+        # FROM THE PRESS, and (critically) stays there over many move events
+        # rather than creeping to the cursor (relative-to-start, not a lag).
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        plain = run_jsui(transfer_curve_js(), """
+            set_threshold(-12.0);
+            onpointerdown({x: 60, y: 50, buttons: 1});
+            for (var i = 0; i < 20; i++) onpointermove({x: 60, y: 95, buttons: 1});
+            dump({thr: threshold});
+        """, size=(132, 152))
+        fine = run_jsui(transfer_curve_js(), """
+            set_threshold(-12.0);
+            onpointerdown({x: 60, y: 50, buttons: 1, shiftKey: 1});
+            for (var i = 0; i < 20; i++) onpointermove({x: 60, y: 95, buttons: 1, shiftKey: 1});
+            dump({thr: threshold});
+        """, size=(132, 152))
+        start = -12.0
+        dp = plain.state["thr"] - start
+        df = fine.state["thr"] - start
+        assert abs(df) < abs(dp)                    # fine moves less
+        assert 0.15 < (df / dp) < 0.25              # ~1/5th, STABLE after 20 moves
+
+    def test_shift_fine_adjust_ratio(self):
+        # Shift slows the per-pixel ratio rate to 15% for fine control.
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        plain = run_jsui(transfer_curve_js(), """
+            set_ratio(2.0);
+            onpointerdown({x: 40, y: 60, buttons: 1});
+            onpointermove({x: 90, y: 60, buttons: 1});
+            dump({r: ratio});
+        """, size=(132, 152))
+        fine = run_jsui(transfer_curve_js(), """
+            set_ratio(2.0);
+            onpointerdown({x: 40, y: 60, buttons: 1, shiftKey: 1});
+            onpointermove({x: 90, y: 60, buttons: 1, shiftKey: 1});
+            dump({r: ratio});
+        """, size=(132, 152))
+        dp = plain.state["r"] - 2.0
+        df = fine.state["r"] - 2.0
+        assert df > 0 and df < dp
+        assert 0.15 < (df / dp) < 0.25
 
     def test_vertical_drag_leaves_ratio_untouched(self):
         # A pure vertical (threshold) drag must not nudge ratio.

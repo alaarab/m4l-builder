@@ -446,14 +446,26 @@ function pointer_buttons(pe, fb) {
     if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
     return fb;
 }
+function pointer_shift_key(pe) {
+    return (pe && pe.shiftKey) ? 1 : 0;
+}
 
 function y_to_db(y) {
     return lo_db + ((plot_b() - y) / plot_h()) * (hi_db - lo_db);
 }
 
-function apply_ref(y) {
+function apply_ref(y, fine) {
     if (isNaN(y)) return;
-    ref_db = clamp(y_to_db(y), lo_db, Math.min(hi_db, 0.0));
+    var target = clamp(y_to_db(y), lo_db, Math.min(hi_db, 0.0));
+    // Shift = fine-adjust (Pro-Q/Pro-C tactile grammar): move only 1/5th of the
+    // cursor distance FROM THE PRESS POINT — a stable 5x-finer drag for surgical
+    // ceiling/threshold placement (relative-to-start, so it does NOT creep back
+    // to the cursor over many move events). Plain drag stays absolute.
+    if (fine && isFinite(drag_start_ref)) {
+        target = clamp(drag_start_ref + (target - drag_start_ref) * 0.20,
+                       lo_db, Math.min(hi_db, 0.0));
+    }
+    ref_db = target;
     outlet(0, "threshold", Math.round(ref_db * 10) / 10);
     mgraphics.redraw();
 }
@@ -461,13 +473,16 @@ function apply_ref(y) {
 function start_drag(y) {
     if (!INTERACTIVE) return;
     dragging = 1;
+    // Anchor for shift=fine (relative-to-press); fall back to the floor if the
+    // line was hidden so fine still has a sane origin.
+    drag_start_ref = (ref_db !== null && isFinite(ref_db)) ? ref_db : lo_db;
     // Arm only (don't apply on press) so the first click of a double-click
     // doesn't jump the line before reset_ref() runs. The drag sets it on move.
 }
 
 function drag_to(y, fine) {
     if (!dragging) return;
-    apply_ref(y);
+    apply_ref(y, fine);
 }
 
 function end_drag() {
@@ -487,7 +502,7 @@ function reset_ref() {
 function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b())); }
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
-        drag_to(pointer_y(pe, plot_b()), 0);
+        drag_to(pointer_y(pe, plot_b()), pointer_shift_key(pe));
     } else if (dragging) {
         end_drag();
     }

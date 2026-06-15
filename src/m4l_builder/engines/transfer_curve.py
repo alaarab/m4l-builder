@@ -129,6 +129,7 @@ var drag_start_y = 0;
 var drag_start_threshold = 0.0;
 var drag_start_x = 0.0;
 var drag_start_ratio = 2.0;
+var drag_start_threshold = 0.0;   // anchor for shift=fine (relative-to-press)
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -377,23 +378,34 @@ function pointer_buttons(pe, fb) {
     if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
     return fb;
 }
+function pointer_shift_key(pe) {
+    return (pe && pe.shiftKey) ? 1 : 0;
+}
 
 function y_to_threshold(y) {
     return clamp(MIN_DB + ((plot_b() - y) / plot_h()) * (MAX_DB - MIN_DB), MIN_DB, 0.0);
 }
 
-function apply_threshold(y) {
+// Shift = fine-adjust (Pro-Q/Pro-C tactile grammar): threshold eases 15% toward
+// the cursor for surgical placement; plain drag stays absolute (follows cursor).
+function apply_threshold(y, fine) {
     if (isNaN(y)) return;
-    threshold = y_to_threshold(y);
+    var target = y_to_threshold(y);
+    // Move only 1/5th of the cursor distance FROM THE PRESS POINT — a stable
+    // 5x-finer drag (relative-to-start, so it does not creep to the cursor).
+    if (fine) target = drag_start_threshold + (target - drag_start_threshold) * 0.20;
+    threshold = clamp(target, MIN_DB, 0.0);
     outlet(0, "threshold", Math.round(threshold * 10) / 10);
     mgraphics.redraw();
 }
 
 // Horizontal drag = ratio (relative to the press), for compressors. A pure
 // vertical drag (x unchanged) leaves ratio alone; limiters set RATIO_DRAG = 0.
-function apply_ratio(x) {
+// Shift slows the per-pixel rate to 15% for fine ratio control.
+function apply_ratio(x, fine) {
     if (!RATIO_DRAG || isNaN(x)) return;
-    var nr = clamp(drag_start_ratio + (x - drag_start_x) * RATIO_PER_PX, 1.0, 20.0);
+    var rate = RATIO_PER_PX * (fine ? 0.20 : 1.0);
+    var nr = clamp(drag_start_ratio + (x - drag_start_x) * rate, 1.0, 20.0);
     if (Math.abs(nr - ratio) < 0.01) return;
     ratio = nr;
     outlet(0, "ratio", Math.round(ratio * 10) / 10);
@@ -406,9 +418,10 @@ function start_drag(y, x) {
     dragging = 1;
     drag_start_x = isNaN(x) ? 0.0 : x;
     drag_start_ratio = ratio;
+    drag_start_threshold = threshold;
     ds_set_cursor(DS_CUR_GRAB);
 }
-function drag_to(y, x, fine) { if (dragging) { apply_threshold(y); apply_ratio(x); } }
+function drag_to(y, x, fine) { if (dragging) { apply_threshold(y, fine); apply_ratio(x, fine); } }
 function end_drag() {
     if (!dragging) return;
     dragging = 0;
@@ -425,7 +438,7 @@ function reset_threshold() {
 function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b()), pointer_x(pe, 0.0)); }
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
-        drag_to(pointer_y(pe, plot_b()), pointer_x(pe, drag_start_x)); return;
+        drag_to(pointer_y(pe, plot_b()), pointer_x(pe, drag_start_x), pointer_shift_key(pe)); return;
     }
     if (dragging) { end_drag(); return; }
     if (!hovering) { hovering = 1; mgraphics.redraw(); }
