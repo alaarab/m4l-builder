@@ -142,6 +142,54 @@ class TestEqCurveGestures:
         assert abs(result.state["created_freq"] - 2000.0) < 120.0, \
             "flat spectrum must place the band exactly at the click"
 
+    def test_sketch_bump_creates_a_boost_band_at_the_apex(self):
+        # EQ Sketch: with sketch_mode on, dragging a bump (0 -> +9 -> 0) drops a
+        # single boost band near the apex; the existing node gestures are bypassed.
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_sketch(1);
+            onpointerdown({x: freq_to_x(100.0), y: gain_to_y(0.0)});
+            onpointermove({x: freq_to_x(300.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(1000.0), y: gain_to_y(9.0), buttons: 1});
+            onpointermove({x: freq_to_x(3000.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(8000.0), y: gain_to_y(0.0), buttons: 1});
+            onpointerup({x: freq_to_x(8000.0), y: gain_to_y(0.0)});
+            var idx = -1, n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) { n += 1; if (idx < 0) idx = i; }
+            dump({n: n, freq: bands[idx].freq, gain: bands[idx].gain});
+        """)
+        assert result.state["n"] == 1, "a single bump sketches one band"
+        assert 500.0 < result.state["freq"] < 2000.0, "band lands near the apex"
+        assert result.state["gain"] > 2.0, "the apex sketches a boost"
+        assert len(_named(result.outlets, "band_freq")) == 1
+
+    def test_sketch_flat_stroke_creates_nothing(self):
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_sketch(1);
+            onpointerdown({x: freq_to_x(100.0), y: gain_to_y(0.0)});
+            onpointermove({x: freq_to_x(1000.0), y: gain_to_y(0.2), buttons: 1});
+            onpointermove({x: freq_to_x(8000.0), y: gain_to_y(0.0), buttons: 1});
+            onpointerup({x: freq_to_x(8000.0), y: gain_to_y(0.0)});
+            var n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) n += 1;
+            dump({n: n});
+        """)
+        assert result.state["n"] == 0, "a flat stroke adds no bands"
+
+    def test_sketch_off_leaves_node_gestures_intact(self):
+        # With sketch_mode off a press behaves normally (here: double-click adds).
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_sketch(0);
+            ondblclick(freq_to_x(2000.0), gain_to_y(0.0), 1, 0, 0, 0, 0, 0);
+            var n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) n += 1;
+            dump({n: n, sketching: sketching});
+        """)
+        assert result.state["n"] == 1, "node gestures still work when sketch is off"
+        assert result.state["sketching"] == 0
+
     def test_option_click_toggles_enable_not_delete(self):
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
