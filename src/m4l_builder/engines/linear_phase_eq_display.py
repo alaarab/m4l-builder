@@ -834,7 +834,7 @@ function draw_grid() {
 // Draw-time triangular smoothing (read-only -> never compounds) that rounds the
 // wide-cell max-envelope plateaus into a clean curve.
 function analyzer_smooth_at(i, n) {
-    var R = 4, acc = 0.0, wsum = 0.0, k, idx, w;
+    var R = 1, acc = 0.0, wsum = 0.0, k, idx, w;
     for (k = -R; k <= R; k++) {
         idx = i + k;
         if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;
@@ -1663,7 +1663,7 @@ function update_analyzer_from_fft(mags) {
     var hz_per_bin = (sample_rate * 0.5) / m;
     // Fixed ~1/4-octave half-cell + peak-dominant energy = a max envelope that
     // fills inter-harmonic valleys up to the harmonic tops -> clean smooth curve.
-    var half = 0.011;
+    var half = 0.0035;
     var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
