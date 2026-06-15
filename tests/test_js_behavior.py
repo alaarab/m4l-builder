@@ -25,6 +25,13 @@ def _named(outlets, name):
     return [o for o in outlets if len(o) > 1 and o[1] == name]
 
 
+def _non_chip(outlets):
+    # chip_num/chip_band/chip_sel are the band-chip-row DISPLAY feed (Para<->LP
+    # parity), not a param echo — exclude them from no-echo assertions.
+    return [o for o in outlets
+            if not (len(o) > 1 and str(o[1]).startswith("chip_"))]
+
+
 class TestEqCurveNoteNames:
     def test_note_name_maps_known_pitches(self):
         # it131: frequency readouts show the nearest musical note (Pro-Q style).
@@ -57,7 +64,7 @@ class TestEqCurveGestures:
             set_band(0, 1000.0, 6.0, 1.0, 0, 1);
             dump({n: __captured.outlets.length});
         """)
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_double_click_on_gain_band_resets_gain_not_delete(self):
         result = run_jsui(eq_curve_js(), """
@@ -204,7 +211,7 @@ class TestEqCurveAnalyzerTilt:
             update_analyzer_data([-10, -20, -30, -40]);
             dump({n: __captured.outlets.length});
         """)
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_slope_pivots_at_1k_and_clamps(self):
         result = run_jsui(eq_curve_js(), """
@@ -284,7 +291,7 @@ class TestEqCurveDynamic:
             update_dynamic_from_fft(mags);
             dump({n: __captured.outlets.length});
         """)
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_dynamic_band_compresses_on_signal(self):
         result = run_jsui(eq_curve_js(), """
@@ -507,7 +514,7 @@ class TestLinearPhaseAnalyzerTilt:
             update_analyzer_data([-10, -20, -30, -40]);
             dump({n: __captured.outlets.length});
         """)
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_slope_pivots_at_1k_and_clamps(self):
         result = run_jsui(linear_phase_eq_display_js(), """
@@ -568,7 +575,7 @@ class TestLevelHistoryBehavior:
             clear();
             dump({ok: 1});
         """, size=(208, 152))
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_ring_wraps_and_guards_nonfinite(self):
         result = run_jsui(level_history_js(seconds=1.0, rate_hz=30.0), """
@@ -960,7 +967,7 @@ class TestLevelHistoryInteractive:
             onpointerup({x: 60, y: 90, buttons: 0});
             dump({ref: ref_db, dragging: dragging});
         """, size=(208, 152))
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
         assert result.state == {"ref": -20.0, "dragging": 0}
 
     def test_interactive_drag_sets_threshold_absolute_with_drag_owns_line(self):
@@ -1102,7 +1109,7 @@ class TestBallisticsCurve:
             onpointermove({x: 40, y: 30, buttons: 1});
             dump({ok: 1});
         """, size=(132, 68))
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_double_click_resets_attack_and_release(self):
         # it108: double-click resets BOTH attack + release to defaults, emits both.
@@ -1124,7 +1131,7 @@ class TestBallisticsCurve:
             ondblclick(50, 30, 1, 0, 0, 0, 0, 0);
             dump({ok: 1});
         """, size=(132, 68))
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
 
 class TestLoopFilterCurve:
@@ -1137,7 +1144,7 @@ class TestLoopFilterCurve:
             set_tone(40);
             dump({damp: damp_pct, tone: tone_pct});
         """)
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
         assert abs(result.state["damp"] - 60) < 1e-6
         assert abs(result.state["tone"] - 40) < 1e-6
 
@@ -1168,7 +1175,7 @@ class TestLoopFilterCurve:
             dump({dragging: dragging});
         """)
         assert result.state["dragging"] == 0
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_double_click_resets_damp_and_tone(self):
         # it108: double-click resets DAMP+TONE to their defaults, emits both.

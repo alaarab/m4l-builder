@@ -1172,6 +1172,38 @@ function rebuild_band_cache() {
         }
     }
     refresh_animation_task();
+    emit_chip_states();
+}
+
+// Band CHIP ROW feed (Pro-Q-style band overview, Para<->LP parity). Emits unique
+// selectors so the existing outlet-0 band-router traffic is untouched; the product
+// routes chip_num/chip_band/chip_sel into a band_chip_row jsui. Called from
+// rebuild_band_cache (covers add/delete/toggle/drag) and set_selected (selection).
+function emit_chip_states() {
+    var i;
+    outlet(0, "chip_num", num_bands);
+    for (i = 0; i < num_bands; i++) {
+        outlet(0, "chip_band", i,
+            bands[i].present ? 1 : 0, bands[i].enabled ? 1 : 0, 0);
+    }
+    outlet(0, "chip_sel", selected_band);
+}
+
+// Chip clicks (from the band_chip_row jsui): select a band / toggle its enable.
+function select_band(idx) {
+    idx = Math.floor(idx);
+    if (idx < 0 || idx >= num_bands || !bands[idx].present) return;
+    set_selected(idx);
+    outlet(0, "selected_band", selected_band);
+}
+function toggle_band_enable(idx) {
+    idx = Math.floor(idx);
+    if (idx < 0 || idx >= num_bands || !bands[idx].present) return;
+    bands[idx].enabled = bands[idx].enabled ? 0 : 1;
+    selected_band = idx;
+    rebuild_band_cache();
+    outlet(0, "band_enable", idx, bands[idx].enabled);
+    outlet(0, "selected_band", idx);
 }
 
 // ── Build frequency table (logarithmic spacing) ─────────────────────
@@ -2106,6 +2138,7 @@ function set_selected(idx) {
         selected_band = idx;
     }
     force_redraw();
+    emit_chip_states();
 }
 
 function set_motion(idx, enabled) {
