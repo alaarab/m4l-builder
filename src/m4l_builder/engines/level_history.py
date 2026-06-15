@@ -262,21 +262,39 @@ function paint() {
         mgraphics.stroke();
     }
 
-    // Reference level line (ceiling/threshold) on the level scale.
+    // Reference level line (ceiling/threshold) on the level scale, with a dB
+    // readout pill. While DRAGGING the line the pill brightens + enlarges and
+    // rides the cursor's level (Pro-C/Pro-L threshold feedback); idle it's a
+    // subtle tag so the value is always legible.
     if (ref_db !== null && ref_db >= lo_db && ref_db <= hi_db) {
         y = db_to_y(ref_db);
-        mgraphics.set_source_rgba(REF_CLR);
-        mgraphics.set_line_width(1.2);
+        var big = (INTERACTIVE && dragging) ? 1 : 0;
+        mgraphics.set_source_rgba(REF_CLR[0], REF_CLR[1], REF_CLR[2],
+            (REF_CLR.length > 3 ? REF_CLR[3] : 1.0) * (big ? 1.0 : 0.85));
+        mgraphics.set_line_width(big ? 1.8 : 1.2);
         var dash_x = plot_l();
+        var dash_len = big ? 7 : 5, dash_gap = big ? 11 : 9;
         while (dash_x < plot_r()) {
             mgraphics.move_to(dash_x, y);
-            mgraphics.line_to(Math.min(dash_x + 5, plot_r()), y);
+            mgraphics.line_to(Math.min(dash_x + dash_len, plot_r()), y);
             mgraphics.stroke();
-            dash_x += 9;
+            dash_x += dash_gap;
         }
-        mgraphics.set_font_size(6.5);
-        mgraphics.move_to(plot_r() - 26, y - 3);
-        mgraphics.show_text(ref_db.toFixed(1));
+        // The readout pill.
+        var rtxt = ((ref_db >= 0 ? "+" : "") + ref_db.toFixed(1)) + " dB";
+        var fs = big ? 9.5 : 7.0;
+        var pw = rtxt.length * (big ? 5.8 : 4.0) + (big ? 12 : 6);
+        var ph = big ? 15 : 10;
+        var pxx = plot_r() - pw - 2;
+        var pyy = clamp(y - ph * 0.5, plot_t() + 1, plot_b() - ph - 1);
+        mgraphics.set_source_rgba(REF_CLR[0], REF_CLR[1], REF_CLR[2], big ? 0.96 : 0.20);
+        mgraphics.rectangle_rounded(pxx, pyy, pw, ph, 3, 3);
+        mgraphics.fill();
+        if (big) mgraphics.set_source_rgba(0.05, 0.06, 0.08, 0.97);
+        else mgraphics.set_source_rgba(REF_CLR[0], REF_CLR[1], REF_CLR[2], 0.96);
+        mgraphics.set_font_size(fs);
+        mgraphics.move_to(pxx + (big ? 6 : 3), pyy + (big ? 10.8 : 7.6));
+        mgraphics.show_text(rtxt);
     }
 
     // Peak GR over the most recent ~1.5 s, as a readout.
