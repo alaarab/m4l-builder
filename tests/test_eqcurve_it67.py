@@ -30,6 +30,12 @@ def _named(outlets, name):
     return [o for o in outlets if len(o) > 1 and o[1] == name]
 
 
+def _non_chip(outlets):
+    # chip_* = band-chip-row DISPLAY feed (Para<->LP parity), not a param echo.
+    return [o for o in outlets
+            if not (len(o) > 1 and str(o[1]).startswith("chip_"))]
+
+
 class TestDynamicRingGrabbableAtZero:
     def test_ring_hit_testable_when_amount_zero(self):
         # Band is dynamic-enabled but its range is exactly 0. The ring must be
@@ -222,7 +228,7 @@ class TestMotionHandlersEchoSafe:
         assert s["after_depth"] == 0, "depth must not enable motion"
         assert abs(s["rate"] - 3.5) < 1e-6
         assert abs(s["depth"] - 50.0) < 1e-6
-        assert result.outlets == [], "rate/depth handlers never echo"
+        assert _non_chip(result.outlets) == [], "rate/depth handlers never echo"
 
     def test_set_motion_owns_enable(self):
         # set_motion is the sole owner of the enable flag; it never fires an
@@ -239,7 +245,7 @@ class TestMotionHandlersEchoSafe:
         s = result.state
         assert s["on"] == 1
         assert s["off"] == 0
-        assert result.outlets == []
+        assert _non_chip(result.outlets) == []
 
     def test_disable_motion_keeps_rate_depth_so_no_reenable(self):
         # The exact echo scenario: the product, on motion-off, would re-send the
