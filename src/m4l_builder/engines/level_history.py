@@ -119,6 +119,7 @@ var ref_db = $ref_db;
 var INTERACTIVE = $interactive;
 var RESET_DB = $reset_db;
 var dragging = 0;
+var flare_env = 0.0;   // smoothed gain-reduction glow on the reference line
 var drag_start_y = 0.0;
 var drag_start_ref = 0.0;
 var lo_db = $lo_db;
@@ -269,9 +270,31 @@ function paint() {
     if (ref_db !== null && ref_db >= lo_db && ref_db <= hi_db) {
         y = db_to_y(ref_db);
         var big = (INTERACTIVE && dragging) ? 1 : 0;
+
+        // Flare: the reference line IGNITES with gain reduction (the Pro-L/Pro-C
+        // signature — the threshold/ceiling lights up as the signal slams it).
+        // Fast attack / slow release so it glows briefly after each transient;
+        // fully guarded so there is zero extra drawing when nothing is reducing.
+        var cur_gr = (count > 0) ? -gr_ring[frame_at(count - 1)] : 0.0;
+        var ftarget = clamp(cur_gr / 6.0, 0.0, 1.0);
+        flare_env = (ftarget > flare_env) ? ftarget : (flare_env * 0.85 + ftarget * 0.15);
+        if (flare_env > 0.01) {
+            var fk;
+            for (fk = 0; fk < 3; fk++) {
+                var fw = (3.0 + 8.0 * flare_env) * (1.0 - fk * 0.28);
+                var fa = (0.07 + 0.22 * flare_env) * (1.0 + fk * 0.45);
+                mgraphics.set_source_rgba(REF_CLR[0], REF_CLR[1], REF_CLR[2], fa);
+                mgraphics.set_line_width(fw);
+                mgraphics.move_to(plot_l(), y);
+                mgraphics.line_to(plot_r(), y);
+                mgraphics.stroke();
+            }
+        }
+
         mgraphics.set_source_rgba(REF_CLR[0], REF_CLR[1], REF_CLR[2],
-            (REF_CLR.length > 3 ? REF_CLR[3] : 1.0) * (big ? 1.0 : 0.85));
-        mgraphics.set_line_width(big ? 1.8 : 1.2);
+            (REF_CLR.length > 3 ? REF_CLR[3] : 1.0)
+                * (big ? 1.0 : (0.85 + 0.15 * flare_env)));
+        mgraphics.set_line_width(big ? 1.8 : (1.2 + 0.6 * flare_env));
         var dash_x = plot_l();
         var dash_len = big ? 7 : 5, dash_gap = big ? 11 : 9;
         while (dash_x < plot_r()) {
