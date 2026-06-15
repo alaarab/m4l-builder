@@ -831,6 +831,20 @@ function draw_grid() {
     }
 }
 
+// Draw-time triangular smoothing (read-only -> never compounds) that rounds the
+// wide-cell max-envelope plateaus into a clean curve.
+function analyzer_smooth_at(i, n) {
+    var R = 4, acc = 0.0, wsum = 0.0, k, idx, w;
+    for (k = -R; k <= R; k++) {
+        idx = i + k;
+        if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;
+        w = (R + 1) - (k < 0 ? -k : k);
+        acc += analyzer_display[idx] * w;
+        wsum += w;
+    }
+    return acc / wsum;
+}
+
 function draw_analyzer() {
     var n, x, y, peak_db, f, tilt;
     if (!analyzer_enabled) return;
@@ -848,7 +862,7 @@ function draw_analyzer() {
     for (i = 0; i < n; i++) {
         f = analyzer_bin_freq(i, n);
         x = freq_to_x(f);
-        y = analyzer_db_to_y(analyzer_tilted_db(analyzer_display[i], analyzer_slope_at(f)));
+        y = analyzer_db_to_y(analyzer_tilted_db(analyzer_smooth_at(i, n), analyzer_slope_at(f)));
         mgraphics.line_to(x, y);
     }
     mgraphics.line_to(freq_to_x(analyzer_bin_freq(n - 1, n)), plot_bottom());
@@ -860,7 +874,7 @@ function draw_analyzer() {
     for (i = 0; i < n; i++) {
         f = analyzer_bin_freq(i, n);
         x = freq_to_x(f);
-        y = analyzer_db_to_y(analyzer_tilted_db(analyzer_display[i], analyzer_slope_at(f)));
+        y = analyzer_db_to_y(analyzer_tilted_db(analyzer_smooth_at(i, n), analyzer_slope_at(f)));
         if (i === 0) mgraphics.move_to(x, y);
         else mgraphics.line_to(x, y);
     }
@@ -1647,9 +1661,9 @@ function update_analyzer_from_fft(mags) {
     if (m < 4) return;
     ensure_analyzer_arrays();
     var hz_per_bin = (sample_rate * 0.5) / m;
-    // Wider overlapping cells -> dense harmonics average into a clean envelope
-    // (matches the standalone analyzer; the old 0.5 half-cell was over-sharp).
-    var half = 1.4 / (ANALYZER_BINS - 1);
+    // Fixed ~1/4-octave half-cell + peak-dominant energy = a max envelope that
+    // fills inter-harmonic valleys up to the harmonic tops -> clean smooth curve.
+    var half = 0.011;
     var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
@@ -1697,7 +1711,7 @@ function update_analyzer_from_fft(mags) {
         }
         // Peak-dominant for sharp tonal spikes (match eq_curve + the
         // standalone analyzer); small mean term tames noise jitter.
-        energy = cnt > 0 ? (0.5 * peak + 0.5 * (sum / cnt)) : 0.0;
+        energy = cnt > 0 ? (0.85 * peak + 0.15 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);

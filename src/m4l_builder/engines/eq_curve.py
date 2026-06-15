@@ -519,10 +519,10 @@ function update_analyzer_from_fft(mags) {
     if (m < 4) return;
     ensure_analyzer_arrays();
     var hz_per_bin = (sample_rate * 0.5) / m;   // mags = FFT_SIZE/2 bins -> Nyquist
-    // Wider, overlapping cells (~2.8x the point spacing) average dense high
-    // harmonics into a clean envelope instead of a comb of needles (matches the
-    // smoothed standalone analyzer; the old 0.5 half-cell was over-sharp).
-    var half = 1.4 / (ANALYZER_BINS - 1);
+    // Fixed ~1/4-octave half-cell (point-count independent). Wide + peak-
+    // dominant energy below = a max envelope that fills inter-harmonic valleys
+    // up to the harmonic tops -> a clean smooth curve, not a comb of needles.
+    var half = 0.011;
     var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db, atk, rel;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
@@ -570,9 +570,9 @@ function update_analyzer_from_fft(mags) {
             if (mag > peak) peak = mag;
             sum += mag; cnt++;
         }
-        // Balanced peak/mean: resolves tonal lines but averages dense harmonics
-        // into a clean envelope (the old 0.88/0.12 read as grassy needles).
-        energy = cnt > 0 ? (0.5 * peak + 0.5 * (sum / cnt)) : 0.0;
+        // Peak-dominant over the wide cell = a max envelope (fills valleys up to
+        // the harmonic tops, keeping the level high) -> a clean smooth curve.
+        energy = cnt > 0 ? (0.85 * peak + 0.15 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
@@ -589,6 +589,21 @@ function update_analyzer_from_fft(mags) {
         }
     }
     request_redraw();
+}
+
+// Draw-time triangular smoothing of the analyzer (read-only -> never compounds
+// across frames, unlike smoothing the temporal analyzer_display state itself).
+// Rounds the wide-cell max-envelope plateaus into a clean curve.
+function analyzer_smooth_at(i, n) {
+    var R = 4, acc = 0.0, wsum = 0.0, k, idx, w;
+    for (k = -R; k <= R; k++) {
+        idx = i + k;
+        if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;
+        w = (R + 1) - (k < 0 ? -k : k);
+        acc += analyzer_display[idx] * w;
+        wsum += w;
+    }
+    return acc / wsum;
 }
 
 function fft_frame() {
@@ -1285,7 +1300,7 @@ function draw_analyzer() {
         freq = analyzer_bin_freq(i, n);
         tilt = analyzer_slope_at(freq);
         xs[i] = freq_to_x(freq);
-        ys[i] = analyzer_db_to_y(analyzer_tilted_db(analyzer_display[i], tilt));
+        ys[i] = analyzer_db_to_y(analyzer_tilted_db(analyzer_smooth_at(i, n), tilt));
         py[i] = analyzer_db_to_y(analyzer_tilted_db(analyzer_peaks[i], tilt));
     }
 
