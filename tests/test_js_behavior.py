@@ -551,6 +551,55 @@ class TestLinearPhaseGestureParity:
         assert abs(result.state["created_freq"] - 1000.0) < 60.0, \
             "LP band created near a peak must snap onto it"
 
+    _SK = ("set_num_bands(8);\n"
+           "for (var i = 0; i < 8; i++) { bands[i].present = 0; bands[i].enabled = 0; }\n"
+           "rebuild_band_cache();\n"
+           "set_sketch(1);\n")
+
+    def test_sketch_bump_creates_a_boost_band_at_the_apex(self):
+        # EQ Sketch ported to the LP engine: a bump stroke drops one boost band.
+        result = run_jsui(linear_phase_eq_display_js(), self._SK + """
+            onpointerdown({x: freq_to_x(100.0), y: gain_to_y(0.0)});
+            onpointermove({x: freq_to_x(300.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(1000.0), y: gain_to_y(9.0), buttons: 1});
+            onpointermove({x: freq_to_x(3000.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(8000.0), y: gain_to_y(0.0), buttons: 1});
+            onpointerup({x: freq_to_x(8000.0), y: gain_to_y(0.0)});
+            var idx = -1, n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) { n += 1; if (idx < 0) idx = i; }
+            dump({n: n, freq: bands[idx].freq, gain: bands[idx].gain});
+        """)
+        assert result.state["n"] == 1, "a single bump sketches one band"
+        assert 500.0 < result.state["freq"] < 2000.0, "band lands near the apex"
+        assert result.state["gain"] > 2.0, "the apex sketches a boost"
+        assert len(_named(result.outlets, "add_band")) == 1
+
+    def test_sketch_flat_stroke_creates_nothing(self):
+        result = run_jsui(linear_phase_eq_display_js(), self._SK + """
+            onpointerdown({x: freq_to_x(100.0), y: gain_to_y(0.0)});
+            onpointermove({x: freq_to_x(1000.0), y: gain_to_y(0.2), buttons: 1});
+            onpointermove({x: freq_to_x(8000.0), y: gain_to_y(0.0), buttons: 1});
+            onpointerup({x: freq_to_x(8000.0), y: gain_to_y(0.0)});
+            var n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) n += 1;
+            dump({n: n});
+        """)
+        assert result.state["n"] == 0, "a flat stroke adds no bands"
+
+    def test_sketch_off_leaves_node_gestures_intact(self):
+        result = run_jsui(linear_phase_eq_display_js(), """
+            set_num_bands(8);
+            for (var i = 0; i < 8; i++) { bands[i].present = 0; bands[i].enabled = 0; }
+            rebuild_band_cache();
+            set_sketch(0);
+            handle_double_click(freq_to_x(2000.0), gain_to_y(0.0));
+            var n = 0;
+            for (var i = 0; i < num_bands; i++) if (bands[i].present) n += 1;
+            dump({n: n, sketching: sketching});
+        """)
+        assert result.state["n"] >= 1, "node gestures still work when sketch is off"
+        assert result.state["sketching"] == 0
+
 
 class TestLinearPhaseAnalyzerTilt:
     # Same tilt/freeze contract as eq_curve, ported to the LP display engine.
