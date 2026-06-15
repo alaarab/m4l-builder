@@ -730,6 +730,36 @@ class TestWaveshapeDrag:
         emits = _named(result.outlets, "drive")
         assert len(emits) == 1 and abs(emits[0][2] - 12.0) < 1e-6
 
+    def test_drag_zone_boundary_emits_split_and_resizes_zone(self):
+        # Heat "cool & colorful" finale: grab a zone divider and drag it to
+        # resize which part of the wave a color/mode covers; emit the split as
+        # input amplitude (-1..1) for the gen~. Press ON boundary 0 (~1/3).
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            var bx = bound_x(0), by = plot_t() + 8;
+            var before = zone_bound[0];
+            onpointerdown({x: bx, y: by, buttons: 1});
+            var grabbed = drag_bound;
+            onpointermove({x: plot_l() + 0.5 * plot_w(), y: by, buttons: 1});
+            dump({before: before, after: zone_bound[0], grabbed: grabbed});
+        """, size=(296, 152))
+        assert result.state["grabbed"] == 0, "press on the divider grabs it"
+        assert result.state["after"] > result.state["before"], "dragged right"
+        emits = _named(result.outlets, "z_split_lo")
+        assert len(emits) >= 1
+        assert abs(emits[-1][2] - 0.0) < 0.06, "frac ~0.5 -> input ~0.0"
+        assert _named(result.outlets, "drive") == [], "boundary drag is not a drive drag"
+
+    def test_press_off_divider_is_a_drive_drag_not_boundary(self):
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            // press well away from either divider -> normal drive/bias drag
+            onpointerdown({x: plot_l() + 4, y: plot_t() + 30, buttons: 1});
+            dump({dragbound: drag_bound, dragging: dragging});
+        """, size=(296, 152))
+        assert result.state["dragbound"] == -1
+        assert result.state["dragging"] == 1
+
     def test_horizontal_drag_sets_bias_vertical_leaves_it(self):
         # it107: the hero is a 2-axis pad — vertical = drive, horizontal = bias.
         from m4l_builder.engines.waveshape_curve import waveshape_curve_js

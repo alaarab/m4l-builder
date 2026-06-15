@@ -215,6 +215,34 @@ function set_zmode(z, v) {
     mgraphics.redraw();
 }
 
+// DRAGGABLE zone boundaries (plot-fractions of the input axis). Default thirds;
+// drag a divider on the plot to resize which PART of the wave each color/mode
+// covers (Ala: "select parts of the wave and the color affects that part"). The
+// gen~ reads the same splits as z_split_lo/hi (input amplitude -1..1).
+var zone_bound = [1.0 / 3.0, 2.0 / 3.0];
+var drag_bound = -1;
+function zone_lo_t(z) { return z <= 0 ? 0.0 : zone_bound[z - 1]; }
+function zone_hi_t(z) { return z >= NUM_ZONES - 1 ? 1.0 : zone_bound[z]; }
+// Param echoes (input -1..1 -> plot fraction). Ignored mid-drag (drag owns it).
+function set_z_split_lo(v) {
+    if (drag_bound >= 0) return;
+    zone_bound[0] = clamp((v + 1.0) * 0.5, 0.04, zone_bound[1] - 0.04);
+    mgraphics.redraw();
+}
+function set_z_split_hi(v) {
+    if (drag_bound >= 0) return;
+    zone_bound[1] = clamp((v + 1.0) * 0.5, zone_bound[0] + 0.04, 0.96);
+    mgraphics.redraw();
+}
+function bound_x(i) { return plot_l() + zone_bound[i] * plot_w(); }
+function bound_hit(px, py) {
+    if (isNaN(px) || isNaN(py)) return -1;
+    if (py < plot_t() || py > plot_b()) return -1;
+    var i;
+    for (i = 0; i < 2; i++) { if (Math.abs(px - bound_x(i)) <= 5.0) return i; }
+    return -1;
+}
+
 // Read WAVE_WIN consecutive samples at the current scroll position. This window
 // IS the live wavetable: `scope` (drawn as the oscilloscope) and `curve_tbl`
 // (drawn as the transfer curve + interpolated by sample_transfer) are the same
@@ -445,7 +473,7 @@ function zone_grad(a) {
     var g = mgraphics.pattern_create_linear(plot_l(), 0, plot_r(), 0);
     var z, t0, t1, eff, pal, k, tt, c;
     for (z = 0; z < NUM_ZONES; z++) {
-        t0 = z / NUM_ZONES; t1 = (z + 1) / NUM_ZONES;
+        t0 = zone_lo_t(z); t1 = zone_hi_t(z);
         eff = zone_eff(z);
         if (eff === 0) {
             pal = PALETTES[0];
@@ -640,8 +668,8 @@ function pick_mode(idx) {
 var ZONE_MSGS = ["zmode_lo", "zmode_mid", "zmode_hi"];
 function zone_strip_h() { return 7; }
 function zone_strip_y() { return swatch_y() - zone_strip_h() - 3; }
-function zone_x0(z) { return plot_l() + (z / NUM_ZONES) * plot_w() + 2; }
-function zone_x1(z) { return plot_l() + ((z + 1) / NUM_ZONES) * plot_w() - 2; }
+function zone_x0(z) { return plot_l() + zone_lo_t(z) * plot_w() + 2; }
+function zone_x1(z) { return plot_l() + zone_hi_t(z) * plot_w() - 2; }
 
 function draw_zone_strips() {
     var z, x0, x1, sy = zone_strip_y(), sh = zone_strip_h(), eff, c;
@@ -662,14 +690,22 @@ function draw_zone_strips() {
     }
 }
 
-// Faint vertical dividers at the zone boundaries on the plot.
+// Draggable vertical dividers at the zone boundaries on the plot. Drawn with a
+// little more presence + grip handles so they read as grab targets (the active
+// one brightens while dragging).
 function draw_zone_dividers() {
-    var z, x;
-    mgraphics.set_source_rgba(GRID_CLR[0], GRID_CLR[1], GRID_CLR[2], 0.5);
-    mgraphics.set_line_width(1.0);
-    for (z = 1; z < NUM_ZONES; z++) {
-        x = plot_l() + (z / NUM_ZONES) * plot_w();
-        mgraphics.move_to(x, plot_t()); mgraphics.line_to(x, plot_b()); mgraphics.stroke();
+    var i, x, active, t, b;
+    t = plot_t(); b = plot_b();
+    for (i = 0; i < 2; i++) {
+        x = bound_x(i);
+        active = (drag_bound === i);
+        mgraphics.set_source_rgba(0.92, 0.94, 0.98, active ? 0.85 : 0.34);
+        mgraphics.set_line_width(active ? 1.6 : 1.0);
+        mgraphics.move_to(x, t); mgraphics.line_to(x, b); mgraphics.stroke();
+        // grip handles top + bottom
+        mgraphics.set_source_rgba(0.92, 0.94, 0.98, active ? 0.95 : 0.55);
+        mgraphics.rectangle(x - 2.0, t, 4.0, 3.0); mgraphics.fill();
+        mgraphics.rectangle(x - 2.0, b - 3.0, 4.0, 3.0); mgraphics.fill();
     }
 }
 
@@ -850,6 +886,7 @@ function pointer_buttons(pe, fb) {
 function start_drag(x, y) {
     if (isNaN(y)) return;
     dragging = 1;
+    drag_bound = -1;
     ds_set_cursor(DS_CUR_GRAB);
     drag_start_y = y;
     drag_start_drive = drive_db;
@@ -858,6 +895,19 @@ function start_drag(x, y) {
 }
 
 function drag_to(x, y, fine) {
+    if (drag_bound >= 0) {
+        // Move a zone boundary -> resize which part of the wave a color/mode
+        // covers; emit the split as input amplitude (-1..1) for the gen~.
+        if (isNaN(x)) return;
+        var f = clamp((x - plot_l()) / Math.max(1.0, plot_w()),
+            drag_bound === 0 ? 0.04 : zone_bound[0] + 0.04,
+            drag_bound === 0 ? zone_bound[1] - 0.04 : 0.96);
+        zone_bound[drag_bound] = f;
+        outlet(0, drag_bound === 0 ? "z_split_lo" : "z_split_hi",
+            Math.round((f * 2.0 - 1.0) * 1000) / 1000);
+        mgraphics.redraw();
+        return;
+    }
     if (!dragging || isNaN(y)) return;
     // 2-axis pad: vertical = DRIVE (up = more, 0.3 dB/px; 0.045 with shift),
     // horizontal = BIAS (right = more asymmetry/even harmonics, 0.008/px;
@@ -874,8 +924,9 @@ function drag_to(x, y, fine) {
 }
 
 function end_drag() {
-    if (!dragging) return;
+    if (!dragging && drag_bound < 0) return;
     dragging = 0;
+    drag_bound = -1;
     ds_set_cursor(DS_CUR_ARROW);
     mgraphics.redraw();
 }
@@ -886,6 +937,8 @@ function onpointerdown(pe) {
     if (sh >= 0) { pick_mode(sh); return; }     // swatch wins over a drive drag
     var zh = zone_hit(px, py);
     if (zh >= 0) { cycle_zone(zh); return; }     // zone strip wins too
+    var bh = bound_hit(px, py);                  // a zone divider grabs the drag
+    if (bh >= 0) { drag_bound = bh; dragging = 1; ds_set_cursor(DS_CUR_GRAB); mgraphics.redraw(); return; }
     start_drag(pointer_x(pe, drag_start_x), pointer_y(pe, drag_start_y));
 }
 function onpointermove(pe) {
