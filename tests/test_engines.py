@@ -544,7 +544,7 @@ class TestEqCurveEngine:
 
     def test_contains_double_click_create_delete_and_drag_fast_path(self):
         js = eq_curve_js()
-        assert "function create_band_at(x, y, btype, no_snap)" in js
+        assert "function create_band_at(x, y, btype, no_snap, bq)" in js
         assert "function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl)" in js
         assert "function delete_band_at(idx)" in js
         assert "var DOUBLE_CLICK_MS = 320;" in js

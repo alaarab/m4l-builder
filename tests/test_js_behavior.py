@@ -209,6 +209,32 @@ class TestEqCurveGestures:
         assert result.state["type"] == 1, "low-end step -> LOW SHELF (type 1)"
         assert result.state["gain"] > 6.0, "shelf carries the step gain"
 
+    def test_sketch_q_tracks_drawn_bump_width(self):
+        # A narrow drawn bump sketches a TIGHT bell (high Q); a wide bump a BROAD
+        # one (low Q) — the band follows the shape, not a fixed Q=1.
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_sketch(1);
+            // narrow bump around 1 kHz (~1/3 octave)
+            onpointerdown({x: freq_to_x(900.0), y: gain_to_y(0.0)});
+            onpointermove({x: freq_to_x(950.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(1000.0), y: gain_to_y(9.0), buttons: 1});
+            onpointermove({x: freq_to_x(1060.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(1110.0), y: gain_to_y(0.0), buttons: 1});
+            onpointerup({x: freq_to_x(1110.0), y: gain_to_y(0.0)});
+            // wide bump around 1 kHz (several octaves)
+            onpointerdown({x: freq_to_x(200.0), y: gain_to_y(0.0)});
+            onpointermove({x: freq_to_x(450.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(1000.0), y: gain_to_y(9.0), buttons: 1});
+            onpointermove({x: freq_to_x(2200.0), y: gain_to_y(5.0), buttons: 1});
+            onpointermove({x: freq_to_x(5000.0), y: gain_to_y(0.0), buttons: 1});
+            onpointerup({x: freq_to_x(5000.0), y: gain_to_y(0.0)});
+            dump({qn: bands[0].q, qw: bands[1].q});
+        """)
+        assert result.state["qn"] > 2.5, "a narrow draw makes a tight bell"
+        assert result.state["qw"] < 1.0, "a wide draw makes a broad bell"
+        assert result.state["qn"] > result.state["qw"]
+
     def test_option_click_toggles_enable_not_delete(self):
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);

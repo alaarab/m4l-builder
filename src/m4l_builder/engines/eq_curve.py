@@ -956,11 +956,12 @@ function delete_band_at(idx) {
     mgraphics.redraw();
 }
 
-function create_band_at(x, y, btype, no_snap) {
+function create_band_at(x, y, btype, no_snap, bq) {
     var created_idx;
     var created_freq;
     var created_gain;
     var t = (btype === undefined) ? TYPE_PEAK : Math.floor(btype);
+    var q0 = (bq === undefined || !(bq > 0)) ? 1.0 : clamp(bq, 0.1, 30.0);
     created_idx = find_free_band();
     if (created_idx < 0) return 0;
 
@@ -976,7 +977,7 @@ function create_band_at(x, y, btype, no_snap) {
     created_gain = Math.round(created_gain * 10.0) / 10.0;
     bands[created_idx].freq = clamp(created_freq, MIN_FREQ, MAX_FREQ);
     bands[created_idx].gain = clamp(created_gain, MIN_GAIN, MAX_GAIN);
-    bands[created_idx].q = 1.0;
+    bands[created_idx].q = q0;
     bands[created_idx].type = t;
     bands[created_idx].present = 1;
     bands[created_idx].enabled = 1;
@@ -1048,7 +1049,7 @@ function sketch_commit() {
     sketch_x = [];
     sketch_g = [];
     for (var i = 0; i < anchors.length; i++) {
-        create_band_at(anchors[i].x, gain_to_y(anchors[i].gain), anchors[i].type, 1);
+        create_band_at(anchors[i].x, gain_to_y(anchors[i].gain), anchors[i].type, 1, anchors[i].q);
     }
     mgraphics.redraw();
 }
@@ -1060,9 +1061,27 @@ function sketch_cancel() {
     mgraphics.redraw();
 }
 
+// Estimate a bell's Q from how wide the drawn bump is: find the half-gain points
+// on each side of the extremum, measure the octave span (via x_to_freq), and map
+// it to a Q (narrow draw -> tight bell, wide draw -> broad bell). Falls back to
+// the stroke ends when a side never returns to half-gain.
+function sketch_q(X, S, i, n) {
+    var half = Math.abs(S[i]) * 0.5;
+    var fl = x_to_freq(X[0]), fr = x_to_freq(X[n - 1]), j;
+    for (j = i - 1; j >= 0; j--) { if (Math.abs(S[j]) <= half) { fl = x_to_freq(X[j]); break; } }
+    for (j = i + 1; j < n; j++) { if (Math.abs(S[j]) <= half) { fr = x_to_freq(X[j]); break; } }
+    if (!(fl > 0) || !(fr > fl)) return 1.0;
+    var oct = Math.log(fr / fl) / Math.LN2;
+    if (oct < 0.18) oct = 0.18;
+    if (oct > 3.0) oct = 3.0;
+    var p = Math.pow(2.0, oct);
+    return clamp(Math.sqrt(p) / (p - 1.0), 0.3, 8.0);
+}
+
 // Reduce a freehand stroke to up to 5 band anchors: smooth, take interior local
-// extrema + the endpoints that clear a dB threshold, then greedily keep the
-// strongest with a minimum plot-x spacing. Returns [{x, gain}] (plot x, dB).
+// extrema (Q from their drawn width) + the endpoints/shelves that clear a dB
+// threshold, then greedily keep the strongest with a minimum plot-x spacing.
+// Returns [{x, gain, type, q}] (plot x, dB).
 function fit_sketch(xs, gs) {
     var out = [], n = xs.length, i;
     if (n < 2) return out;
@@ -1108,7 +1127,7 @@ function fit_sketch(xs, gs) {
         var ismax = S[i] > S[i - 1] && S[i] > S[i + 1];
         var ismin = S[i] < S[i - 1] && S[i] < S[i + 1];
         if ((ismax || ismin) && Math.abs(S[i]) >= THRESH) {
-            cand.push({ x: X[i], gain: S[i], type: TYPE_PEAK });
+            cand.push({ x: X[i], gain: S[i], type: TYPE_PEAK, q: sketch_q(X, S, i, n) });
         }
     }
     if (!hi_used && Math.abs(G[n - 1]) >= THRESH) cand.push({ x: X[n - 1], gain: G[n - 1], type: TYPE_PEAK });
