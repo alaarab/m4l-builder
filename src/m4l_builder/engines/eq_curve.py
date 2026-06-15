@@ -526,7 +526,7 @@ function update_analyzer_from_fft(mags) {
     // Moderate cell so harmonics read as CONNECTED bumps with shallow dips
     // (EQ8 look), not deep V-notches plunging to the floor (too narrow) and not
     // a fat filled wall (too wide). Mean-dominant energy below fills the dips.
-    var half = 0.008;
+    var half = 0.0055;
     var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db, atk, rel;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
@@ -574,10 +574,10 @@ function update_analyzer_from_fft(mags) {
             if (mag > peak) peak = mag;
             sum += mag; cnt++;
         }
-        // Mean-dominant: valley points read the band average (the harmonic's
-        // skirt), giving SHALLOW dips between connected bumps rather than deep
-        // notches to the floor; small peak term keeps a little tonal definition.
-        energy = cnt > 0 ? (0.25 * peak + 0.75 * (sum / cnt)) : 0.0;
+        // Peak-dominant so a tone reads as a TIGHT spike like EQ8 (the higher-res
+        // 4096-pt FFT keeps the floor smooth, so we don't need heavy mean-fill);
+        // the mean term only lifts valleys slightly so harmonics stay connected.
+        energy = cnt > 0 ? (0.65 * peak + 0.35 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
@@ -600,7 +600,7 @@ function update_analyzer_from_fft(mags) {
 // across frames, unlike smoothing the temporal analyzer_display state itself).
 // Rounds the wide-cell max-envelope plateaus into a clean curve.
 function analyzer_smooth_at(i, n) {
-    var R = 2, acc = 0.0, wsum = 0.0, k, idx, w;
+    var R = 1, acc = 0.0, wsum = 0.0, k, idx, w;
     for (k = -R; k <= R; k++) {
         idx = i + k;
         if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;
