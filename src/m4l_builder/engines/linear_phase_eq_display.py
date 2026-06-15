@@ -73,7 +73,9 @@ def linear_phase_eq_display_js(
     show_dynamic=True,
     show_hud_badges=True,
     show_selection_readout=True,
-    analyzer_trim_db=18.0,
+    # No boost: with the +12 dB headroom above, a loud signal lands ~80% up as a
+    # backdrop, not pegged at the top. Matches the Parametric EQ. Was 18.
+    analyzer_trim_db=0.0,
 ):
     """Return JavaScript source for the flagship linear-phase EQ display.
 
@@ -154,8 +156,10 @@ var MAX_GAIN = 30;
 var GRAPH_FLOOR = -180;
 var MIN_Q = 0.1;
 var MAX_Q = 30.0;
-var ANALYZER_MIN_DB = -72.0;
-var ANALYZER_MAX_DB = 0.0;
+var ANALYZER_MIN_DB = -78.0;
+// Headroom above 0 dBFS so a loud signal sits ~80% up as a backdrop (EQ8-style),
+// not pegged at the top of the plot. Matches the Parametric EQ analyzer.
+var ANALYZER_MAX_DB = 12.0;
 // Spectrum Grab (Pro-Q): a plain press over an analyzer peak louder than this
 // spawns a band right at that frequency and starts dragging it. The floor sits
 // near ANALYZER_MIN_DB so this cleanly distinguishes a real resonance.
