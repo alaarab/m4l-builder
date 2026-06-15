@@ -224,6 +224,12 @@ var hover_in_plot = 0;
 // (ds_set_cursor / DS_CUR_* / ds_node_glow), prepended to this script.
 var dragging = 0;
 var drag_mode = 0;
+// EQ Sketch (draw-to-EQ): with sketch_mode on, a drag across the plot records a
+// freehand target curve; on release the prominent peaks/dips become bell bands.
+var sketch_mode = 0;
+var sketching = 0;
+var sketch_x = [];   // captured plot x's
+var sketch_g = [];   // captured gains (dB) at those x's
 var drag_start_freq = 0;
 var drag_start_gain = 0;
 var drag_start_q = 1.0;
@@ -1007,6 +1013,110 @@ function create_band_at(x, y) {
     return 1;
 }
 
+// ── EQ Sketch (draw-to-EQ) ───────────────────────────────────────────
+// Pro-Q-style: turn on Sketch, drag the shape you want across the plot, and the
+// prominent peaks/dips of your stroke become bell bands (additive). The fit is
+// pure (no mgraphics/Buffer) so it is unit-testable in the Node harness.
+function set_sketch(v) {
+    sketch_mode = (v && v !== "0") ? 1 : 0;
+    if (!sketch_mode) { sketching = 0; sketch_x = []; sketch_g = []; }
+    mgraphics.redraw();
+}
+
+function sketch_begin(x, y) {
+    sketching = 1;
+    sketch_x = [x];
+    sketch_g = [y_to_gain(y)];
+    mgraphics.redraw();
+}
+
+function sketch_extend(x, y) {
+    if (!sketching) return;
+    sketch_x.push(x);
+    sketch_g.push(y_to_gain(y));
+    mgraphics.redraw();
+}
+
+function sketch_commit() {
+    if (!sketching) return;
+    sketching = 0;
+    var anchors = fit_sketch(sketch_x, sketch_g);
+    sketch_x = [];
+    sketch_g = [];
+    for (var i = 0; i < anchors.length; i++) {
+        create_band_at(anchors[i].x, gain_to_y(anchors[i].gain));
+    }
+    mgraphics.redraw();
+}
+
+function sketch_cancel() {
+    sketching = 0;
+    sketch_x = [];
+    sketch_g = [];
+    mgraphics.redraw();
+}
+
+// Reduce a freehand stroke to up to 5 band anchors: smooth, take interior local
+// extrema + the endpoints that clear a dB threshold, then greedily keep the
+// strongest with a minimum plot-x spacing. Returns [{x, gain}] (plot x, dB).
+function fit_sketch(xs, gs) {
+    var out = [], n = xs.length, i;
+    if (n < 2) return out;
+    var order = [];
+    for (i = 0; i < n; i++) order.push(i);
+    order.sort(function (a, b) { return xs[a] - xs[b]; });
+    var X = [], G = [];
+    for (i = 0; i < n; i++) { X.push(xs[order[i]]); G.push(gs[order[i]]); }
+    // 3-point smooth so pointer jitter does not spawn spurious extrema.
+    var S = [];
+    for (i = 0; i < n; i++) {
+        var a = G[i > 0 ? i - 1 : 0];
+        var c = G[i < n - 1 ? i + 1 : n - 1];
+        S.push((a + G[i] + c) / 3.0);
+    }
+    var THRESH = 1.5;   // dB; flatter strokes than this add nothing
+    var MIN_PX = 22;    // min plot-x gap between two sketched bands
+    var CAP = 5;
+    var cand = [];
+    // Endpoints use the RAW gain (smoothing pulls a flat end up toward an
+    // interior bump, which would spawn a spurious edge band). A genuine shelf
+    // that ends high/low still qualifies; a bump's flat tails do not.
+    if (Math.abs(G[0]) >= THRESH) cand.push({ x: X[0], gain: G[0] });
+    for (i = 1; i < n - 1; i++) {
+        // STRICT extrema only: a flat/sloped run is not a peak, so a broad flat
+        // stroke reduces to its endpoints (spread) instead of every tie-point
+        // packing in from the left until the band slots run out.
+        var ismax = S[i] > S[i - 1] && S[i] > S[i + 1];
+        var ismin = S[i] < S[i - 1] && S[i] < S[i + 1];
+        if ((ismax || ismin) && Math.abs(S[i]) >= THRESH) {
+            cand.push({ x: X[i], gain: S[i] });
+        }
+    }
+    if (Math.abs(G[n - 1]) >= THRESH) cand.push({ x: X[n - 1], gain: G[n - 1] });
+    cand.sort(function (a, b) { return Math.abs(b.gain) - Math.abs(a.gain); });
+    for (i = 0; i < cand.length && out.length < CAP; i++) {
+        var ok = 1;
+        for (var j = 0; j < out.length; j++) {
+            if (Math.abs(cand[i].x - out[j].x) < MIN_PX) { ok = 0; break; }
+        }
+        if (ok) out.push(cand[i]);
+    }
+    return out;
+}
+
+// The live stroke preview while sketching (a dashed accent polyline).
+function draw_sketch() {
+    if (!sketching || sketch_x.length < 2) return;
+    mgraphics.set_source_rgba(0.95, 0.85, 0.45, 0.9);
+    mgraphics.set_line_width(1.6);
+    for (var i = 0; i < sketch_x.length; i++) {
+        var yy = gain_to_y(sketch_g[i]);
+        if (i === 0) mgraphics.move_to(sketch_x[i], yy);
+        else mgraphics.line_to(sketch_x[i], yy);
+    }
+    mgraphics.stroke();
+}
+
 // ── Filter coefficients / response ───────────────────────────────────
 function biquad_coeffs(type, freq, gain, q) {
     var sr = clamp(sample_rate, 22050.0, 384000.0);
@@ -1248,6 +1358,7 @@ function paint() {
     draw_hover_crosshair();
     draw_dynamic_handles();
     draw_nodes();
+    draw_sketch();
     draw_tooltip();
     draw_node_menu();
 }
@@ -2777,6 +2888,7 @@ function draw_hover_crosshair() {
 function onpointerdown(pointerevent) {
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
+    if (sketch_mode) { sketch_begin(x, y); return; }
     note_pointer_press(x, y);
     handle_press(
         x,
@@ -2795,6 +2907,11 @@ function onpointermove(pointerevent) {
     var buttons = pointer_buttons(pointerevent, 0);
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
+    if (sketching) {
+        if ((buttons & 1) !== 0) sketch_extend(x, y);
+        else sketch_commit();
+        return;
+    }
     if (dragging && ((buttons & 1) !== 0)) {
         ds_set_cursor(DS_CUR_GRAB);
         handle_drag_at(
@@ -2816,6 +2933,7 @@ function onpointermove(pointerevent) {
 function onpointerup(pointerevent) {
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
+    if (sketching) { sketch_commit(); return; }
     if (dragging) {
         dragging = 0;
         drag_mode = 0;
@@ -2826,6 +2944,7 @@ function onpointerup(pointerevent) {
 }
 
 function onpointerleave(pointerevent) {
+    if (sketching) { sketch_commit(); return; }
     if (dragging && pointerevent && pointerevent.buttons === 0) {
         dragging = 0;
         drag_mode = 0;
@@ -2834,15 +2953,18 @@ function onpointerleave(pointerevent) {
 }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl, pointerevent) {
+    if (sketch_mode) return;
     if (should_ignore_pointer_click(x, y)) return;
     handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent);
 }
 
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+    if (sketch_mode) return;
     handle_double_click(x, y);
 }
 
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
+    if (sketch_mode) return;
     handle_drag_at(x, y, but, cmd, shift);
 }
 
