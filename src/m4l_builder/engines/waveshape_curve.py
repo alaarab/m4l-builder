@@ -145,6 +145,8 @@ var scope = [];            // current window of samples
 var mode = 0;              // 0 = transfer curve, 1 = sample scope
 var live_scope = [];       // live OUTPUT waveform window (Phase-4 oscilloscope)
 var live_scope_name = "";  // named buffer~ the device records the output into
+var live_scope_dry = [];   // live DRY (input) waveform — the before/after ghost
+var live_scope_dry_name = "";  // named buffer~ the device records the input into
 
 // The CURRENT wavetable = the WAVE_WIN window at scope_pos (== `scope`): drawn
 // as the transfer curve (input -1..1 -> window sample -> output) and applied,
@@ -281,19 +283,24 @@ function read_window() {
 // watch the actual shaped waveform. Shown at TRUE amplitude (no normalize) so a
 // driven/clipped output reads hot. (Buffer/peek are Max-only -> no-ops in Node.)
 function set_live_scope(name) { live_scope_name = "" + name; }
-function live_read() {
-    if (typeof Buffer === "undefined" || live_scope_name === "") return;
-    var b = new Buffer(live_scope_name);
+// The DRY (pre-saturation input) buffer — drawn as a faint ghost behind the wet
+// output so the saturation reads as a before/after (Saturn/Rift signature).
+function set_live_scope_dry(name) { live_scope_dry_name = "" + name; }
+function read_scope_buf(name) {
+    if (typeof Buffer === "undefined" || name === "") return [];
+    var b = new Buffer(name);
     var f = b.framecount();
-    if (!f || f < 2) { live_scope = []; return; }
+    if (!f || f < 2) return [];
     // Read a search window + a display window, then TRIGGER: start the trace at
     // the first rising zero-crossing so the waveform is phase-stable (a free-
     // running ring buffer otherwise scrolls). Falls back to 0 if none is found.
     var want = WAVE_WIN + TRIG_SEARCH;
     var rd = (f < want) ? f : want;
     var chunk = b.peek(1, 0, rd);
-    live_scope = trigger_slice((chunk.length === undefined) ? [chunk] : chunk);
+    return trigger_slice((chunk.length === undefined) ? [chunk] : chunk);
 }
+function live_read() { live_scope = read_scope_buf(live_scope_name); }
+function live_read_dry() { live_scope_dry = read_scope_buf(live_scope_dry_name); }
 
 // Trigger + slice: find the first rising zero-crossing in the search region and
 // return WAVE_WIN samples from there (phase-stable trace); fall back to index 0.
@@ -546,6 +553,20 @@ function draw_live_scope() {
     mgraphics.set_line_width(1.0);
     mgraphics.move_to(l, cy); mgraphics.line_to(r, cy); mgraphics.stroke();
 
+    // DRY (input) ghost trace behind the wet output: a faint neutral line so the
+    // saturation reads as a before/after (at drive 0 the two overlap; as Drive
+    // climbs the bright output squares/folds away from the calm dry sine).
+    var dn = live_scope_dry.length;
+    if (dn > 1) {
+        mgraphics.set_source_rgba(0.60, 0.65, 0.72, 0.34);
+        mgraphics.set_line_width(1.0);
+        for (c = 0; c < dn; c++) {
+            xx = l + (c / (dn - 1)) * w; yy = cy - clamp(live_scope_dry[c], -1.0, 1.0) * amp;
+            if (c === 0) mgraphics.move_to(xx, yy); else mgraphics.line_to(xx, yy);
+        }
+        mgraphics.stroke();
+    }
+
     mgraphics.set_source(zone_grad(0.14));
     mgraphics.move_to(l, cy);
     for (c = 0; c < n; c++) {
@@ -567,7 +588,7 @@ function draw_live_scope() {
     mgraphics.set_source_rgba(ACCENT_CLR);
     mgraphics.set_font_size(7.5);
     mgraphics.move_to(l + 4, b - 4);
-    mgraphics.show_text("LIVE OUTPUT");
+    mgraphics.show_text((live_scope_dry.length > 1) ? "DRY -> OUTPUT" : "LIVE OUTPUT");
 }
 
 // The sample-as-transfer-function: curve_tbl plotted input->output, with the
@@ -852,7 +873,10 @@ function io_level(e)      {
     env_lin = e;
     // Re-read the live output buffer on this proven 33ms message tick (patcher
     // metros silently fail to tick this display; io_level reliably arrives).
-    if (mode === 1 && !sample_loaded && live_scope_name !== "") live_read();
+    if (mode === 1 && !sample_loaded && live_scope_name !== "") {
+        live_read();
+        if (live_scope_dry_name !== "") live_read_dry();
+    }
     mgraphics.redraw();
 }
 
