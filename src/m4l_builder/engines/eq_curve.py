@@ -82,9 +82,9 @@ def eq_curve_js(
     grid_color="0.2, 0.2, 0.22, 0.5",
     text_color="0.5, 0.5, 0.52, 1.0",
     zero_line_color="0.3, 0.3, 0.32, 0.8",
-    # Lower boost so the analyzer sits as a low backdrop (EQ8-style) instead of
-    # a loud signal pegging the top of the plot. Was 18 (way too hot).
-    analyzer_trim_db=6.0,
+    # No boost: combined with the +12 dB headroom above, a loud signal lands
+    # ~80% up as a backdrop, not pegged at the top. Was 18 (way too hot).
+    analyzer_trim_db=0.0,
 ):
     """Return JavaScript source for an interactive parametric EQ display.
 
@@ -183,8 +183,10 @@ var DYNAMIC_DEFAULT_OFFSET = 6.0;
 var DYNAMIC_GRAB_BIAS_SQ = 9.0;
 var MAX_BANDS       = 8;
 var DEFAULT_SR      = 48000.0;
-var ANALYZER_MIN_DB = -72.0;
-var ANALYZER_MAX_DB = 0.0;
+var ANALYZER_MIN_DB = -78.0;
+// Headroom above 0 dBFS so even a loud signal sits ~80% up (a backdrop) instead
+// of pegging the top of the plot like a wall (EQ8 maps the analyzer this way).
+var ANALYZER_MAX_DB = 12.0;
 var ANALYZER_BINS   = 256;        // fixed log-spaced display bins for fft_frame
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
 // Spectrum Grab (Pro-Q): a plain press over an analyzer peak louder than this
