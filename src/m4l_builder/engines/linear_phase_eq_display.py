@@ -1527,24 +1527,28 @@ function point_in_plot(x, y) {
     return x >= plot_left() && x <= plot_right() && y >= plot_top() && y <= plot_bottom();
 }
 
-function create_band_at(x, y) {
+function create_band_at(x, y, btype, no_snap) {
     var created_idx;
     var created_freq;
     var created_gain;
+    var t = (btype === undefined) ? TYPE_PEAK : Math.floor(btype);
     if (!point_in_plot(x, y)) return 0;
     created_idx = find_free_band();
     if (created_idx < 0) return 0;
     created_freq = clamp(x_to_freq(x), MIN_FREQ, MAX_FREQ);
     // SPECTRUM GRAB: snap onto a clear analyzer peak near the click (else exact).
-    var snap_freq = analyzer_peak_near_x(x);
-    if (snap_freq > 0.0) created_freq = clamp(snap_freq, MIN_FREQ, MAX_FREQ);
+    // Skipped for sketch-created bands (no_snap) so the drawn shape is respected.
+    if (!no_snap) {
+        var snap_freq = analyzer_peak_near_x(x);
+        if (snap_freq > 0.0) created_freq = clamp(snap_freq, MIN_FREQ, MAX_FREQ);
+    }
     created_gain = clamp(y_to_gain(y), MIN_GAIN, MAX_GAIN);
     created_gain = Math.round(created_gain * 10.0) / 10.0;
     bands[created_idx].present = 1;
     bands[created_idx].freq = created_freq;
     bands[created_idx].gain = created_gain;
     bands[created_idx].q = 1.0;
-    bands[created_idx].type = TYPE_PEAK;
+    bands[created_idx].type = t;
     bands[created_idx].enabled = 1;
     bands[created_idx].slope = 0;
     bands[created_idx].solo = 0;
@@ -1553,7 +1557,7 @@ function create_band_at(x, y) {
     bands[created_idx].dynamic_current = 0.0;
     selected_band = created_idx;
     rebuild_band_cache();
-    outlet(0, "add_band", created_idx, created_freq, created_gain, 1.0, TYPE_PEAK, 1, 0, 0, 0, 0.0, 0.0, 1);
+    outlet(0, "add_band", created_idx, created_freq, created_gain, 1.0, t, 1, 0, 0, 0, 0.0, 0.0, 1);
     outlet(0, "selected_band", created_idx);
     mgraphics.redraw();
     return 1;
@@ -1587,7 +1591,7 @@ function sketch_commit() {
     sketch_x = [];
     sketch_g = [];
     for (var i = 0; i < anchors.length; i++) {
-        create_band_at(anchors[i].x, gain_to_y(anchors[i].gain));
+        create_band_at(anchors[i].x, gain_to_y(anchors[i].gain), anchors[i].type, 1);
     }
     mgraphics.redraw();
 }
@@ -1618,18 +1622,34 @@ function fit_sketch(xs, gs) {
         S.push((a + G[i] + c) / 3.0);
     }
     var THRESH = 1.5;
+    var SHELF_MIN = 2.5;
     var MIN_PX = 22;
     var CAP = 5;
+    // SHELF FIT (it160): a stroke that steps up/down at one end and returns toward
+    // 0 at the other reads as a SHELF (bass boost / air), not a pair of edge bells.
+    var lo_used = 0, hi_used = 0;
+    if (Math.abs(G[0]) >= SHELF_MIN && Math.abs(G[n - 1]) < Math.abs(G[0]) * 0.45) {
+        var halfL = Math.abs(G[0]) * 0.5, cxL = X[n - 1];
+        for (i = 1; i < n; i++) { if (Math.abs(S[i]) <= halfL) { cxL = X[i]; break; } }
+        out.push({ x: cxL, gain: G[0], type: TYPE_LOSHELF });
+        lo_used = 1;
+    }
+    if (Math.abs(G[n - 1]) >= SHELF_MIN && Math.abs(G[0]) < Math.abs(G[n - 1]) * 0.45) {
+        var halfH = Math.abs(G[n - 1]) * 0.5, cxH = X[0];
+        for (i = n - 2; i >= 0; i--) { if (Math.abs(S[i]) <= halfH) { cxH = X[i]; break; } }
+        out.push({ x: cxH, gain: G[n - 1], type: TYPE_HISHELF });
+        hi_used = 1;
+    }
     var cand = [];
-    if (Math.abs(G[0]) >= THRESH) cand.push({ x: X[0], gain: G[0] });
+    if (!lo_used && Math.abs(G[0]) >= THRESH) cand.push({ x: X[0], gain: G[0], type: TYPE_PEAK });
     for (i = 1; i < n - 1; i++) {
         var ismax = S[i] > S[i - 1] && S[i] > S[i + 1];
         var ismin = S[i] < S[i - 1] && S[i] < S[i + 1];
         if ((ismax || ismin) && Math.abs(S[i]) >= THRESH) {
-            cand.push({ x: X[i], gain: S[i] });
+            cand.push({ x: X[i], gain: S[i], type: TYPE_PEAK });
         }
     }
-    if (Math.abs(G[n - 1]) >= THRESH) cand.push({ x: X[n - 1], gain: G[n - 1] });
+    if (!hi_used && Math.abs(G[n - 1]) >= THRESH) cand.push({ x: X[n - 1], gain: G[n - 1], type: TYPE_PEAK });
     cand.sort(function (a, b) { return Math.abs(b.gain) - Math.abs(a.gain); });
     for (i = 0; i < cand.length && out.length < CAP; i++) {
         var ok = 1;
