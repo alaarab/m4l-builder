@@ -10,6 +10,7 @@ import os
 import pytest
 
 from m4l_builder.engines.eq_curve import eq_curve_js
+from m4l_builder.engines.integrated_lufs import integrated_lufs_js
 from m4l_builder.engines.level_history import level_history_js
 from m4l_builder.engines.linear_phase_eq_display import linear_phase_eq_display_js
 from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
@@ -1496,3 +1497,85 @@ class TestLoopFilterCurve:
         assert result.state["tone"] == 0.0
         assert [o[2] for o in _named(result.outlets, "damp")][-1] == 20.0
         assert [o[2] for o in _named(result.outlets, "tone")][-1] == 0.0
+
+
+class TestIntegratedLufs:
+    """ITU-R BS.1770-4 gated integrated loudness (the non-UI accumulator).
+
+    Drives the engine's `block(m)` / `reset()` entry points directly and
+    reads the running `ilufs` state + the float emitted on outlet 0.
+    """
+
+    def _feed(self, calls):
+        return run_jsui(integrated_lufs_js(), calls)
+
+    def test_constant_minus23_calibration(self):
+        # The canonical EBU calibration: a constant -23 LUFS programme
+        # integrates to -23 (all blocks equal -> both gates pass everything).
+        r = self._feed("""
+            for (var i = 0; i < 50; i++) block(-23.0);
+            dump({i: ilufs, n: n_abs});
+        """)
+        assert r.state["n"] == 50
+        assert abs(r.state["i"] - (-23.0)) < 0.01
+
+    def test_constant_minus6_matches_block(self):
+        r = self._feed("""
+            for (var i = 0; i < 30; i++) block(-6.06);
+            dump({i: ilufs});
+        """)
+        assert abs(r.state["i"] - (-6.06)) < 0.02
+
+    def test_absolute_gate_drops_silence(self):
+        # Blocks at/under -70 are silence -> never counted; ilufs stays at the
+        # -70 "no measurement" sentinel.
+        r = self._feed("""
+            block(-70.0); block(-75.0); block(-80.0);
+            dump({i: ilufs, n: n_abs});
+        """)
+        assert r.state["n"] == 0
+        assert r.state["i"] == -70.0
+
+    def test_relative_gate_excludes_quiet_section(self):
+        # A loud section (-10) plus an equally long quiet section (-40): the
+        # quiet blocks sit below (mean - 10 LU) so the relative gate drops them
+        # and the integrated value tracks the loud section (~-10), NOT the -25
+        # arithmetic midpoint of the two loudnesses.
+        r = self._feed("""
+            for (var i = 0; i < 40; i++) block(-10.0);
+            for (var j = 0; j < 40; j++) block(-40.0);
+            dump({i: ilufs, n: n_abs});
+        """)
+        assert r.state["n"] == 80               # both gated in absolutely
+        assert abs(r.state["i"] - (-10.0)) < 0.3  # but the quiet half is rel-gated out
+
+    def test_reset_clears_measurement_and_emits(self):
+        r = self._feed("""
+            for (var i = 0; i < 20; i++) block(-12.0);
+            var before = ilufs;
+            reset();
+            dump({before: before, after: ilufs, n: n_abs});
+        """)
+        assert abs(r.state["before"] - (-12.0)) < 0.05
+        assert r.state["after"] == -70.0
+        assert r.state["n"] == 0
+        # reset() emits the sentinel on outlet 0 so the probe + readout clear.
+        assert r.outlets[-1] == [0, -70.0]
+
+    def test_each_block_emits_current_integrated(self):
+        r = self._feed("""
+            block(-18.0); block(-18.0);
+            dump({i: ilufs});
+        """)
+        floats = [o for o in r.outlets if len(o) == 2 and o[0] == 0]
+        assert len(floats) >= 2                 # one emit per block
+        assert abs(floats[-1][1] - (-18.0)) < 0.05
+
+    def test_nan_block_never_poisons_state(self):
+        r = self._feed("""
+            block(-14.0);
+            block(NaN);
+            dump({i: ilufs, finite: isFinite(ilufs) ? 1 : 0});
+        """)
+        assert r.state["finite"] == 1
+        assert abs(r.state["i"] - (-14.0)) < 0.05

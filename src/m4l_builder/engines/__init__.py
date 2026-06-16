@@ -29,6 +29,11 @@ from .fft_analyzer import (
 from .filter_curve import filter_curve_js
 from .grain_display import grain_display_js
 from .grid_sequencer_display import grid_sequencer_display_js
+from .integrated_lufs import (
+    INTEGRATED_LUFS_INLETS,
+    INTEGRATED_LUFS_OUTLETS,
+    integrated_lufs_js,
+)
 from .level_history import (
     LEVEL_HISTORY_INLETS,
     LEVEL_HISTORY_OUTLETS,
@@ -77,6 +82,9 @@ __all__ = [
     "delay_trail_js",
     "DELAY_TRAIL_INLETS",
     "DELAY_TRAIL_OUTLETS",
+    "integrated_lufs_js",
+    "INTEGRATED_LUFS_INLETS",
+    "INTEGRATED_LUFS_OUTLETS",
     "level_history_js",
     "LEVEL_HISTORY_INLETS",
     "LEVEL_HISTORY_OUTLETS",
