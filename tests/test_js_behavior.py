@@ -979,6 +979,39 @@ class TestWaveshapeScopeTrigger:
         assert abs(result.state["first"] - 0.5) < 1e-9     # started at index 0
 
 
+class TestWaveshapeMorph:
+    def test_morph_crossfades_character_a_to_b(self):
+        # it168: shape() crossfades character A -> B by morph. At a high drive the
+        # two characters differ; morph 0 == pure A, 1 == pure B, 0.5 == midpoint.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_drive(12.0); set_character(0); set_character_b(3);  // TAPE -> FOLD
+            set_morph(0);   var a = shape(0.3);
+            set_morph(100); var b = shape(0.3);
+            set_morph(50);  var mid = shape(0.3);
+            dump({a: a, b: b, mid: mid});
+        """, size=(296, 152))
+        a, b, mid = result.state["a"], result.state["b"], result.state["mid"]
+        assert abs(a - b) > 0.05                     # the two characters differ
+        assert abs(mid - 0.5 * (a + b)) < 1e-6        # exact crossfade midpoint
+
+    def test_morph_zero_or_same_character_is_pure_a(self):
+        # morph 0 (or B == A) leaves the curve bit-identical to character A, so the
+        # pre-morph behaviour + the drive-0 null are preserved.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_drive(24.0); set_character(3);            // FOLD
+            var base = shape(0.4);
+            set_character_b(5); set_morph(0);            // morph 0 -> still A
+            var m0 = shape(0.4);
+            set_character_b(3); set_morph(100);          // B == A -> still A
+            var same = shape(0.4);
+            dump({base: base, m0: m0, same: same});
+        """, size=(296, 152))
+        assert result.state["m0"] == result.state["base"]
+        assert result.state["same"] == result.state["base"]
+
+
 class TestWaveshapeDrag:
     def test_drag_up_adds_drive_at_documented_scale(self):
         from m4l_builder.engines.waveshape_curve import waveshape_curve_js

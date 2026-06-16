@@ -119,6 +119,8 @@ var NUM_CHARS = 7;
 var MARGIN = 10;
 var drive_db = 0.0;
 var character = 0;
+var character_b = 0;   // it168: morph target character (B)
+var morph = 0.0;       // it168: 0..1 crossfade from character A to character B
 var bias = 0.0;
 var mix_pct = 100;
 var env_lin = 0.0;
@@ -410,24 +412,27 @@ function drive_lin() {
 }
 
 // Mirrors the gen~ core shape(x, d, ch) — keep in sync. Pure/stateless.
-function shape_raw(x) {
+// `ch` selects the character (defaults to the active `character`) so the morph
+// can evaluate both endpoints.
+function shape_raw(x, ch) {
+    if (ch === undefined) ch = character;
     var d = drive_lin();
     var v, dn, nf, u, dp;
-    if (character === 0) {                       // TAPE
+    if (ch === 0) {                              // TAPE
         v = Math.tanh(d * x) / Math.tanh(d);
-    } else if (character === 1) {                // TUBE
+    } else if (ch === 1) {                       // TUBE
         dp = x >= 0 ? d * 1.6 : d * 0.9;
         v = clamp(Math.tanh(dp * x) / Math.tanh(d * 1.25), -1.0, 1.0);
-    } else if (character === 2) {                // CLIP
+    } else if (ch === 2) {                       // CLIP
         v = clamp(x * (1.0 + (d - 1.0) * 0.6), -1.0, 1.0);
-    } else if (character === 3) {                // FOLD
+    } else if (ch === 3) {                       // FOLD
         v = Math.sin(x * d * Math.PI * 0.5);
-    } else if (character === 4) {                // DIODE
+    } else if (ch === 4) {                       // DIODE
         dn = clamp((d - 0.05) * 0.125, 0.0, 1.0);
         nf = 1.0 - 0.6 * dn;
         v = x >= 0 ? Math.tanh(d * x) / Math.tanh(d)
                    : Math.tanh(d * nf * x) / Math.tanh(d);
-    } else if (character === 5) {                // WRAP
+    } else if (ch === 5) {                       // WRAP
         v = 0.63661977 * Math.asin(Math.sin(x * (1.0 + d * 0.6) * Math.PI * 0.5));
     } else {                                     // SOFT
         dn = clamp((d - 0.05) * 0.125, 0.0, 1.0);
@@ -437,12 +442,21 @@ function shape_raw(x) {
     return v;
 }
 
-// Biased transfer: shift into the curve + recenter (even harmonics). Matches
-// the gen's shape(s + b, d, ch) - shape(b, d, ch). bias 0 => exact shape_raw.
-function shape(x) {
+// Biased transfer for character `ch`: shift into the curve + recenter (even
+// harmonics). Matches the gen's shape(s + b, d, ch) - shape(b, d, ch).
+function shape_ch(x, ch) {
     var b = clamp(bias, -1.0, 1.0) * 0.5;
-    if (b === 0.0) return shape_raw(x);
-    return clamp(shape_raw(x + b) - shape_raw(b), -1.0, 1.0);
+    if (b === 0.0) return shape_raw(x, ch);
+    return clamp(shape_raw(x + b, ch) - shape_raw(b, ch), -1.0, 1.0);
+}
+
+// The CHARACTER-MORPH transfer (it168): character A crossfaded to character B by
+// `morph` (0..1). morph 0 => pure A (bit-identical to the pre-morph curve), so
+// every existing caller (curve, IO dots, sample overlay) morphs automatically.
+function shape(x) {
+    var a = shape_ch(x, character);
+    if (morph <= 0.0 || character_b === character) return a;
+    return a + (shape_ch(x, character_b) - a) * morph;
 }
 
 // Horizontal gradient across the plot from the ACTIVE mode's palette: the
@@ -854,7 +868,11 @@ function paint() {
     mgraphics.set_font_size(8.0);
     mgraphics.set_source_rgba(ACCENT_CLR);
     mgraphics.move_to(plot_l() + 5, plot_t() + 11);
-    mgraphics.show_text(CHAR_NAMES[character] + "  " + (Math.round(drive_db * 10) / 10) + " dB");
+    var clabel = (morph > 0.0 && character_b !== character)
+        ? (CHAR_NAMES[character] + "→" + CHAR_NAMES[character_b]
+           + " " + Math.round(morph * 100) + "%")
+        : CHAR_NAMES[character];
+    mgraphics.show_text(clabel + "  " + (Math.round(drive_db * 10) / 10) + " dB");
     mgraphics.set_source_rgba(TEXT_CLR);
     mgraphics.move_to(plot_l() + 5, plot_t() + 21);
     mgraphics.show_text("MIX " + Math.round(mix_pct) + "%");
@@ -867,6 +885,8 @@ function paint() {
 // ── Messages ─────────────────────────────────────────────────────────
 function set_drive(v)     { drive_db = clamp(v, 0.0, 36.0); mgraphics.redraw(); }
 function set_character(v) { character = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
+function set_character_b(v) { character_b = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
+function set_morph(v)    { morph = clamp(v, 0.0, 100.0) * 0.01; mgraphics.redraw(); }
 function set_bias(v)      { bias = clamp(v, -1.0, 1.0); mgraphics.redraw(); }
 function set_mix(v)       { mix_pct = clamp(v, 0, 100); mgraphics.redraw(); }
 function io_level(e)      {
