@@ -13,6 +13,7 @@ Messages in (inlet 0):
     set_pingpong <0|1>
     set_sync_label <text>  "FREE" or a division label for the readout
     wet_level <lin>        live wet level 0..1 (~30ms)
+    set_duck <lin>         live duck depth 0..1 (dims the trail; lights DUCK badge)
 
 Messages out (outlet 0):
     time <ms>              while dragging (only meaningful in FREE mode)
@@ -100,6 +101,7 @@ var damp_pct = 20.0;
 var pingpong = 0;
 var sync_label = "FREE";
 var wet_lvl = 0.0;
+var duck_lvl = 0.0;
 var dragging = 0;
 var hovering = 0;
 var drag_start_x = 0;
@@ -183,6 +185,11 @@ function paint() {
     // non-ping-pong mode — both channels echo, so both lanes should show it).
     var fb = clamp(feedback_pct / 100.0, 0.0, 1.1);
     var amp = fb;
+    // it177: the live DUCK depth recedes the WHOLE trail — when a dry transient
+    // ducks the wet, every echo dims in lock-step (even a full duck keeps a faint
+    // trail so the pattern stays readable). Makes the rail-only Duck knob visible.
+    var duck = clamp(duck_lvl, 0, 1);
+    var dim = 1.0 - duck * 0.72;
     var t = time_ms;
     var n = 0;
     var li, ly, stem, active_lane;
@@ -196,17 +203,17 @@ function paint() {
             if (pingpong && li !== active_lane) continue;
             ly = lane_y(li);
             // Stem.
-            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], amp * 0.35);
+            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], amp * 0.35 * dim);
             mgraphics.set_line_width(1.0);
             mgraphics.move_to(x, ly - stem);
             mgraphics.line_to(x, ly + stem);
             mgraphics.stroke();
             // Glowing tap: a radial glow (design-system) that fades with the
             // echo amplitude, then a solid dot core — louder/earlier taps read
-            // as brighter lights fading down the trail.
+            // as brighter lights fading down the trail (and dim under ducking).
             ds_node_glow(x, ly, TAP_CLR, size + 5.0 + amp * 6.0,
-                         0.20 + clamp(amp, 0, 1) * 0.45);
-            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], clamp(amp, 0, 1));
+                         (0.20 + clamp(amp, 0, 1) * 0.45) * dim);
+            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], clamp(amp, 0, 1) * dim);
             mgraphics.arc(x, ly, size, 0, Math.PI * 2);
             mgraphics.fill();
         }
@@ -231,6 +238,32 @@ function paint() {
         mgraphics.move_to(plot_l() + 16, plot_t() + 21);
         mgraphics.show_text("PING-PONG");
     }
+
+    // it177: DUCK activity badge (top-right). An amber "DUCK ▾" + meter bar that
+    // IGNITES with the live duck depth so the rail-only Duck knob has a hero
+    // tell: idle = faint outline, ducking = bright amber. Pairs with the
+    // whole-trail dim above (the echoes recede as this lights up).
+    var dk = clamp(duck_lvl, 0, 1);
+    var bx = plot_r() - 52;
+    var by = plot_t() + 6;
+    mgraphics.set_font_size(7.5);
+    mgraphics.set_source_rgba(0.96, 0.66, 0.26, 0.28 + dk * 0.72);
+    mgraphics.move_to(bx, by + 6);
+    mgraphics.show_text("DUCK");
+    // Downward chevron — brightens with the duck depth.
+    mgraphics.set_source_rgba(0.96, 0.66, 0.26, 0.22 + dk * 0.78);
+    mgraphics.move_to(bx + 27, by + 1);
+    mgraphics.line_to(bx + 33, by + 1);
+    mgraphics.line_to(bx + 30, by + 5.5);
+    mgraphics.close_path();
+    mgraphics.fill();
+    // Thin meter: faint track + amber fill proportional to the live duck.
+    mgraphics.set_source_rgba(0.96, 0.66, 0.26, 0.16);
+    mgraphics.rectangle(bx, by + 9, 44, 2.5);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(0.96, 0.66, 0.26, 0.88);
+    mgraphics.rectangle(bx, by + 9, 44 * dk, 2.5);
+    mgraphics.fill();
 }
 
 // ── Messages ─────────────────────────────────────────────────────────
@@ -240,6 +273,7 @@ function set_damp(v)       { damp_pct = clamp(v, 0.0, 100.0); mgraphics.redraw()
 function set_pingpong(v)   { pingpong = v ? 1 : 0; mgraphics.redraw(); }
 function set_sync_label(v) { sync_label = "" + v; mgraphics.redraw(); }
 function wet_level(v) { wet_lvl = v; mgraphics.redraw(); }
+function set_duck(v) { duck_lvl = clamp(v, 0.0, 1.0); mgraphics.redraw(); }
 
 // ── Interaction: ABSOLUTE X/Y pad ────────────────────────────────────
 // Robust pointer-coordinate resolution. Max's v8ui pointer events expose the
