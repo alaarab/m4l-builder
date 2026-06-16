@@ -1003,9 +1003,17 @@ function draw_band_curves() {
         // line (filling a full rolloff region reads as noise).
         if (band_cache[i].uses_gain && Math.abs(band_cache[i].gain) > 0.01) {
             fill_a = selected_band === i ? 0.22 : 0.12;
-            mgraphics.set_source_rgba(
-                BAND_COLORS[i][0], BAND_COLORS[i][1], BAND_COLORS[i][2], fill_a
-            );
+            // it178: vertical gradient gives the lobe depth — brightest at the
+            // band's peak deviation, fading to near-transparent at the 0 dB waist
+            // (Pro-Q "lit lobe"); mirrors eq_curve.py.
+            var bptop = plot_top(), bpbot = plot_bottom();
+            var bfz = (zero_y - bptop) / (bpbot - bptop);
+            if (bfz < 0.04) bfz = 0.04; else if (bfz > 0.96) bfz = 0.96;
+            var bgrad = mgraphics.pattern_create_linear(plot_left(), bptop, plot_left(), bpbot);
+            bgrad.add_color_stop_rgba(0.0, BAND_COLORS[i][0], BAND_COLORS[i][1], BAND_COLORS[i][2], fill_a * 1.55);
+            bgrad.add_color_stop_rgba(bfz, BAND_COLORS[i][0], BAND_COLORS[i][1], BAND_COLORS[i][2], fill_a * 0.18);
+            bgrad.add_color_stop_rgba(1.0, BAND_COLORS[i][0], BAND_COLORS[i][1], BAND_COLORS[i][2], fill_a * 1.55);
+            mgraphics.set_source(bgrad);
             mgraphics.move_to(points[0][0], zero_y);
             for (p = 0; p < points.length; p++) {
                 mgraphics.line_to(points[p][0], points[p][1]);
@@ -1034,12 +1042,27 @@ function draw_composite_curve() {
     var points = composite_curve_points;
     if (!points || points.length < 2) return;
 
-    mgraphics.set_source_rgba(FILL_CLR);
-    mgraphics.move_to(points[0][0], gain_to_y(0.0));
+    // it178: premium gradient fill (Pro-Q "lit curve") — brightest along the
+    // curve's deviation from flat, fading to near-transparent at the 0 dB waist.
+    // One vertical pattern anchored at zero_y so both boost and cut lobes glow at
+    // the curve and fade toward the axis; matches the suite's gradient language
+    // (analyzer/transfer/level/trail, it171+) and mirrors eq_curve.py.
+    var czero = gain_to_y(0.0);
+    var cptop = plot_top(), cpbot = plot_bottom();
+    var cfz = (czero - cptop) / (cpbot - cptop);
+    if (cfz < 0.04) cfz = 0.04; else if (cfz > 0.96) cfz = 0.96;
+    var caw = FILL_CLR[3] * 0.22;
+    var cae = FILL_CLR[3] * 1.7; if (cae > 0.9) cae = 0.9;
+    var cgrad = mgraphics.pattern_create_linear(plot_left(), cptop, plot_left(), cpbot);
+    cgrad.add_color_stop_rgba(0.0, FILL_CLR[0], FILL_CLR[1], FILL_CLR[2], cae);
+    cgrad.add_color_stop_rgba(cfz, FILL_CLR[0], FILL_CLR[1], FILL_CLR[2], caw);
+    cgrad.add_color_stop_rgba(1.0, FILL_CLR[0], FILL_CLR[1], FILL_CLR[2], cae);
+    mgraphics.set_source(cgrad);
+    mgraphics.move_to(points[0][0], czero);
     for (i = 0; i < points.length; i++) {
         mgraphics.line_to(points[i][0], points[i][1]);
     }
-    mgraphics.line_to(points[points.length - 1][0], gain_to_y(0.0));
+    mgraphics.line_to(points[points.length - 1][0], czero);
     mgraphics.close_path();
     mgraphics.fill();
 

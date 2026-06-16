@@ -1648,8 +1648,18 @@ function draw_band_curves() {
         fill_a = is_active ? 0.22 : 0.12;
 
         // Filled colored region from the 0 dB line to this band's response
-        // (boost fills upward, cut fills downward — both tinted).
-        mgraphics.set_source_rgba(clr[0], clr[1], clr[2], fill_a);
+        // (boost fills upward, cut fills downward — both tinted). it178: a
+        // vertical gradient gives the lobe depth — brightest at the band's peak
+        // deviation, fading to near-transparent at the 0 dB waist (Pro-Q "lit
+        // lobe"), same anchored-at-zero pattern as the composite fill.
+        var bptop = plot_top(), bpbot = plot_bottom();
+        var bfz = (zero_y - bptop) / (bpbot - bptop);
+        if (bfz < 0.04) bfz = 0.04; else if (bfz > 0.96) bfz = 0.96;
+        var bgrad = mgraphics.pattern_create_linear(plot_left(), bptop, plot_left(), bpbot);
+        bgrad.add_color_stop_rgba(0.0, clr[0], clr[1], clr[2], fill_a * 1.55);
+        bgrad.add_color_stop_rgba(bfz, clr[0], clr[1], clr[2], fill_a * 0.18);
+        bgrad.add_color_stop_rgba(1.0, clr[0], clr[1], clr[2], fill_a * 1.55);
+        mgraphics.set_source(bgrad);
         mgraphics.move_to(freq_to_x(freq_table[0]), zero_y);
         for (j = 0; j < NUM_POINTS; j++) {
             f = freq_table[j];
@@ -1713,7 +1723,22 @@ function draw_composite_curve() {
     }
 
     if (num_bands > 0) {
-        mgraphics.set_source_rgba(FILL_CLR);
+        // it178: premium gradient fill (Pro-Q "lit curve") — brightest along the
+        // curve's deviation from flat, fading to near-transparent at the 0 dB
+        // waist. One vertical pattern anchored at zero_y: both boost and cut lobes
+        // glow at the curve and fade toward the axis, so bigger moves reach the
+        // brighter edge zones. Matches the analyzer/transfer/level/trail gradient
+        // language (it171+), bringing the last flat fill into the suite's look.
+        var ptop = plot_top(), pbot = plot_bottom();
+        var fz = (zero_y - ptop) / (pbot - ptop);
+        if (fz < 0.04) fz = 0.04; else if (fz > 0.96) fz = 0.96;
+        var aw = FILL_CLR[3] * 0.22;
+        var ae = FILL_CLR[3] * 1.7; if (ae > 0.9) ae = 0.9;
+        var cgrad = mgraphics.pattern_create_linear(plot_left(), ptop, plot_left(), pbot);
+        cgrad.add_color_stop_rgba(0.0, FILL_CLR[0], FILL_CLR[1], FILL_CLR[2], ae);
+        cgrad.add_color_stop_rgba(fz, FILL_CLR[0], FILL_CLR[1], FILL_CLR[2], aw);
+        cgrad.add_color_stop_rgba(1.0, FILL_CLR[0], FILL_CLR[1], FILL_CLR[2], ae);
+        mgraphics.set_source(cgrad);
         mgraphics.move_to(xs[0], zero_y);
         for (j = 0; j < NUM_POINTS; j++) {
             if (ys[j] !== null) mgraphics.line_to(xs[j], ys[j]);
