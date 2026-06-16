@@ -586,6 +586,28 @@ class TestLinearPhaseGestureParity:
         assert [e[3] for e in enables] == [0, 1]
         assert _named(result.outlets, "delete_band") == []
 
+    def test_opt_click_empty_snapshots_analyzer_node_click_toggles_band(self):
+        # it174: opt-click on EMPTY graph captures the live analyzer as an A/B
+        # reference (and clears on repeat); opt-click on a NODE still toggles that
+        # band's enable — the two gestures never collide.
+        result = run_jsui(linear_phase_eq_display_js(), self._SETUP + """
+            analyzer_display = []; analyzer_peaks = [];
+            for (var k = 0; k < 40; k++) { analyzer_display[k] = -70 + k; analyzer_peaks[k] = -70 + k; }
+            var ex = freq_to_x(80.0), ey = gain_to_y(0.0);   // empty (away from the 1kHz node)
+            handle_press(ex, ey, 1, 0, 0, 1, 0, {altKey: 1, buttons: 1});
+            var snap1 = analyzer_snapshot.length, en_empty = bands[0].enabled;
+            handle_press(ex, ey, 1, 0, 0, 1, 0, {altKey: 1, buttons: 1});   // clears
+            var snap2 = analyzer_snapshot.length;
+            handle_press(nx, ny, 1, 0, 0, 1, 0, {altKey: 1, buttons: 1});   // the node -> toggle
+            dump({snap1: snap1, en_empty: en_empty, snap2: snap2,
+                  snap3: analyzer_snapshot.length, en_node: bands[0].enabled});
+        """)
+        assert result.state["snap1"] == 40     # empty opt-click captured the analyzer
+        assert result.state["en_empty"] == 1   # ...and did NOT toggle the band
+        assert result.state["snap2"] == 0      # repeat empty opt-click cleared it
+        assert result.state["snap3"] == 0      # the node opt-click did NOT snapshot
+        assert result.state["en_node"] == 0    # ...it toggled the band off
+
     def test_double_click_empty_still_creates_band(self):
         result = run_jsui(linear_phase_eq_display_js(), """
             set_num_bands(8);
