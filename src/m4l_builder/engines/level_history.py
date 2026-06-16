@@ -132,6 +132,7 @@ var LOUD_ENABLED = $loudness_target;
 // value color-codes against it (green on-target / amber under / red over).
 var lufs = -70.0;
 var slufs = -70.0;     // short-term LUFS (EBU "S", 3s) — the stable number you target
+var ilufs = -70.0;     // integrated LUFS (EBU "I", gated, whole programme) — click to reset
 var loud_target = 0;
 var LOUD_TARGETS = [0.0, -14.0, -16.0, -23.0];
 var LOUD_LABELS = ["", "-14", "-16", "-23"];
@@ -426,12 +427,24 @@ function draw_loudness() {
     mgraphics.set_source_rgba(sr, sg, sb, 0.95);
     mgraphics.move_to(rx - sw, ty + 11.0);
     mgraphics.show_text(stxt);
+    // Integrated LUFS (I, BS.1770-4 gated) — the whole-programme number a master
+    // is judged by. Neutral; the trailing ↺ hints it's clickable to RESET the
+    // integration (start a fresh measurement), like every pro loudness meter.
+    var itxt = (ilufs <= -70.0) ? "I -inf LUFS"
+        : ("I " + ((ilufs >= 0 ? "+" : "") + ilufs.toFixed(1)) + " LUFS");
+    var iw = itxt.length * 4.4;
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.95);
+    mgraphics.move_to(rx - iw, ty + 22.0);
+    mgraphics.show_text(itxt);
+    mgraphics.set_source_rgba(0.52, 0.57, 0.65, 0.85);
+    mgraphics.move_to(rx + 1.0, ty + 22.0);
+    mgraphics.show_text("↺");
     var gtxt = (loud_target > 0) ? ("TGT " + LOUD_LABELS[loud_target] + " <") : "TGT OFF <";
     var gw = gtxt.length * 4.0;
     mgraphics.set_font_size(7.0);
     if (loud_target > 0) mgraphics.set_source_rgba(0.70, 0.76, 0.85, 0.85);
     else mgraphics.set_source_rgba(0.46, 0.51, 0.59, 0.72);
-    mgraphics.move_to(rx - gw, ty + 22.0);
+    mgraphics.move_to(rx - gw, ty + 33.0);
     mgraphics.show_text(gtxt);
 }
 
@@ -440,6 +453,13 @@ function set_lufs(v) {
     v = parseFloat(v);
     if (!isFinite(v)) v = -70.0;   // NaN guard (per-frame handler)
     lufs = clamp(v, -70.0, 0.0);
+    mgraphics.redraw();
+}
+
+function set_ilufs(v) {
+    v = parseFloat(v);
+    if (!isFinite(v)) v = -70.0;   // NaN guard (per-frame handler)
+    ilufs = clamp(v, -70.0, 0.0);
     mgraphics.redraw();
 }
 
@@ -538,14 +558,23 @@ function pointer_buttons(pe, fb) {
     return fb;
 }
 
-// Hit-test the top-right loudness readout block (M + TGT chip). A press there
+// Hit-test the top-right loudness readout block (M/S/I/TGT). A press there
 // cycles the loudness target instead of grabbing the reference line.
 function loud_hit(pe) {
     if (!LOUD_ENABLED || plot_w() <= 300) return 0;
     var px = pointer_x(pe, NaN), py = pointer_y(pe, NaN);
     if (isNaN(px) || isNaN(py)) return 0;
     var rx = plot_r() - 6, ty = plot_t() + 12;
-    return (px >= rx - 86 && px <= rx + 2 && py >= ty - 9 && py <= ty + 25) ? 1 : 0;
+    return (px >= rx - 86 && px <= rx + 8 && py >= ty - 9 && py <= ty + 36) ? 1 : 0;
+}
+// Sub-zone: a press on the "I" (integrated) line resets the integration. Takes
+// priority over the target-cycle block it sits inside.
+function loud_reset_hit(pe) {
+    if (!LOUD_ENABLED || plot_w() <= 300) return 0;
+    var px = pointer_x(pe, NaN), py = pointer_y(pe, NaN);
+    if (isNaN(px) || isNaN(py)) return 0;
+    var rx = plot_r() - 6, ty = plot_t() + 12;
+    return (px >= rx - 86 && px <= rx + 8 && py >= ty + 15 && py <= ty + 27) ? 1 : 0;
 }
 function pointer_shift_key(pe) {
     return (pe && pe.shiftKey) ? 1 : 0;
@@ -601,6 +630,12 @@ function reset_ref() {
 }
 
 function onpointerdown(pe) {
+    if (loud_reset_hit(pe)) {
+        ilufs = -70.0;                 // optimistic local clear (the probe re-confirms)
+        outlet(0, "loudreset", 1);     // -> the integrated-loudness accumulator
+        mgraphics.redraw();
+        return;
+    }
     if (loud_hit(pe)) {
         loud_target = (loud_target + 1) & 3;   // cycle 0..3
         outlet(0, "loudtarget", loud_target);
