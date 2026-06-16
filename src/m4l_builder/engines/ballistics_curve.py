@@ -14,6 +14,8 @@ Messages in (inlet 0):
     set_release <ms>    release time (one-pole tau), default 120
     set_knee <db>       knee width — softens the onset corner, default 6
     set_ratio <r>       compression ratio — sets the hold depth, default 2
+    set_live_gr <db>    live gain reduction (>=0) — a cyan depth line rides the
+                        modeled envelope, so the inset breathes with the signal
 
 Messages out (outlet 0; interactive=True only, on user drag — no-echo):
     attack <ms>         left-half horizontal drag (log-mapped over [min,max])
@@ -136,6 +138,8 @@ var REL_MIN = $release_min_ms, REL_MAX = $release_max_ms;
 var RESET_ATK = $reset_attack_ms, RESET_REL = $reset_release_ms;
 var dragging = 0;
 var drag_zone = 0;     // 0 = attack (left half), 1 = release (right half)
+var live_gr_db = 0.0;  // live gain reduction (dB, >=0) fed from the compressor
+var live_gr_prev = -1.0;
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -250,6 +254,43 @@ function paint() {
     }
     mgraphics.stroke();
 
+    // Live GR indicator: a cyan line at the CURRENT gain-reduction depth that
+    // rides against the modeled attack/release shape, so the static inset now
+    // breathes with the signal (matching the transfer IO dot + level-history GR
+    // stream — the last non-live hero comes alive). Ignites with depth: a soft
+    // "current reduction" band from the 0-GR line down to the live depth, a
+    // bright line, a glowing right-edge dot, and a numeric GR readout. Idle
+    // (GR ~0) draws nothing so the envelope shape stays clean.
+    if (live_gr_db > 0.1) {
+        var lg = clamp(live_gr_db, 0.0, FULL_DB);
+        var ly = gr_to_y(lg);
+        var ign = clamp(lg / 9.0, 0.0, 1.0);   // brightness ramps to ~9 dB
+        // Reduction band (0-GR line -> live depth).
+        mgraphics.set_source_rgba(0.34, 0.82, 1.0, 0.06 + ign * 0.12);
+        mgraphics.rectangle(plot_l(), y0, plot_w(), ly - y0);
+        mgraphics.fill();
+        // Live depth line.
+        mgraphics.set_source_rgba(0.40, 0.85, 1.0, 0.45 + ign * 0.45);
+        mgraphics.set_line_width(1.4);
+        mgraphics.move_to(plot_l(), ly);
+        mgraphics.line_to(plot_r(), ly);
+        mgraphics.stroke();
+        // Glowing right-edge dot (halo + core).
+        mgraphics.set_source_rgba(0.40, 0.85, 1.0, 0.18 + ign * 0.22);
+        mgraphics.arc(plot_r() - 4, ly, 5.0 + ign * 3.0, 0, Math.PI * 2);
+        mgraphics.fill();
+        mgraphics.set_source_rgba(0.65, 0.93, 1.0, 0.85);
+        mgraphics.arc(plot_r() - 4, ly, 2.2, 0, Math.PI * 2);
+        mgraphics.fill();
+        // Numeric readout (top-right).
+        mgraphics.select_font_face("Arial");
+        mgraphics.set_font_size(7.5);
+        mgraphics.set_source_rgba(0.55, 0.88, 1.0, 0.55 + ign * 0.45);
+        var gl = "GR " + (Math.round(lg * 10) / 10).toFixed(1);
+        mgraphics.move_to(plot_r() - (gl.length * 4.6 + 4), plot_t() + 9);
+        mgraphics.show_text(gl);
+    }
+
     // Phase labels.
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(7.0);
@@ -267,6 +308,17 @@ function set_attack(v) { if (dragging) return; if (isFinite(v)) { attack_ms = v;
 function set_release(v) { if (dragging) return; if (isFinite(v)) { release_ms = v; mgraphics.redraw(); } }
 function set_knee(v) { if (isFinite(v)) { knee_db = v; mgraphics.redraw(); } }
 function set_ratio(v) { if (isFinite(v)) { ratio = v; mgraphics.redraw(); } }
+// Live gain reduction (dB, >=0) from the compressor's GR stream (~30 Hz). Guard
+// against needless repaints when GR is pinned (e.g. parked at 0 when not
+// compressing): only redraw when it moves by >=0.05 dB.
+function set_live_gr(v) {
+    if (!isFinite(v)) return;
+    var nv = v < 0.0 ? 0.0 : v;
+    if (Math.abs(nv - live_gr_prev) < 0.05) { live_gr_db = nv; return; }
+    live_gr_prev = nv;
+    live_gr_db = nv;
+    mgraphics.redraw();
+}
 
 // ── Interaction: left half drags ATTACK, right half drags RELEASE ──────
 // (matches the ATK/REL corner labels). Absolute + log-mapped, with the proven
