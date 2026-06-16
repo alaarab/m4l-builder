@@ -253,6 +253,7 @@ var bands = [];
 var band_cache = [];
 var analyzer_display = [];
 var analyzer_peaks = [];
+var analyzer_snapshot = [];   // it173: captured A/B reference of the analyzer, or empty
 var i;
 for (i = 0; i < MAX_BANDS; i++) {
     bands[i] = {
@@ -1386,6 +1387,7 @@ function paint() {
     draw_plot_background();
 
     draw_grid();
+    draw_analyzer_snapshot();   // it173: A/B reference behind the live analyzer
     draw_analyzer();
     // Re-sweep each motion band's drawn coeffs so the curve moves with the LFO.
     var _mi;
@@ -1466,6 +1468,55 @@ function draw_grid() {
             mgraphics.show_text(label);
         }
     }
+}
+
+// it173: capture the live analyzer as a static A/B reference, or clear it. We
+// store the SMOOTHED values (what draw_analyzer plots) so an unchanged input
+// overlaps exactly; the tilt is re-applied at draw so it tracks the Tilt control.
+function toggle_analyzer_snapshot() {
+    if (analyzer_snapshot.length > 1) {
+        analyzer_snapshot = [];
+    } else {
+        var n = analyzer_display.length, k;
+        analyzer_snapshot = [];
+        if (n > 1 && !analyzer_is_flat()) {
+            for (k = 0; k < n; k++) analyzer_snapshot[k] = analyzer_smooth_at(k, n);
+        }
+    }
+    outlet(0, "analyzer_snapshot", analyzer_snapshot.length > 1 ? 1 : 0);  // -> SnapProbe
+    mgraphics.redraw();
+}
+
+// The captured reference (A/B compare) — a dim warm line + faint fill drawn
+// behind the live spectrum. Persists while the live trace comes and goes.
+function draw_analyzer_snapshot() {
+    var n = analyzer_snapshot.length, k, freq, tilt;
+    if (n < 2) return;
+    var left = plot_left(), right = plot_right();
+    var bottom = plot_bottom(), top = plot_top();
+    var sx = [], sy = [];
+    for (k = 0; k < n; k++) {
+        freq = analyzer_bin_freq(k, n);
+        tilt = analyzer_slope_at(freq);
+        sx[k] = freq_to_x(freq);
+        sy[k] = analyzer_db_to_y(analyzer_tilted_db(analyzer_snapshot[k], tilt));
+    }
+    var grad = mgraphics.pattern_create_linear(left, top, left, bottom);
+    grad.add_color_stop_rgba(0.0, 0.90, 0.82, 0.55, 0.07);
+    grad.add_color_stop_rgba(1.0, 0.90, 0.82, 0.55, 0.0);
+    mgraphics.set_source(grad);
+    mgraphics.move_to(sx[0], bottom);
+    for (k = 0; k < n; k++) mgraphics.line_to(sx[k], sy[k]);
+    mgraphics.line_to(sx[n - 1], bottom);
+    mgraphics.close_path();
+    mgraphics.fill();
+    mgraphics.set_source_rgba(0.90, 0.82, 0.55, 0.55);
+    mgraphics.set_line_width(1.2);
+    for (k = 0; k < n; k++) {
+        if (k === 0) mgraphics.move_to(sx[k], sy[k]);
+        else mgraphics.line_to(sx[k], sy[k]);
+    }
+    mgraphics.stroke();
 }
 
 function draw_analyzer() {
@@ -2629,6 +2680,14 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
             outlet(0, "band_enable", opt_idx, bands[opt_idx].enabled);
             outlet(0, "selected_band", opt_idx);
             mgraphics.redraw();
+            return;
+        }
+        // it173: alt/opt-click on EMPTY graph captures the live analyzer as a
+        // static A/B reference (or clears it) — a Pro-Q-style compare. (A node
+        // alt-click toggles that band, above; this only fires off a node.)
+        if (x >= plot_left() && x <= plot_right() &&
+                y >= plot_top() && y <= plot_bottom()) {
+            toggle_analyzer_snapshot();
             return;
         }
     }

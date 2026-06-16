@@ -84,6 +84,30 @@ class TestEqCurveGestures:
         assert [0, 0.0] == [gains[-1][2], gains[-1][3]]
         assert _named(result.outlets, "delete_band") == []
 
+    def test_alt_click_empty_snapshots_analyzer_node_click_toggles_band(self):
+        # it173: alt-click on EMPTY graph captures the live analyzer as an A/B
+        # reference (and clears on repeat); alt-click on a NODE still toggles that
+        # band's enable (the two gestures never collide).
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            analyzer_display = []; analyzer_peaks = [];
+            for (var k = 0; k < 40; k++) { analyzer_display[k] = -70 + k; analyzer_peaks[k] = -70 + k; }
+            var ex = freq_to_x(80.0), ey = gain_to_y(0.0);   // empty (away from the 1kHz node)
+            onpointerdown({x: ex, y: ey, buttons: 1, altKey: 1});
+            var snap1 = analyzer_snapshot.length, en_empty = bands[0].enabled;
+            onpointerdown({x: ex, y: ey, buttons: 1, altKey: 1});   // clears
+            var snap2 = analyzer_snapshot.length;
+            onpointerdown({x: freq_to_x(1000.0), y: gain_to_y(6.0), buttons: 1, altKey: 1});  // the node
+            dump({snap1: snap1, en_empty: en_empty, snap2: snap2,
+                  snap3: analyzer_snapshot.length, en_node: bands[0].enabled});
+        """)
+        assert result.state["snap1"] == 40     # empty alt-click captured the analyzer
+        assert result.state["en_empty"] == 1   # ...and did NOT toggle the band
+        assert result.state["snap2"] == 0      # repeat empty alt-click cleared it
+        assert result.state["snap3"] == 0      # the node alt-click did NOT snapshot
+        assert result.state["en_node"] == 0    # ...it toggled the band off (unchanged path)
+
     def test_double_click_via_ondblclick_resets_too(self):
         # Legacy jsui path (ondblclick) must agree with the pointer path.
         result = run_jsui(eq_curve_js(), """
