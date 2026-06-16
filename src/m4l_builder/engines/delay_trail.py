@@ -321,7 +321,22 @@ function reset_pad() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pe) { start_drag(pointer_x(pe, plot_l()), pointer_y(pe, plot_b())); }
+function pointer_alt_key(pe) { return (pe && pe.altKey) ? 1 : 0; }
+
+// Opt-click toggles PING-PONG (the trail VISUALISES it — taps alternate L/R
+// lanes), a direct-manipulation toggle right where the effect is shown. A bare
+// click never moves the pad (start_drag only anchors; drag_to applies), so this
+// does not disturb the time/feedback drag.
+function toggle_pingpong() {
+    pingpong = pingpong ? 0 : 1;
+    outlet(0, "pingpong", pingpong);
+    mgraphics.redraw();
+}
+
+function onpointerdown(pe) {
+    if (pointer_alt_key(pe)) { toggle_pingpong(); return; }
+    start_drag(pointer_x(pe, plot_l()), pointer_y(pe, plot_b()));
+}
 function onpointermove(pe) {
     var b = pointer_buttons(pe, 0);
     if (dragging && ((b & 1) !== 0)) {

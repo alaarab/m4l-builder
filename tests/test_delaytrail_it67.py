@@ -54,6 +54,31 @@ class TestDelayTrailDiagonalDrag:
         assert abs(times[0][2] - result.state["t"]) <= 0.5
         assert abs(feedbacks[0][2] - result.state["fb"]) <= 0.5
 
+    def test_opt_click_toggles_pingpong_without_moving_pad(self):
+        # Opt-click flips PING-PONG (the trail visualises it) and leaves the
+        # time/feedback pad untouched; a normal drag never touches ping-pong.
+        result = run_jsui(delay_trail_js(), """
+            set_time(350.0); set_feedback(45.0); set_pingpong(0);
+            onpointerdown({x: 120, y: 80, altKey: 1});
+            var p1 = pingpong, t1 = time_ms, f1 = feedback_pct;
+            onpointerup({x: 120, y: 80});
+            onpointerdown({x: 120, y: 80, altKey: 1});
+            dump({p1: p1, p2: pingpong, t1: t1, f1: f1});
+        """, size=(326, 152))
+        assert result.state["p1"] == 1, "opt-click toggles ping-pong on"
+        assert result.state["p2"] == 0, "a second opt-click toggles it off"
+        assert result.state["t1"] == 350.0 and result.state["f1"] == 45.0, \
+            "opt-click leaves the time/feedback pad alone"
+        pps = _named(result.outlets, "pingpong")
+        assert [p[2] for p in pps] == [1, 0]
+        r2 = run_jsui(delay_trail_js(), """
+            set_pingpong(1);
+            onpointerdown({x: 100, y: 100, buttons: 1});
+            onpointermove({x: 160, y: 40, buttons: 1});
+            dump({p: pingpong});
+        """, size=(326, 152))
+        assert r2.state["p"] == 1, "a normal drag leaves ping-pong unchanged"
+
     def test_absolute_mapping_is_position_not_delta(self):
         # ABSOLUTE X/Y pad: the pointer POSITION sets the values, independent of
         # where the drag began. Two drags that END at the same point land on the
