@@ -192,6 +192,15 @@ function frame_at(i) {
     return (head - count + i + cap * 2) % cap;
 }
 
+// it171: a vertical fill gradient (top alpha -> bottom alpha) for the level + GR
+// areas, so they read as energy (SPAN/Pro-L look) instead of a flat wash.
+function vgrad(clr, a_top, a_bot) {
+    var g = mgraphics.pattern_create_linear(0, plot_t(), 0, plot_b());
+    g.add_color_stop_rgba(0.0, clr[0], clr[1], clr[2], a_top);
+    g.add_color_stop_rgba(1.0, clr[0], clr[1], clr[2], a_bot);
+    return g;
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
@@ -243,8 +252,9 @@ function paint() {
         var px = plot_w() / (cap - 1);
         var x0 = plot_r() - (count - 1) * px;
 
-        // Input level: filled area from the bottom + line.
-        mgraphics.set_source_rgba(LVL_FILL);
+        // Input level: filled area from the bottom + line. Gradient = brightest
+        // up near the live level, fading to almost nothing at the floor.
+        mgraphics.set_source(vgrad(LVL_FILL, LVL_FILL[3] * 2.6, LVL_FILL[3] * 0.20));
         mgraphics.move_to(x0, plot_b());
         for (i = 0; i < count; i++) {
             idx = frame_at(i);
@@ -265,8 +275,20 @@ function paint() {
         }
         mgraphics.stroke();
 
-        // Gain reduction: filled band hanging from the top + edge line.
-        mgraphics.set_source_rgba(GR_FILL);
+        // it171: a small live glow dot rides the newest (rightmost) level sample,
+        // marking "now" the way the Spectrum's peak dot does.
+        var cx = x0 + (count - 1) * px;
+        var cy = db_to_y(env_ring[frame_at(count - 1)]);
+        mgraphics.set_source_rgba(LVL_LINE[0], LVL_LINE[1], LVL_LINE[2], 0.22);
+        mgraphics.ellipse(cx - 3.6, cy - 3.6, 7.2, 7.2);
+        mgraphics.fill();
+        mgraphics.set_source_rgba(LVL_LINE[0], LVL_LINE[1], LVL_LINE[2], 0.95);
+        mgraphics.ellipse(cx - 1.7, cy - 1.7, 3.4, 3.4);
+        mgraphics.fill();
+
+        // Gain reduction: filled band hanging from the top + edge line. Gradient
+        // = faint at the anchor, igniting toward the leading edge (deeper = hotter).
+        mgraphics.set_source(vgrad(GR_FILL, GR_FILL[3] * 0.40, GR_FILL[3] * 2.1));
         mgraphics.move_to(x0, plot_t());
         for (i = 0; i < count; i++) {
             idx = frame_at(i);
