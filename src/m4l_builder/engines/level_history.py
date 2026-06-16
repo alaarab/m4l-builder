@@ -131,6 +131,7 @@ var LOUD_ENABLED = $loudness_target;
 // block to cycle OFF -> -14 (streaming) -> -16 (Apple) -> -23 (EBU R128); the M
 // value color-codes against it (green on-target / amber under / red over).
 var lufs = -70.0;
+var slufs = -70.0;     // short-term LUFS (EBU "S", 3s) — the stable number you target
 var loud_target = 0;
 var LOUD_TARGETS = [0.0, -14.0, -16.0, -23.0];
 var LOUD_LABELS = ["", "-14", "-16", "-23"];
@@ -401,25 +402,36 @@ function draw_loudness() {
     var ty = plot_t() + 12;
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(8.0);
+    // Momentary (M, 400ms) reads the instant — NEUTRAL. The TARGET compliance
+    // color rides the SHORT-TERM value (S, 3s) below, the stable number you
+    // actually dial a master to (momentary jumps too much to color usefully).
     var ltxt = (lufs <= -70.0) ? "M -inf LUFS"
         : ("M " + ((lufs >= 0 ? "+" : "") + lufs.toFixed(1)) + " LUFS");
     var lw = ltxt.length * 4.4;
-    var mr = TEXT_CLR[0], mg = TEXT_CLR[1], mb = TEXT_CLR[2];
-    if (loud_target > 0 && lufs > -70.0) {
-        var tgt = LOUD_TARGETS[loud_target];
-        if (lufs > tgt + 1.0) { mr = 0.95; mg = 0.43; mb = 0.39; }        // over -> red
-        else if (lufs >= tgt - 1.0) { mr = 0.36; mg = 0.86; mb = 0.56; }  // on target -> green
-        else { mr = 0.96; mg = 0.78; mb = 0.36; }                        // under -> amber
-    }
-    mgraphics.set_source_rgba(mr, mg, mb, 0.95);
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.95);
     mgraphics.move_to(rx - lw, ty);
     mgraphics.show_text(ltxt);
+    // Short-term LUFS (S) — color-coded vs the loudness target (green on-target
+    // +/-1 LU, amber under, red over). This is the loudness-compliance read.
+    var stxt = (slufs <= -70.0) ? "S -inf LUFS"
+        : ("S " + ((slufs >= 0 ? "+" : "") + slufs.toFixed(1)) + " LUFS");
+    var sw = stxt.length * 4.4;
+    var sr = TEXT_CLR[0], sg = TEXT_CLR[1], sb = TEXT_CLR[2];
+    if (loud_target > 0 && slufs > -70.0) {
+        var tgt = LOUD_TARGETS[loud_target];
+        if (slufs > tgt + 1.0) { sr = 0.95; sg = 0.43; sb = 0.39; }        // over -> red
+        else if (slufs >= tgt - 1.0) { sr = 0.36; sg = 0.86; sb = 0.56; }  // on target -> green
+        else { sr = 0.96; sg = 0.78; sb = 0.36; }                        // under -> amber
+    }
+    mgraphics.set_source_rgba(sr, sg, sb, 0.95);
+    mgraphics.move_to(rx - sw, ty + 11.0);
+    mgraphics.show_text(stxt);
     var gtxt = (loud_target > 0) ? ("TGT " + LOUD_LABELS[loud_target] + " <") : "TGT OFF <";
     var gw = gtxt.length * 4.0;
     mgraphics.set_font_size(7.0);
     if (loud_target > 0) mgraphics.set_source_rgba(0.70, 0.76, 0.85, 0.85);
     else mgraphics.set_source_rgba(0.46, 0.51, 0.59, 0.72);
-    mgraphics.move_to(rx - gw, ty + 11.0);
+    mgraphics.move_to(rx - gw, ty + 22.0);
     mgraphics.show_text(gtxt);
 }
 
@@ -428,6 +440,13 @@ function set_lufs(v) {
     v = parseFloat(v);
     if (!isFinite(v)) v = -70.0;   // NaN guard (per-frame handler)
     lufs = clamp(v, -70.0, 0.0);
+    mgraphics.redraw();
+}
+
+function set_slufs(v) {
+    v = parseFloat(v);
+    if (!isFinite(v)) v = -70.0;   // NaN guard (per-frame handler)
+    slufs = clamp(v, -70.0, 0.0);
     mgraphics.redraw();
 }
 
@@ -526,7 +545,7 @@ function loud_hit(pe) {
     var px = pointer_x(pe, NaN), py = pointer_y(pe, NaN);
     if (isNaN(px) || isNaN(py)) return 0;
     var rx = plot_r() - 6, ty = plot_t() + 12;
-    return (px >= rx - 86 && px <= rx + 2 && py >= ty - 9 && py <= ty + 14) ? 1 : 0;
+    return (px >= rx - 86 && px <= rx + 2 && py >= ty - 9 && py <= ty + 25) ? 1 : 0;
 }
 function pointer_shift_key(pe) {
     return (pe && pe.shiftKey) ? 1 : 0;

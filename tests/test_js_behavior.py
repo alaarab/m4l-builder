@@ -1300,6 +1300,35 @@ class TestLevelHistoryInteractive:
         """, size=(208, 152))
         assert r2.state["ref"] == -12.0 and r2.outlets == []
 
+    def test_set_slufs_tracks_and_guards_nan(self):
+        # Short-term LUFS (S, 3s) — the color-coded loudness-compliance read.
+        result = run_jsui(level_history_js(loudness_target=True), """
+            set_slufs(-12.3);
+            var a = slufs;
+            set_slufs("not-a-number");   // NaN guard -> floor at -70, not poisoned
+            dump({a: a, b: slufs});
+        """, size=(660, 320))
+        assert abs(result.state["a"] - (-12.3)) < 1e-6
+        assert result.state["b"] == -70.0
+
+    def test_loud_target_chip_still_cycles_with_taller_block(self):
+        # The S line grew the readout block one row; clicking it must still cycle
+        # the loudness target (OFF -> -14 -> -16 -> -23 -> OFF) on a pop-out view.
+        result = run_jsui(level_history_js(loudness_target=True), """
+            var rx = plot_r() - 6, ty = plot_t() + 12;
+            function tap(yy) { onpointerdown({x: rx - 40, y: yy, buttons: 1});
+                               onpointerup({x: rx - 40, y: yy, buttons: 0}); }
+            tap(ty);          // M row
+            var t1 = loud_target;
+            tap(ty + 22);     // TGT row (the newly-pushed-down line)
+            var t2 = loud_target;
+            dump({t1: t1, t2: t2});
+        """, size=(660, 320))
+        assert result.state["t1"] == 1     # first tap armed -14
+        assert result.state["t2"] == 2     # tap on the dropped TGT row still hit
+        emits = _named(result.outlets, "loudtarget")
+        assert [e[2] for e in emits] == [1, 2]
+
 
 class TestBallisticsCurve:
     def test_envelope_rises_holds_decays(self):
