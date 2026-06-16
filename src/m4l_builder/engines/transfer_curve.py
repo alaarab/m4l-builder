@@ -54,6 +54,7 @@ def transfer_curve_js(
     min_db=-60.0,
     reset_db=0.0,
     ratio_drag=True,
+    knee_drag=False,
 ):
     """Return JavaScript source for the transfer-curve display.
 
@@ -61,10 +62,15 @@ def transfer_curve_js(
     cursor's level), HORIZONTAL = ratio (relative, when ``ratio_drag``). Wheel
     also = ratio; double-click resets the threshold to ``reset_db``. Limiters
     (fixed ratio) pass ``ratio_drag=False`` so horizontal drag is inert.
+
+    knee_drag=True (compressors) draws a draggable grip at the knee's upper
+    corner; dragging it horizontally widens/narrows the soft knee (emits
+    ``knee <db>``) — the Pro-C "shape the knee on the curve" move.
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         ratio_drag=1 if ratio_drag else 0,
+        knee_drag=1 if knee_drag else 0,
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -110,6 +116,9 @@ var MIN_DB = $min_db;
 var MAX_DB = 0.0;
 var RESET_DB = $reset_db;
 var RATIO_DRAG = $ratio_drag;   // 1 = horizontal drag sets ratio (compressors)
+var KNEE_DRAG = $knee_drag;     // 1 = a draggable knee-width grip on the curve
+var KNEE_DEBUG = 0;            // temp: any in-plot press -> knee (round-trip probe)
+var knee_dragging = 0;
 var RATIO_PER_PX = 0.12;        // ratio units per px of horizontal drag
 var GR_BAR_W = 10;
 var MARGIN_L = 24;
@@ -145,6 +154,15 @@ function in_to_x(db) {
 }
 function out_to_y(db) {
     return plot_b() - ((db - MIN_DB) / (MAX_DB - MIN_DB)) * plot_h();
+}
+function x_to_in(x) {
+    return clamp(MIN_DB + ((x - plot_l()) / plot_w()) * (MAX_DB - MIN_DB), MIN_DB, MAX_DB);
+}
+// Knee grip lives at the knee's upper corner (threshold + knee/2 on the input
+// axis), with a 3 dB minimum offset so it stays off the threshold line and
+// grabbable even at knee 0. Returns the plot input dB of the grip.
+function knee_grip_in() {
+    return clamp(threshold + Math.max(knee, 3.0) * 0.5, MIN_DB, MAX_DB);
 }
 
 // Soft-knee transfer function (same math as the gen~ gain computer).
@@ -287,6 +305,21 @@ function paint() {
     mgraphics.line_to(tx, plot_b());
     mgraphics.stroke();
 
+    // Knee grip: a small hollow handle at the knee's upper corner, on the curve.
+    // Drag it horizontally to widen/narrow the soft knee (compressors only).
+    if (KNEE_DRAG) {
+        var kgi = knee_grip_in();
+        var kgx = in_to_x(kgi), kgy = out_to_y(transfer_out_db(kgi));
+        var ka = knee_dragging ? 1.0 : 0.7;
+        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], ka);
+        mgraphics.set_line_width(knee_dragging ? 2.0 : 1.4);
+        mgraphics.arc(kgx, kgy, knee_dragging ? 4.5 : 3.5, 0, Math.PI * 2);
+        mgraphics.stroke();
+        mgraphics.set_source_rgba(0.04, 0.05, 0.06, 0.8);
+        mgraphics.arc(kgx, kgy, 1.4, 0, Math.PI * 2);
+        mgraphics.fill();
+    }
+
     // Live IO dot riding the curve — a glowing "operating point" (Pro-C/Pro-L).
     // The radial glow IGNITES with gain reduction: a calm dot at rest, a bright
     // pulsing light with a white-hot core as the compressor digs in, so the
@@ -412,6 +445,26 @@ function apply_ratio(x, fine) {
     mgraphics.redraw();
 }
 
+// Knee grip drag (compressors): the cursor's input dB sets the knee's upper
+// corner -> knee = 2*(in - threshold), clamped 0..24. Emits "knee".
+function apply_knee(x) {
+    if (isNaN(x)) return;
+    var nk = clamp((x_to_in(x) - threshold) * 2.0, 0.0, 24.0);
+    if (Math.abs(nk - knee) < 0.05) return;
+    knee = nk;
+    outlet(0, "knee", Math.round(knee * 10) / 10);
+    mgraphics.redraw();
+}
+function knee_hit(px, py) {
+    if (!KNEE_DRAG || isNaN(px) || isNaN(py)) return 0;
+    if (KNEE_DEBUG) return (px > plot_l() && px < plot_r()) ? 1 : 0;  // round-trip probe
+    var kgi = knee_grip_in();
+    var kgx = in_to_x(kgi), kgy = out_to_y(transfer_out_db(kgi));
+    // Generous point grab so the small grip is easy to land on; localized in BOTH
+    // axes so threshold/ratio drags elsewhere in the plot are unaffected.
+    return (Math.abs(px - kgx) < 16.0 && Math.abs(py - kgy) < 14.0) ? 1 : 0;
+}
+
 // Cursor: a subtle grab ONLY while actively dragging (no hover-hand over the
 // whole plot — it doesn't need it). The press anchors the relative ratio drag.
 function start_drag(y, x) {
@@ -435,8 +488,22 @@ function reset_threshold() {
     mgraphics.redraw();
 }
 
-function onpointerdown(pe) { start_drag(pointer_y(pe, plot_b()), pointer_x(pe, 0.0)); }
+function end_knee_drag() {
+    if (!knee_dragging) return;
+    knee_dragging = 0;
+    ds_set_cursor(DS_CUR_ARROW);
+    mgraphics.redraw();
+}
+function onpointerdown(pe) {
+    var px = pointer_x(pe, 0.0), py = pointer_y(pe, plot_b());
+    if (knee_hit(px, py)) { knee_dragging = 1; ds_set_cursor(DS_CUR_GRAB); mgraphics.redraw(); return; }
+    start_drag(py, px);
+}
 function onpointermove(pe) {
+    if (knee_dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
+        apply_knee(pointer_x(pe, in_to_x(knee_grip_in()))); return;
+    }
+    if (knee_dragging) { end_knee_drag(); return; }
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
         drag_to(pointer_y(pe, plot_b()), pointer_x(pe, drag_start_x), pointer_shift_key(pe)); return;
     }
@@ -444,12 +511,16 @@ function onpointermove(pe) {
     if (!hovering) { hovering = 1; mgraphics.redraw(); }
     ds_set_cursor(DS_CUR_HAND);
 }
-function onpointerup(pe) { end_drag(); }
-function onpointerleave(pe) { hovering = 0; end_drag(); ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
+function onpointerup(pe) { if (knee_dragging) { end_knee_drag(); return; } end_drag(); }
+function onpointerleave(pe) { hovering = 0; end_knee_drag(); end_drag(); ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_threshold(); }
 
-function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y, x); }
+function onclick(x, y, but, cmd, shift, caps, opt, ctrl) {
+    if (knee_hit(x, y)) { knee_dragging = 1; mgraphics.redraw(); return; }
+    start_drag(y, x);
+}
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
+    if (knee_dragging) { if (but) apply_knee(x); else end_knee_drag(); return; }
     if (but) drag_to(y, x, shift);
     else end_drag();
 }

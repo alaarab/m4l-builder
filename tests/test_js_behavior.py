@@ -787,6 +787,37 @@ class TestTransferCurveDrag:
         assert len(emits) == 2
         assert abs(emits[-1][2] - result.state["hi_y"]) < 0.06
 
+    def test_knee_grip_drag_widens_knee(self):
+        # knee_drag=True: grabbing the knee grip and dragging it RIGHT widens the
+        # soft knee (emits "knee"); the threshold is untouched.
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(knee_drag=True), """
+            set_threshold(-20.0); set_knee(4.0);
+            var gi = knee_grip_in();
+            var gx = in_to_x(gi), gy = out_to_y(transfer_out_db(gi));
+            onpointerdown({x: gx, y: gy, buttons: 1});
+            var grabbed = knee_dragging, thr0 = threshold;
+            onpointermove({x: in_to_x(-10.0), y: gy, buttons: 1});  // in -10 -> knee 20
+            dump({grabbed: grabbed, knee: knee, thr: threshold, thr0: thr0});
+        """, size=(132, 152))
+        assert result.state["grabbed"] == 1, "press on the grip starts a knee drag"
+        assert abs(result.state["knee"] - 20.0) < 0.2, "knee = 2*(in - threshold)"
+        assert result.state["thr"] == result.state["thr0"], "knee drag leaves threshold alone"
+        assert len(_named(result.outlets, "knee")) >= 1
+        assert _named(result.outlets, "threshold") == []
+
+    def test_knee_grip_off_by_default(self):
+        # Default (limiters): no knee grip, a press starts the threshold drag.
+        from m4l_builder.engines.transfer_curve import transfer_curve_js
+        result = run_jsui(transfer_curve_js(), """
+            set_threshold(-20.0); set_knee(4.0);
+            var gi = knee_grip_in();
+            onpointerdown({x: in_to_x(gi), y: out_to_y(transfer_out_db(gi)), buttons: 1});
+            dump({knee_dragging: knee_dragging, dragging: dragging});
+        """, size=(132, 152))
+        assert result.state["knee_dragging"] == 0
+        assert result.state["dragging"] == 1, "without knee_drag a press is a threshold drag"
+
     def test_double_click_resets_threshold(self):
         from m4l_builder.engines.transfer_curve import transfer_curve_js
         result = run_jsui(transfer_curve_js(reset_db=0.0), """
