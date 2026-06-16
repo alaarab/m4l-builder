@@ -1011,6 +1011,35 @@ class TestWaveshapeMorph:
         assert result.state["m0"] == result.state["base"]
         assert result.state["same"] == result.state["base"]
 
+    def test_split_routes_positive_to_a_negative_to_b(self):
+        # it170: bipolar SPLIT — character A shapes the positive input half, B the
+        # negative half (asymmetric distortion), instead of morphing.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_drive(18.0); set_character(0); set_character_b(2);  // A=TAPE B=CLIP
+            set_morph(50); set_split(1);
+            // positive x -> A (TAPE), negative x -> B (CLIP), morph IGNORED.
+            dump({pos: shape(0.4), a_pos: shape_ch(0.4, 0),
+                  neg: shape(-0.4), b_neg: shape_ch(-0.4, 2),
+                  active: morph_active() ? 1 : 0});
+        """, size=(296, 152))
+        assert result.state["pos"] == result.state["a_pos"]   # +half == character A
+        assert result.state["neg"] == result.state["b_neg"]   # -half == character B
+        assert result.state["active"] == 0                    # morph rail hidden in split
+
+    def test_split_off_restores_morph(self):
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_drive(18.0); set_character(0); set_character_b(3);
+            set_morph(100); set_split(1); var s = shape(0.3);
+            set_split(0); var m = shape(0.3);                  // back to morph -> B
+            dump({split_v: s, morph_v: m, b: shape_ch(0.3, 3)});
+        """, size=(296, 152))
+        # split used A on the +half; morph 100 uses pure B -> the two differ, and
+        # morph-100 equals character B exactly.
+        assert result.state["morph_v"] == result.state["b"]
+        assert result.state["split_v"] != result.state["morph_v"]
+
     def test_top_rail_drag_sets_morph_and_emits(self):
         # it169: dragging the A<->B rail at the hero's top edge sets the morph and
         # emits "morph <pct>" (so the product routes it to the Morph dial). A press
