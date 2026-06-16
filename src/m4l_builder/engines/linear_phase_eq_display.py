@@ -246,6 +246,7 @@ var pending_context_ms = 0;
 
 var analyzer_display = [];
 var analyzer_peaks = [];
+var analyzer_snapshot = [];   // it174: captured A/B reference of the analyzer, or empty
 var analyzer_input = [];
 var last_redraw_ms = 0;
 var freq_table = [];
@@ -853,6 +854,51 @@ function analyzer_smooth_at(i, n) {
         wsum += w;
     }
     return acc / wsum;
+}
+
+// it174: capture the live analyzer as a static A/B reference, or clear it. Stores
+// the SMOOTHED values (what draw_analyzer plots) so an unchanged input overlaps
+// exactly; the tilt is re-applied at draw so it tracks the Tilt control.
+function toggle_analyzer_snapshot() {
+    if (analyzer_snapshot.length > 1) {
+        analyzer_snapshot = [];
+    } else {
+        var n = analyzer_display.length, k;
+        analyzer_snapshot = [];
+        if (n > 1 && !analyzer_is_flat()) {
+            for (k = 0; k < n; k++) analyzer_snapshot[k] = analyzer_smooth_at(k, n);
+        }
+    }
+    outlet(0, "analyzer_snapshot", analyzer_snapshot.length > 1 ? 1 : 0);  // -> SnapProbe
+    mgraphics.redraw();
+}
+
+// The captured reference (A/B compare) — a dim warm line + faint fill drawn
+// behind the live spectrum. Persists while the live trace comes and goes.
+function draw_analyzer_snapshot() {
+    var n = analyzer_snapshot.length, k, f, x, y;
+    if (n < 2) return;
+    var bottom = plot_bottom();
+    mgraphics.set_source_rgba(0.90, 0.82, 0.55, 0.07);
+    mgraphics.move_to(freq_to_x(analyzer_bin_freq(0, n)), bottom);
+    for (k = 0; k < n; k++) {
+        f = analyzer_bin_freq(k, n);
+        mgraphics.line_to(freq_to_x(f),
+            analyzer_db_to_y(analyzer_tilted_db(analyzer_snapshot[k], analyzer_slope_at(f))));
+    }
+    mgraphics.line_to(freq_to_x(analyzer_bin_freq(n - 1, n)), bottom);
+    mgraphics.close_path();
+    mgraphics.fill();
+    mgraphics.set_source_rgba(0.90, 0.82, 0.55, 0.55);
+    mgraphics.set_line_width(1.2);
+    for (k = 0; k < n; k++) {
+        f = analyzer_bin_freq(k, n);
+        x = freq_to_x(f);
+        y = analyzer_db_to_y(analyzer_tilted_db(analyzer_snapshot[k], analyzer_slope_at(f)));
+        if (k === 0) mgraphics.move_to(x, y);
+        else mgraphics.line_to(x, y);
+    }
+    mgraphics.stroke();
 }
 
 function draw_analyzer() {
@@ -1472,6 +1518,7 @@ function paint() {
     mgraphics.stroke();
 
     draw_grid();
+    draw_analyzer_snapshot();   // it174: A/B reference behind the live analyzer
     draw_analyzer();
     if (present_band_count() < 1) {
         draw_empty_state();
@@ -2194,6 +2241,14 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
         outlet(0, "context_enable", hit, band.enabled);
         outlet(0, "selected_band", hit);
         mgraphics.redraw();
+        return;
+    }
+
+    // it174: opt/alt-click on EMPTY graph space captures the live analyzer as a
+    // static A/B reference (or clears it) — a Pro-Q-style compare. A node opt-click
+    // toggles that band (above); this only fires off a node, inside the plot.
+    if (opt && point_in_plot(x, y)) {
+        toggle_analyzer_snapshot();
         return;
     }
 
