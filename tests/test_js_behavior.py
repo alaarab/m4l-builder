@@ -1011,6 +1011,47 @@ class TestWaveshapeMorph:
         assert result.state["m0"] == result.state["base"]
         assert result.state["same"] == result.state["base"]
 
+    def test_top_rail_drag_sets_morph_and_emits(self):
+        # it169: dragging the A<->B rail at the hero's top edge sets the morph and
+        # emits "morph <pct>" (so the product routes it to the Morph dial). A press
+        # at the track's horizontal midpoint -> ~50%.
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        result = run_jsui(waveshape_curve_js(), """
+            set_character(0); set_character_b(3);   // distinct B -> rail is active
+            var midx = (morph_track_x0() + morph_track_x1()) / 2;
+            onpointerdown({x: midx, y: plot_t() + 4, buttons: 1});
+            dump({m: morph, dragging_morph: drag_morph});
+        """, size=(296, 152))
+        assert abs(result.state["m"] - 0.5) < 0.02       # midpoint -> ~50%
+        assert result.state["dragging_morph"] == 1
+        emits = _named(result.outlets, "morph")
+        assert len(emits) == 1
+        assert abs(emits[-1][2] - 50.0) < 2.0            # ~50 (%)
+
+    def test_rail_hidden_when_no_distinct_b_and_pad_drag_untouched(self):
+        # When B == A there is nothing to morph: the rail is inert and a top-edge
+        # press falls through to the drive/bias pad. And a mid-plot drag is always
+        # the pad, never the morph (the rail only owns the thin top strip).
+        from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+        inert = run_jsui(waveshape_curve_js(), """
+            set_character(2); set_character_b(2);   // B == A -> rail inactive
+            onpointerdown({x: 150, y: plot_t() + 4, buttons: 1});
+            dump({hit: morph_strip_hit(150, plot_t() + 4), dm: drag_morph,
+                  dragging: dragging});
+        """, size=(296, 152))
+        assert inert.state["hit"] == 0
+        assert inert.state["dm"] == 0
+        assert inert.state["dragging"] == 1              # fell through to the pad
+        pad = run_jsui(waveshape_curve_js(), """
+            set_character(0); set_character_b(3); set_morph(40);
+            onpointerdown({x: 150, y: 80, buttons: 1});  // mid-plot -> drive/bias
+            onpointermove({x: 200, y: 40, buttons: 1});
+            dump({m: morph, dm: drag_morph});
+        """, size=(296, 152))
+        assert abs(pad.state["m"] - 0.40) < 1e-6         # morph untouched by the pad
+        assert pad.state["dm"] == 0
+        assert _named(pad.outlets, "morph") == []
+
 
 class TestWaveshapeDrag:
     def test_drag_up_adds_drive_at_documented_scale(self):

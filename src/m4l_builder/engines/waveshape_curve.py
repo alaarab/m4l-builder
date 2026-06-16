@@ -225,6 +225,7 @@ function set_zmode(z, v) {
 // gen~ reads the same splits as z_split_lo/hi (input amplitude -1..1).
 var zone_bound = [1.0 / 3.0, 2.0 / 3.0];
 var drag_bound = -1;
+var drag_morph = 0;    // it169: dragging the A<->B morph rail at the hero's top edge
 function zone_lo_t(z) { return z <= 0 ? 0.0 : zone_bound[z - 1]; }
 function zone_hi_t(z) { return z >= NUM_ZONES - 1 ? 1.0 : zone_bound[z]; }
 // Param echoes (input -1..1 -> plot fraction). Ignored mid-drag (drag owns it).
@@ -789,6 +790,60 @@ function draw_lit_segment(transfer_is_sample, e) {
     mgraphics.stroke();
 }
 
+// it169: one faint endpoint curve (character `ch`) behind the bright morph blend.
+function draw_ghost_curve(ch, a) {
+    var i, v;
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], a);
+    mgraphics.set_line_width(1.0);
+    for (i = 0; i <= 96; i++) {
+        v = -1.0 + (i / 96) * 2.0;
+        if (i === 0) mgraphics.move_to(x_of(v), y_of(shape_ch(v, ch)));
+        else mgraphics.line_to(x_of(v), y_of(shape_ch(v, ch)));
+    }
+    mgraphics.stroke();
+}
+
+// it169: the MORPH rail — a draggable A<->B track at the hero's top edge. The
+// handle position is the morph amount (left = pure A, right = pure B). Only shown
+// when a distinct character B is selected (else there is nothing to morph to).
+function morph_track_y() { return plot_t() + 4; }
+function morph_track_x0() { return plot_l() + 14; }
+function morph_track_x1() { return plot_r() - 14; }
+function morph_handle_x() {
+    return morph_track_x0() + morph * (morph_track_x1() - morph_track_x0());
+}
+function morph_active() { return character_b !== character; }
+function draw_morph_track() {
+    if (!morph_active()) return;
+    var ty = morph_track_y(), x0 = morph_track_x0(), x1 = morph_track_x1();
+    mgraphics.set_line_width(2.0);
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.30);
+    mgraphics.move_to(x0, ty); mgraphics.line_to(x1, ty); mgraphics.stroke();
+    mgraphics.set_font_size(6.0);
+    mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.55);
+    mgraphics.move_to(plot_l() + 2, ty + 2.5); mgraphics.show_text("A");
+    mgraphics.move_to(x1 + 4, ty + 2.5); mgraphics.show_text("B");
+    var hx = morph_handle_x();
+    mgraphics.set_source_rgba(ACCENT_CLR);
+    mgraphics.ellipse(hx - 3.0, ty - 3.0, 6.0, 6.0);
+    mgraphics.fill();
+}
+// A press on the top morph rail grabs it (takes the drag instead of the pad).
+function morph_strip_hit(px, py) {
+    if (!morph_active() || isNaN(px) || isNaN(py)) return 0;
+    var ty = morph_track_y();
+    return (py >= plot_t() - 3 && py <= ty + 6 &&
+            px >= morph_track_x0() - 8 && px <= morph_track_x1() + 8) ? 1 : 0;
+}
+function apply_morph_x(x) {
+    if (isNaN(x)) return;
+    var f = clamp((x - morph_track_x0())
+                  / Math.max(1.0, morph_track_x1() - morph_track_x0()), 0.0, 1.0);
+    morph = f;
+    outlet(0, "morph", Math.round(f * 1000) / 10);   // 0..100 (%) for the dial
+    mgraphics.redraw();
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
@@ -836,6 +891,13 @@ function paint() {
     mgraphics.close_path();
     mgraphics.fill();
 
+    // it169: when morphing, GHOST the two endpoint character curves (A + B)
+    // faintly behind the bright blend, so you SEE the two shapes being crossfaded.
+    if (morph > 0.0 && character_b !== character) {
+        draw_ghost_curve(character, 0.20);
+        draw_ghost_curve(character_b, 0.30);
+    }
+
     // The shape curve, colored by the active palette across the input axis.
     mgraphics.set_source(zone_grad(0.97));
     mgraphics.set_line_width(dragging || hovering ? 2.3 : 1.8);
@@ -880,13 +942,14 @@ function paint() {
     // Zone strips + mode swatches on top of everything (always pickable).
     draw_zone_strips();
     draw_swatches();
+    draw_morph_track();   // it169: the A<->B morph rail (top edge)
 }
 
 // ── Messages ─────────────────────────────────────────────────────────
 function set_drive(v)     { drive_db = clamp(v, 0.0, 36.0); mgraphics.redraw(); }
 function set_character(v) { character = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
 function set_character_b(v) { character_b = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
-function set_morph(v)    { morph = clamp(v, 0.0, 100.0) * 0.01; mgraphics.redraw(); }
+function set_morph(v)    { if (drag_morph) return; morph = clamp(v, 0.0, 100.0) * 0.01; mgraphics.redraw(); }
 function set_bias(v)      { bias = clamp(v, -1.0, 1.0); mgraphics.redraw(); }
 function set_mix(v)       { mix_pct = clamp(v, 0, 100); mgraphics.redraw(); }
 function io_level(e)      {
@@ -939,6 +1002,7 @@ function start_drag(x, y) {
 }
 
 function drag_to(x, y, fine) {
+    if (drag_morph) { apply_morph_x(x); return; }   // the morph rail owns this drag
     if (drag_bound >= 0) {
         // Move a zone boundary -> resize which part of the wave a color/mode
         // covers; emit the split as input amplitude (-1..1) for the gen~.
@@ -968,15 +1032,22 @@ function drag_to(x, y, fine) {
 }
 
 function end_drag() {
-    if (!dragging && drag_bound < 0) return;
+    if (!dragging && drag_bound < 0 && !drag_morph) return;
     dragging = 0;
     drag_bound = -1;
+    drag_morph = 0;
     ds_set_cursor(DS_CUR_ARROW);
     mgraphics.redraw();
 }
 
 function onpointerdown(pe) {
     var px = pointer_x(pe, -1), py = pointer_y(pe, -1);
+    if (morph_strip_hit(px, py)) {              // the top morph rail grabs the drag
+        drag_morph = 1; dragging = 1;
+        ds_set_cursor(DS_CUR_GRAB);
+        apply_morph_x(px);
+        return;
+    }
     var sh = swatch_hit(px, py);
     if (sh >= 0) { pick_mode(sh); return; }     // swatch wins over a drive drag
     var zh = zone_hit(px, py);
