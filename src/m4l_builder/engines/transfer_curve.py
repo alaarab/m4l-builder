@@ -226,8 +226,17 @@ function paint() {
     mgraphics.line_to(in_to_x(MAX_DB), out_to_y(MAX_DB));
     mgraphics.stroke();
 
-    // Gain-reduction region: between unity and the transfer curve.
-    mgraphics.set_source_rgba(GRFILL_CLR);
+    // Gain-reduction region: between unity and the transfer curve. it176: a
+    // vertical gradient (bright near the top, fading down) that IGNITES with live
+    // reduction — the wedge glows hotter the harder the comp/limiter pulls down,
+    // so the inset breathes with the signal instead of reading as a flat wash.
+    var gr_amt0 = clamp(-gr_db / 12.0, 0.0, 1.0);
+    var gfa = GRFILL_CLR.length > 3 ? GRFILL_CLR[3] : 0.3;
+    var grfill = mgraphics.pattern_create_linear(0, plot_t(), 0, plot_b());
+    grfill.add_color_stop_rgba(0.0, GRFILL_CLR[0], GRFILL_CLR[1], GRFILL_CLR[2],
+        clamp(gfa * (1.25 + gr_amt0 * 2.4), 0.0, 0.95));
+    grfill.add_color_stop_rgba(1.0, GRFILL_CLR[0], GRFILL_CLR[1], GRFILL_CLR[2], gfa * 0.16);
+    mgraphics.set_source(grfill);
     mgraphics.move_to(in_to_x(MIN_DB), out_to_y(MIN_DB));
     for (i = 0; i <= 64; i++) {
         db = MIN_DB + (i / 64) * (MAX_DB - MIN_DB);
