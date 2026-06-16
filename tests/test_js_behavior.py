@@ -1313,15 +1313,15 @@ class TestLevelHistoryInteractive:
         assert result.state["b"] == -70.0
 
     def test_loud_target_chip_still_cycles_with_taller_block(self):
-        # The S line grew the readout block one row; clicking it must still cycle
-        # the loudness target (OFF -> -14 -> -16 -> -23 -> OFF) on a pop-out view.
+        # The M/S/I stack grew the readout block; the M row + the (now lower) TGT
+        # row both still cycle the loudness target on a pop-out view.
         result = run_jsui(level_history_js(loudness_target=True), """
             var rx = plot_r() - 6, ty = plot_t() + 12;
             function tap(yy) { onpointerdown({x: rx - 40, y: yy, buttons: 1});
                                onpointerup({x: rx - 40, y: yy, buttons: 0}); }
             tap(ty);          // M row
             var t1 = loud_target;
-            tap(ty + 22);     // TGT row (the newly-pushed-down line)
+            tap(ty + 33);     // TGT row (dropped two lines by the S + I rows)
             var t2 = loud_target;
             dump({t1: t1, t2: t2});
         """, size=(660, 320))
@@ -1329,6 +1329,34 @@ class TestLevelHistoryInteractive:
         assert result.state["t2"] == 2     # tap on the dropped TGT row still hit
         emits = _named(result.outlets, "loudtarget")
         assert [e[2] for e in emits] == [1, 2]
+
+    def test_set_ilufs_tracks_and_guards_nan(self):
+        # Integrated LUFS (I) — the whole-programme readout the pop-out shows.
+        result = run_jsui(level_history_js(loudness_target=True), """
+            set_ilufs(-14.7);
+            var a = ilufs;
+            set_ilufs("not-a-number");   // NaN guard -> floor at -70, not poisoned
+            dump({a: a, b: ilufs});
+        """, size=(660, 320))
+        assert abs(result.state["a"] - (-14.7)) < 1e-6
+        assert result.state["b"] == -70.0
+
+    def test_i_line_click_resets_integration_not_target(self):
+        # Clicking the "I" line (the ↺ row) emits loudreset + clears the local
+        # value WITHOUT cycling the loudness target (the reset zone out-prioritises
+        # the target-cycle block it sits inside).
+        result = run_jsui(level_history_js(loudness_target=True), """
+            set_ilufs(-9.0);
+            var rx = plot_r() - 6, ty = plot_t() + 12;
+            onpointerdown({x: rx - 40, y: ty + 22, buttons: 1});   // the I row
+            onpointerup({x: rx - 40, y: ty + 22, buttons: 0});
+            dump({i: ilufs, tgt: loud_target});
+        """, size=(660, 320))
+        assert result.state["i"] == -70.0           # integration cleared locally
+        assert result.state["tgt"] == 0             # target NOT cycled
+        resets = _named(result.outlets, "loudreset")
+        assert len(resets) == 1
+        assert _named(result.outlets, "loudtarget") == []
 
 
 class TestBallisticsCurve:
