@@ -121,6 +121,7 @@ var drive_db = 0.0;
 var character = 0;
 var character_b = 0;   // it168: morph target character (B)
 var morph = 0.0;       // it168: 0..1 crossfade from character A to character B
+var split = 0;         // it170: bipolar — A shapes +half, B shapes -half (vs morph)
 var bias = 0.0;
 var mix_pct = 100;
 var env_lin = 0.0;
@@ -451,12 +452,17 @@ function shape_ch(x, ch) {
     return clamp(shape_raw(x + b, ch) - shape_raw(b, ch), -1.0, 1.0);
 }
 
-// The CHARACTER-MORPH transfer (it168): character A crossfaded to character B by
-// `morph` (0..1). morph 0 => pure A (bit-identical to the pre-morph curve), so
-// every existing caller (curve, IO dots, sample overlay) morphs automatically.
+// The two-character transfer (it168/it170). With a distinct character B:
+//  - SPLIT (bipolar, it170): A shapes the positive input half, B the negative
+//    half (asymmetric distortion — the step at x=0 is the effect).
+//  - else MORPH (it168): A crossfaded to B by `morph` (0..1).
+// morph 0 / split 0 => pure A (bit-identical), so every caller (curve, IO dots,
+// sample overlay) follows automatically.
 function shape(x) {
     var a = shape_ch(x, character);
-    if (morph <= 0.0 || character_b === character) return a;
+    if (character_b === character) return a;
+    if (split) return (x >= 0.0) ? a : shape_ch(x, character_b);
+    if (morph <= 0.0) return a;
     return a + (shape_ch(x, character_b) - a) * morph;
 }
 
@@ -812,7 +818,7 @@ function morph_track_x1() { return plot_r() - 14; }
 function morph_handle_x() {
     return morph_track_x0() + morph * (morph_track_x1() - morph_track_x0());
 }
-function morph_active() { return character_b !== character; }
+function morph_active() { return character_b !== character && !split; }
 function draw_morph_track() {
     if (!morph_active()) return;
     var ty = morph_track_y(), x0 = morph_track_x0(), x1 = morph_track_x1();
@@ -893,7 +899,7 @@ function paint() {
 
     // it169: when morphing, GHOST the two endpoint character curves (A + B)
     // faintly behind the bright blend, so you SEE the two shapes being crossfaded.
-    if (morph > 0.0 && character_b !== character) {
+    if (morph > 0.0 && character_b !== character && !split) {
         draw_ghost_curve(character, 0.20);
         draw_ghost_curve(character_b, 0.30);
     }
@@ -930,10 +936,16 @@ function paint() {
     mgraphics.set_font_size(8.0);
     mgraphics.set_source_rgba(ACCENT_CLR);
     mgraphics.move_to(plot_l() + 5, plot_t() + 11);
-    var clabel = (morph > 0.0 && character_b !== character)
-        ? (CHAR_NAMES[character] + "→" + CHAR_NAMES[character_b]
-           + " " + Math.round(morph * 100) + "%")
-        : CHAR_NAMES[character];
+    var clabel;
+    if (split && character_b !== character) {
+        // Bipolar: B shapes the negative half (left), A the positive half (right).
+        clabel = CHAR_NAMES[character_b] + "|" + CHAR_NAMES[character] + " SPLIT";
+    } else if (morph > 0.0 && character_b !== character) {
+        clabel = CHAR_NAMES[character] + "→" + CHAR_NAMES[character_b]
+                 + " " + Math.round(morph * 100) + "%";
+    } else {
+        clabel = CHAR_NAMES[character];
+    }
     mgraphics.show_text(clabel + "  " + (Math.round(drive_db * 10) / 10) + " dB");
     mgraphics.set_source_rgba(TEXT_CLR);
     mgraphics.move_to(plot_l() + 5, plot_t() + 21);
@@ -950,6 +962,7 @@ function set_drive(v)     { drive_db = clamp(v, 0.0, 36.0); mgraphics.redraw(); 
 function set_character(v) { character = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
 function set_character_b(v) { character_b = clamp(Math.floor(v), 0, NUM_CHARS - 1); mgraphics.redraw(); }
 function set_morph(v)    { if (drag_morph) return; morph = clamp(v, 0.0, 100.0) * 0.01; mgraphics.redraw(); }
+function set_split(v)    { split = (v > 0.5) ? 1 : 0; mgraphics.redraw(); }
 function set_bias(v)      { bias = clamp(v, -1.0, 1.0); mgraphics.redraw(); }
 function set_mix(v)       { mix_pct = clamp(v, 0, 100); mgraphics.redraw(); }
 function io_level(e)      {
