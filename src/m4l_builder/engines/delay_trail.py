@@ -104,6 +104,8 @@ var wet_lvl = 0.0;
 var duck_lvl = 0.0;
 var dragging = 0;
 var hovering = 0;
+var hover_x = 0.0;
+var hover_y = 0.0;
 var drag_start_x = 0;
 var drag_start_y = 0;
 var drag_start_time = 0.0;
@@ -264,6 +266,24 @@ function paint() {
     mgraphics.set_source_rgba(0.96, 0.66, 0.26, 0.88);
     mgraphics.rectangle(bx, by + 9, 44 * dk, 2.5);
     mgraphics.fill();
+
+    // Hover preview: a faint vertical crosshair at the cursor + the time/feedback
+    // a click would set (the pad is absolute, X=time and Y=feedback). Time shows
+    // only in FREE mode (in synced mode the X drag is overridden by the division).
+    if (hovering && !dragging) {
+        var hx = clamp(hover_x, plot_l(), plot_r());
+        var hms = clamp((hx - plot_l()) / plot_w() * MAX_MS, 1.0, MAX_MS);
+        var hfb = clamp((plot_b() - clamp(hover_y, plot_t(), plot_b())) / plot_h() * 110.0, 0.0, 110.0);
+        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.30);
+        mgraphics.set_line_width(1.0);
+        mgraphics.move_to(hx, plot_t()); mgraphics.line_to(hx, plot_b()); mgraphics.stroke();
+        var lbl = (sync_label === "FREE" ? (Math.round(hms) + " ms · ") : "") + Math.round(hfb) + "%";
+        var lx = hx + 4; if (lx > plot_r() - 70) lx = hx - 72;
+        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.9);
+        mgraphics.set_font_size(7.5);
+        mgraphics.move_to(lx, plot_b() - 4);
+        mgraphics.show_text(lbl);
+    }
 }
 
 // ── Messages ─────────────────────────────────────────────────────────
@@ -278,7 +298,7 @@ function set_duck(v) { duck_lvl = clamp(v, 0.0, 1.0); mgraphics.redraw(); }
 // ── Interaction: ABSOLUTE X/Y pad ────────────────────────────────────
 // Robust pointer-coordinate resolution. Max's v8ui pointer events expose the
 // object-local position under DIFFERENT property names across runtimes
-// (.x / .localX / .offsetX / .clientX); reading only `.x` returned undefined
+// (.x / .localX / .offsetX / .clientX); reading only '.x' returned undefined
 // in Live -> (undefined - plot_l()) = NaN -> time/feedback slammed to the rails
 // (and the readout showed "NaN ms"). This is the exact helper set eq_curve uses
 // (that engine drags reliably). The legacy onclick/ondrag path already passes
@@ -379,7 +399,13 @@ function onpointermove(pe) {
         return;
     }
     if (dragging && b === 0) { end_drag(); return; }
-    if (!hovering) { hovering = 1; mgraphics.redraw(); }
+    // Track the hover position so paint() can draw a crosshair + a preview of the
+    // time/feedback a click here would set (the X/Y pad is absolute). The
+    // hovering flag was already set but never read; this wires that affordance.
+    hover_x = pointer_x(pe, hover_x);
+    hover_y = pointer_y(pe, hover_y);
+    hovering = 1;
+    mgraphics.redraw();
 }
 function onpointerup(pe) { end_drag(); }
 function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
@@ -390,7 +416,7 @@ function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
     if (but) drag_to(x, y, shift);
     else end_drag();
 }
-function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }
+function onidle(x, y) { hover_x = x; hover_y = y; hovering = 1; mgraphics.redraw(); }
 function onidleout() { hovering = 0; mgraphics.redraw(); }
 
 function onwheel(x, y, scrollx, scrolly) {

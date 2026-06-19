@@ -1177,7 +1177,13 @@ function draw_nodes() {
 
         label = TYPE_NAMES[band_cache[i].type];
         bounds = [x + radius + 8, y + 2, x + radius + 62, y + 14];
-        if ((!compact && !label_overlaps(bounds, used_labels)) || (!compact && (selected_band === i || hover_band === i))) {
+        // A focused (selected/hover) band always labels. Otherwise, only ENABLED
+        // bands claim label space — a faint, crossed-out disabled band must never
+        // block an active band's type label in the collision test (it did before:
+        // disabled labels were pushed to used_labels unconditionally). Disabled
+        // bands keep their number badge + cross; they just drop the type name.
+        var is_focus = (selected_band === i || hover_band === i);
+        if (!compact && (is_focus || (band_cache[i].enabled && !label_overlaps(bounds, used_labels)))) {
             used_labels.push(bounds);
             mgraphics.select_font_face("Arial");
             mgraphics.set_font_size(7.0);
@@ -1397,8 +1403,17 @@ function hud_badges() {
         {key: "quality", x: badge_x, y: info_y, w: 58, h: 14, label: "Q", value: QUALITY_NAMES[quality_mode]},
         {key: "latency", x: badge_x + 62, y: info_y, w: 62, h: 14, label: "LAT", value: latency_ms.toFixed(1) + " ms"},
         {key: "analyzer", x: badge_x + 128, y: info_y, w: 56, h: 14, label: "AN", value: ANALYZER_MODE_NAMES[analyzer_mode]},
-        {key: "range", x: badge_x + 188, y: info_y, w: 54, h: 14, label: "RNG", value: display_range.toFixed(0) + " dB"}
+        {key: "range", x: badge_x + 188, y: info_y, w: 54, h: 14, label: "RNG", value: display_range.toFixed(0) + " dB"},
+        {key: "tilt", x: badge_x + 246, y: info_y, w: 52, h: 14, label: "TILT", value: hud_tilt_value()}
     ];
+}
+
+// Display-tilt value for the HUD badge (parity with the AN/RNG badges — tilt was
+// the one analyzer param a badge could not cycle). "0" / "+4.5" style.
+function hud_tilt_value() {
+    if (analyzer_slope_db_oct === 0.0) return "0";
+    var v = Math.round(analyzer_slope_db_oct * 10) / 10;
+    return (v > 0 ? "+" : "") + v;
 }
 
 function hud_badge_hit(x, y) {
@@ -1434,6 +1449,24 @@ function cycle_hud_badge(key, reverse) {
         display_range = 15.0;
         curve_dirty = 1;
         outlet(0, "hud_range", 0);
+        mgraphics.redraw();
+        return 1;
+    }
+    if (key === "tilt") {
+        // Cycle the display tilt through the same steps the rail Tilt menu offers
+        // (0 / +3 / +4.5 / +6 dB/oct). Emit hud_tilt <idx> so a host routing it to
+        // the Analyzer Tilt menu keeps the param + badge in sync (no-op in products
+        // that ship the badge row off, like the current LP rail layout).
+        var TILT_STEPS = [0.0, 3.0, 4.5, 6.0];
+        var ci = 0, bd = 1e9, k, dd;
+        for (k = 0; k < TILT_STEPS.length; k++) {
+            dd = Math.abs(TILT_STEPS[k] - analyzer_slope_db_oct);
+            if (dd < bd) { bd = dd; ci = k; }
+        }
+        ci = reverse ? (ci + TILT_STEPS.length - 1) % TILT_STEPS.length
+                     : (ci + 1) % TILT_STEPS.length;
+        analyzer_slope_db_oct = TILT_STEPS[ci];
+        outlet(0, "hud_tilt", ci);
         mgraphics.redraw();
         return 1;
     }

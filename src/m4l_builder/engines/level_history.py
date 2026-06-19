@@ -37,6 +37,7 @@ from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_COLOR,
     resolve_graph_panel_color,
 )
+from .design_system import design_system_js
 
 LEVEL_HISTORY_INLETS = 1
 LEVEL_HISTORY_OUTLETS = 1
@@ -78,7 +79,7 @@ def level_history_js(
     ``set_lufs <db>`` and echo ``set_loudtarget <idx>`` back (no-echo rule).
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return _JS_TEMPLATE.substitute(
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -553,7 +554,7 @@ function set_ref_db(v) {
 // ── Interaction (interactive=True): drag the reference line ──────────
 // Robust pointer-coordinate resolver: v8ui exposes the object-local position
 // under different property names (.y / .localY / .offsetY / .clientY); reading
-// only `.y` returned undefined in Live -> NaN -> the line mis-scaled and jumped
+// only '.y' returned undefined in Live -> NaN -> the line mis-scaled and jumped
 // (the it38 bug). Mirrors eq_curve / delay_trail. The mapping is ABSOLUTE — the
 // line follows the cursor's level on the dB scale (robust to any v8ui frame
 // quirk), not a relative start+delta.
@@ -625,6 +626,7 @@ function apply_ref(y, fine) {
 function start_drag(y) {
     if (!INTERACTIVE) return;
     dragging = 1;
+    ds_set_cursor(DS_CUR_GRAB);
     // Anchor for shift=fine (relative-to-press); fall back to the floor if the
     // line was hidden so fine still has a sane origin.
     drag_start_ref = (ref_db !== null && isFinite(ref_db)) ? ref_db : lo_db;
@@ -669,12 +671,18 @@ function onpointerdown(pe) {
 function onpointermove(pe) {
     if (dragging && ((pointer_buttons(pe, 1) & 1) !== 0)) {
         drag_to(pointer_y(pe, plot_b()), pointer_shift_key(pe));
+        ds_set_cursor(DS_CUR_GRAB);
+        return;
     } else if (dragging) {
         end_drag();
     }
+    // Hover affordance: the whole plot is a draggable reference-line surface when
+    // INTERACTIVE — a hand cursor signals it (design-system, matches the transfer
+    // inset). Engines lacking design_system showed a plain arrow over a drag zone.
+    if (INTERACTIVE) ds_set_cursor(DS_CUR_HAND);
 }
 function onpointerup(pe) { end_drag(); }
-function onpointerleave(pe) { end_drag(); }
+function onpointerleave(pe) { end_drag(); ds_set_cursor(DS_CUR_ARROW); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_ref(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(y); }

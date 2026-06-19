@@ -135,7 +135,7 @@ var drag_start_bias = 0.0;
 // Dropped sample as a scrolling OSCILLOSCOPE: a window of the sample's actual
 // samples (a line trace, not a min/max blob) plus the SATURATED version
 // (shape() applied through the mix) so you watch the distortion on real audio.
-// A metro in the patcher advances the window via scope_tick. `mode` (0 =
+// A metro in the patcher advances the window via scope_tick. 'mode' (0 =
 // transfer curve, 1 = sample scope) is driven by the SCOPE/CURVE rail toggle;
 // a fresh drop auto-switches to scope (emitting "mode 1" to sync the toggle).
 var WAVE_WIN = 512;        // samples shown at once (a couple of cycles)
@@ -151,7 +151,7 @@ var live_scope_name = "";  // named buffer~ the device records the output into
 var live_scope_dry = [];   // live DRY (input) waveform — the before/after ghost
 var live_scope_dry_name = "";  // named buffer~ the device records the input into
 
-// The CURRENT wavetable = the WAVE_WIN window at scope_pos (== `scope`): drawn
+// The CURRENT wavetable = the WAVE_WIN window at scope_pos (== 'scope'): drawn
 // as the transfer curve (input -1..1 -> window sample -> output) and applied,
 // for the same window, by the gen~ core. It scans the file as scope_pos scrolls
 // so the table morphs; the gen~ follows via the wt_start it is sent.
@@ -250,11 +250,11 @@ function bound_hit(px, py) {
 }
 
 // Read WAVE_WIN consecutive samples at the current scroll position. This window
-// IS the live wavetable: `scope` (drawn as the oscilloscope) and `curve_tbl`
+// IS the live wavetable: 'scope' (drawn as the oscilloscope) and 'curve_tbl'
 // (drawn as the transfer curve + interpolated by sample_transfer) are the same
 // data, and the gen~ core reads the same window via wt_start. (Max-only: new
 // Buffer/peek are absent in the Node harness, so this no-ops there, leaving any
-// test-injected `scope`/`curve_tbl` intact.)
+// test-injected 'scope'/'curve_tbl' intact.)
 function read_window() {
     if (typeof Buffer === "undefined") return;
     var b = new Buffer("" + sample_name);
@@ -414,7 +414,7 @@ function drive_lin() {
 }
 
 // Mirrors the gen~ core shape(x, d, ch) — keep in sync. Pure/stateless.
-// `ch` selects the character (defaults to the active `character`) so the morph
+// 'ch' selects the character (defaults to the active 'character') so the morph
 // can evaluate both endpoints.
 function shape_raw(x, ch) {
     if (ch === undefined) ch = character;
@@ -444,7 +444,7 @@ function shape_raw(x, ch) {
     return v;
 }
 
-// Biased transfer for character `ch`: shift into the curve + recenter (even
+// Biased transfer for character 'ch': shift into the curve + recenter (even
 // harmonics). Matches the gen's shape(s + b, d, ch) - shape(b, d, ch).
 function shape_ch(x, ch) {
     var b = clamp(bias, -1.0, 1.0) * 0.5;
@@ -455,8 +455,8 @@ function shape_ch(x, ch) {
 // The two-character transfer (it168/it170). With a distinct character B:
 //  - SPLIT (bipolar, it170): A shapes the positive input half, B the negative
 //    half (asymmetric distortion — the step at x=0 is the effect).
-//  - else MORPH (it168): A crossfaded to B by `morph` (0..1).
-// morph 0 / split 0 => pure A (bit-identical), so every caller (curve, IO dots,
+//  - else MORPH (it168): A crossfaded to B by 'morph' (0..1).
+// morph 0 / split 0 -> pure A (bit-identical), so every caller (curve, IO dots,
 // sample overlay) follows automatically.
 function shape(x) {
     var a = shape_ch(x, character);
@@ -796,7 +796,7 @@ function draw_lit_segment(transfer_is_sample, e) {
     mgraphics.stroke();
 }
 
-// it169: one faint endpoint curve (character `ch`) behind the bright morph blend.
+// it169: one faint endpoint curve (character 'ch') behind the bright morph blend.
 function draw_ghost_curve(ch, a) {
     var i, v;
     mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], a);
@@ -950,6 +950,27 @@ function paint() {
     mgraphics.set_source_rgba(TEXT_CLR);
     mgraphics.move_to(plot_l() + 5, plot_t() + 21);
     mgraphics.show_text("MIX " + Math.round(mix_pct) + "%");
+
+    // Scan-position indicator: a dropped sample becomes a wavetable that SCANS
+    // through the whole file (scope_pos loops 0..end), morphing the table — but
+    // there was no tell of WHERE in the sample the live window sits. A thin bar +
+    // bright scan-head along the bottom shows the traverse position; hidden for
+    // normal (sample-less) waveshaping so it never clutters the hero.
+    if (sample_loaded && scope_frames > WAVE_WIN) {
+        var prog = clamp(scope_pos / (scope_frames - WAVE_WIN), 0.0, 1.0);
+        var sby = plot_b() - 3.5;
+        var sbl = plot_l() + 2, sbw = (plot_r() - 2) - sbl;
+        mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.20);
+        mgraphics.rectangle(sbl, sby, sbw, 2.0); mgraphics.fill();
+        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.70);
+        mgraphics.rectangle(sbl, sby, sbw * prog, 2.0); mgraphics.fill();
+        mgraphics.set_source_rgba(1.0, 1.0, 1.0, 0.85);
+        mgraphics.rectangle(sbl + sbw * prog - 1, sby - 1, 2.0, 4.0); mgraphics.fill();
+        mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.62);
+        mgraphics.set_font_size(6.5);
+        mgraphics.move_to(sbl, sby - 3);
+        mgraphics.show_text("SCAN");
+    }
 
     // Zone strips + mode swatches on top of everything (always pickable).
     draw_zone_strips();
