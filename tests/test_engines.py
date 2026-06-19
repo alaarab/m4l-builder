@@ -16,6 +16,9 @@ from m4l_builder.engines.eq_band_column import (
     eq_band_column_js,
 )
 from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+from m4l_builder.engines.delay_trail import delay_trail_js
+from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
+from m4l_builder.engines.waveshape_curve import waveshape_curve_js
 from m4l_builder.engines.design_system import (
     DESIGN_SYSTEM_VERSION,
     design_system_js,
@@ -135,6 +138,10 @@ ALL_JSUI_FACTORIES = [
     slice_pattern_display_js,
     transfer_curve_js,
     ballistics_curve_js,
+    level_history_js,
+    delay_trail_js,
+    loop_filter_curve_js,
+    waveshape_curve_js,
 ]
 
 

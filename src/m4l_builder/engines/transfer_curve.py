@@ -369,15 +369,27 @@ function paint() {
     mgraphics.rectangle(plot_l() + 0.5, plot_t() + 0.5, plot_w() - 1, plot_h() - 1);
     mgraphics.stroke();
 
-    // Readout (top-left of plot): threshold / ratio / live GR.
+    // Readout (top-left of plot): threshold / ratio, then live GR + makeup gain.
     mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 1.0);
     mgraphics.set_font_size(8.0);
     mgraphics.move_to(plot_l() + 5, plot_t() + 10);
     mgraphics.show_text(Math.round(threshold * 10) / 10 + " dB   " + format_ratio());
+    // Second line: live GR (accent) and, when set, the makeup gain (soft green)
+    // — makeup was a "display readout only" value (var makeup / set_makeup) that
+    // paint() never rendered; show it so the output-trim is visible on the hero.
+    var ry = plot_t() + 21;
+    var rx = plot_l() + 5;
     if (gr_db < -0.05) {
         mgraphics.set_source_rgba(ACCENT_CLR);
-        mgraphics.move_to(plot_l() + 5, plot_t() + 21);
-        mgraphics.show_text("GR " + (Math.round(-gr_db * 10) / 10) + " dB");
+        mgraphics.move_to(rx, ry);
+        var grtxt = "GR " + (Math.round(-gr_db * 10) / 10) + " dB";
+        mgraphics.show_text(grtxt);
+        rx += grtxt.length * 4.4 + 8;
+    }
+    if (makeup > 0.05 || makeup < -0.05) {
+        mgraphics.set_source_rgba(0.55, 0.80, 0.62, 1.0);
+        mgraphics.move_to(rx, ry);
+        mgraphics.show_text("MU " + (makeup >= 0 ? "+" : "") + (Math.round(makeup * 10) / 10) + " dB");
     }
 }
 

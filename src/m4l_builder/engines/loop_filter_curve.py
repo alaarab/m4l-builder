@@ -151,8 +151,8 @@ function db_to_y(db) {
     return plot_t() + t * plot_h();
 }
 
-// One-pole magnitude (dB) for a feedback coeff `a`: H(z)=(1-a)/(1-a z^-1),
-// DC gain 1. Mirrors `y = x + (y-x)*a` in the loop.
+// One-pole magnitude (dB) for a feedback coeff 'a': H(z)=(1-a)/(1-a z^-1),
+// DC gain 1. Mirrors 'y = x + (y-x)*a' in the loop.
 function onepole_mag(f, a) {
     if (a <= 0.0) return 1.0;
     var w = 6.283185307 * f / samplerate;
