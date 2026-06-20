@@ -7,6 +7,7 @@ from .reverse import (
     detect_snapshot_recipes,
     extract_behavior_hints,
     extract_building_block_candidates,
+    extract_controller_shell_candidates,
     extract_embedded_patcher_snapshots,
     extract_embedded_ui_shell_candidates,
     extract_first_party_abstraction_family_candidates,

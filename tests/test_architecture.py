@@ -202,6 +202,30 @@ class TestV8uiContract:
         assert str(box_id) == "raw"
 
 
+class TestPublicExportSurface:
+    """Every declared public export must actually load (guards lazy-getattr typos
+    like the unloadable extract_controller_shell_candidates that shipped in __all__
+    but was never imported in reverse_api)."""
+
+    def test_every_root_export_is_loadable(self):
+        from m4l_builder._exports import ROOT_ALL
+
+        unloadable = []
+        for name in ROOT_ALL:
+            try:
+                getattr(m4l, name)
+            except Exception as exc:  # noqa: BLE001 - surfacing any import failure
+                unloadable.append(f"{name}: {type(exc).__name__}")
+        assert unloadable == [], f"unloadable exports: {unloadable}"
+
+    def test_gen_registry_primitives_are_top_level(self):
+        # The gen registry must be discoverable from the package root, not only
+        # via deep module paths, so plugin authors don't hand-roll the math.
+        for name in ("build_gendsp", "lint_genexpr", "ms_encode", "ms_decode",
+                     "ms_width", "drive_blend", "peak_follower"):
+            assert callable(getattr(m4l, name)), name
+
+
 class TestTypedGraphHandles:
     def test_connect_accepts_typed_endpoints(self):
         device = Device("test", 200, 100)
