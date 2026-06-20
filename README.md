@@ -141,12 +141,15 @@ GEN_CODE += dynamics_band("peak", "env", "atk", "rel",
                           "threshold", "ratio", "knee", "makeup", "gain")
 ```
 
-Registry (12): `ms_encode` / `ms_decode` / `ms_width` (Mid/Side matrix),
+Registry (17): `ms_encode` / `ms_decode` / `ms_width` (Mid/Side matrix),
 `drive_blend` (level-matched tanh soft-clip), `peak_follower` (attack/release
 detector), `isp_catmull_4x` (4× inter-sample-peak / true-peak), `kweight_coeffs_bs1770`
 (ITU-R BS.1770-4 K-weight), `exp_pole` (one-pole ballistics coefficient),
 `soft_knee_gain_computer` + `dynamics_band` (compressor gain path), `biquad_df1`
-(Direct-Form-I biquad apply), `rbj_peaking` (runtime peaking-EQ coefficients).
+(Direct-Form-I biquad apply), `rbj_peaking` / `rbj_shelf` (runtime peaking-EQ /
+low-high-shelf coefficients), `one_pole_coeff` / `one_pole_lp` / `one_pole_hp`
+(cutoff-frequency 1st-order filter split), `exciter_harmonics` (harmonic-exciter
+generator: odd tanh + even squarer, the added content).
 
 **`build_gendsp(code, numins, numouts)`** — wraps GenExpr into a `.gendsp`
 support file, and **lints at build time** (`gen_lint`): a dead/unassigned signal
