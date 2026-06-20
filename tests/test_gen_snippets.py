@@ -4,12 +4,15 @@ The M/S primitives are pure arithmetic, so the emitted GenExpr is also valid
 Python — we can exec it to behaviourally verify the math (round-trip identity,
 mono/wide), not just snapshot the text.
 """
-from m4l_builder.gen_snippets import ms_decode, ms_encode, ms_width
+from math import tanh
+
+from m4l_builder.gen_snippets import drive_blend, ms_decode, ms_encode, ms_width
 
 
 def _run(code, **vars):
-    ns = dict(vars)
-    exec(code, ns)  # GenExpr +,-,* and numeric literals are valid Python
+    ns = {"tanh": tanh}
+    ns.update(vars)
+    exec(code, ns)  # GenExpr +,-,*,tanh and numeric literals are valid Python
     return ns
 
 
@@ -61,3 +64,32 @@ def test_ms_width_custom_intermediate_names_avoid_clash():
     assert "m2 = (L + R) * 0.5;" in out
     assert "s2 = (L - R) * 0.5 * W;" in out
     assert "mid" not in out and "side" not in out
+
+
+def test_drive_blend_text():
+    assert drive_blend("x", "y", "k", "d") == "y = x + (tanh(x * k) / tanh(k) - x) * d;"
+
+
+def test_drive_blend_transparent_at_zero_drive():
+    for x in (-0.7, 0.0, 0.3, 0.9):
+        ns = _run(drive_blend("X", "Y", "K", "D"), X=x, K=6.0, D=0.0)
+        assert abs(ns["Y"] - x) < 1e-12  # bit-transparent when drive=0
+
+
+def test_drive_blend_full_scale_stays_unity_at_full_drive():
+    # x=1, drive=1 -> tanh(k)/tanh(k) = 1 (level-matched, no gain dump)
+    ns = _run(drive_blend("X", "Y", "K", "D"), X=1.0, K=6.0, D=1.0)
+    assert abs(ns["Y"] - 1.0) < 1e-12
+
+
+def test_drive_blend_soft_compresses_midlevel_at_full_drive():
+    # x=0.5, drive=1 -> tanh(0.5k)/tanh(k) > 0.5 (upward soft-clip gain on lower levels)
+    ns = _run(drive_blend("X", "Y", "K", "D"), X=0.5, K=6.0, D=1.0)
+    assert ns["Y"] > 0.5
+    assert ns["Y"] == tanh(0.5 * 6.0) / tanh(6.0)
+
+
+def test_drive_blend_matches_echotide_shipped_form():
+    assert drive_blend("fbcL", "fbL", "k", "drv") == (
+        "fbL = fbcL + (tanh(fbcL * k) / tanh(k) - fbcL) * drv;"
+    )
