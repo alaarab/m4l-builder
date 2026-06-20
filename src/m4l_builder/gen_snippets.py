@@ -28,6 +28,7 @@ __all__ = [
     "dynamics_band",
     "biquad_df1",
     "rbj_peaking",
+    "rbj_shelf",
 ]
 
 
@@ -384,4 +385,59 @@ def rbj_peaking(
         f"{b2} = (1. - {alpha} * {A}) / {a0};\n"
         f"{a1} = (-2. * {cw}) / {a0};\n"
         f"{a2} = (1. - {alpha} / {A}) / {a0};"
+    )
+
+
+def rbj_shelf(
+    freq: str,
+    gain_db: str,
+    kind: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha",
+    a0: str = "a0", sqA: str = "sqA", tsa: str = "tsa",
+) -> str:
+    """Runtime RBJ low/high-shelf biquad coefficients (Butterworth slope, S=1).
+
+    ``kind`` is ``"low"`` or ``"high"``. Computes the Direct-Form-I shelf
+    coefficients ``b0 b1 b2 a1 a2`` from ``freq`` (Hz) and ``gain_db`` at the
+    running ``samplerate`` (tunable LIVE), matching the build-time ``_biquad_shelf``
+    math (alpha uses the Butterworth shelf slope ``1/S = sqrt(2)``). Pair with
+    :func:`biquad_df1` to apply it.
+
+    A low-shelf boosts/cuts DC by ``gain_db`` and is unity at Nyquist; a high-shelf
+    is the inverse. At ``gain_db == 0`` (A == 1) the b coeffs equal the a coeffs ->
+    flat. This is the shelf half of the runtime EQ-band coefficient set (peaking is
+    :func:`rbj_peaking`). ``A w0 cw alpha a0 sqA tsa`` are scratch var names.
+    """
+    if kind not in ("low", "high"):
+        raise ValueError(f"rbj_shelf kind must be 'low' or 'high', got {kind!r}")
+    if kind == "low":
+        b0e = f"{A} * (({A} + 1.) - ({A} - 1.) * {cw} + {tsa})"
+        b1e = f"2. * {A} * (({A} - 1.) - ({A} + 1.) * {cw})"
+        b2e = f"{A} * (({A} + 1.) - ({A} - 1.) * {cw} - {tsa})"
+        a0e = f"({A} + 1.) + ({A} - 1.) * {cw} + {tsa}"
+        a1e = f"-2. * (({A} - 1.) + ({A} + 1.) * {cw})"
+        a2e = f"({A} + 1.) + ({A} - 1.) * {cw} - {tsa}"
+    else:  # high
+        b0e = f"{A} * (({A} + 1.) + ({A} - 1.) * {cw} + {tsa})"
+        b1e = f"-2. * {A} * (({A} - 1.) + ({A} + 1.) * {cw})"
+        b2e = f"{A} * (({A} + 1.) + ({A} - 1.) * {cw} - {tsa})"
+        a0e = f"({A} + 1.) - ({A} - 1.) * {cw} + {tsa}"
+        a1e = f"2. * (({A} - 1.) - ({A} + 1.) * {cw})"
+        a2e = f"({A} + 1.) - ({A} - 1.) * {cw} - {tsa}"
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / 2. * sqrt(({A} + 1. / {A}) * (1.4142135623730951 - 1.) + 2.);\n"
+        f"{sqA} = sqrt({A});\n"
+        f"{tsa} = 2. * {sqA} * {alpha};\n"
+        f"{a0} = {a0e};\n"
+        f"{b0} = ({b0e}) / {a0};\n"
+        f"{b1} = ({b1e}) / {a0};\n"
+        f"{b2} = ({b2e}) / {a0};\n"
+        f"{a1} = ({a1e}) / {a0};\n"
+        f"{a2} = ({a2e}) / {a0};"
     )

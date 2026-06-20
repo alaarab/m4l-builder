@@ -19,6 +19,7 @@ from m4l_builder.gen_snippets import (
     ms_width,
     peak_follower,
     rbj_peaking,
+    rbj_shelf,
     soft_knee_gain_computer,
 )
 
@@ -488,3 +489,65 @@ def test_rbj_peaking_centre_frequency_gain_matches_db():
                samplerate=sr, num_samples=n)["out1"]
     amp = max(abs(v) for v in out[-2000:])     # steady-state peak (input amp == 1)
     assert abs(amp - 10 ** (gain / 20.0)) < 0.02   # ~ +6 dB == x1.995
+
+
+# --- rbj_shelf: runtime low/high-shelf biquad coefficients ---------------------
+def _shelf_coeffs(kind, freq, gain_db, sr=48000.0):
+    code = ("Param f(1000.);\nParam g(6.);\n"
+            + rbj_shelf("f", "g", kind, "b0", "b1", "b2", "a1", "a2")
+            + "\nout1 = b0;\nout2 = b1;\nout3 = b2;\nout4 = a1;\nout5 = a2;")
+    o = _sim(code, {"in1": [0.0]}, params={"f": freq, "g": gain_db},
+             samplerate=sr, num_samples=1)
+    return [o[f"out{k}"][0] for k in range(1, 6)]
+
+
+def test_rbj_shelf_invalid_kind_raises():
+    import pytest
+    with pytest.raises(ValueError, match="must be 'low' or 'high'"):
+        rbj_shelf("f", "g", "band", "b0", "b1", "b2", "a1", "a2")
+
+
+def test_rbj_low_shelf_matches_reference():
+    # RBJ low-shelf, +6 dB, 1k, 48k, normalised for the biquad_df1 convention
+    # (regression snapshot; physical correctness is the DC/Nyquist tests below).
+    ref = [1.03795790, -1.81274621, 0.79692279, -1.81826669, 0.82936021]
+    got = _shelf_coeffs("low", 1000.0, 6.0)
+    assert all(abs(a - b) < 1e-7 for a, b in zip(got, ref)), got
+
+
+def test_rbj_high_shelf_matches_reference():
+    ref = [1.92229600, -3.49524679, 1.59427581, -1.74645447, 0.76777949]
+    got = _shelf_coeffs("high", 1000.0, 6.0)
+    assert all(abs(a - b) < 1e-7 for a, b in zip(got, ref)), got
+
+
+def test_rbj_shelf_zero_gain_is_unity_through_biquad():
+    for kind in ("low", "high"):
+        code = ("Param f(1000.);\nParam g(0.);\n"
+                "History x1(0.); History x2(0.); History y1(0.); History y2(0.);\n"
+                + rbj_shelf("f", "g", kind, "b0", "b1", "b2", "a1", "a2") + "\n"
+                + biquad_df1("in1", "b0", "b1", "b2", "a1", "a2",
+                             "x1", "x2", "y1", "y2", "y") + "\nout1 = y;")
+        sig = [0.3, -0.7, 1.0, 0.0, 0.5, -0.2]
+        out = _sim(code, {"in1": sig}, params={"f": 1000.0, "g": 0.0},
+                   num_samples=len(sig))["out1"]
+        assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig)), kind
+
+
+def test_rbj_low_shelf_dc_gain_is_full_nyquist_unity():
+    # low-shelf boosts DC by gain_db, unity at Nyquist.
+    for gain in (-9.0, 6.0):
+        b0, b1, b2, a1, a2 = _shelf_coeffs("low", 1000.0, gain)
+        dc = (b0 + b1 + b2) / (1.0 + a1 + a2)
+        nyq = (b0 - b1 + b2) / (1.0 - a1 + a2)
+        assert abs(dc - 10 ** (gain / 20.0)) < 1e-6
+        assert abs(nyq - 1.0) < 1e-6
+
+
+def test_rbj_high_shelf_dc_unity_nyquist_full():
+    for gain in (-9.0, 6.0):
+        b0, b1, b2, a1, a2 = _shelf_coeffs("high", 1000.0, gain)
+        dc = (b0 + b1 + b2) / (1.0 + a1 + a2)
+        nyq = (b0 - b1 + b2) / (1.0 - a1 + a2)
+        assert abs(dc - 1.0) < 1e-6
+        assert abs(nyq - 10 ** (gain / 20.0)) < 1e-6

@@ -26,6 +26,7 @@ from ..gen_snippets import (
     ms_width,
     peak_follower,
     rbj_peaking,
+    rbj_shelf,
     soft_knee_gain_computer,
 )
 from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
@@ -103,6 +104,7 @@ __all__ = [
     "dynamics_band",
     "biquad_df1",
     "rbj_peaking",
+    "rbj_shelf",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
