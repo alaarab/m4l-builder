@@ -169,28 +169,36 @@ def notch_filter(id_prefix: str) -> tuple:
     return _svf_filter(id_prefix, 3)
 
 
-def highshelf_filter(id_prefix: str, freq: float = 3000., gain_db: float = 0.) -> tuple:
+def highshelf_filter(id_prefix: str, freq: float = 3000., gain_db: float = 0.,
+                     samplerate: float = 48000.) -> tuple:
     """Create a stereo high-shelf EQ filter using biquad~.
 
     Uses fixed high-shelf biquad coefficients. Wire cutoff and gain updates
     externally via direct biquad~ coefficient messages if needed.
 
+    samplerate normalizes the cutoff; default 48000 Hz matches Ableton Live.
+    Pass the session rate if building for 44100/96000 to avoid a shifted shelf.
+
     Wire audio into {prefix}_l / {prefix}_r inlet 0.
     Output from {prefix}_l / {prefix}_r outlet 0.
     """
-    return _biquad_shelf(id_prefix, 'high', freq, gain_db)
+    return _biquad_shelf(id_prefix, 'high', freq, gain_db, samplerate)
 
 
-def lowshelf_filter(id_prefix: str, freq: float = 300., gain_db: float = 0.) -> tuple:
+def lowshelf_filter(id_prefix: str, freq: float = 300., gain_db: float = 0.,
+                    samplerate: float = 48000.) -> tuple:
     """Create a stereo low-shelf EQ filter using biquad~.
 
     Uses fixed low-shelf biquad coefficients. Wire cutoff and gain updates
     externally via direct biquad~ coefficient messages if needed.
 
+    samplerate normalizes the cutoff; default 48000 Hz matches Ableton Live.
+    Pass the session rate if building for 44100/96000 to avoid a shifted shelf.
+
     Wire audio into {prefix}_l / {prefix}_r inlet 0.
     Output from {prefix}_l / {prefix}_r outlet 0.
     """
-    return _biquad_shelf(id_prefix, 'low', freq, gain_db)
+    return _biquad_shelf(id_prefix, 'low', freq, gain_db, samplerate)
 
 
 def peaking_eq(id_prefix: str, *, freq: float = 1000,
