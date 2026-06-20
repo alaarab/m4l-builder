@@ -25,6 +25,7 @@ __all__ = [
     "kweight_coeffs_bs1770",
     "exp_pole",
     "soft_knee_gain_computer",
+    "dynamics_band",
 ]
 
 
@@ -263,4 +264,48 @@ def soft_knee_gain_computer(
         f"    {t} = {over} + {half_knee};\n"
         f"    {out} = ({t} * {t}) / (2.0 * {knee}) * {slope};\n"
         f"}}"
+    )
+
+
+def dynamics_band(
+    peak: str,
+    env: str,
+    attack_coeff: str,
+    release_coeff: str,
+    threshold: str,
+    ratio: str,
+    knee: str,
+    makeup: str,
+    out_gain: str,
+    *,
+    level: str = "level_db",
+    coeff: str = "dcoeff",
+    grdb: str = "grdb",
+    floor: str = "0.0000316",
+) -> str:
+    """End-to-end downward-compression gain path: detector -> knee -> makeup.
+
+    Composes the two shipped dynamics primitives into the reusable macro a
+    dynamic-EQ band / compressor / limiter applies to one signal:
+
+    1. convert the input ``peak`` (linear, e.g. ``max(abs(L), abs(R))``) to dB,
+       floored so silence reads a finite ``-90`` dB instead of ``-inf``;
+    2. attack/release envelope-follow in the dB domain (:func:`peak_follower`)
+       into the ``env`` History with ``attack_coeff``/``release_coeff`` poles;
+    3. soft-knee gain reduction (:func:`soft_knee_gain_computer`) -> ``grdb`` dB;
+    4. ``out_gain = dbtoa(grdb + makeup)`` — the linear gain to multiply the
+       (optionally delayed) audio by.
+
+    At ``ratio == 1`` and ``makeup == 0`` the whole band is unity (transparent);
+    it only ever attenuates relative to the makeup. ``level``/``coeff``/``grdb``
+    are scratch var names (override to use the macro twice in one codebox);
+    ``floor`` is the linear silence floor fed to ``atodb``. This is the audio-rate
+    dynamics foundation the EQ dynamic-bands compose (detector = peak_follower,
+    gain computer = soft_knee_gain_computer, both already null-tested).
+    """
+    return (
+        f"{level} = max(atodb(max({peak}, {floor})), -90.);\n"
+        + peak_follower(level, env, attack_coeff, release_coeff, coeff) + "\n"
+        + soft_knee_gain_computer(env, threshold, ratio, knee, grdb) + "\n"
+        + f"{out_gain} = dbtoa({grdb} + {makeup});"
     )

@@ -53,6 +53,7 @@ CORE_EXPORTS = [
     "kweight_coeffs_bs1770",
     "exp_pole",
     "soft_knee_gain_computer",
+    "dynamics_band",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
