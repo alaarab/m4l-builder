@@ -2,6 +2,8 @@
 
 import pytest
 
+from m4l_builder.amxd import WIRING_INTEGRITY_CODES
+from m4l_builder.validation import lint_graph
 from m4l_builder.dsp import (
     adsr_envelope,
     aftertouch_in,
@@ -4547,3 +4549,60 @@ class TestMcSelector:
     def test_invalid_channels_raises(self):
         with pytest.raises(ValueError):
             mc_selector("mc", channels=0)
+
+
+class TestDynamicsWiringIntegrity:
+    """Every dsp/dynamics primitive must be structurally sound: no out-of-range
+    outlet/inlet indices, no patchlines to unknown boxes, no duplicate IDs.
+
+    This sweep ran the wiring-integrity validator (it191) over the full dynamics
+    set and refuted the 100-agent scan's #4 claims that the multiband high band
+    routed into a frequency inlet and that limiter/gate had malformed internal
+    wiring — all primitives lint clean. The detector + VCA primitives leave the
+    gain-apply inlet 0 as a documented EXTERNAL connection (caller fans the dry
+    audio there), which is a contract, not a wiring error.
+    """
+
+    PRIMITIVES = [
+        ("envelope_follower", envelope_follower),
+        ("compressor", compressor),
+        ("limiter", limiter),
+        ("gate_expander", gate_expander),
+        ("sidechain_detect", sidechain_detect),
+        ("multiband_compressor", multiband_compressor),
+        ("lookahead_envelope_follower", lookahead_envelope_follower),
+        ("bitcrusher", bitcrusher),
+        ("auto_gain", auto_gain),
+    ]
+
+    @pytest.mark.parametrize("name,factory", PRIMITIVES, ids=[n for n, _ in PRIMITIVES])
+    def test_no_wiring_integrity_violations(self, name, factory):
+        boxes, lines = factory("x")
+        issues = lint_graph(boxes, lines)
+        wiring = [i for i in issues if i.code in WIRING_INTEGRITY_CODES]
+        assert wiring == [], (
+            f"{name} has wiring-integrity violations: "
+            + "; ".join(f"{i.code} {i.box_id}: {i.message}" for i in wiring)
+        )
+
+    def test_bitcrusher_is_single_object_no_internal_lines(self):
+        # degrade~ is a single object; the caller wires audio in/out. (boxes, [])
+        # is correct here, not a missing-connection bug.
+        boxes, lines = bitcrusher("bc")
+        assert len(boxes) == 1
+        assert lines == []
+        assert boxes[0]["box"]["text"].startswith("degrade~")
+
+    def test_auto_gain_makeup_chain_is_wired(self):
+        # Regression for the silent-by-construction bug: env~ feeds the dB makeup
+        # chain into the *~ gain coefficient (inlet 1), not an unset divisor.
+        boxes, lines = auto_gain("ag")
+        ids = _box_ids(boxes)
+        assert {"ag_env", "ag_atodb", "ag_makeup", "ag_gain", "ag_mul"} <= set(ids)
+        # gain float -> mul inlet 1 (the *~ coefficient)
+        gain_to_mul = [
+            ln for ln in lines
+            if ln["patchline"]["source"][0] == "ag_gain"
+            and ln["patchline"]["destination"] == ["ag_mul", 1]
+        ]
+        assert len(gain_to_mul) == 1

@@ -62,7 +62,13 @@ def compressor(id_prefix: str) -> tuple:
       - threshold -> * (1 - 1/ratio) -> clip~ 0 inf -> -~ 0 (negate gain reduction) ->
       dbtoa~ -> *~ input
 
-    Wire audio L/R into {prefix}_abs_l / {prefix}_abs_r inlet 0.
+    This is a detector + VCA: the dry audio must be fanned to BOTH the detector
+    entry (abs~) AND the gain-apply inlet 0 (out *~). The out *~ inlet 0 is left
+    as an external connection by design so a separate sidechain signal can drive
+    detection — wiring nothing there yields constant 0 (silence).
+
+    Wire audio L/R into {prefix}_abs_l / {prefix}_abs_r inlet 0 (detector) AND
+    {prefix}_out_l / {prefix}_out_r inlet 0 (the signal to compress).
     Wire threshold (dB, negative) float into {prefix}_thresh_l inlet 1 and {prefix}_thresh_r inlet 1.
     Wire ratio float (> 1) into {prefix}_ratio_l inlet 1 and {prefix}_ratio_r inlet 1.
     Wire attack ms into {prefix}_atk_l inlet 1 and {prefix}_atk_r inlet 1.
@@ -176,7 +182,16 @@ def gate_expander(id_prefix: str) -> tuple:
 
     Signal flow per channel: input -> abs~ -> slide~ -> >~ threshold -> *~ original
     The >~ output (0 or 1) multiplies the original signal to gate it.
-    Inlet 0/1: audio L/R, inlet via >~ objects: threshold (float).
+
+    Detector + VCA: fan the dry audio to BOTH the detector entry (abs~) AND the
+    gate-apply inlet 0 (*~). The {prefix}_gate_l / {prefix}_gate_r inlet 0 is an
+    external connection by design (enables a sidechain key) — wiring nothing
+    there yields constant 0 (silence).
+
+    Wire audio L/R into {prefix}_abs_l / {prefix}_abs_r inlet 0 (detector) AND
+    {prefix}_gate_l / {prefix}_gate_r inlet 0 (the signal to gate).
+    Wire threshold (linear) into {prefix}_thresh_l / {prefix}_thresh_r inlet 1.
+    Output from {prefix}_gate_l / {prefix}_gate_r outlet 0.
     """
     boxes = []
     lines = []
@@ -335,25 +350,35 @@ def bitcrusher(id_prefix: str, bits: int = 8,
     return (boxes, [])
 
 
-def auto_gain(id_prefix: str) -> tuple:
-    """RMS-based auto loudness normalization.
+def auto_gain(id_prefix: str, target_db: float = -12.0) -> tuple:
+    """RMS-based makeup gain toward a target level.
 
-    Uses env~ to measure RMS, then *~ to apply makeup gain.
-    Wire audio into {prefix}_mul inlet 0.
-    Output from {prefix}_mul outlet 0.
-    Feed gain CV into {prefix}_mul inlet 1.
+    env~ reports the input RMS as a float stream; that level is converted to dB
+    (atodb), subtracted from the target via !- to get the makeup in dB
+    (target_db - measured_db), converted back to linear (dbtoa), and applied as
+    the *~ gain coefficient. target_db sets the loudness goal (default -12 dB).
+
+    Wire audio into {prefix}_env inlet 0 (the detector) AND {prefix}_mul inlet 0
+    (the signal to normalize). Output from {prefix}_mul outlet 0.
+
+    The previous form divided an unset numerator by the measured level, so the
+    gain collapsed to 0 (silence) and env~ was never given an input — this wires
+    the detector and computes a real target-relative makeup instead.
     """
     p = id_prefix
     boxes = [
         newobj(f"{p}_env", "env~ 1024 512",
                numinlets=1, numoutlets=1, outlettype=[""],
                patching_rect=[30, 30, 100, 20]),
-        newobj(f"{p}_div", "/ 1.",
-               numinlets=2, numoutlets=1, outlettype=[""],
-               patching_rect=[30, 70, 60, 20]),
-        newobj(f"{p}_ftom", "atodb",
+        # measured RMS -> dB
+        newobj(f"{p}_atodb", "atodb",
                numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 70, 60, 20]),
+        # makeup dB = target_db - measured_db  (!- computes arg - input)
+        newobj(f"{p}_makeup", f"!- {target_db}",
+               numinlets=2, numoutlets=1, outlettype=[""],
                patching_rect=[30, 110, 60, 20]),
+        # makeup dB -> linear gain coefficient
         newobj(f"{p}_gain", "dbtoa",
                numinlets=1, numoutlets=1, outlettype=[""],
                patching_rect=[30, 150, 60, 20]),
@@ -362,9 +387,9 @@ def auto_gain(id_prefix: str) -> tuple:
                patching_rect=[30, 190, 60, 20]),
     ]
     lines = [
-        patchline(f"{p}_env", 0, f"{p}_div", 1),
-        patchline(f"{p}_div", 0, f"{p}_ftom", 0),
-        patchline(f"{p}_ftom", 0, f"{p}_gain", 0),
+        patchline(f"{p}_env", 0, f"{p}_atodb", 0),
+        patchline(f"{p}_atodb", 0, f"{p}_makeup", 0),
+        patchline(f"{p}_makeup", 0, f"{p}_gain", 0),
         patchline(f"{p}_gain", 0, f"{p}_mul", 1),
     ]
     return (boxes, lines)
