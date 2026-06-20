@@ -56,6 +56,7 @@ CORE_EXPORTS = [
     "dynamics_band",
     "biquad_df1",
     "rbj_peaking",
+    "rbj_shelf",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
