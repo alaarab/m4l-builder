@@ -14,8 +14,8 @@ never silently mis-evaluates and reports a false green):
   block (previous sample's value) and committed at the END.
 * ``Param name(default);`` — a held scalar the test overrides.
 * ``in1``..``inN`` per-sample inputs and the ``samplerate`` constant.
-* straight-line ``lhs = expr;`` statements (``lhs`` a scratch var, an ``outK``,
-  or a History var).
+* ``lhs = expr;`` statements (``lhs`` a scratch var, an ``outK``, or a History
+  var) and ``if (c) {...} else if (c) {...} else {...}`` blocks (incl. nesting).
 * ``+ - * /`` arithmetic and the ``cond ? a : b`` ternary, parsed
   parenthesis/precedence-correct (gen ternary binds BELOW arithmetic and is
   right-associative — reproduced exactly, NOT via Python's ``a if c else b``).
@@ -24,10 +24,10 @@ never silently mis-evaluates and reports a false green):
 
 Explicitly NOT modelled (refused): ``Delay``/``Buffer``/``Data`` and any
 ``.read``/``.write``/``peek``/``poke``/``index``/``pfft``/``filtercoeff``/
-``biquad`` ring access, indexed history ``h[n]``, ``if``/``else``/loops, and
-multiple writes to the same History var in one sample. Those kernels (delay
-lines, FFT, LUFS integration windows) need the live render path; the simulator
-refuses them so a delay-dependent path is never reported as passing.
+``biquad`` ring access, indexed history ``h[n]``, and ``for``/``while``/function
+definitions. Those kernels (delay lines, FFT, LUFS integration windows) need the
+live render path; the simulator refuses them so a delay-dependent path is never
+reported as passing.
 """
 
 from __future__ import annotations
@@ -194,17 +194,26 @@ def _logic_to_py(expr: str) -> str:
 
 
 class GenKernel:
-    """A parsed, simulatable gen~ codebox kernel."""
+    """A parsed, simulatable gen~ codebox kernel.
+
+    The body is parsed into a small node tree of assignments and ``if`` /
+    ``else if`` / ``else`` blocks; per sample the tree is walked over a
+    persistent namespace (History values carry across samples). A History var
+    written in several mutually-exclusive branches is fine — only the taken
+    branch runs — and a sequential re-write within one block is last-wins, both
+    matching gen.
+    """
 
     def __init__(self, code: str):
         body = "\n".join(_strip_comments(code))
         self._refuse_unsupported(body)
         self.histories, self.params = self._parse_decls(body)
-        self.statements, self.num_outs = self._parse_body(body)
-        self._check_single_history_writes()
+        self.nodes = self._parse_block(body, 0, top=True)
+        self.num_outs = self._count_outs(self.nodes)
 
     @staticmethod
     def _refuse_unsupported(body: str) -> None:
+        import re as _re
         for tok in _REFUSE_TOKENS:
             if tok in body:
                 raise UnsupportedKernel(
@@ -213,12 +222,11 @@ class GenKernel:
                 )
         if "[" in body:
             raise UnsupportedKernel("indexed access '[' is not supported")
-        for kw in ("if", "else", "for", "while", "function"):
-            # word-boundary check so 'diff'/'forest' don't trip it
-            import re as _re
+        # if/else ARE supported; loops and function defs are not.
+        for kw in ("for", "while", "function"):
             if _re.search(rf"(?<![A-Za-z0-9_]){kw}(?![A-Za-z0-9_])", body):
                 raise UnsupportedKernel(
-                    f"control-flow keyword {kw!r} is not supported (straight-line only)"
+                    f"control-flow keyword {kw!r} is not supported"
                 )
 
     @staticmethod
@@ -232,43 +240,134 @@ class GenKernel:
             (histories if kind == "History" else params)[name] = float(init)
         return histories, params
 
-    def _parse_body(self, body: str):
-        import re
-        # strip declaration statements, keep `lhs = rhs;` assignments
-        statements = []
-        num_outs = 0
-        for raw in body.split(";"):
-            stmt = raw.strip()
-            if not stmt:
-                continue
-            if stmt.startswith(("History ", "Param ")):
-                continue
-            if "=" not in stmt:
-                raise UnsupportedKernel(f"non-assignment statement: {stmt!r}")
-            lhs, rhs = stmt.split("=", 1)
-            lhs = lhs.strip()
-            if not re.fullmatch(r"[A-Za-z_]\w*", lhs):
-                raise UnsupportedKernel(f"unsupported assignment target: {lhs!r}")
-            m = re.fullmatch(r"out(\d+)", lhs)
-            if m:
-                num_outs = max(num_outs, int(m.group(1)))
-            py_rhs = _ternary_to_py(_logic_to_py(rhs.strip()))
-            statements.append((lhs, compile(py_rhs, "<gen>", "eval")))
-        return statements, num_outs
+    @staticmethod
+    def _match(body: str, pos: int, open_ch: str, close_ch: str):
+        """Return the index of the close char matching the open char at ``pos``."""
+        depth = 0
+        for i in range(pos, len(body)):
+            if body[i] == open_ch:
+                depth += 1
+            elif body[i] == close_ch:
+                depth -= 1
+                if depth == 0:
+                    return i
+        raise UnsupportedKernel(f"unbalanced {open_ch!r} in kernel")
 
-    def _check_single_history_writes(self) -> None:
-        seen = set()
-        for lhs, _ in self.statements:
-            if lhs in self.histories:
-                if lhs in seen:
-                    raise UnsupportedKernel(
-                        f"History {lhs!r} written more than once per sample "
-                        f"(only-last-write is ambiguous; refused)"
-                    )
-                seen.add(lhs)
+    def _parse_block(self, body: str, pos: int, top: bool = False):
+        """Parse a sequence of statements until ``}`` (or end-of-body if top)."""
+        import re
+        nodes: list = []
+        n = len(body)
+        while pos < n:
+            while pos < n and body[pos] in " \t\r\n":
+                pos += 1
+            if pos >= n:
+                break
+            if body[pos] == "}":
+                if top:
+                    raise UnsupportedKernel("unexpected '}' at top level")
+                return nodes, pos
+            if re.match(r"if(?![A-Za-z0-9_])", body[pos:]):
+                node, pos = self._parse_if(body, pos)
+                nodes.append(node)
+                continue
+            semi = body.find(";", pos)
+            if semi < 0:
+                raise UnsupportedKernel(f"statement without ';': {body[pos:pos + 40]!r}")
+            stmt = body[pos:semi].strip()
+            pos = semi + 1
+            if not stmt or stmt.startswith(("History ", "Param ")):
+                continue
+            nodes.append(self._parse_assign(stmt))
+        if top:
+            return nodes
+        raise UnsupportedKernel("unterminated block (missing '}')")
+
+    def _parse_assign(self, stmt: str):
+        import re
+        if "=" not in stmt:
+            raise UnsupportedKernel(f"non-assignment statement: {stmt!r}")
+        lhs, rhs = stmt.split("=", 1)
+        lhs = lhs.strip()
+        if not re.fullmatch(r"[A-Za-z_]\w*", lhs):
+            raise UnsupportedKernel(f"unsupported assignment target: {lhs!r}")
+        py_rhs = _ternary_to_py(_logic_to_py(rhs.strip()))
+        return ("assign", lhs, compile(py_rhs, "<gen>", "eval"))
+
+    def _parse_if(self, body: str, pos: int):
+        """Parse ``if (c){...} else if (c){...} else {...}`` into an if-node."""
+        branches = []           # list of (compiled_cond, [nodes])
+        else_nodes = None
+        while True:
+            pos += 2            # skip 'if'
+            while body[pos] in " \t\r\n":
+                pos += 1
+            if body[pos] != "(":
+                raise UnsupportedKernel("expected '(' after 'if'")
+            close = self._match(body, pos, "(", ")")
+            cond = body[pos + 1:close].strip()
+            cond_py = _ternary_to_py(_logic_to_py(cond))
+            pos = close + 1
+            while body[pos] in " \t\r\n":
+                pos += 1
+            if body[pos] != "{":
+                raise UnsupportedKernel("expected '{' after if-condition")
+            end = self._match(body, pos, "{", "}")
+            block, _ = self._parse_block(body, pos + 1)
+            branches.append((compile(cond_py, "<gen>", "eval"), block))
+            pos = end + 1
+            # look for a following 'else' / 'else if'
+            save = pos
+            while pos < len(body) and body[pos] in " \t\r\n":
+                pos += 1
+            import re
+            if not re.match(r"else(?![A-Za-z0-9_])", body[pos:]):
+                pos = save
+                break
+            pos += 4
+            while body[pos] in " \t\r\n":
+                pos += 1
+            if re.match(r"if(?![A-Za-z0-9_])", body[pos:]):
+                continue        # 'else if' -> another branch
+            if body[pos] != "{":
+                raise UnsupportedKernel("expected '{' or 'if' after 'else'")
+            end = self._match(body, pos, "{", "}")
+            else_nodes, _ = self._parse_block(body, pos + 1)
+            pos = end + 1
+            break
+        return ("if", branches, else_nodes), pos
+
+    def _count_outs(self, nodes) -> int:
+        import re
+        num = 0
+        for node in nodes:
+            if node[0] == "assign":
+                m = re.fullmatch(r"out(\d+)", node[1])
+                if m:
+                    num = max(num, int(m.group(1)))
+            else:  # if-node
+                for _, block in node[1]:
+                    num = max(num, self._count_outs(block))
+                if node[2]:
+                    num = max(num, self._count_outs(node[2]))
+        return num
+
+    @staticmethod
+    def _exec_nodes(nodes, ns) -> None:
+        for node in nodes:
+            if node[0] == "assign":
+                ns[node[1]] = eval(node[2], {"__builtins__": {}}, ns)  # noqa: S307
+            else:  # ("if", branches, else_nodes)
+                for cond_code, block in node[1]:
+                    if eval(cond_code, {"__builtins__": {}}, ns):  # noqa: S307
+                        GenKernel._exec_nodes(block, ns)
+                        break
+                else:
+                    if node[2] is not None:
+                        GenKernel._exec_nodes(node[2], ns)
 
     def run(self, inputs=None, params=None, samplerate=48000.0, num_samples=None):
-        """Run the kernel and return ``{outK: [values...]}`` plus the History trace.
+        """Run the kernel and return ``{outK: [values...]}``.
 
         inputs: dict ``{"in1": [...], "in2": [...]}`` (or a single list for in1).
         params: dict overriding Param defaults (held constant across the run).
@@ -292,8 +391,7 @@ class GenKernel:
             ns["samplerate"] = float(samplerate)
             for name, seq in inputs.items():
                 ns[name] = float(seq[n]) if n < len(seq) else 0.0
-            for lhs, code in self.statements:
-                ns[lhs] = eval(code, {"__builtins__": {}}, ns)  # noqa: S307 - sandboxed ns
+            self._exec_nodes(self.nodes, ns)
             for h in hist:
                 hist[h] = ns[h]
             for k in range(1, self.num_outs + 1):
