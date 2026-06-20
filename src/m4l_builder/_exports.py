@@ -52,6 +52,7 @@ CORE_EXPORTS = [
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
     "exp_pole",
+    "soft_knee_gain_computer",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
