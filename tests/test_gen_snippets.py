@@ -17,6 +17,7 @@ from m4l_builder.gen_snippets import (
     exp_pole,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
+    lr_crossover,
     ms_decode,
     ms_encode,
     ms_width,
@@ -815,3 +816,71 @@ def test_biquad_cascade_invalid_args_raise():
         biquad_cascade("in1", "out1", "f", "band", 4)
     with pytest.raises(ValueError, match="even and >= 2"):
         biquad_cascade("in1", "out1", "f", "low", 3)
+
+
+# --- lr_crossover: Linkwitz-Riley complementary crossover split ---------------
+def _lr_rms_db(order, which, f, fc=1000.0, sr=48000.0, n=8192):
+    # RMS-based amplitude (exact for a steady sine regardless of sample phase,
+    # unlike max|sample| which under-reads at few-samples-per-cycle).
+    from math import log10, pi, sin, sqrt
+    code = lr_crossover("in1", "lo", "hi", f"{fc}", order)
+    code += "\nout1 = lo + hi;" if which == "sum" else f"\nout1 = {which};"
+    seq = [sin(2 * pi * f * k / sr) for k in range(n)]
+    out = _sim(code, {"in1": seq}, samplerate=sr, num_samples=n)["out1"]
+    tail = out[n // 2:]
+    rms = sqrt(sum(v * v for v in tail) / len(tail))
+    amp = rms * sqrt(2.0)
+    return 20 * log10(amp) if amp > 1e-12 else -999.0
+
+
+def test_lr_crossover_flat_sum_reconstruction():
+    # THE defining Linkwitz-Riley property: lo + hi sums to a FLAT magnitude
+    # (allpass) at every frequency — no peak or notch at the crossover.
+    for order in (4, 8):
+        for f in (100.0, 300.0, 700.0, 1000.0, 1500.0, 3000.0):
+            assert abs(_lr_rms_db(order, "sum", f)) < 0.1, (order, f)
+
+
+def test_lr_crossover_minus6db_at_crossover():
+    # each LR band is exactly -6.02 dB at the crossover (vs -3 dB for Butterworth).
+    for order in (4, 8):
+        assert abs(_lr_rms_db(order, "lo", 1000.0) - (-6.02)) < 0.1, order
+        assert abs(_lr_rms_db(order, "hi", 1000.0) - (-6.02)) < 0.1, order
+
+
+def test_lr_crossover_dc_nyquist_split():
+    # LP band passes DC / blocks Nyquist; HP band is the complement.
+    code = lr_crossover("in1", "lo", "hi", "1000.", 4)
+    dc = _sim(code + "\nout1 = lo;\nout2 = hi;", {"in1": [1.0] * 600}, num_samples=600)
+    assert abs(dc["out1"][-1] - 1.0) < 1e-4        # LP -> DC passes
+    assert abs(dc["out2"][-1]) < 1e-4              # HP -> DC blocked
+    nyq_seq = [(-1.0) ** k for k in range(600)]
+    nyq = _sim(code + "\nout1 = lo;\nout2 = hi;", {"in1": nyq_seq}, num_samples=600)
+    assert max(abs(v) for v in nyq["out1"][500:]) < 1e-3   # LP -> Nyquist blocked
+    assert max(abs(v) for v in nyq["out2"][500:]) > 0.99   # HP -> Nyquist passes
+
+
+def test_lr_crossover_slope_steepens_with_order():
+    # LR4 = 24 dB/oct, LR8 = 48 dB/oct: the LP at 2*fc drops by ~ order*6 dB/oct.
+    lp4 = _lr_rms_db(4, "lo", 2000.0)
+    lp8 = _lr_rms_db(8, "lo", 2000.0)
+    assert abs(lp4 - (-24.8)) < 1.5
+    assert lp8 < lp4 - 20.0          # 48 dB/oct far steeper than 24 at 2fc
+
+
+def test_lr_crossover_self_contained_and_namespaced():
+    code = lr_crossover("in1", "lo", "hi", "1000.", 8)
+    assert "History xo_lo0_x1(0.);" in code        # declares its own state
+    # LR8: order//2 = 4 -> Butterworth-4 (2 biquads) twice = 4 biquads PER band,
+    # x2 bands = 8 biquads total, 4 History cells each = 32 History decls.
+    assert code.count("History ") == 8 * 4
+    other = lr_crossover("in1", "lo", "hi", "1000.", 4, prefix="bandsplit")
+    assert "bandsplit_lo0" in other and "bandsplit_hi0" in other
+    assert "xo_" not in other
+
+
+def test_lr_crossover_rejects_non_multiple_of_4():
+    import pytest
+    for bad in (0, 2, 3, 6, 7, 10):
+        with pytest.raises(ValueError, match="multiple of 4"):
+            lr_crossover("in1", "lo", "hi", "f", bad)

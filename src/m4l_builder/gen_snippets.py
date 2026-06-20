@@ -35,6 +35,7 @@ __all__ = [
     "rbj_highpass",
     "butterworth_q_table",
     "biquad_cascade",
+    "lr_crossover",
     "one_pole_coeff",
     "one_pole_lp",
     "one_pole_hp",
@@ -688,4 +689,67 @@ def biquad_cascade(
                 f"{p}_x1", f"{p}_x2", f"{p}_y1", f"{p}_y2", stage_out,
             )
         )
+    return "\n".join(decls) + "\n" + "\n".join(body)
+
+
+def lr_crossover(
+    x: str,
+    lo_out: str,
+    hi_out: str,
+    freq: str,
+    order: int,
+    *,
+    prefix: str = "xo",
+) -> str:
+    """Linkwitz-Riley complementary crossover split (self-contained).
+
+    Splits ``x`` into a LOW band (``lo_out``) and a HIGH band (``hi_out``) at the
+    runtime cutoff ``freq`` (Hz) with an LR filter of ``order`` — a positive
+    multiple of 4 (``4`` = LR4 24 dB/oct, ``8`` = LR8 48 dB/oct, ``12`` = 72,
+    ``16`` = 96). Each band is a Butterworth filter of order ``order // 2`` applied
+    TWICE (the Linkwitz-Riley = Butterworth-squared construction), so the two
+    bands stay in phase and **sum to a flat (allpass) magnitude**: ``lo_out +
+    hi_out`` reconstructs the input with no peak or notch at the crossover (each
+    band is exactly -6 dB at ``freq``). Split repeatedly for an N-band multiband
+    bank whose bands recombine flat.
+
+    SELF-CONTAINED: emits its own ``History`` state (``order`` biquads total,
+    ``order // 2`` per band, 4 cells each) and per-stage scratch coeffs, so the
+    caller just splices the block in. ``order`` MUST be a positive multiple of 4
+    — odd/lower LR orders (e.g. LR2) are 180 deg out of phase at the crossover and
+    notch instead of summing flat, so they are rejected. ``prefix`` namespaces all
+    generated vars (override to place more than one crossover in a codebox).
+    """
+    if order < 4 or order % 4 != 0:
+        raise ValueError(
+            f"lr_crossover order must be a positive multiple of 4 (LR4/LR8/...), got {order}"
+        )
+    # LR = Butterworth-(order/2) applied twice; order//2 is even so the table accepts it.
+    qs = butterworth_q_table(order // 2) * 2
+    decls = []
+    body = []
+    for coeff_fn, out_var, tag in ((rbj_lowpass, lo_out, "lo"),
+                                   (rbj_highpass, hi_out, "hi")):
+        n = len(qs)
+        for i, q in enumerate(qs):
+            p = f"{prefix}_{tag}{i}"
+            stage_in = x if i == 0 else f"{prefix}_{tag}{i - 1}_y"
+            stage_out = out_var if i == n - 1 else f"{p}_y"
+            decls.append(
+                f"History {p}_x1(0.); History {p}_x2(0.); "
+                f"History {p}_y1(0.); History {p}_y2(0.);"
+            )
+            body.append(
+                coeff_fn(
+                    freq, f"{q:.12g}",
+                    f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                    w0=f"{p}_w0", cw=f"{p}_cw", alpha=f"{p}_al", a0=f"{p}_a0",
+                )
+            )
+            body.append(
+                biquad_df1(
+                    stage_in, f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                    f"{p}_x1", f"{p}_x2", f"{p}_y1", f"{p}_y2", stage_out,
+                )
+            )
     return "\n".join(decls) + "\n" + "\n".join(body)
