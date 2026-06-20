@@ -123,6 +123,52 @@ device.add_dsp(boxes, lines)
 
 100+ blocks total. Browse the [catalog](docs/catalog.md) or [docs/api.md](docs/api.md) for the full list with signatures.
 
+### gen~ DSP primitives & verification
+
+The DSP blocks above emit Max object graphs. For sample-accurate DSP that needs a
+`gen~` codebox, `m4l-builder` provides a registry of **composable GenExpr
+fragments** plus a codegen and a two-layer test harness — so the flagship plugins
+compose audited primitives instead of hand-copying the same math.
+
+**`gen_snippets`** — parameterized GenExpr fragments (each takes caller-chosen
+variable names and returns a gen code string):
+
+```python
+from m4l_builder import peak_follower, soft_knee_gain_computer, dynamics_band
+
+# detector -> soft-knee gain computer -> makeup, one reusable compressor band
+GEN_CODE += dynamics_band("peak", "env", "atk", "rel",
+                          "threshold", "ratio", "knee", "makeup", "gain")
+```
+
+Registry (12): `ms_encode` / `ms_decode` / `ms_width` (Mid/Side matrix),
+`drive_blend` (level-matched tanh soft-clip), `peak_follower` (attack/release
+detector), `isp_catmull_4x` (4× inter-sample-peak / true-peak), `kweight_coeffs_bs1770`
+(ITU-R BS.1770-4 K-weight), `exp_pole` (one-pole ballistics coefficient),
+`soft_knee_gain_computer` + `dynamics_band` (compressor gain path), `biquad_df1`
+(Direct-Form-I biquad apply), `rbj_peaking` (runtime peaking-EQ coefficients).
+
+**`build_gendsp(code, numins, numouts)`** — wraps GenExpr into a `.gendsp`
+support file, and **lints at build time** (`gen_lint`): a dead/unassigned signal
+out, an out-of-range `in N`/`out N` index, or the multi-line-ternary trap raise a
+`ValueError` instead of silently shipping a broken device.
+
+**`gen_sim`** — an offline simulator that runs a `gen~` kernel sample-by-sample in
+pure Python, so tests assert the *audio behaviour*, not just the structure:
+
+```python
+from m4l_builder import simulate
+
+out = simulate("History env(0.);\n" + peak_follower("in1", "env", "0.1", "0.9", "c")
+               + "\nout1 = env;", {"in1": [1.0] * 5 + [0.0] * 5})
+# assert attack is faster than release, no NaN, ratio=1 is transparent, ...
+```
+
+It supports History/Param/arithmetic/ternary/if-else and a pure-function table,
+and **refuses** (rather than mis-evaluates) Delay/buffer/FFT kernels that need a
+live render. This is how the suite proves a compressor is transparent at ratio 1
+or a limiter never boosts — the "advertised-but-unwired" bug class — fully offline.
+
 ### Engines (jsui visualizations)
 
 JavaScript generators for Max's jsui object. Each returns an ES5 string for mgraphics/Cairo rendering:
