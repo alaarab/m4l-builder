@@ -39,7 +39,14 @@ def _parameter_banks_payload(device) -> dict[str, dict]:
 # found: deleting") -> dead controls with no build error; these rules have
 # zero false positives, so they are always errors.
 WIRING_INTEGRITY_CODES = frozenset(
-    {"duplicate-box-id", "unknown-source", "unknown-destination"}
+    {
+        "duplicate-box-id",
+        "unknown-source",
+        "unknown-destination",
+        "outlet-index-out-of-range",
+        "inlet-index-out-of-range",
+        "selector-initial-out-of-range",
+    }
 )
 
 

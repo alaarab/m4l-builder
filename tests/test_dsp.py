@@ -975,7 +975,10 @@ class TestDelayLine:
         boxes, _ = delay_line("dl")
         tapout = _find_box(boxes, "dl_tapout")
         assert tapout["text"].startswith("tapout~")
-        assert tapout["numinlets"] == 1
+        # tapout~ has 2 inlets: 0 = tapin~ connection, 1 = tap-time. Declaring
+        # numinlets=1 made the tap-time inlet unreachable (wiring-index lint
+        # would flag an inlet-1 patchline as out-of-range against the device).
+        assert tapout["numinlets"] == 2
         assert tapout["numoutlets"] == 1
         assert tapout["outlettype"] == ["signal"]
 
