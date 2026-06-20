@@ -39,6 +39,11 @@ from .level_history import (
     LEVEL_HISTORY_OUTLETS,
     level_history_js,
 )
+from .level_meter import (
+    LEVEL_METER_INLETS,
+    LEVEL_METER_OUTLETS,
+    level_meter_js,
+)
 from .lfo_display import lfo_display_js
 from .linear_phase_eq_display import linear_phase_eq_display_js
 from .peaking_eq_display import peaking_eq_display_js
@@ -86,6 +91,9 @@ __all__ = [
     "INTEGRATED_LUFS_INLETS",
     "INTEGRATED_LUFS_OUTLETS",
     "level_history_js",
+    "LEVEL_METER_INLETS",
+    "LEVEL_METER_OUTLETS",
+    "level_meter_js",
     "LEVEL_HISTORY_INLETS",
     "LEVEL_HISTORY_OUTLETS",
     "WAVESHAPE_CURVE_INLETS",

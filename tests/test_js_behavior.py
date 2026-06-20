@@ -12,6 +12,7 @@ import pytest
 from m4l_builder.engines.eq_curve import eq_curve_js
 from m4l_builder.engines.integrated_lufs import integrated_lufs_js
 from m4l_builder.engines.level_history import level_history_js
+from m4l_builder.engines.level_meter import level_meter_js
 from m4l_builder.engines.linear_phase_eq_display import linear_phase_eq_display_js
 from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
 
@@ -54,6 +55,38 @@ class TestEqCurveNoteNames:
         assert result.state["inTune"] == "A3"        # exact pitch -> just the note
         assert result.state["sharp"] == "A3 +16c"    # 222 Hz is ~16 cents sharp
         assert result.state["low"] == ""
+
+
+class TestLevelMeter:
+    def test_levels_convert_linear_to_db(self):
+        result = run_jsui(level_meter_js(), """
+            levels(1.0, 0.5);
+            dump({dbL: lvlL, dbR: lvlR});
+        """)
+        assert abs(result.state["dbL"] - 0.0) < 1e-6          # 1.0 -> 0 dBFS
+        assert abs(result.state["dbR"] - (-6.0206)) < 0.01    # 0.5 -> ~-6 dB
+
+    def test_clip_latches_above_full_scale_until_reset(self):
+        result = run_jsui(level_meter_js(), """
+            levels(0.5, 0.5);   var safe = clip;
+            levels(1.4, 0.2);   var clipped = clip;   // L over 0 dBFS
+            levels(0.1, 0.1);   var held = clip;      // back under -> stays latched
+            reset_clip();
+            dump({safe: safe, clipped: clipped, held: held, afterReset: clip});
+        """)
+        assert result.state["safe"] == 0
+        assert result.state["clipped"] == 1
+        assert result.state["held"] == 1
+        assert result.state["afterReset"] == 0
+
+    def test_peak_hold_rises_instantly_then_decays(self):
+        result = run_jsui(level_meter_js(), """
+            levels(1.0, 1.0);      var p1 = peakL;   // peak at 0 dB
+            levels(0.0001, 0.0001); var p2 = peakL;  // drop -> peak decays one frame
+            dump({p1: p1, p2: p2});
+        """)
+        assert abs(result.state["p1"] - 0.0) < 1e-6
+        assert abs(result.state["p2"] - (-0.4)) < 1e-6     # decay step 0.4 dB/frame
 
 
 class TestEqCurveGestures:
