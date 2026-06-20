@@ -8,6 +8,7 @@ import re
 from math import pow, tan, tanh
 
 from m4l_builder.gen_snippets import (
+    biquad_df1,
     drive_blend,
     dynamics_band,
     exp_pole,
@@ -380,3 +381,54 @@ def test_dynamics_band_attack_is_faster_than_release():
     # release: 1000 samples later env has fallen but is FAR from the -90 floor
     assert env[1999] > -40.0
     assert env[1999] < env[999]   # it is releasing (falling)
+
+
+# --- biquad_df1: one Direct-Form-I biquad stage --------------------------------
+def _run_biquad(x_seq, b0, b1, b2, a1, a2):
+    code = ("History x1(0.); History x2(0.); History y1(0.); History y2(0.);\n"
+            + biquad_df1("in1", f"{b0}", f"{b1}", f"{b2}", f"{a1}", f"{a2}",
+                         "x1", "x2", "y1", "y2", "y") + "\nout1 = y;")
+    return _sim(code, {"in1": list(x_seq)}, num_samples=len(x_seq))["out1"]
+
+
+def test_biquad_df1_matches_kweight_shipped_form():
+    assert biquad_df1("oL", "sb0", "sb1", "sb2", "sa1", "sa2",
+                      "kx1L", "kx2L", "ky1L", "ky2L", "s1L") == (
+        "s1L = sb0 * oL + sb1 * kx1L + sb2 * kx2L - sa1 * ky1L - sa2 * ky2L;\n"
+        "kx2L = kx1L; kx1L = oL; ky2L = ky1L; ky1L = s1L;"
+    )
+
+
+def test_biquad_df1_identity_passes_signal_through():
+    # b0=1, all else 0 -> y == x sample for sample.
+    sig = [0.3, -0.7, 1.0, 0.0, 0.5]
+    out = _run_biquad(sig, 1.0, 0.0, 0.0, 0.0, 0.0)
+    assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig))
+
+
+def test_biquad_df1_impulse_response_is_b_then_feedback():
+    # impulse in -> y[0]=b0, y[1]=b1 - a1*b0, y[2]=b2 - a1*y[1] - a2*b0 (DF-I).
+    b0, b1, b2, a1, a2 = 0.5, 0.2, 0.1, -0.3, 0.05
+    out = _run_biquad([1.0, 0.0, 0.0, 0.0], b0, b1, b2, a1, a2)
+    y0 = b0
+    y1 = b1 - a1 * y0
+    y2 = b2 - a1 * y1 - a2 * y0
+    y3 = -a1 * y2 - a2 * y1
+    for got, exp in zip(out, [y0, y1, y2, y3]):
+        assert abs(got - exp) < 1e-12
+
+
+def test_biquad_df1_dc_gain():
+    # constant 1.0 input -> steady-state y = (b0+b1+b2)/(1+a1+a2).
+    b0, b1, b2, a1, a2 = 0.2, 0.2, 0.2, -0.5, 0.1
+    out = _run_biquad([1.0] * 4000, b0, b1, b2, a1, a2)
+    expected = (b0 + b1 + b2) / (1.0 + a1 + a2)
+    assert abs(out[-1] - expected) < 1e-9
+
+
+def test_biquad_df1_stable_filter_stays_bounded():
+    # a stable lowpass fed full-scale must not blow up (|y| bounded).
+    # RBJ-ish stable coeffs (gentle lowpass)
+    out = _run_biquad([(-1.0) ** n for n in range(2000)],
+                      0.05, 0.1, 0.05, -1.6, 0.7)
+    assert all(abs(v) < 10.0 for v in out)

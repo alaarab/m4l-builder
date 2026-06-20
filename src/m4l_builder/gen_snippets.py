@@ -26,6 +26,7 @@ __all__ = [
     "exp_pole",
     "soft_knee_gain_computer",
     "dynamics_band",
+    "biquad_df1",
 ]
 
 
@@ -308,4 +309,34 @@ def dynamics_band(
         + peak_follower(level, env, attack_coeff, release_coeff, coeff) + "\n"
         + soft_knee_gain_computer(env, threshold, ratio, knee, grdb) + "\n"
         + f"{out_gain} = dbtoa({grdb} + {makeup});"
+    )
+
+
+def biquad_df1(
+    x: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    x1: str, x2: str,
+    y1: str, y2: str,
+    out: str,
+) -> str:
+    """One Direct-Form-I biquad stage: ``y = b0 x + b1 x1 + b2 x2 - a1 y1 - a2 y2``.
+
+    Applies a normalised biquad (``a0 == 1``) to ``x`` with feed-forward coeffs
+    ``b0 b1 b2`` and feedback coeffs ``a1 a2``, using the four History state cells
+    ``x1 x2`` (input delays) and ``y1 y2`` (output delays), writing the filtered
+    sample to ``out`` and shifting the state. Emits::
+
+        out = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x; y2 = y1; y1 = out;
+
+    Cascade two stages for the BS.1770 K-weight (shelf then RLB high-pass), and it
+    is the apply-block the cascaded-filter foundation builds on. The caller
+    declares ``x1 x2 y1 y2`` as History and supplies the coeffs (e.g. from
+    :func:`kweight_coeffs_bs1770`). This is the DF-I apply copy-pasted across the
+    metering plugins; sharing it audits the recurrence once.
+    """
+    return (
+        f"{out} = {b0} * {x} + {b1} * {x1} + {b2} * {x2} - {a1} * {y1} - {a2} * {y2};\n"
+        f"{x2} = {x1}; {x1} = {x}; {y2} = {y1}; {y1} = {out};"
     )

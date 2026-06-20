@@ -15,6 +15,7 @@ from ..gen_lint import lint_genexpr
 from ..gen_patcher import build_gendsp
 from ..gen_sim import GenKernel, UnsupportedKernel, simulate
 from ..gen_snippets import (
+    biquad_df1,
     drive_blend,
     dynamics_band,
     exp_pole,
@@ -99,6 +100,7 @@ __all__ = [
     "exp_pole",
     "soft_knee_gain_computer",
     "dynamics_band",
+    "biquad_df1",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
