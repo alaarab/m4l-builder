@@ -131,6 +131,8 @@ from .synthesis import (
     groove_player,
     noise_source,
     poly_voices,
+    slice_pool,
+    slice_voice,
     wavetable_osc,
 )
 
@@ -228,6 +230,8 @@ __all__ = [
     "sidechain_detect",
     "sidechain_routing",
     "signal_divide",
+    "slice_pool",
+    "slice_voice",
     "spectral_crossover",
     "spectral_crossover_subpatcher",
     "spectral_gate",

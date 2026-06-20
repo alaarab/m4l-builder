@@ -669,9 +669,9 @@ class TestSliceOverviewEngine:
     def test_declares_expected_io(self):
         js = slice_overview_js()
         assert "inlets = 7;" in js
-        assert "outlets = 1;" in js
+        assert "outlets = 3;" in js
         assert SLICE_OVERVIEW_INLETS == 7
-        assert SLICE_OVERVIEW_OUTLETS == 1
+        assert SLICE_OVERVIEW_OUTLETS == 3
 
     def test_contains_sampler_surface_handlers(self):
         js = slice_overview_js()
@@ -685,6 +685,22 @@ class TestSliceOverviewEngine:
         assert "recent_hits" in js
         assert "ACTIVE" in js
         assert "DROP SAMPLE" in js
+
+    def test_contains_slicer_analysis_handlers(self):
+        js = slice_overview_js()
+        for fn in (
+            "function compute_onsets()",
+            "function compute_grid()",
+            "function emit_slices()",
+            "function analyze()",
+            "function set_mode(",
+            "function set_samplerate(",
+            "function set_sensitivity(",
+            "function set_min_spacing(",
+            "function set_slices(",
+            "function set_pitch(",
+        ):
+            assert fn in js, fn
 
     def test_allows_custom_region_color(self):
         js = slice_overview_js(region_line="1.0, 0.0, 0.0, 1.0")
