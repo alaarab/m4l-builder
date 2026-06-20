@@ -21,6 +21,7 @@ from m4l_builder.gen_snippets import (
     ms_decode,
     ms_encode,
     ms_width,
+    multiband_split,
     one_pole_coeff,
     one_pole_hp,
     one_pole_lp,
@@ -884,3 +885,63 @@ def test_lr_crossover_rejects_non_multiple_of_4():
     for bad in (0, 2, 3, 6, 7, 10):
         with pytest.raises(ValueError, match="multiple of 4"):
             lr_crossover("in1", "lo", "hi", "f", bad)
+
+
+# --- multiband_split: flat-reconstructing N-band Linkwitz-Riley bank -----------
+def _mb_rms_db(freqs, which, f, order=4, sr=48000.0, n=16384):
+    from math import log10, pi, sin, sqrt
+    nb = len(freqs) + 1
+    outs = [f"b{i}" for i in range(nb)]
+    code = multiband_split("in1", outs, [str(x) for x in freqs], order)
+    code += ("\nout1 = " + " + ".join(outs) + ";") if which == "sum" else f"\nout1 = b{which};"
+    seq = [sin(2 * pi * f * k / sr) for k in range(n)]
+    out = _sim(code, {"in1": seq}, samplerate=sr, num_samples=n)["out1"]
+    tail = out[n // 2:]
+    amp = sqrt(sum(v * v for v in tail) / len(tail)) * sqrt(2.0)
+    return 20 * log10(amp) if amp > 1e-12 else -999.0
+
+
+def test_multiband_split_flat_reconstruction():
+    # THE point of the allpass compensation: summing the bands reconstructs a
+    # FLAT magnitude (the bands recombine transparently) for 3- and 4-band banks.
+    for freqs in ([200.0, 2000.0], [150.0, 800.0, 4000.0]):
+        for f in (120.0, 300.0, 800.0, 2000.0, 5000.0):
+            assert abs(_mb_rms_db(freqs, "sum", f)) < 0.1, (freqs, f)
+
+
+def test_multiband_split_band_isolation():
+    freqs = [200.0, 2000.0]            # low | mid | high
+    assert _mb_rms_db(freqs, 0, 80.0) > -1.0       # low band passes lows
+    assert _mb_rms_db(freqs, 0, 8000.0) < -40.0    # ...and rejects highs hard
+    assert _mb_rms_db(freqs, 2, 8000.0) > -1.0     # high band passes highs
+    assert _mb_rms_db(freqs, 2, 80.0) < -40.0      # ...and rejects lows
+    assert _mb_rms_db(freqs, 1, 600.0) > -1.5      # mid band passes its centre
+    assert _mb_rms_db(freqs, 1, 80.0) < -20.0      # ...and rolls off below
+    assert _mb_rms_db(freqs, 1, 9000.0) < -20.0    # ...and above
+
+
+def test_multiband_split_dc_only_in_low_band():
+    code = multiband_split("in1", ["b0", "b1", "b2"], ["200.", "2000."], 4)
+    r = _sim(code + "\nout1=b0;\nout2=b1;\nout3=b2;", {"in1": [1.0] * 1200},
+             num_samples=1200)
+    assert abs(r["out1"][-1] - 1.0) < 1e-3     # DC fully in the low band
+    assert abs(r["out2"][-1]) < 1e-3
+    assert abs(r["out3"][-1]) < 1e-3
+
+
+def test_multiband_split_is_self_contained_and_namespaced():
+    code = multiband_split("in1", ["lo", "mid", "hi"], ["200.", "2000."], 4)
+    assert "History " in code                       # declares all internal state
+    # low band is allpass-compensated by the upper (2 kHz) crossover -> the comp
+    # crossover's lo+hi is summed into the low output.
+    assert "mb_c0_0lo + mb_c0_0hi" in code
+    other = multiband_split("in1", ["lo", "mid", "hi"], ["200.", "2000."], 4, prefix="xb")
+    assert "xb_s0" in other and "mb_" not in other
+
+
+def test_multiband_split_rejects_bad_args():
+    import pytest
+    with pytest.raises(ValueError, match="band_outs"):
+        multiband_split("in1", ["b0", "b1"], ["200.", "2000."], 4)  # 3 bands, 2 outs
+    with pytest.raises(ValueError, match="at least 1 crossover"):
+        multiband_split("in1", ["b0"], [], 4)
