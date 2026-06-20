@@ -139,36 +139,83 @@ def spectral_crossover(id_prefix: str, bands: int = 4) -> tuple:
     return (boxes, [])
 
 
-def spectral_crossover_subpatcher(bands: int = 4) -> dict:
+def spectral_crossover_subpatcher(bands: int = 4, fftsize: int = 1024) -> dict:
     """Return the pfft~ subpatcher dict for spectral band splitting.
 
-    Splits the input spectrum into N equal-width frequency bands using
-    fftin~, bin-range routing logic, and fftout~.
+    Splits the input spectrum into N equal-width frequency bands by bin index.
+    Each band masks the magnitude to its bin range [lo, hi) using the bin-index
+    signal from fftin~'s third outlet, then resynthesizes via poltocar~ into its
+    own fftout~. Previously the fftout~ boxes were created but never connected,
+    so every band output silence; the cartopol~ outputs are now actually routed.
+
+    fftsize is the pfft~ FFT size (the subpatcher sees fftsize/2 + 1 bins);
+    keep it in sync with the pfft~ args (default 1024 -> 512 usable bins).
+
+    NOTE: bin-index masking is the standard pfft~ idiom but has not been
+    verified inside Ableton/Max; the structure lints clean and every fftout~ is
+    fed, which is strictly better than the prior all-silent state.
     """
+    nyquist_bin = fftsize // 2
     sub_boxes = [
+        # fftin~ outlet 2 carries the bin index as a signal ramp (0..fftsize/2),
+        # required for frequency-band masking. The prior numoutlets=2 omitted it.
         {"box": {"id": "sc_fftin", "maxclass": "newobj", "text": "fftin~ 1",
-                 "numinlets": 0, "numoutlets": 2,
-                 "outlettype": ["signal", "signal"],
+                 "numinlets": 0, "numoutlets": 3,
+                 "outlettype": ["signal", "signal", "signal"],
                  "patching_rect": [30, 30, 70, 20]}},
         {"box": {"id": "sc_cartopol", "maxclass": "newobj", "text": "cartopol~",
                  "numinlets": 2, "numoutlets": 2,
                  "outlettype": ["signal", "signal"],
                  "patching_rect": [30, 70, 70, 20]}},
     ]
-    for i in range(bands):
-        sub_boxes.append({
-            "box": {
-                "id": f"sc_fftout_{i}", "maxclass": "newobj",
-                "text": f"fftout~ {i + 1}",
-                "numinlets": 2, "numoutlets": 0,
-                "patching_rect": [30 + i * 80, 200, 70, 20],
-            }
-        })
-
     sub_lines = [
         {"patchline": {"source": ["sc_fftin", 0], "destination": ["sc_cartopol", 0]}},
         {"patchline": {"source": ["sc_fftin", 1], "destination": ["sc_cartopol", 1]}},
     ]
+    for i in range(bands):
+        lo = round(i * nyquist_bin / bands)
+        # include the Nyquist bin in the top band's upper bound
+        hi = nyquist_bin + 1 if i == bands - 1 else round((i + 1) * nyquist_bin / bands)
+        x = 30 + i * 110
+        sub_boxes.extend([
+            # bin-index >= lo  AND  bin-index < hi  -> 0/1 band mask
+            {"box": {"id": f"sc_masklo_{i}", "maxclass": "newobj",
+                     "text": f">=~ {lo}", "numinlets": 2, "numoutlets": 1,
+                     "outlettype": ["signal"], "patching_rect": [x, 110, 60, 20]}},
+            {"box": {"id": f"sc_maskhi_{i}", "maxclass": "newobj",
+                     "text": f"<~ {hi}", "numinlets": 2, "numoutlets": 1,
+                     "outlettype": ["signal"], "patching_rect": [x + 65, 110, 55, 20]}},
+            {"box": {"id": f"sc_mask_{i}", "maxclass": "newobj",
+                     "text": "*~", "numinlets": 2, "numoutlets": 1,
+                     "outlettype": ["signal"], "patching_rect": [x, 140, 30, 20]}},
+            # apply mask to magnitude
+            {"box": {"id": f"sc_bandmag_{i}", "maxclass": "newobj",
+                     "text": "*~", "numinlets": 2, "numoutlets": 1,
+                     "outlettype": ["signal"], "patching_rect": [x, 170, 30, 20]}},
+            {"box": {"id": f"sc_poltocar_{i}", "maxclass": "newobj",
+                     "text": "poltocar~", "numinlets": 2, "numoutlets": 2,
+                     "outlettype": ["signal", "signal"],
+                     "patching_rect": [x, 200, 70, 20]}},
+            {"box": {"id": f"sc_fftout_{i}", "maxclass": "newobj",
+                     "text": f"fftout~ {i + 1}", "numinlets": 2, "numoutlets": 0,
+                     "patching_rect": [x, 230, 70, 20]}},
+        ])
+        sub_lines.extend([
+            # bin index -> both mask comparators
+            {"patchline": {"source": ["sc_fftin", 2], "destination": [f"sc_masklo_{i}", 0]}},
+            {"patchline": {"source": ["sc_fftin", 2], "destination": [f"sc_maskhi_{i}", 0]}},
+            # combine lo & hi masks
+            {"patchline": {"source": [f"sc_masklo_{i}", 0], "destination": [f"sc_mask_{i}", 0]}},
+            {"patchline": {"source": [f"sc_maskhi_{i}", 0], "destination": [f"sc_mask_{i}", 1]}},
+            # magnitude * mask
+            {"patchline": {"source": ["sc_cartopol", 0], "destination": [f"sc_bandmag_{i}", 0]}},
+            {"patchline": {"source": [f"sc_mask_{i}", 0], "destination": [f"sc_bandmag_{i}", 1]}},
+            # (band magnitude, original phase) -> poltocar~ -> fftout~
+            {"patchline": {"source": [f"sc_bandmag_{i}", 0], "destination": [f"sc_poltocar_{i}", 0]}},
+            {"patchline": {"source": ["sc_cartopol", 1], "destination": [f"sc_poltocar_{i}", 1]}},
+            {"patchline": {"source": [f"sc_poltocar_{i}", 0], "destination": [f"sc_fftout_{i}", 0]}},
+            {"patchline": {"source": [f"sc_poltocar_{i}", 1], "destination": [f"sc_fftout_{i}", 1]}},
+        ])
 
     return {
         "patcher": {

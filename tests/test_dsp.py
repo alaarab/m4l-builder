@@ -3390,6 +3390,31 @@ class TestSpectralCrossoverSubpatcher:
         result = spectral_crossover_subpatcher()
         assert len(result["patcher"]["lines"]) > 0
 
+    def test_every_fftout_is_connected(self):
+        # Regression: the fftout~ boxes were created but never wired, so every
+        # band output silence. Each fftout~ must now be a patchline destination.
+        for bands in (1, 4, 8):
+            result = spectral_crossover_subpatcher(bands=bands)
+            boxes = result["patcher"]["boxes"]
+            lines = result["patcher"]["lines"]
+            fftouts = [b["box"]["id"] for b in boxes if "fftout~" in b["box"]["text"]]
+            dests = {ln["patchline"]["destination"][0] for ln in lines}
+            unconnected = [f for f in fftouts if f not in dests]
+            assert unconnected == [], f"bands={bands} unconnected fftout~: {unconnected}"
+
+    def test_fftin_exposes_bin_index_outlet(self):
+        # bin-index masking needs fftin~'s 3rd outlet (was declared numoutlets=2).
+        result = spectral_crossover_subpatcher()
+        fftin = next(b["box"] for b in result["patcher"]["boxes"]
+                     if b["box"]["id"] == "sc_fftin")
+        assert fftin["numoutlets"] == 3
+
+    def test_subpatcher_wiring_lints_clean(self):
+        result = spectral_crossover_subpatcher(bands=4)
+        issues = lint_graph(result["patcher"]["boxes"], result["patcher"]["lines"])
+        wiring = [i for i in issues if i.code in WIRING_INTEGRITY_CODES]
+        assert wiring == []
+
 
 class TestGrainCloud:
     def test_returns_boxes_and_lines(self):
@@ -3682,6 +3707,20 @@ class TestMorphingLfo:
         ids = _box_ids(boxes)
         assert "myx_phasor" in ids
         assert "myx_sel" in ids
+
+    def test_sine_is_phase_driven_by_phasor(self):
+        # Regression: the sine was "cycle~ 1." free-running at a fixed 1 Hz while
+        # tri/sq/saw tracked the phasor rate. It must now be cycle~ 0. driven by
+        # the phasor on its phase (right) inlet so all morph targets share a rate.
+        boxes, lines = morphing_lfo("mlfo")
+        sine = _find_box(boxes, "mlfo_sine")
+        assert sine["text"] == "cycle~ 0."
+        phase_link = [
+            ln for ln in lines
+            if ln["patchline"]["source"] == ["mlfo_phasor", 0]
+            and ln["patchline"]["destination"] == ["mlfo_sine", 1]
+        ]
+        assert len(phase_link) == 1
 
 
 class TestMidiClockIn:

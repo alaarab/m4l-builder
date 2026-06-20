@@ -235,7 +235,10 @@ def morphing_lfo(id_prefix: str) -> tuple:
         newobj(f"{p}_phasor", "phasor~ 1.",
                numinlets=2, numoutlets=1, outlettype=["signal"],
                patching_rect=[30, 30, 80, 20]),
-        newobj(f"{p}_sine", "cycle~ 1.",
+        # cycle~ frequency 0: the wavetable is read purely by the phase signal
+        # on the right inlet, so the sine is locked to the phasor's rate (was
+        # "cycle~ 1." free-running at a fixed 1 Hz while tri/sq/saw tracked rate).
+        newobj(f"{p}_sine", "cycle~ 0.",
                numinlets=2, numoutlets=1, outlettype=["signal"],
                patching_rect=[30, 70, 70, 20]),
         newobj(f"{p}_tri", "expr~ ($v1 < 0.5) ? (4.*$v1 - 1.) : (3. - 4.*$v1)",
@@ -252,6 +255,8 @@ def morphing_lfo(id_prefix: str) -> tuple:
                patching_rect=[30, 200, 100, 20]),
     ]
     lines = [
+        # phasor -> cycle~ phase inlet (1) drives the sine at the phasor's rate
+        patchline(f"{p}_phasor", 0, f"{p}_sine", 1),
         patchline(f"{p}_phasor", 0, f"{p}_tri", 0),
         patchline(f"{p}_phasor", 0, f"{p}_sq", 0),
         patchline(f"{p}_phasor", 0, f"{p}_saw", 0),
