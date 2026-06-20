@@ -18,6 +18,7 @@ from m4l_builder.gen_snippets import (
     ms_encode,
     ms_width,
     peak_follower,
+    rbj_peaking,
     soft_knee_gain_computer,
 )
 
@@ -432,3 +433,58 @@ def test_biquad_df1_stable_filter_stays_bounded():
     out = _run_biquad([(-1.0) ** n for n in range(2000)],
                       0.05, 0.1, 0.05, -1.6, 0.7)
     assert all(abs(v) < 10.0 for v in out)
+
+
+# --- rbj_peaking: runtime peaking-EQ biquad coefficients -----------------------
+def _rbj_coeffs(freq, q, gain_db, sr=48000.0):
+    code = ("Param f(1000.);\nParam q(1.);\nParam g(6.);\n"
+            + rbj_peaking("f", "q", "g", "b0", "b1", "b2", "a1", "a2")
+            + "\nout1 = b0;\nout2 = b1;\nout3 = b2;\nout4 = a1;\nout5 = a2;")
+    o = _sim(code, {"in1": [0.0]}, params={"f": freq, "q": q, "g": gain_db},
+             samplerate=sr, num_samples=1)
+    return [o[f"out{k}"][0] for k in range(1, 6)]
+
+
+def test_rbj_peaking_matches_reference_coeffs():
+    # independently computed RBJ peaking for f0=1000, Q=1, +6 dB, 48k.
+    ref = [1.0439530870, -1.8953207239, 0.8677222848, -1.8953207239, 0.9116753718]
+    got = _rbj_coeffs(1000.0, 1.0, 6.0)
+    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref)), got
+
+
+def test_rbj_peaking_zero_gain_is_unity_through_biquad():
+    # gain_db = 0 -> b == a -> the band is flat: filtered output == input.
+    code = ("Param f(1000.);\nParam q(1.);\nParam g(0.);\n"
+            "History x1(0.); History x2(0.); History y1(0.); History y2(0.);\n"
+            + rbj_peaking("f", "q", "g", "b0", "b1", "b2", "a1", "a2") + "\n"
+            + biquad_df1("in1", "b0", "b1", "b2", "a1", "a2",
+                         "x1", "x2", "y1", "y2", "y") + "\nout1 = y;")
+    sig = [0.3, -0.7, 1.0, 0.0, 0.5, -0.2]
+    out = _sim(code, {"in1": sig}, params={"f": 1000.0, "q": 1.0, "g": 0.0},
+               num_samples=len(sig))["out1"]
+    assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig))
+
+
+def test_rbj_peaking_dc_gain_is_unity():
+    # a peaking EQ passes DC at unity regardless of gain: (b0+b1+b2)/(1+a1+a2)==1.
+    for gain in (-12.0, -3.0, 3.0, 12.0):
+        b0, b1, b2, a1, a2 = _rbj_coeffs(1000.0, 1.0, gain)
+        assert abs((b0 + b1 + b2) / (1.0 + a1 + a2) - 1.0) < 1e-9
+
+
+def test_rbj_peaking_centre_frequency_gain_matches_db():
+    # end-to-end: a sine at f0 through [rbj_peaking + biquad_df1] is boosted/cut by
+    # exactly gain_db. Measure steady-state output amplitude vs input amplitude.
+    from math import pi, sin
+    f0, sr, gain = 1000.0, 48000.0, 6.0
+    n = 8000
+    sine = [sin(2 * pi * f0 * k / sr) for k in range(n)]
+    code = ("Param f(1000.);\nParam q(1.);\nParam g(6.);\n"
+            "History x1(0.); History x2(0.); History y1(0.); History y2(0.);\n"
+            + rbj_peaking("f", "q", "g", "b0", "b1", "b2", "a1", "a2") + "\n"
+            + biquad_df1("in1", "b0", "b1", "b2", "a1", "a2",
+                         "x1", "x2", "y1", "y2", "y") + "\nout1 = y;")
+    out = _sim(code, {"in1": sine}, params={"f": f0, "q": 1.0, "g": gain},
+               samplerate=sr, num_samples=n)["out1"]
+    amp = max(abs(v) for v in out[-2000:])     # steady-state peak (input amp == 1)
+    assert abs(amp - 10 ** (gain / 20.0)) < 0.02   # ~ +6 dB == x1.995

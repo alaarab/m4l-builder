@@ -55,6 +55,7 @@ CORE_EXPORTS = [
     "soft_knee_gain_computer",
     "dynamics_band",
     "biquad_df1",
+    "rbj_peaking",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
