@@ -11,12 +11,16 @@ from m4l_builder.gen_snippets import (
     biquad_df1,
     drive_blend,
     dynamics_band,
+    exciter_harmonics,
     exp_pole,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
     ms_decode,
     ms_encode,
     ms_width,
+    one_pole_coeff,
+    one_pole_hp,
+    one_pole_lp,
     peak_follower,
     rbj_peaking,
     rbj_shelf,
@@ -551,3 +555,125 @@ def test_rbj_high_shelf_dc_unity_nyquist_full():
         nyq = (b0 - b1 + b2) / (1.0 - a1 + a2)
         assert abs(dc - 1.0) < 1e-6
         assert abs(nyq - 10 ** (gain / 20.0)) < 1e-6
+
+
+# --- one_pole_coeff / one_pole_lp / one_pole_hp: the shared 1st-order filter -----
+import math  # noqa: E402
+from math import exp as _exp_op  # noqa: E402
+from math import pi as _pi  # noqa: E402
+
+
+def test_one_pole_coeff_text():
+    assert one_pole_coeff("c", "fc") == \
+        "c = 1.0 - exp(-6.28318530717959 * fc / samplerate);"
+
+
+def test_one_pole_coeff_matches_minus_2pi_fc_over_fs():
+    code = one_pole_coeff("c", "fc")
+    for fc, sr in [(100.0, 48000.0), (3000.0, 44100.0), (8000.0, 96000.0)]:
+        ns = {"exp": _exp_op, "fc": fc, "samplerate": sr}
+        exec(code, ns)  # noqa: S102
+        assert abs(ns["c"] - (1.0 - _exp_op(-2.0 * _pi * fc / sr))) < 1e-12
+        assert 0.0 < ns["c"] < 1.0   # a stable lerp rate
+
+
+def test_one_pole_lp_and_hp_text():
+    assert one_pole_lp("x", "s", "c", "y") == "s = s + c * (x - s);\ny = s;"
+    assert one_pole_hp("x", "s", "c", "y") == "s = s + c * (x - s);\ny = x - s;"
+
+
+def _run_one_pole(kind, x_seq, freq, sr=48000.0, init=0.0):
+    snip = one_pole_lp if kind == "lp" else one_pole_hp
+    code = (f"History s({init});\n"
+            + one_pole_coeff("c", "fc") + "\n"
+            + snip("in1", "s", "c", "y") + "\nout1 = y;")
+    return _sim(code, {"in1": list(x_seq)}, params={"fc": freq},
+                samplerate=sr, num_samples=len(x_seq))["out1"]
+
+
+def test_one_pole_lp_dc_settles_to_input():
+    # a low-pass fed constant DC converges to that DC level (unity DC gain).
+    out = _run_one_pole("lp", [1.0] * 4000, 1000.0)
+    assert abs(out[-1] - 1.0) < 1e-6
+
+
+def test_one_pole_hp_removes_dc():
+    # the complementary high-pass strips the DC: a constant input decays to ~0.
+    out = _run_one_pole("hp", [1.0] * 4000, 1000.0)
+    assert abs(out[-1]) < 1e-3
+
+
+def test_one_pole_lp_hp_reconstruct_the_input():
+    # lp(x) + hp(x) == x sample-for-sample (they share one state -> exact split).
+    sig = [0.3, -0.7, 1.0, 0.0, 0.5, -0.2, 0.9]
+    lp = _run_one_pole("lp", sig, 2000.0)
+    hp = _run_one_pole("hp", sig, 2000.0)
+    assert all(abs((a + b) - x) < 1e-12 for a, b, x in zip(lp, hp, sig))
+
+
+def test_one_pole_hp_passes_nyquist_alternation():
+    # full-scale +/- alternation (Nyquist, all "highs") passes the high-pass with
+    # most of its level intact: |out| stays high (the band an exciter shapes),
+    # whereas DC is removed to ~0 (test_one_pole_hp_removes_dc) — that contrast is
+    # the frequency selectivity the exciter relies on.
+    out = _run_one_pole("hp", [(-1.0) ** n for n in range(2000)], 3000.0)
+    assert abs(out[-1]) > 0.75
+
+
+# --- exciter_harmonics: the harmonic-generation core (added content) ------------
+def _exc_harm(band, k, even):
+    code = ("Param k(2.);\nParam even(0.);\n"
+            + exciter_harmonics("in1", "k", "even", "h") + "\nout1 = h;")
+    return _sim(code, {"in1": [band]}, params={"k": k, "even": even},
+                num_samples=1)["out1"][0]
+
+
+def test_exciter_harmonics_text():
+    assert exciter_harmonics("b", "k", "e", "h") == (
+        "hx_odd = tanh(b * k) / tanh(k);\n"
+        "hx_sq = b * b;\n"
+        "h = (hx_odd - b) + e * hx_sq;"
+    )
+
+
+def test_exciter_harmonics_silence_adds_nothing():
+    # band == 0 -> no harmonics added (silence in, silence added) for any k/even.
+    for k in (1.0, 2.0, 8.0):
+        for even in (0.0, 0.5, 1.0):
+            assert abs(_exc_harm(0.0, k, even)) < 1e-12
+
+
+def test_exciter_harmonics_odd_only_when_even_is_zero():
+    # even == 0 -> out == tanh(band*k)/tanh(k) - band exactly (pure odd generator).
+    band, k = 0.5, 3.0
+    expect = tanh(band * k) / tanh(k) - band
+    assert abs(_exc_harm(band, k, 0.0) - expect) < 1e-12
+
+
+def test_exciter_harmonics_even_term_is_symmetric_square():
+    # the even contribution is band^2*even: equal for +/-band (it is the even,
+    # DC-bearing 2nd-harmonic source the caller DC-blocks). Isolate it by
+    # subtracting the (odd, antisymmetric) even=0 baseline.
+    band, k, even = 0.6, 4.0, 1.0
+    base_p = _exc_harm(band, k, 0.0)
+    base_n = _exc_harm(-band, k, 0.0)
+    even_p = _exc_harm(band, k, even) - base_p
+    even_n = _exc_harm(-band, k, even) - base_n
+    assert abs(even_p - even_n) < 1e-12           # symmetric -> even harmonics
+    assert abs(even_p - band * band) < 1e-12
+
+
+def test_exciter_harmonics_more_drive_more_odd_energy():
+    # at a fixed mid-level band, a higher k generates more odd-harmonic delta.
+    band = 0.4
+    lo = abs(_exc_harm(band, 1.5, 0.0))
+    hi = abs(_exc_harm(band, 6.0, 0.0))
+    assert hi > lo > 0.0
+
+
+def test_exciter_harmonics_stays_finite_under_extremes():
+    for band in (-1.0, -0.001, 0.0, 0.001, 1.0):
+        for k in (1.0, 12.0, 40.0):
+            for even in (0.0, 1.0):
+                v = _exc_harm(band, k, even)
+                assert math.isfinite(v)

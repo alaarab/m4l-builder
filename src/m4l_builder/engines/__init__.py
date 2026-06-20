@@ -20,6 +20,11 @@ from .delay_trail import (
 from .envelope_display import envelope_display_js
 from .eq_band_column import eq_band_column_js
 from .eq_curve import eq_curve_js
+from .exciter_curve import (
+    EXCITER_CURVE_INLETS,
+    EXCITER_CURVE_OUTLETS,
+    exciter_curve_js,
+)
 from .fft_analyzer import (
     FFT_ANALYZER_DEFAULT_OVERLAP,
     FFT_ANALYZER_DEFAULT_SIZE,
@@ -78,6 +83,9 @@ __all__ = [
     "crossover_display_js",
     "eq_curve_js",
     "eq_band_column_js",
+    "exciter_curve_js",
+    "EXCITER_CURVE_INLETS",
+    "EXCITER_CURVE_OUTLETS",
     "fft_analyzer_dsp",
     "fft_analyzer_kernel",
     "transfer_curve_js",

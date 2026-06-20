@@ -4,6 +4,15 @@
 
 ### Added
 
+- `gen_snippets` harmonic-exciter foundation: `one_pole_coeff` (cutoff-frequency
+  `1 - exp(-2*pi*f/fs)` coefficient), `one_pole_lp` / `one_pole_hp` (the shared
+  1st-order low-/high-pass split), and `exciter_harmonics` (the harmonic-exciter
+  generator — a level-matched odd `tanh` shaper plus an even squarer, returning
+  the *added* content). All behaviourally null-tested via `gen_sim`; the
+  registry is now 17 primitives. Composed by the new `Sheen` harmonic exciter.
+- `engines/exciter_curve.py` (`exciter_curve_js`): an Aphex/Ozone-style hero —
+  a log-frequency band-lift envelope with draggable LOW/HIGH handles (drag X =
+  tune, Y = amount) and a live output glow.
 - `NoteEvent` / `notes_dict` (new `notes` module): pure-Python builders for
   the Live 12 MIDI Tool notes dictionary (`{"notes": [...]}`), with range
   validation and JSON-ready output. Structure-building only — sending the
