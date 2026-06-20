@@ -74,16 +74,22 @@ def _signal_sum_chain(id_prefix: str, source_ids: list) -> tuple:
 
 
 def _biquad_shelf(id_prefix: str, shelf_type: str,
-                  freq: float, gain_db: float) -> tuple:
+                  freq: float, gain_db: float,
+                  samplerate: float = 48000.0) -> tuple:
     """Shared biquad~ shelf filter (high or low).
 
     shelf_type: 'high' or 'low'.
+    samplerate: session sample rate used to normalize the cutoff. Defaults to
+        48000 Hz (Ableton Live's default) — coefficients are baked at build
+        time, so a device built for 44100 sounds shifted at 48k and vice versa.
     """
     p = id_prefix
     A = 10 ** (gain_db / 40.0)
-    w0 = 2 * math.pi * freq / 44100.0
+    w0 = 2 * math.pi * freq / samplerate
     cos_w0 = math.cos(w0)
-    alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1 / A) * (1 / 0.7071 - 1) + 2)
+    # RBJ shelving EQ: alpha = sin(w0)/2 * sqrt((A + 1/A)*(1/S - 1) + 2) with
+    # shelf slope S = 1/sqrt(2) (Butterworth), so 1/S = sqrt(2).
+    alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1 / A) * (math.sqrt(2) - 1) + 2)
 
     if shelf_type == 'high':
         b0 = A * ((A + 1) + (A - 1) * cos_w0 + 2 * math.sqrt(A) * alpha)

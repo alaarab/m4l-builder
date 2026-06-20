@@ -1562,6 +1562,28 @@ class TestLowshelfFilter:
             assert "dcblock~" not in b["box"]["text"]
 
 
+class TestShelfSampleRate:
+    """Shelf coefficients must track the session sample rate (was hardcoded 44100)."""
+
+    def test_samplerate_changes_highshelf_coefficients(self):
+        boxes44, _ = highshelf_filter("hs", freq=3000., gain_db=6., samplerate=44100.)
+        boxes48, _ = highshelf_filter("hs", freq=3000., gain_db=6., samplerate=48000.)
+        assert boxes44[0]["box"]["text"] != boxes48[0]["box"]["text"]
+
+    def test_samplerate_changes_lowshelf_coefficients(self):
+        boxes44, _ = lowshelf_filter("ls", freq=300., gain_db=6., samplerate=44100.)
+        boxes96, _ = lowshelf_filter("ls", freq=300., gain_db=6., samplerate=96000.)
+        assert boxes44[0]["box"]["text"] != boxes96[0]["box"]["text"]
+
+    def test_default_samplerate_is_48000(self):
+        # Default (no samplerate arg) must equal an explicit 48000, not 44100.
+        default, _ = highshelf_filter("hs", freq=3000., gain_db=6.)
+        explicit_48, _ = highshelf_filter("hs", freq=3000., gain_db=6., samplerate=48000.)
+        explicit_44, _ = highshelf_filter("hs", freq=3000., gain_db=6., samplerate=44100.)
+        assert default[0]["box"]["text"] == explicit_48[0]["box"]["text"]
+        assert default[0]["box"]["text"] != explicit_44[0]["box"]["text"]
+
+
 class TestTriangleLFO:
     """Test lfo() with waveform='triangle'."""
 
