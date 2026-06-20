@@ -65,6 +65,8 @@ from ..theme import (
     VIOLET,
     WARM,
     Theme,
+    alpha,
+    js_color,
 )
 from ..ui import (
     adsrui,
@@ -141,6 +143,8 @@ __all__ = [
     "ubutton",
     "nslider",
     "Theme",
+    "js_color",
+    "alpha",
     "MIDNIGHT",
     "WARM",
     "COOL",

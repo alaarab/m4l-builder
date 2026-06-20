@@ -4,6 +4,20 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+def js_color(color) -> str:
+    """Format an RGBA color list as a ``"r, g, b, a"`` string for jsui/v8ui kwargs.
+
+    Components are rounded to 4 decimals (the convention every flagship used when
+    it defined this helper inline).
+    """
+    return ", ".join(str(round(c, 4)) for c in color)
+
+
+def alpha(color, value) -> list:
+    """Return a copy of an RGB(A) color with its alpha replaced by ``value``."""
+    return [color[0], color[1], color[2], value]
+
+
 @dataclass
 class Theme:
     """Coordinated color theme for M4L devices.

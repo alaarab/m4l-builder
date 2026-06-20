@@ -117,6 +117,8 @@ UI_WIDGET_EXPORTS = [
 
 UI_THEME_EXPORTS = [
     "Theme",
+    "js_color",
+    "alpha",
     "MIDNIGHT",
     "WARM",
     "COOL",

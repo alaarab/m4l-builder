@@ -13,7 +13,26 @@ from m4l_builder.theme import (
     VIOLET,
     WARM,
     Theme,
+    alpha,
+    js_color,
 )
+
+
+class TestColorHelpers:
+    """js_color/alpha were duplicated identically across 5 flagships; lifting them
+    to theme.py must preserve the exact formatting those inline copies produced."""
+
+    def test_js_color_rounds_to_4_decimals(self):
+        assert js_color([0.45, 0.75, 0.65, 1.0]) == "0.45, 0.75, 0.65, 1.0"
+        assert js_color([0.123456, 0.0, 1.0, 0.5]) == "0.1235, 0.0, 1.0, 0.5"
+
+    def test_alpha_replaces_only_the_alpha_channel(self):
+        assert alpha([0.1, 0.2, 0.3, 1.0], 0.0) == [0.1, 0.2, 0.3, 0.0]
+        assert alpha([0.9, 0.8, 0.7], 0.85) == [0.9, 0.8, 0.7, 0.85]
+
+    def test_alpha_then_js_color_composes(self):
+        # the exact idiom the plugins use: js_color(alpha(GRAPH_BG, 0.0))
+        assert js_color(alpha([0.07, 0.07, 0.08, 1.0], 0.0)) == "0.07, 0.07, 0.08, 0.0"
 
 
 class TestThemeDataclass:
