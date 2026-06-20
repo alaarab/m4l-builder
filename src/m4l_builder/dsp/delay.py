@@ -14,7 +14,7 @@ def delay_line(id_prefix: str, max_delay_ms: int = 5000) -> tuple:
         newobj(f"{p}_tapin", f"tapin~ {max_delay_ms}", numinlets=1,
                numoutlets=1, outlettype=["tapconnect"],
                patching_rect=[30, 120, 100, 20]),
-        newobj(f"{p}_tapout", f"tapout~ {max_delay_ms}", numinlets=1,
+        newobj(f"{p}_tapout", f"tapout~ {max_delay_ms}", numinlets=2,
                numoutlets=1, outlettype=["signal"],
                patching_rect=[30, 150, 100, 20]),
     ]
@@ -71,7 +71,7 @@ def feedback_delay(id_prefix: str, max_delay_ms: int = 5000) -> tuple:
         newobj(f"{p}_tapin", f"tapin~ {max_delay_ms}", numinlets=1,
                numoutlets=1, outlettype=["tapconnect"],
                patching_rect=[30, 150, 100, 20]),
-        newobj(f"{p}_tapout", f"tapout~ {max_delay_ms}", numinlets=1,
+        newobj(f"{p}_tapout", f"tapout~ {max_delay_ms}", numinlets=2,
                numoutlets=1, outlettype=["signal"],
                patching_rect=[30, 180, 100, 20]),
         # Feedback path: tanh~ saturation
@@ -186,7 +186,7 @@ def fdn_reverb(id_prefix: str, num_delays: int = 8) -> tuple:
         boxes.append(newobj(f"{p}_tapin_{i}", f"tapin~ {delay_ms}", numinlets=1,
                             numoutlets=1, outlettype=["tapconnect"],
                             patching_rect=[30 + i * 100, 120, 80, 20]))
-        boxes.append(newobj(f"{p}_tapout_{i}", f"tapout~ {delay_ms}", numinlets=1,
+        boxes.append(newobj(f"{p}_tapout_{i}", f"tapout~ {delay_ms}", numinlets=2,
                             numoutlets=1, outlettype=["signal"],
                             patching_rect=[30 + i * 100, 150, 80, 20]))
         lines.append(patchline(f"{p}_tapin_{i}", 0, f"{p}_tapout_{i}", 0))

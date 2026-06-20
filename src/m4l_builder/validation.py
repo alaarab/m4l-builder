@@ -101,6 +101,20 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
                         box_id=box_id,
                     )
                 )
+            else:
+                try:
+                    n_in, init = int(parts[1]), int(parts[2])
+                    if not 0 <= init <= n_in:
+                        issues.append(
+                            ValidationIssue(
+                                code="selector-initial-out-of-range",
+                                message=f"selector~ initial {init} out of range 0..{n_in}: '{text}'",
+                                severity="error",
+                                box_id=box_id,
+                            )
+                        )
+                except ValueError:
+                    pass
 
     connected = set()
     for line in lines:
@@ -129,6 +143,32 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
                     box_id=dst,
                 )
             )
+        # Outlet/inlet index bounds — Max silently DROPS an out-of-range patchline
+        # ("patchcord source not found: deleting"), a dead connection with no error.
+        src_arr = payload.get("source", [])
+        if src in seen_ids and len(src_arr) > 1 and isinstance(src_arr[1], int):
+            nout = seen_ids[src].get("numoutlets")
+            if isinstance(nout, int) and src_arr[1] >= nout:
+                issues.append(
+                    ValidationIssue(
+                        code="outlet-index-out-of-range",
+                        message=f"Patchline from {src} outlet {src_arr[1]} exceeds its numoutlets ({nout})",
+                        severity="error",
+                        box_id=src,
+                    )
+                )
+        dst_arr = payload.get("destination", [])
+        if dst in seen_ids and len(dst_arr) > 1 and isinstance(dst_arr[1], int):
+            nin = seen_ids[dst].get("numinlets")
+            if isinstance(nin, int) and dst_arr[1] >= nin:
+                issues.append(
+                    ValidationIssue(
+                        code="inlet-index-out-of-range",
+                        message=f"Patchline to {dst} inlet {dst_arr[1]} exceeds its numinlets ({nin})",
+                        severity="error",
+                        box_id=dst,
+                    )
+                )
 
     if device_type == "audio_effect":
         if "obj-plugin" not in seen_ids:
