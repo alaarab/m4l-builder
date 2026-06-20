@@ -36,9 +36,12 @@ def _resolve_parameter_spec(
     else:
         spec = ParameterSpec(name=str(base))
 
-    updates: dict[str, Any] = {
-        "parameter_type": parameter_type,
-    }
+    updates: dict[str, Any] = {}
+    # parameter_type: a first-class spec is authoritative — do NOT clobber an
+    # enum/toggle spec's type with the dial/slider default 0 (the legacy arg only
+    # applies when building from a bare name), matching every other field below.
+    if not provided_spec:
+        updates["parameter_type"] = parameter_type
     if shortname is not None and (not provided_spec or spec.shortname is None):
         updates["shortname"] = shortname
     if minimum is not None and (not provided_spec or spec.minimum is None):

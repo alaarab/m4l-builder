@@ -2732,3 +2732,22 @@ class TestNslider:
     def test_kwargs_passthrough(self):
         result = nslider("ns-1", [0, 0, 100, 120], custom_attr="val")
         assert result["box"]["custom_attr"] == "val"
+
+
+def test_resolve_parameter_spec_preserves_provided_type():
+    # it190 (scan #3): a first-class enum/toggle spec passed to a dial/slider must
+    # NOT have its parameter_type clobbered to the resolver's default 0.
+    from m4l_builder.parameters import ParameterSpec
+    from m4l_builder.ui import _resolve_parameter_spec
+
+    enum_spec = ParameterSpec(name="Mode", parameter_type=2, enum=["A", "B", "C"])
+    resolved = _resolve_parameter_spec(enum_spec)
+    assert resolved.parameter_type == 2
+    assert resolved.enum == ["A", "B", "C"]
+
+
+def test_resolve_parameter_spec_uses_arg_for_bare_name():
+    from m4l_builder.ui import _resolve_parameter_spec
+
+    resolved = _resolve_parameter_spec("Gain", parameter_type=1)
+    assert resolved.parameter_type == 1
