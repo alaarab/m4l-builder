@@ -42,6 +42,7 @@ from m4l_builder.engines.level_history import (
     LEVEL_HISTORY_OUTLETS,
     level_history_js,
 )
+from m4l_builder.engines.level_meter import level_meter_js
 from m4l_builder.engines.linear_phase_eq_display import (
     LINEAR_PHASE_EQ_DISPLAY_INLETS,
     LINEAR_PHASE_EQ_DISPLAY_OUTLETS,
@@ -142,6 +143,7 @@ ALL_JSUI_FACTORIES = [
     delay_trail_js,
     loop_filter_curve_js,
     waveshape_curve_js,
+    level_meter_js,
 ]
 
 
