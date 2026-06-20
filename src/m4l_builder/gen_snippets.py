@@ -29,6 +29,10 @@ __all__ = [
     "biquad_df1",
     "rbj_peaking",
     "rbj_shelf",
+    "one_pole_coeff",
+    "one_pole_lp",
+    "one_pole_hp",
+    "exciter_harmonics",
 ]
 
 
@@ -341,6 +345,91 @@ def biquad_df1(
     return (
         f"{out} = {b0} * {x} + {b1} * {x1} + {b2} * {x2} - {a1} * {y1} - {a2} * {y2};\n"
         f"{x2} = {x1}; {x1} = {x}; {y2} = {y1}; {y1} = {out};"
+    )
+
+
+def one_pole_coeff(out: str, freq: str) -> str:
+    """Cutoff-frequency one-pole coefficient: ``out = 1 - exp(-2*pi*fc/fs)``. Emits::
+
+        out = 1.0 - exp(-6.28318530717959 * freq / samplerate);
+
+    The per-sample lerp coefficient of a one-pole low-pass with -3 dB corner at
+    ``freq`` Hz, computed at the running ``samplerate`` so the corner stays put at
+    44.1 / 48 / 96 / 192 kHz. Pair it with :func:`one_pole_lp` / :func:`one_pole_hp`
+    (``state = state + coeff*(x - state)``). LARGER coeff (higher freq) = faster /
+    brighter; at ``freq`` -> 0 the coeff -> 0 (the filter freezes, output holds).
+    This is the ``1 - exp(-2*pi*f/fs)`` form copy-pasted across the saturation /
+    tone / exciter plugins (distinct from :func:`exp_pole`'s time-constant
+    ``exp(-1/(tau*fs))`` ballistics pole); sharing it audits the corner math once.
+    """
+    return f"{out} = 1.0 - exp(-6.28318530717959 * {freq} / samplerate);"
+
+
+def one_pole_lp(x: str, state: str, coeff: str, out: str) -> str:
+    """One-pole low-pass: chase ``x`` into the ``state`` History, expose it. Emits::
+
+        state = state + coeff * (x - state);
+        out = state;
+
+    A first-order (6 dB/oct) low-pass where ``coeff`` (0..1, from
+    :func:`one_pole_coeff`) is the lerp rate: 1 passes ``x`` through, 0 freezes the
+    state. ``state`` is the caller's History cell (the filter memory); ``out`` may
+    alias ``state``. This is the smoother/tone-LP recurrence shared across the
+    saturation + exciter cores (the LP half; :func:`one_pole_hp` is the complement).
+    """
+    return (
+        f"{state} = {state} + {coeff} * ({x} - {state});\n"
+        f"{out} = {state};"
+    )
+
+
+def one_pole_hp(x: str, state: str, coeff: str, out: str) -> str:
+    """One-pole high-pass via ``x - lowpass(x)``. Emits::
+
+        state = state + coeff * (x - state);
+        out = x - state;
+
+    The complement of :func:`one_pole_lp` sharing the same one-pole ``state``: the
+    low-passed energy is subtracted from the input, leaving a first-order
+    (6 dB/oct) high-pass with corner ``freq`` (via :func:`one_pole_coeff`). At
+    ``coeff`` -> 0 the state stays at its init so ``out`` -> ``x`` (all-pass / DC
+    retained); at ``coeff`` -> 1 the state tracks ``x`` so ``out`` -> 0. This is the
+    pre-saturation low-cut / exciter high-band split shared across the cores.
+    """
+    return (
+        f"{state} = {state} + {coeff} * ({x} - {state});\n"
+        f"{out} = {x} - {state};"
+    )
+
+
+def exciter_harmonics(band: str, k: str, even: str, out: str,
+                      *, odd: str = "hx_odd", sq: str = "hx_sq") -> str:
+    """Generated harmonic content of a band-limited signal (the exciter core). Emits::
+
+        odd = tanh(band * k) / tanh(k);
+        sq = band * band;
+        out = (odd - band) + even * sq;
+
+    A harmonic exciter ADDS upper harmonics of a filtered band back to the dry
+    signal (Aphex Aural Exciter / Ozone Exciter), and ``out`` is exactly that ADDED
+    content (the delta, not the wet band):
+
+    * ``odd - band`` — a level-matched ``tanh`` shaper (``tanh(x*k)/tanh(k)``)
+      minus its input, i.e. the ODD harmonics it generated (symmetric, "clear"
+      air). ``k`` (>= 1) is the drive / harmonic density; bigger = brighter.
+    * ``even * sq`` — a squarer (``band^2``) scaled by ``even`` (0..1), the EVEN
+      harmonics (2nd, "warm" tube colour). ``band^2`` carries DC, so the CALLER
+      DC-blocks ``out`` before mixing (the exciter sums it into the dry path).
+
+    At ``band == 0`` -> ``out == 0`` (silence in, silence added). The caller scales
+    ``out`` by a per-band amount and adds it to dry, so amount 0 is a perfect null.
+    ``odd``/``sq`` are scratch var names (override to use the macro twice — e.g. a
+    LOW and a HIGH band — in one codebox).
+    """
+    return (
+        f"{odd} = tanh({band} * {k}) / tanh({k});\n"
+        f"{sq} = {band} * {band};\n"
+        f"{out} = ({odd} - {band}) + {even} * {sq};"
     )
 
 
