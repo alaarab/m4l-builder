@@ -15,7 +15,7 @@ no leading/trailing newline, so a caller splices it between its own lines.
 
 from __future__ import annotations
 
-__all__ = ["ms_encode", "ms_decode", "ms_width"]
+__all__ = ["ms_encode", "ms_decode", "ms_width", "drive_blend"]
 
 
 def ms_encode(left: str, right: str, mid: str, side: str) -> str:
@@ -67,3 +67,18 @@ def ms_width(
         f"{out_left} = {mid} + {side};\n"
         f"{out_right} = {mid} - {side};"
     )
+
+
+def drive_blend(x: str, out: str, k: str, drive: str) -> str:
+    """Soft-clip drive with a clean<->saturated crossfade. Emits::
+
+        out = x + (tanh(x*k)/tanh(k) - x) * drive;
+
+    The ``tanh(x*k)`` shaper is level-matched by ``/tanh(k)`` (so full-scale
+    stays unity and the stage adds harmonics without dumping gain), then
+    crossfaded against the clean ``x`` by ``drive`` (0..1). At ``drive=0`` the
+    block is bit-transparent; at ``drive=1`` it is the normalized soft-clip.
+    ``k`` is the pre-gain / curve sharpness (caller computes it, e.g.
+    ``1 + drive*5``).
+    """
+    return f"{out} = {x} + (tanh({x} * {k}) / tanh({k}) - {x}) * {drive};"
