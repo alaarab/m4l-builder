@@ -23,6 +23,7 @@ __all__ = [
     "peak_follower",
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
+    "exp_pole",
 ]
 
 
@@ -193,3 +194,20 @@ def kweight_coeffs_bs1770() -> str:
         "ha1 = 2. * (Kh * Kh - 1.) / a0h;\n"
         "ha2 = (1. - Kh / 0.5003270373253953 + Kh * Kh) / a0h;"
     )
+
+
+def exp_pole(out: str, tau_seconds: str) -> str:
+    """One-pole smoothing/ballistics coefficient: ``out = exp(-1/(tau*sr))``. Emits::
+
+        out = exp(-1.0 / (tau_seconds * samplerate));
+
+    The per-sample feedback pole of a one-pole low-pass / envelope follower with
+    time constant ``tau_seconds``: pair it with a ``state = x + out*(state - x)``
+    update (or peak_follower). SMALLER tau = faster. ``tau_seconds`` is an
+    expression in the gen vars — e.g. ``"0.0004"`` for a fixed 0.4 ms smoother or
+    ``"atk_ms * 0.001"`` for a millisecond Param. This is the smoothing/ballistics
+    coefficient copy-pasted across every dynamics + metering plugin; sharing it
+    audits the `exp(-1/(tau*fs))` formula once and is the unit the future
+    samplerate-coefficient cache will wrap.
+    """
+    return f"{out} = exp(-1.0 / ({tau_seconds} * samplerate));"

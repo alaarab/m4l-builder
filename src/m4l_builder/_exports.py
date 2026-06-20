@@ -51,6 +51,7 @@ CORE_EXPORTS = [
     "peak_follower",
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
+    "exp_pole",
     "Stage",
     "StageResult",
     "stage_result",
