@@ -61,6 +61,11 @@ from .transfer_curve import (
     TRANSFER_CURVE_OUTLETS,
     transfer_curve_js,
 )
+from .transient_history import (
+    TRANSIENT_HISTORY_INLETS,
+    TRANSIENT_HISTORY_OUTLETS,
+    transient_history_js,
+)
 from .velocity_curve_display import velocity_curve_display_js
 from .waveform_display import waveform_display_js
 from .waveshape_curve import (
@@ -96,6 +101,9 @@ __all__ = [
     "level_meter_js",
     "LEVEL_HISTORY_INLETS",
     "LEVEL_HISTORY_OUTLETS",
+    "transient_history_js",
+    "TRANSIENT_HISTORY_INLETS",
+    "TRANSIENT_HISTORY_OUTLETS",
     "WAVESHAPE_CURVE_INLETS",
     "WAVESHAPE_CURVE_OUTLETS",
     "FFT_ANALYZER_DEFAULT_SIZE",
