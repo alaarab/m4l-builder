@@ -19,9 +19,13 @@ def _build_timestamp() -> int:
     epoch = os.environ.get("SOURCE_DATE_EPOCH")
     if epoch:
         try:
-            return int(epoch)
+            value = int(epoch)
         except ValueError:
-            pass
+            value = None
+        # A negative epoch violates the reproducible-builds convention (it is a
+        # Unix timestamp); ignore it and fall back rather than stamp a bogus date.
+        if value is not None and value >= 0:
+            return value
     return int(time.time())
 
 
@@ -63,6 +67,14 @@ class PatcherProfile:
         latency: int = 0,
     ) -> dict:
         """Build the root patcher payload for a device."""
+        if width <= 0 or height <= 0:
+            raise ValueError(
+                f"device width/height must be positive, got {width}x{height}"
+            )
+        if latency < 0:
+            raise ValueError(
+                f"device latency must be >= 0 (PDC samples), got {latency}"
+            )
         now = _build_timestamp()
         return {
             "patcher": {

@@ -1,8 +1,12 @@
 """Tests for patcher.py — build_patcher() function."""
 
+import os
+
+import pytest
 
 from m4l_builder.constants import AMXD_TYPE, DEFAULT_APPVERSION
 from m4l_builder.patcher import build_patcher
+from m4l_builder.profiles import _build_timestamp
 
 SAMPLE_BOX = {"box": {"id": "obj-1", "maxclass": "newobj", "text": "plugin~"}}
 SAMPLE_LINE = {"patchline": {"source": ["obj-1", 0], "destination": ["obj-2", 0]}}
@@ -147,3 +151,30 @@ class TestBuildPatcher:
         instr = build_patcher([], [], device_type="instrument")["patcher"]["project"]["amxdtype"]
         midi = build_patcher([], [], device_type="midi_effect")["patcher"]["project"]["amxdtype"]
         assert len({audio, instr, midi}) == 3
+
+
+class TestBuildPatcherBounds:
+    """profiles.py is the entry point every build flows through; reject values
+    that would silently produce a broken device / undefined PDC."""
+
+    @pytest.mark.parametrize("w,h", [(0, 170), (-10, 170), (400, 0), (400, -5)])
+    def test_non_positive_dimensions_raise(self, w, h):
+        with pytest.raises(ValueError, match="width/height must be positive"):
+            build_patcher([], [], width=w, height=h)
+
+    def test_negative_latency_raises(self):
+        with pytest.raises(ValueError, match="latency must be >= 0"):
+            build_patcher([], [], latency=-1)
+
+    def test_zero_latency_ok(self):
+        result = build_patcher([], [], latency=0)
+        assert result["patcher"]["latency"] == 0
+
+    def test_negative_source_date_epoch_falls_back(self, monkeypatch):
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", "-5")
+        # a negative epoch is invalid; must NOT be stamped, must fall back to >= 0
+        assert _build_timestamp() >= 0
+
+    def test_valid_source_date_epoch_used(self, monkeypatch):
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", "1234567890")
+        assert _build_timestamp() == 1234567890

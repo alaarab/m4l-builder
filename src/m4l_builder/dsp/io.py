@@ -204,11 +204,14 @@ def signal_divide(id_prefix: str) -> tuple:
 
 
 def sidechain_routing(id_prefix: str) -> tuple:
-    """Route external audio as sidechain via second plugin~ input.
+    """Route external audio as sidechain via a second plugin~ stereo pair.
 
-    Creates plugin~ with 2 stereo pairs (4 inlets), routes inlet 2 as sidechain.
-    Wire main audio into {prefix}_plugin inlets 0-1.
-    Sidechain signal available from {prefix}_plugin outlet 2 (right) / 3 (left).
+    plugin~ SOURCES the host audio from its OUTLETS (it is not an audio sink):
+    `plugin~ 2` exposes 2 inlets and 4 outlets — the main input on outlets 0/1
+    and the sidechain input on outlets 2/3.
+
+    Take main audio from {prefix}_plugin outlets 0-1.
+    Take the sidechain signal from {prefix}_plugin outlets 2-3.
     """
     p = id_prefix
     boxes = [
