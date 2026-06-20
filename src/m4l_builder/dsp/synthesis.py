@@ -199,3 +199,137 @@ def groove_player(id_prefix: str, buf_name: str) -> tuple:
         patchline(f"{p}_buffer", 1, f"{p}_groove", 0),
     ]
     return (boxes, lines)
+
+
+def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
+                declick_attack_ms: float = 2.0,
+                declick_release_ms: float = 5.0) -> tuple:
+    """One-shot buffer-subregion player with a de-click envelope.
+
+    A ``play~`` read-head driven by a ``line~`` position ramp (the ramp *is*
+    the playback). Trigger one slice by sending a 4-float list
+    ``start_ms 0 end_ms dur_ms`` to ``{prefix}_unpack`` inlet 0 -- the same
+    shape ``line~`` consumes: jump to start_ms in 0 ms, then ramp to end_ms
+    over dur_ms (dur_ms = the slice length in ms gives natural-rate playback;
+    a shorter dur pitches the slice up). The list also opens a ``live.adsr~``
+    de-click VCA (attack on trigger, release after dur_ms via ``{prefix}_delay``)
+    so ``play~``'s read-position jumps don't click.
+
+    No ``sig~`` (lint-banned, and it zeroes gains on load): the position is a
+    pure ``line~`` ramp built by the caller (or by the slice engine).
+
+    Audio out: ``{prefix}_vca_l`` / ``{prefix}_vca_r`` outlet 0.
+    """
+    if channels not in (1, 2):
+        raise ValueError(f"slice_voice channels must be 1 or 2, got {channels}")
+    p = id_prefix
+    r_outlet = 1 if channels >= 2 else 0
+    play_outlettype = ["signal"] * channels
+    boxes = [
+        newobj(f"{p}_unpack", "unpack 0. 0. 0. 0.",
+               numinlets=1, numoutlets=4,
+               outlettype=["float", "float", "float", "float"],
+               patching_rect=[30, 30, 130, 20]),
+        newobj(f"{p}_pack", "pack 0. 0. 0. 0.",
+               numinlets=4, numoutlets=1, outlettype=[""],
+               patching_rect=[30, 60, 130, 20]),
+        newobj(f"{p}_tr", "t l b b", numinlets=1, numoutlets=3,
+               outlettype=["", "bang", "bang"],
+               patching_rect=[30, 90, 90, 20]),
+        newobj(f"{p}_line", "line~", numinlets=2, numoutlets=2,
+               outlettype=["signal", "bang"], patching_rect=[30, 120, 50, 20]),
+        newobj(f"{p}_play", f"play~ {buffer_name} {channels}",
+               numinlets=1, numoutlets=channels, outlettype=play_outlettype,
+               patching_rect=[30, 150, 120, 20]),
+        newobj(f"{p}_adsr",
+               f"live.adsr~ {declick_attack_ms} 0 1 {declick_release_ms}",
+               numinlets=5, numoutlets=4,
+               outlettype=["signal", "signal", "", ""],
+               patching_rect=[180, 90, 150, 20]),
+        newobj(f"{p}_open", "t 1", numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[180, 60, 40, 20]),
+        newobj(f"{p}_delay", "delay 0", numinlets=2, numoutlets=1,
+               outlettype=["bang"], patching_rect=[120, 120, 50, 20]),
+        newobj(f"{p}_rel", "t 0", numinlets=1, numoutlets=1, outlettype=[""],
+               patching_rect=[120, 150, 40, 20]),
+        newobj(f"{p}_vca_l", "*~", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[30, 190, 50, 20]),
+        newobj(f"{p}_vca_r", "*~", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[100, 190, 50, 20]),
+    ]
+    lines = [
+        # rebuild the start/0/end/dur list, start (outlet 0) is the hot trigger
+        patchline(f"{p}_unpack", 0, f"{p}_pack", 0),
+        patchline(f"{p}_unpack", 1, f"{p}_pack", 1),
+        patchline(f"{p}_unpack", 2, f"{p}_pack", 2),
+        patchline(f"{p}_unpack", 3, f"{p}_pack", 3),
+        # dur (outlet 3) also sets the release-delay time (cold inlet)
+        patchline(f"{p}_unpack", 3, f"{p}_delay", 1),
+        patchline(f"{p}_pack", 0, f"{p}_tr", 0),
+        # t l b b fires right->left: start delay, open VCA, then ramp line~
+        patchline(f"{p}_tr", 0, f"{p}_line", 0),
+        patchline(f"{p}_tr", 1, f"{p}_open", 0),
+        patchline(f"{p}_tr", 2, f"{p}_delay", 0),
+        patchline(f"{p}_open", 0, f"{p}_adsr", 0),
+        patchline(f"{p}_line", 0, f"{p}_play", 0),
+        patchline(f"{p}_play", 0, f"{p}_vca_l", 0),
+        patchline(f"{p}_play", r_outlet, f"{p}_vca_r", 0),
+        patchline(f"{p}_adsr", 0, f"{p}_vca_l", 1),
+        patchline(f"{p}_adsr", 0, f"{p}_vca_r", 1),
+        # ramp done -> release the de-click envelope
+        patchline(f"{p}_delay", 0, f"{p}_rel", 0),
+        patchline(f"{p}_rel", 0, f"{p}_adsr", 0),
+    ]
+    return (boxes, lines)
+
+
+def slice_pool(id_prefix: str, buffer_name: str, num_voices: int = 4,
+               **voice_kwargs) -> tuple:
+    """Round-robin pool of ``num_voices`` ``slice_voice`` players, summed.
+
+    Send a per-note slice list ``start_ms 0 end_ms dur_ms`` to
+    ``{prefix}_in_tr`` inlet 0; the pool advances a ``counter`` and routes the
+    list through a ``gate`` to the next voice (round-robin), so overlapping
+    slice hits (rolls/stutters) keep their tails instead of choking a single
+    voice. Summed stereo output from ``{prefix}_l_sum`` / ``{prefix}_r_sum``
+    outlet 0.
+
+    The named ``buffer~`` is NOT created here -- the device owns the single
+    shared buffer (loaded by the dropfile and read by the slice display).
+    """
+    if num_voices < 1:
+        raise ValueError(f"slice_pool num_voices must be >= 1, got {num_voices}")
+    p = id_prefix
+    boxes = [
+        newobj(f"{p}_in_tr", "t l b", numinlets=1, numoutlets=2,
+               outlettype=["", "bang"], patching_rect=[30, 30, 90, 20]),
+        newobj(f"{p}_counter", f"counter 1 {num_voices}",
+               numinlets=5, numoutlets=4,
+               outlettype=["int", "int", "int", "int"],
+               patching_rect=[30, 60, 90, 20]),
+        newobj(f"{p}_gate", f"gate {num_voices}",
+               numinlets=2, numoutlets=num_voices,
+               outlettype=[""] * num_voices, patching_rect=[30, 90, 160, 20]),
+    ]
+    lines = [
+        patchline(f"{p}_in_tr", 1, f"{p}_counter", 0),
+        patchline(f"{p}_counter", 0, f"{p}_gate", 0),
+        patchline(f"{p}_in_tr", 0, f"{p}_gate", 1),
+    ]
+
+    for i in range(num_voices):
+        vb, vl = slice_voice(f"{p}_v{i}", buffer_name, **voice_kwargs)
+        boxes.extend(vb)
+        lines.extend(vl)
+        lines.append(patchline(f"{p}_gate", i, f"{p}_v{i}_unpack", 0))
+
+    l_ids = [f"{p}_v{i}_vca_l" for i in range(num_voices)]
+    r_ids = [f"{p}_v{i}_vca_r" for i in range(num_voices)]
+    l_boxes, l_lines = _signal_sum_chain(f"{p}_l", l_ids)
+    r_boxes, r_lines = _signal_sum_chain(f"{p}_r", r_ids)
+    boxes.extend(l_boxes)
+    boxes.extend(r_boxes)
+    lines.extend(l_lines)
+    lines.extend(r_lines)
+
+    return (boxes, lines)

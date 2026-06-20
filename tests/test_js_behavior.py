@@ -15,6 +15,7 @@ from m4l_builder.engines.level_history import level_history_js
 from m4l_builder.engines.level_meter import level_meter_js
 from m4l_builder.engines.linear_phase_eq_display import linear_phase_eq_display_js
 from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
+from m4l_builder.engines.slice_overview import slice_overview_js
 
 from .js_harness import NODE, run_jsui
 
@@ -1789,3 +1790,120 @@ class TestIntegratedLufs:
         """)
         assert r.state["finite"] == 1
         assert abs(r.state["i"] - (-14.0)) < 0.05
+
+
+# A 1-channel synthetic buffer with sharp energy bursts at known normalized
+# positions: drives the slice_overview onset detector headlessly.
+_SLICE_BUF = """
+    var __fc = 0, __cc = 1, __centers = [];
+    Buffer = function (nm) {
+        this.peek = function (ch, fr) {
+            var v = 0.0;
+            for (var c = 0; c < __centers.length; c++) {
+                var d = fr - __centers[c];
+                if (d >= 0 && d < 2000) v += (1.0 - d / 2000.0) * 0.9;
+            }
+            return v;
+        };
+        this.framecount = function () { return __fc; };
+        this.channelcount = function () { return __cc; };
+    };
+    function _bursts(fc, positions) {
+        __fc = fc; __centers = [];
+        for (var i = 0; i < positions.length; i++)
+            __centers.push(Math.floor(positions[i] * fc));
+    }
+"""
+
+
+class TestSliceOnsetDetection:
+    # The slice engine computes slice boundaries OFFLINE in JS (deterministic,
+    # headless-testable) and emits per-slice coll-store lists `k start 0 end dur`.
+
+    def test_grid_mode_even_boundaries(self):
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []);
+            loaded = 1; sample_rate = 44100;
+            set_mode(1); set_slices(8); analyze();
+            dump({b: slice_boundaries, sc: slice_count});
+        """)
+        b = result.state["b"]
+        assert result.state["sc"] == 8
+        assert len(b) == 9
+        for i in range(9):
+            assert abs(b[i] - i / 8.0) < 1e-6
+
+    def test_grid_emits_ms_coll_store_lists(self):
+        # 44100 frames @ 44100 Hz = 1000 ms; 4 slices -> 250 ms each.
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []);
+            loaded = 1; sample_rate = 44100; slice_mode = 1; slice_count = 4;
+            slice_boundaries = [];
+            analyze();
+            dump({sc: slice_count});
+        """)
+        stores = [o for o in result.outlets if o[0] == 1]
+        assert len(stores) == 4
+        # each store: [outlet=1, k, start_ms, 0, end_ms, dur_ms]
+        for k, st in enumerate(stores):
+            assert st[1] == k
+            assert abs(st[2] - k * 250.0) < 1e-3      # start_ms
+            assert st[3] == 0                          # the line~ jump segment
+            assert abs(st[4] - (k + 1) * 250.0) < 1e-3  # end_ms
+            assert abs(st[5] - 250.0) < 1e-3            # dur_ms (natural rate)
+        counts = [o for o in result.outlets if o[0] == 2]
+        assert counts[-1][1] == 4
+
+    def test_transient_detects_known_onsets(self):
+        # bursts at 0.2/0.4/0.6/0.8 -> interior boundaries near each.
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, [0.2, 0.4, 0.6, 0.8]);
+            loaded = 1; sample_rate = 44100;
+            set_sensitivity(50); set_min_spacing(40);
+            set_mode(0); analyze();
+            dump({b: slice_boundaries});
+        """)
+        b = result.state["b"]
+        assert b[0] == 0.0 and b[-1] == 1.0
+        interior = b[1:-1]
+        for target in (0.2, 0.4, 0.6, 0.8):
+            assert any(abs(p - target) < 0.02 for p in interior), target
+
+    def test_min_spacing_rejects_double_triggers(self):
+        # two bursts ~20 ms apart, min spacing 80 ms -> collapse to one onset.
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, [0.5, 0.5045]);
+            loaded = 1; sample_rate = 44100;
+            set_sensitivity(60); set_min_spacing(80);
+            set_mode(0); analyze();
+            dump({b: slice_boundaries});
+        """)
+        interior = result.state["b"][1:-1]
+        near = [p for p in interior if 0.49 < p < 0.52]
+        assert len(near) == 1
+
+    def test_clamps_to_64_slices(self):
+        positions = [round(0.02 + i * 0.0049, 5) for i in range(190)]
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + ("""
+            _bursts(220500, %s);
+            loaded = 1; sample_rate = 44100;
+            set_sensitivity(100); set_min_spacing(5);
+            set_mode(0); analyze();
+            dump({sc: slice_count, n: slice_boundaries.length});
+        """ % ("[" + ",".join(str(p) for p in positions) + "]")))
+        assert result.state["sc"] <= 64
+        assert result.state["n"] <= 65
+
+    def test_set_messages_never_echo_an_outlet(self):
+        # set_* with no sample loaded must not fire any outlet (no-echo rule).
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            loaded = 0;
+            set_samplerate(48000);
+            set_sensitivity(70);
+            set_min_spacing(30);
+            set_mode(1);
+            set_pitch(0);
+            dump({n: __captured.outlets.length});
+        """)
+        assert result.state["n"] == 0
+        assert result.outlets == []

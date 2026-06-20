@@ -93,6 +93,8 @@ from m4l_builder.dsp import (
     sidechain_detect,
     sidechain_routing,
     signal_divide,
+    slice_pool,
+    slice_voice,
     spectral_crossover,
     spectral_crossover_subpatcher,
     spectral_gate,
@@ -4290,6 +4292,105 @@ class TestGroovePlayer:
         ids = _box_ids(boxes)
         assert "player_buffer" in ids
         assert "player_groove" in ids
+
+
+class TestSliceVoice:
+    """Test slice_voice() builds a play~+line~ one-shot slice player."""
+
+    def test_returns_11_boxes(self):
+        boxes, lines = slice_voice("sv", "slicebuf")
+        assert len(boxes) == 11
+        assert len(lines) > 0
+
+    def test_play_object_uses_buffer_and_channels(self):
+        boxes, _ = slice_voice("sv", "slicebuf")
+        play = _find_box(boxes, "sv_play")
+        assert play["text"] == "play~ slicebuf 2"
+        assert play["numinlets"] == 1
+        assert play["numoutlets"] == 2
+
+    def test_position_is_a_line_ramp_no_sig(self):
+        # float->signal is a line~ ramp, never sig~ (lint-banned, zeroes on load).
+        boxes, _ = slice_voice("sv", "slicebuf")
+        assert _find_box(boxes, "sv_line")["text"] == "line~"
+        assert not any("sig~" in b["box"]["text"] for b in boxes)
+
+    def test_has_declick_adsr_vca(self):
+        boxes, _ = slice_voice("sv", "slicebuf",
+                               declick_attack_ms=2.0, declick_release_ms=5.0)
+        adsr = _find_box(boxes, "sv_adsr")
+        assert adsr["text"] == "live.adsr~ 2.0 0 1 5.0"
+        assert _find_box(boxes, "sv_vca_l")["text"] == "*~"
+        assert _find_box(boxes, "sv_vca_r")["text"] == "*~"
+
+    def test_mono_channel_routes_both_vcas(self):
+        boxes, lines = slice_voice("sv", "buf", channels=1)
+        assert _find_box(boxes, "sv_play")["text"] == "play~ buf 1"
+        # both VCAs read play outlet 0 when mono
+        srcs = [(ln["patchline"]["source"], ln["patchline"]["destination"])
+                for ln in lines]
+        assert (["sv_play", 0], ["sv_vca_r", 0]) in srcs
+
+    def test_rejects_bad_channels(self):
+        with pytest.raises(ValueError):
+            slice_voice("sv", "buf", channels=3)
+
+    def test_all_lines_reference_defined_boxes(self):
+        boxes, lines = slice_voice("sv", "slicebuf")
+        ids = set(_box_ids(boxes))
+        for ln in lines:
+            p = ln["patchline"]
+            assert p["source"][0] in ids
+            assert p["destination"][0] in ids
+
+
+class TestSlicePool:
+    """Test slice_pool() round-robins N slice_voice players into a stereo sum."""
+
+    def test_has_gate_counter_and_voices(self):
+        boxes, _ = slice_pool("sp", "slicebuf", num_voices=4)
+        assert _find_box(boxes, "sp_gate")["text"] == "gate 4"
+        assert _find_box(boxes, "sp_counter")["text"] == "counter 1 4"
+        ids = _box_ids(boxes)
+        for i in range(4):
+            assert f"sp_v{i}_play" in ids
+
+    def test_voice_count_matches(self):
+        boxes, _ = slice_pool("sp", "buf", num_voices=3)
+        play_voices = sum(1 for b in boxes if b["box"]["text"] == "play~ buf 2")
+        assert play_voices == 3
+
+    def test_stereo_sum_outputs(self):
+        boxes, _ = slice_pool("sp", "buf", num_voices=4)
+        ids = _box_ids(boxes)
+        assert "sp_l_sum" in ids
+        assert "sp_r_sum" in ids
+
+    def test_gate_routes_to_each_voice(self):
+        boxes, lines = slice_pool("sp", "buf", num_voices=4)
+        routed = set()
+        for ln in lines:
+            p = ln["patchline"]
+            if p["source"][0] == "sp_gate":
+                routed.add((p["source"][1], p["destination"][0]))
+        for i in range(4):
+            assert (i, f"sp_v{i}_unpack") in routed
+
+    def test_no_sig_objects(self):
+        boxes, _ = slice_pool("sp", "buf", num_voices=4)
+        assert not any("sig~" in b["box"]["text"] for b in boxes)
+
+    def test_rejects_zero_voices(self):
+        with pytest.raises(ValueError):
+            slice_pool("sp", "buf", num_voices=0)
+
+    def test_all_lines_reference_defined_boxes(self):
+        boxes, lines = slice_pool("sp", "buf", num_voices=4)
+        ids = set(_box_ids(boxes))
+        for ln in lines:
+            p = ln["patchline"]
+            assert p["source"][0] in ids
+            assert p["destination"][0] in ids
 
 
 class TestCollStore:
