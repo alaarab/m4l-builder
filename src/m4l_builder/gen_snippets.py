@@ -22,6 +22,7 @@ __all__ = [
     "drive_blend",
     "peak_follower",
     "isp_catmull_4x",
+    "kweight_coeffs_bs1770",
 ]
 
 
@@ -150,4 +151,45 @@ def isp_catmull_4x(x: str, h1: str, h2: str, h3: str, out: str, *, ch: str = "l"
         f"y{ch}2 = k{ch}0 + 0.5 * (k{ch}1 + 0.5 * (k{ch}2 + 0.5 * k{ch}3));\n"
         f"y{ch}3 = k{ch}0 + 0.75 * (k{ch}1 + 0.75 * (k{ch}2 + 0.75 * k{ch}3));\n"
         f"{out} = max(max(abs(y{ch}1), abs(y{ch}2)), abs(y{ch}3));"
+    )
+
+
+def kweight_coeffs_bs1770() -> str:
+    """ITU-R BS.1770-4 K-weighting biquad coefficients, computed at the live rate.
+
+    Emits the two-stage K-weight filter coefficients used by every BS.1770
+    loudness meter — Stage 1 a +4 dB high-shelf at 1681.97 Hz (Q 0.7072), Stage 2
+    an RLB high-pass at 38.135 Hz (Q 0.5003) — bilinear-transformed via ``tan`` at
+    the running ``samplerate`` so the meter stays accurate at 44.1 / 48 / 96 kHz
+    (the tabulated reference coefficients are 48k-only). Defines the Stage-1 vars
+    ``sb0 sb1 sb2 sa1 sa2`` and the Stage-2 vars ``hb0 hb1 hb2 ha1 ha2`` for a
+    Direct-Form-I application by the caller, plus the scratch vars
+    ``KPI Ks Vh Vb a0s Kh a0h``.
+
+    NOTE: unlike the other snippets this block keeps its two explanatory comments
+    — the magic constants (1681.9744509555319, 0.7071752369554193, ...) are
+    inscrutable and were carried verbatim from the audited Ceiling / Spectrum
+    Analyzer source so the migration is byte-identical. Centralizing them means a
+    coefficient fix/audit lands once instead of in every metering plugin.
+    """
+    return (
+        "KPI = 3.14159265358979;\n"
+        "// Stage 1 — high-shelf pre-filter (f0 1681.97 Hz, Q 0.70718, +3.9998 dB).\n"
+        "Ks = tan(KPI * 1681.9744509555319 / samplerate);\n"
+        "Vh = pow(10., 3.99984385397 / 20.);\n"
+        "Vb = pow(Vh, 0.499666774155);\n"
+        "a0s = 1. + Ks / 0.7071752369554193 + Ks * Ks;\n"
+        "sb0 = (Vh + Vb * Ks / 0.7071752369554193 + Ks * Ks) / a0s;\n"
+        "sb1 = 2. * (Ks * Ks - Vh) / a0s;\n"
+        "sb2 = (Vh - Vb * Ks / 0.7071752369554193 + Ks * Ks) / a0s;\n"
+        "sa1 = 2. * (Ks * Ks - 1.) / a0s;\n"
+        "sa2 = (1. - Ks / 0.7071752369554193 + Ks * Ks) / a0s;\n"
+        "// Stage 2 — RLB high-pass (f0 38.135 Hz, Q 0.50033).\n"
+        "Kh = tan(KPI * 38.13547087613982 / samplerate);\n"
+        "a0h = 1. + Kh / 0.5003270373253953 + Kh * Kh;\n"
+        "hb0 = 1. / a0h;\n"
+        "hb1 = -2. / a0h;\n"
+        "hb2 = 1. / a0h;\n"
+        "ha1 = 2. * (Kh * Kh - 1.) / a0h;\n"
+        "ha2 = (1. - Kh / 0.5003270373253953 + Kh * Kh) / a0h;"
     )
