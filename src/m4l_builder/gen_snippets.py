@@ -15,6 +15,8 @@ no leading/trailing newline, so a caller splices it between its own lines.
 
 from __future__ import annotations
 
+import math
+
 __all__ = [
     "ms_encode",
     "ms_decode",
@@ -29,6 +31,10 @@ __all__ = [
     "biquad_df1",
     "rbj_peaking",
     "rbj_shelf",
+    "rbj_lowpass",
+    "rbj_highpass",
+    "butterworth_q_table",
+    "biquad_cascade",
     "one_pole_coeff",
     "one_pole_lp",
     "one_pole_hp",
@@ -530,3 +536,156 @@ def rbj_shelf(
         f"{a1} = ({a1e}) / {a0};\n"
         f"{a2} = ({a2e}) / {a0};"
     )
+
+
+def rbj_lowpass(
+    freq: str,
+    q: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    w0: str = "w0", cw: str = "cw", alpha: str = "alpha", a0: str = "a0",
+) -> str:
+    """Runtime RBJ low-pass biquad coefficients (Audio-EQ-Cookbook, a0-normalised).
+
+    Computes the Direct-Form-I coefficients ``b0 b1 b2 a1 a2`` for a 2nd-order
+    (12 dB/oct) low-pass at cutoff ``freq`` (Hz) and resonance ``q``, at the
+    running ``samplerate`` (tunable LIVE). Pair with :func:`biquad_df1` to apply
+    it. Emits::
+
+        w0 = 2 * pi * freq / samplerate;  cw = cos(w0);  alpha = sin(w0) / (2 * q);
+        a0 = 1 + alpha;
+        b0 = ((1 - cw) / 2) / a0;  b1 = (1 - cw) / a0;  b2 = ((1 - cw) / 2) / a0;
+        a1 = (-2 * cw) / a0;       a2 = (1 - alpha) / a0;
+
+    Unity gain at DC, zero at Nyquist; ``q = 0.70710678`` gives a maximally-flat
+    (Butterworth) -3.01 dB corner at ``freq``. Cascade staggered-Q stages
+    (:func:`butterworth_q_table` / :func:`biquad_cascade`) for variable slope.
+    The complement is :func:`rbj_highpass`. ``w0 cw alpha a0`` are scratch var
+    names (override to use the primitive twice in one codebox).
+    """
+    return (
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = 1. + {alpha};\n"
+        f"{b0} = ((1. - {cw}) / 2.) / {a0};\n"
+        f"{b1} = (1. - {cw}) / {a0};\n"
+        f"{b2} = ((1. - {cw}) / 2.) / {a0};\n"
+        f"{a1} = (-2. * {cw}) / {a0};\n"
+        f"{a2} = (1. - {alpha}) / {a0};"
+    )
+
+
+def rbj_highpass(
+    freq: str,
+    q: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    w0: str = "w0", cw: str = "cw", alpha: str = "alpha", a0: str = "a0",
+) -> str:
+    """Runtime RBJ high-pass biquad coefficients (Audio-EQ-Cookbook, a0-normalised).
+
+    The complement of :func:`rbj_lowpass`: a 2nd-order (12 dB/oct) high-pass at
+    cutoff ``freq`` (Hz), resonance ``q``, at the running ``samplerate``. Pair
+    with :func:`biquad_df1`. Emits the same ``w0 cw alpha a0`` and feedback
+    coeffs as the low-pass, with high-pass numerators::
+
+        b0 = ((1 + cw) / 2) / a0;  b1 = (-(1 + cw)) / a0;  b2 = ((1 + cw) / 2) / a0;
+        a1 = (-2 * cw) / a0;        a2 = (1 - alpha) / a0;
+
+    Zero gain at DC, unity at Nyquist; ``q = 0.70710678`` is the Butterworth
+    -3.01 dB corner. Cascade staggered-Q stages via :func:`biquad_cascade` for
+    variable slope. ``w0 cw alpha a0`` are scratch var names.
+    """
+    return (
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = 1. + {alpha};\n"
+        f"{b0} = ((1. + {cw}) / 2.) / {a0};\n"
+        f"{b1} = (-(1. + {cw})) / {a0};\n"
+        f"{b2} = ((1. + {cw}) / 2.) / {a0};\n"
+        f"{a1} = (-2. * {cw}) / {a0};\n"
+        f"{a2} = (1. - {alpha}) / {a0};"
+    )
+
+
+def butterworth_q_table(order: int) -> list[float]:
+    """Per-stage resonance Q values for an even-order Butterworth filter.
+
+    Returns ``order // 2`` Q values for realising an order-``order`` Butterworth
+    low/high-pass as a cascade of 2nd-order sections: stage ``k`` (1-indexed) has
+    ``Q_k = 1 / (2 * cos((2k - 1) * pi / (2 * order)))``. A cascade of
+    :func:`rbj_lowpass` / :func:`rbj_highpass` biquads at these staggered Qs is a
+    maximally-flat Butterworth of the given order (``order * 6`` dB/oct slope),
+    exactly -3.01 dB at the cutoff for any order.
+
+    Examples: ``order 2 -> [0.7071]``; ``order 4 -> [0.5412, 1.3066]``;
+    ``order 8 -> [0.5098, 0.6013, 0.9000, 2.5629]``. ``order`` must be even and
+    >= 2 (slopes 12, 24, 36, ... dB/oct; up to order 16 = 96 dB/oct).
+    """
+    if order < 2 or order % 2 != 0:
+        raise ValueError(
+            f"butterworth_q_table order must be even and >= 2, got {order}"
+        )
+    return [
+        1.0 / (2.0 * math.cos((2 * k - 1) * math.pi / (2 * order)))
+        for k in range(1, order // 2 + 1)
+    ]
+
+
+def biquad_cascade(
+    x: str,
+    out: str,
+    freq: str,
+    kind: str,
+    order: int,
+    *,
+    prefix: str = "cas",
+) -> str:
+    """Variable-slope Butterworth low/high-pass as cascaded biquads (self-contained).
+
+    Chains ``order // 2`` :func:`biquad_df1` stages, each an :func:`rbj_lowpass`
+    (``kind="low"``) or :func:`rbj_highpass` (``kind="high"``) at the
+    Butterworth-staggered Q from :func:`butterworth_q_table`, from input ``x`` to
+    output ``out``, all sharing the one runtime cutoff ``freq`` (Hz). The result
+    is a maximally-flat ``order``-th-order filter: ``order * 6`` dB/oct slope
+    (e.g. ``order=4`` = 24 dB/oct, ``order=16`` = 96 dB/oct), -3.01 dB at ``freq``.
+
+    SELF-CONTAINED: emits its own ``History`` state declarations (4 cells per
+    stage, named ``{prefix}{i}_x1/_x2/_y1/_y2``) plus per-stage scratch coeff vars,
+    so the caller just splices the returned block into its codebox. ``order`` must
+    be even and >= 2. ``prefix`` namespaces all generated vars (override to use
+    more than one cascade in a single codebox).
+    """
+    if kind not in ("low", "high"):
+        raise ValueError(f"biquad_cascade kind must be 'low' or 'high', got {kind!r}")
+    qs = butterworth_q_table(order)  # validates even / >= 2
+    coeff_fn = rbj_lowpass if kind == "low" else rbj_highpass
+    n = len(qs)
+    decls = []
+    body = []
+    for i, q in enumerate(qs):
+        p = f"{prefix}{i}"
+        stage_in = x if i == 0 else f"{prefix}{i - 1}_y"
+        stage_out = out if i == n - 1 else f"{p}_y"
+        decls.append(
+            f"History {p}_x1(0.); History {p}_x2(0.); "
+            f"History {p}_y1(0.); History {p}_y2(0.);"
+        )
+        body.append(
+            coeff_fn(
+                freq, f"{q:.12g}",
+                f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                w0=f"{p}_w0", cw=f"{p}_cw", alpha=f"{p}_al", a0=f"{p}_a0",
+            )
+        )
+        body.append(
+            biquad_df1(
+                stage_in, f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                f"{p}_x1", f"{p}_x2", f"{p}_y1", f"{p}_y2", stage_out,
+            )
+        )
+    return "\n".join(decls) + "\n" + "\n".join(body)
