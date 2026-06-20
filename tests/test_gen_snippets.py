@@ -31,6 +31,7 @@ from m4l_builder.gen_snippets import (
     rbj_peaking,
     rbj_shelf,
     soft_knee_gain_computer,
+    tpt_svf,
 )
 
 
@@ -945,3 +946,77 @@ def test_multiband_split_rejects_bad_args():
         multiband_split("in1", ["b0", "b1"], ["200.", "2000."], 4)  # 3 bands, 2 outs
     with pytest.raises(ValueError, match="at least 1 crossover"):
         multiband_split("in1", ["b0"], [], 4)
+
+
+# --- tpt_svf: ZDF/TPT state-variable filter (LP/BP/HP/notch) ------------------
+def _svf_code(out):
+    return ("Param fc(1000.); Param q(0.70710678);\n"
+            "History ic1(0.); History ic2(0.);\n"
+            + tpt_svf("in1", "fc", "q", "lp", "bp", "hp", "notch", "ic1", "ic2")
+            + f"\nout1 = {out};")
+
+
+def _svf_db(out, f, fc=1000.0, qv=0.70710678, sr=48000.0, n=16384):
+    from math import log10, pi, sin, sqrt
+    seq = [sin(2 * pi * f * k / sr) for k in range(n)]
+    o = _sim(_svf_code(out), {"in1": seq}, params={"fc": fc, "q": qv},
+             samplerate=sr, num_samples=n)["out1"]
+    t = o[n // 2:]
+    amp = sqrt(2 * sum(v * v for v in t) / len(t))
+    return 20 * log10(amp) if amp > 1e-9 else -999.0
+
+
+def test_tpt_svf_butterworth_corner():
+    # Q=0.7071: all three of LP/BP/HP are -3.01 dB at fc; deep notch at fc.
+    for tap in ("lp", "bp", "hp"):
+        assert abs(_svf_db(tap, 1000.0) - (-3.01)) < 0.1, tap
+    assert _svf_db("notch", 1000.0) < -60.0          # deep null at fc
+    # passband / stopband
+    assert _svf_db("lp", 250.0) > -0.2 and _svf_db("lp", 4000.0) < -20.0
+    assert _svf_db("hp", 4000.0) > -0.2 and _svf_db("hp", 250.0) < -20.0
+    assert _svf_db("bp", 250.0) < -8.0 and _svf_db("bp", 4000.0) < -8.0   # band-pass
+
+
+def test_tpt_svf_notch_equals_lp_plus_hp():
+    # exact structural identity of the SVF: notch = lp + hp, sample for sample.
+    import math
+    code = ("Param fc(1000.); Param q(2.);\nHistory ic1(0.); History ic2(0.);\n"
+            + tpt_svf("in1", "fc", "q", "lp", "bp", "hp", "notch", "ic1", "ic2")
+            + "\nout1 = notch - (lp + hp);")
+    seq = [math.sin(2 * math.pi * 700 * k / 48000) for k in range(2000)]
+    r = _sim(code, {"in1": seq}, params={"fc": 1000.0, "q": 2.0}, num_samples=2000)["out1"]
+    assert max(abs(v) for v in r) < 1e-12
+
+
+def test_tpt_svf_dc_nyquist_split():
+    lp_dc = _sim(_svf_code("lp"), {"in1": [1.0] * 800}, params={"fc": 1000.0, "q": 0.7071},
+                 num_samples=800)["out1"][-1]
+    hp_dc = _sim(_svf_code("hp"), {"in1": [1.0] * 800}, params={"fc": 1000.0, "q": 0.7071},
+                 num_samples=800)["out1"][-1]
+    assert abs(lp_dc - 1.0) < 1e-3     # LP passes DC
+    assert abs(hp_dc) < 1e-3           # HP blocks DC
+    nyq = [(-1.0) ** n for n in range(800)]
+    lp_ny = _sim(_svf_code("lp"), {"in1": nyq}, params={"fc": 1000.0, "q": 0.7071},
+                 num_samples=800)["out1"]
+    assert max(abs(v) for v in lp_ny[700:]) < 1e-2   # LP blocks Nyquist
+
+
+def test_tpt_svf_resonates_at_high_q():
+    # high resonance -> a big peak at fc on all three resonant taps.
+    for tap in ("lp", "bp", "hp"):
+        assert _svf_db(tap, 1000.0, qv=8.0) > 12.0, tap
+
+
+def test_tpt_svf_is_stable_under_fast_cutoff_sweep():
+    # the whole point of the TPT/ZDF form: zipper-free + stable while the cutoff
+    # is modulated every sample (a static biquad can blow up here).
+    import math
+    code = ("Param q(4.);\nHistory ic1(0.); History ic2(0.);\n"
+            "fcmod = 200. + 8000. * (0.5 + 0.5 * cos(6.2831853 * 7. * (mphase)));\n"
+            "mphase = mphase + 1. / samplerate;\n"
+            "History mphase(0.);\n"
+            + tpt_svf("in1", "fcmod", "q", "lp", "bp", "hp", "notch", "ic1", "ic2")
+            + "\nout1 = lp;")
+    seq = [math.sin(2 * math.pi * 500 * k / 48000) for k in range(8000)]
+    o = _sim(code, {"in1": seq}, params={"q": 4.0}, num_samples=8000)["out1"]
+    assert all(abs(v) < 50.0 for v in o)      # bounded (no ZDF instability)
