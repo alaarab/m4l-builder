@@ -36,6 +36,7 @@ __all__ = [
     "butterworth_q_table",
     "biquad_cascade",
     "lr_crossover",
+    "multiband_split",
     "one_pole_coeff",
     "one_pole_lp",
     "one_pole_hp",
@@ -753,3 +754,61 @@ def lr_crossover(
                 )
             )
     return "\n".join(decls) + "\n" + "\n".join(body)
+
+
+def multiband_split(x: str, band_outs: list, freqs: list, order: int = 4,
+                    *, prefix: str = "mb") -> str:
+    """Flat-reconstructing N-band Linkwitz-Riley split (allpass-compensated).
+
+    Splits ``x`` into ``len(freqs) + 1`` frequency bands at the ascending
+    crossover cutoffs ``freqs`` (var names or literals), writing band signals
+    low->high into the ``band_outs`` var names. Built from :func:`lr_crossover`
+    on a split-the-high tree, with the key correction that makes a multiband
+    bank usable on a flagship: each lower band is ALLPASS-COMPENSATED for every
+    higher crossover it skipped (run through that crossover and re-summed, since
+    an LR crossover's ``lo + hi`` is an allpass). Without this the bands sum with
+    audible ripple at the lower crossovers; WITH it the bands recombine to a
+    perfectly FLAT magnitude — ``sum(band_outs)`` reconstructs the input
+    (allpass overall), so the band processors can be transparent at unity.
+
+    ``order`` is the LR order (a multiple of 4: 4 = 24 dB/oct, 8 = 48; see
+    :func:`lr_crossover`). SELF-CONTAINED: emits all the ``History`` state for
+    every internal crossover. ``prefix`` namespaces all generated vars. Needs at
+    least one crossover (2 bands); ``len(band_outs)`` must equal
+    ``len(freqs) + 1``.
+    """
+    n_bands = len(freqs) + 1
+    if len(freqs) < 1:
+        raise ValueError("multiband_split needs at least 1 crossover frequency (2 bands)")
+    if len(band_outs) != n_bands:
+        raise ValueError(
+            f"multiband_split needs {n_bands} band_outs for {len(freqs)} crossover(s), "
+            f"got {len(band_outs)}"
+        )
+    parts = []
+    raw_lows = []          # (band_index, low_var)
+    hchain = x             # the running high-band signal (the HP cascade)
+    for i, f in enumerate(freqs):
+        is_last = i == len(freqs) - 1
+        lo_var = f"{prefix}_lo{i}"
+        hi_var = band_outs[n_bands - 1] if is_last else f"{prefix}_hi{i}"
+        parts.append(lr_crossover(hchain, lo_var, hi_var, f, order,
+                                  prefix=f"{prefix}_s{i}"))
+        raw_lows.append((i, lo_var))
+        hchain = hi_var
+    # band n_bands-1 (the top) is already the last split's high; compensate lows.
+    for i, lo_var in raw_lows:
+        comps = freqs[i + 1:]     # higher crossovers this band skipped
+        sig = lo_var
+        if not comps:
+            parts.append(f"{band_outs[i]} = {sig};")
+            continue
+        for k, cf in enumerate(comps):
+            last = k == len(comps) - 1
+            c_lo, c_hi = f"{prefix}_c{i}_{k}lo", f"{prefix}_c{i}_{k}hi"
+            out_var = band_outs[i] if last else f"{prefix}_c{i}_{k}o"
+            parts.append(lr_crossover(sig, c_lo, c_hi, cf, order,
+                                      prefix=f"{prefix}_c{i}_{k}"))
+            parts.append(f"{out_var} = {c_lo} + {c_hi};")
+            sig = out_var
+    return "\n".join(parts)
