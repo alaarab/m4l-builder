@@ -4469,6 +4469,15 @@ class TestGenCodebox:
         boxes, _ = gen_codebox("myprefix", "out1 = in1")
         assert boxes[0]["box"]["id"] == "myprefix_gen"
 
+    def test_zero_outlets_raises(self):
+        # gen~ always needs >= 1 outlet; numoutlets=0 builds an unusable object.
+        with pytest.raises(ValueError, match="numoutlets must be >= 1"):
+            gen_codebox("g", "out1 = in1", numoutlets=0)
+
+    def test_negative_inlets_raises(self):
+        with pytest.raises(ValueError, match="numinlets must be >= 0"):
+            gen_codebox("g", "out1 = in1", numinlets=-1)
+
 
 class TestMcGainStage:
     def test_returns_1_box_0_lines(self):

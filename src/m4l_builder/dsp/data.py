@@ -110,6 +110,12 @@ def gen_codebox(id_prefix: str, gen_code: str, numinlets: int = 1,
     watch for: device passes audio with a bare/passthrough kernel but silences
     the moment a function definition is added.
     """
+    if numoutlets < 1:
+        raise ValueError(
+            f"gen_codebox numoutlets must be >= 1 (gen~ needs an outlet), got {numoutlets}"
+        )
+    if numinlets < 0:
+        raise ValueError(f"gen_codebox numinlets must be >= 0, got {numinlets}")
     if outlettype is None:
         outlettype = ["signal"] * numoutlets
     box = newobj(f"{id_prefix}_gen", "gen~",

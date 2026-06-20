@@ -28,7 +28,7 @@ def _parameter_banks_payload(device) -> dict[str, dict]:
             {
                 "index": position,
                 "name": varname,
-                "visible": 1 if spec is None else spec.visible,
+                "visible": 1 if spec is None else getattr(spec, "visible", 1),
             }
         )
     return banks
@@ -145,6 +145,14 @@ def device_from_amxd(path: str):
     with open(path, "rb") as handle:
         data = handle.read()
 
+    # The header is type_code(8:12) + meta_len at offset 16 (a uint32); the JSON
+    # body starts after it. Bail with an actionable error rather than a cryptic
+    # IndexError/struct.error on a truncated or non-AMXD file.
+    if len(data) < 20:
+        raise ValueError(
+            f"{path}: not a valid AMXD file (truncated: {len(data)} bytes, need >= 20)"
+        )
+
     type_code = data[8:12]
     type_map = {
         b"aaaa": "audio_effect",
@@ -158,7 +166,14 @@ def device_from_amxd(path: str):
     meta_len = struct.unpack_from("<I", data, 16)[0]
     json_offset = 20 + meta_len + 8
     json_bytes = data[json_offset:].rstrip(b"\x00").rstrip(b"\n")
-    patcher_dict = json.loads(json_bytes)
+    if not json_bytes:
+        raise ValueError(f"{path}: AMXD file contains no patcher JSON payload")
+    try:
+        patcher_dict = json.loads(json_bytes)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"{path}: AMXD patcher JSON is malformed at byte {exc.pos}: {exc.msg}"
+        ) from exc
 
     patcher = patcher_dict["patcher"]
     width = patcher.get("devicewidth", patcher.get("openrect", [0, 0, 400, 170])[2])
