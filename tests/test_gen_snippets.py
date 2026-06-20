@@ -9,6 +9,7 @@ from math import pow, tan, tanh
 
 from m4l_builder.gen_snippets import (
     drive_blend,
+    exp_pole,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
     ms_decode,
@@ -241,3 +242,31 @@ def test_kweight_matches_shipped_form():
     assert "Ks = tan(KPI * 1681.9744509555319 / samplerate);" in code
     assert "Kh = tan(KPI * 38.13547087613982 / samplerate);" in code
     assert code.rstrip().endswith("ha2 = (1. - Kh / 0.5003270373253953 + Kh * Kh) / a0h;")
+
+
+# --- exp_pole: one-pole smoothing/ballistics coefficient exp(-1/(tau*fs)) ------
+
+def test_exp_pole_text():
+    assert exp_pole("sm", "0.0004") == "sm = exp(-1.0 / (0.0004 * samplerate));"
+    assert exp_pole("atk", "atk_ms * 0.001") == \
+        "atk = exp(-1.0 / (atk_ms * 0.001 * samplerate));"
+
+
+def test_exp_pole_value_matches_time_constant():
+    # exp(-1/(tau*fs)): a 1ms pole at 48k -> exp(-1/48) ~ 0.97937; smaller tau = faster
+    from math import exp as _exp
+    code = exp_pole("c", "tau")
+    ns = {"exp": _exp, "tau": 0.001, "samplerate": 48000.0}
+    exec(code, ns)  # noqa: S102
+    assert abs(ns["c"] - _exp(-1.0 / (0.001 * 48000.0))) < 1e-15
+    # faster (smaller tau) -> smaller coefficient (less retention)
+    ns_fast = {"exp": _exp, "tau": 0.0001, "samplerate": 48000.0}
+    exec(code, ns_fast)  # noqa: S102
+    assert ns_fast["c"] < ns["c"]
+
+
+def test_exp_pole_matches_ceiling_and_pressure_shipped_forms():
+    assert exp_pole("rel", "max(release, 5.) * 0.001") == \
+        "rel = exp(-1.0 / (max(release, 5.) * 0.001 * samplerate));"
+    assert exp_pole("rel_fast", "clamp(rel_ms * 0.12, 20., 120.) * 0.001") == \
+        "rel_fast = exp(-1.0 / (clamp(rel_ms * 0.12, 20., 120.) * 0.001 * samplerate));"

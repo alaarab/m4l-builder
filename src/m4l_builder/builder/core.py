@@ -15,6 +15,7 @@ from ..gen_lint import lint_genexpr
 from ..gen_patcher import build_gendsp
 from ..gen_snippets import (
     drive_blend,
+    exp_pole,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
     ms_decode,
@@ -92,6 +93,7 @@ __all__ = [
     "peak_follower",
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
+    "exp_pole",
     "Stage",
     "StageResult",
     "stage_result",
