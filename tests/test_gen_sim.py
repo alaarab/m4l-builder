@@ -146,12 +146,45 @@ def test_ms_width_null_test_identity_and_mono():
                for a, b in zip(mono["out1"], mono["out2"]))
 
 
+# ── if / else / else-if control flow ─────────────────────────────────────────
+def test_if_else_branches():
+    k = "out1 = 0.;\nif (in1 > 0.5) {\n  out1 = 10.;\n} else {\n  out1 = 20.;\n}"
+    assert simulate(k, {"in1": [0.7, 0.3]}, num_samples=2)["out1"] == [10.0, 20.0]
+
+
+def test_else_if_chain():
+    k = ("out1 = 0.;\nif (in1 > 0.7) { out1 = 3.; } "
+         "else if (in1 > 0.4) { out1 = 2.; } else { out1 = 1.; }")
+    assert simulate(k, {"in1": [0.9, 0.5, 0.1]}, num_samples=3)["out1"] == [3.0, 2.0, 1.0]
+
+
+def test_nested_if():
+    k = ("out1 = 0.;\nif (in1 > 0.5) {\n"
+         "  if (in2 > 0.5) { out1 = 11.; } else { out1 = 10.; }\n"
+         "} else { out1 = 0.; }")
+    out = simulate(k, {"in1": [1., 1., 0.], "in2": [1., 0., 1.]}, num_samples=3)["out1"]
+    assert out == [11.0, 10.0, 0.0]
+
+
+def test_history_written_in_mutually_exclusive_branches():
+    # legitimate (only the taken branch runs); was wrongly refused before if/else.
+    k = ("History s(0.);\n"
+         "if (in1 > 0.5) { s = s + 1.; } else { s = s - 0.5; }\nout1 = s;")
+    out = simulate(k, {"in1": [1., 1., 0., 0.]}, num_samples=4)["out1"]
+    assert out == [1.0, 2.0, 1.5, 1.0]
+
+
+def test_and_condition_with_double_bound():
+    # gen '&&' inside a condition (the soft-knee guard form: a > lo && b > 0).
+    k = ("out1 = 0.;\nif (in1 > -1. && in2 > 0.01) { out1 = 1.; }")
+    assert simulate(k, {"in1": [0., 0.], "in2": [1., 0.]}, num_samples=2)["out1"] == [1.0, 0.0]
+
+
 # ── refusal of the out-of-subset constructs (never a false green) ────────────
 @pytest.mark.parametrize("code,label", [
     ("Delay d(512);\nout1 = d.read(10);", "Delay/.read"),
     ("History h(0.);\nh = peek(buf, 3);\nout1 = h;", "peek"),
-    ("History h(0.);\nif (in1 > 0.) { h = 1.; }\nout1 = h;", "if-block"),
-    ("History h(0.);\nh = in1;\nh = in1 * 2.;\nout1 = h;", "double History write"),
+    ("out1 = in1; for (i = 0; i < 3; i = i + 1) { out1 = out1 + 1.; }", "for-loop"),
     ("out1 = data[3];", "indexed access"),
 ])
 def test_refuses_unsupported_constructs(code, label):
@@ -161,3 +194,8 @@ def test_refuses_unsupported_constructs(code, label):
 
 def test_num_outs_autodetected():
     assert GenKernel("out1 = in1;\nout3 = in1 * 2.;").num_outs == 3
+
+
+def test_num_outs_counts_assignments_inside_branches():
+    k = "if (in1 > 0.) { out1 = 1.; out2 = 2.; } else { out1 = 0.; }"
+    assert GenKernel(k).num_outs == 2
