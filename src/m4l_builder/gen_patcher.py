@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import json
 
+from .gen_lint import lint_genexpr
+
 __all__ = ["build_gendsp"]
 
 
@@ -29,17 +31,33 @@ def build_gendsp(
     *,
     codebox_h: float = 560.0,
     patcher_h: float = 660.0,
+    lint: bool = True,
 ) -> str:
     """Serialize a gen~ patcher (.gendsp) with one codebox wired to ins/outs.
 
     ``code`` is the GenExpr source; ``numins``/``numouts`` are the signal in/out
     counts (an ``in N`` / ``out N`` object per channel, wired to the codebox).
 
+    With ``lint=True`` (default) the GenExpr is checked by
+    :func:`m4l_builder.gen_lint.lint_genexpr` and a build-time ``ValueError`` is
+    raised on a dead/passthrough signal out, an out-of-range ``in``/``out`` index,
+    or a multi-line ternary — turning those silent-in-Live failures (the
+    "advertised but unwired / dynamic-EQ-never-touches-audio" class) into a build
+    error. Pass ``lint=False`` only for the rare intentional exception.
+
     ``codebox_h`` / ``patcher_h`` size the gen editor window only — purely
     cosmetic, no DSP effect. They default to the suite-wide 560/660 and are
     overridable so an existing plugin can reproduce its exact prior bytes (e.g.
     pressure historically shipped 540/640).
     """
+    if lint:
+        issues = lint_genexpr(code, numins, numouts)
+        if issues:
+            raise ValueError(
+                "build_gendsp: GenExpr lint failed ("
+                + str(len(issues)) + " issue(s); pass lint=False to bypass):\n  - "
+                + "\n  - ".join(issues)
+            )
     boxes = [{
         "box": {
             "id": "codebox",

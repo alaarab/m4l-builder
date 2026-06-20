@@ -6,6 +6,8 @@ the shared version cannot silently drift.
 """
 import json
 
+import pytest
+
 from m4l_builder.gen_patcher import build_gendsp
 
 
@@ -20,7 +22,8 @@ def test_build_gendsp_is_valid_dsp_gen_patcher():
 
 
 def test_build_gendsp_in_out_counts_and_wiring():
-    p = json.loads(build_gendsp("out1 = in1 + in2;", 2, 3))["patcher"]
+    # all 3 outs assigned so the default lint passes; this test is about wiring
+    p = json.loads(build_gendsp("out1 = in1; out2 = in2; out3 = in1 + in2;", 2, 3))["patcher"]
     ins = [b for b in p["boxes"] if b["box"]["id"].startswith("in_")]
     outs = [b for b in p["boxes"] if b["box"]["id"].startswith("out_")]
     assert len(ins) == 2 and len(outs) == 3
@@ -50,3 +53,20 @@ def test_window_size_params_are_cosmetic_only():
             if box["box"]["id"] == "codebox":
                 box["box"]["patching_rect"][3] = 0
     assert a == b
+
+
+def test_build_gendsp_lints_by_default_and_raises_on_dead_output():
+    # out2/out3 are declared (numouts=3) but never assigned -> lint should fail
+    with pytest.raises(ValueError, match="lint failed"):
+        build_gendsp("out1 = in1;", 2, 3)
+
+
+def test_build_gendsp_lint_false_bypasses():
+    # explicit opt-out still serializes the (malformed) patcher
+    out = build_gendsp("out1 = in1;", 2, 3, lint=False)
+    assert json.loads(out)["patcher"]["classnamespace"] == "dsp.gen"
+
+
+def test_build_gendsp_clean_code_passes_lint():
+    out = build_gendsp("out1 = in1; out2 = in2;", 2, 2)
+    assert json.loads(out)["patcher"]["classnamespace"] == "dsp.gen"
