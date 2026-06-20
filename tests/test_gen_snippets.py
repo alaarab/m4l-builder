@@ -9,6 +9,7 @@ from math import tanh
 
 from m4l_builder.gen_snippets import (
     drive_blend,
+    isp_catmull_4x,
     ms_decode,
     ms_encode,
     ms_width,
@@ -133,3 +134,65 @@ def test_peak_follower_matches_echotide_wet_env_form():
         "coeff = wpk > env ? 0.6 : 0.995;\n"
         "env = wpk + coeff * (env - wpk);"
     )
+
+
+# --- isp_catmull_4x: 4x inter-sample-peak detector (Catmull-Rom) -------------
+# Pure polynomial arithmetic (+,-,*, max, abs), so the emitted GenExpr execs as
+# Python directly. The window is (h3,h2,h1,h0) = oldest..newest; the primitive
+# fits a cubic through it and evaluates t=.25/.5/.75 between h2 and h1.
+
+def _run_isp(h3, h2, h1, h0):
+    code = isp_catmull_4x("x", "h1", "h2", "h3", "isp", ch="l")
+    ns = {"x": h0, "h1": h1, "h2": h2, "h3": h3}
+    exec(code, ns)  # noqa: S102 - trusted generated GenExpr
+    return ns["isp"]
+
+
+def test_isp_constant_window_has_no_overshoot():
+    # a flat DC window -> the spline is flat -> ISP == the level (no phantom peak)
+    assert abs(_run_isp(0.5, 0.5, 0.5, 0.5) - 0.5) < 1e-12
+    assert abs(_run_isp(-0.3, -0.3, -0.3, -0.3) - 0.3) < 1e-12
+
+
+def test_isp_detects_inter_sample_overshoot():
+    # samples (-1, 1, 1, -1): both middle samples are +1 but the negative
+    # neighbours bow the spline ABOVE 1 between them. Closed form y(t)=1+t-t^2,
+    # peaking at t=.5 -> 1.25. ISP must catch the 1.25 inter-sample peak that the
+    # sample peak (1.0) is blind to.
+    assert abs(_run_isp(-1.0, 1.0, 1.0, -1.0) - 1.25) < 1e-12
+
+
+def test_isp_left_and_right_channels_compute_identically():
+    # ISP alone is evaluated strictly BETWEEN samples (t=.25/.5/.75), so it is
+    # NOT bounded below by the sample peak — that is why callers take
+    # tp = max(sample_peak, isp). What must hold is that the L and R forms are
+    # the same math: identical windows -> identical ISP regardless of suffix.
+    codeL = isp_catmull_4x("x", "h1", "h2", "h3", "ispL", ch="l")
+    codeR = isp_catmull_4x("x", "h1", "h2", "h3", "ispR", ch="r")
+    for window in [(0.2, 0.9, 0.4, -0.1), (-0.7, 0.3, 0.8, 0.1), (0.0, 1.0, -1.0, 0.0)]:
+        h3, h2, h1, h0 = window
+        nsL = {"x": h0, "h1": h1, "h2": h2, "h3": h3}
+        nsR = dict(nsL)
+        exec(codeL, nsL)  # noqa: S102
+        exec(codeR, nsR)  # noqa: S102
+        assert nsL["ispL"] == nsR["ispR"]
+
+
+def test_isp_matches_ceiling_shipped_form():
+    assert isp_catmull_4x("inL", "xl1", "xl2", "xl3", "ispl", ch="l") == (
+        "h0l = inL; h1l = xl1; h2l = xl2; h3l = xl3;\n"
+        "kl0 = h2l;\n"
+        "kl1 = 0.5 * (h1l - h3l);\n"
+        "kl2 = h3l - 2.5 * h2l + 2.0 * h1l - 0.5 * h0l;\n"
+        "kl3 = 0.5 * (h0l - h3l) + 1.5 * (h2l - h1l);\n"
+        "yl1 = kl0 + 0.25 * (kl1 + 0.25 * (kl2 + 0.25 * kl3));\n"
+        "yl2 = kl0 + 0.5 * (kl1 + 0.5 * (kl2 + 0.5 * kl3));\n"
+        "yl3 = kl0 + 0.75 * (kl1 + 0.75 * (kl2 + 0.75 * kl3));\n"
+        "ispl = max(max(abs(yl1), abs(yl2)), abs(yl3));"
+    )
+
+
+def test_isp_right_channel_uses_r_suffix():
+    code = isp_catmull_4x("inR", "xr1", "xr2", "xr3", "ispr", ch="r")
+    assert code.splitlines()[0] == "h0r = inR; h1r = xr1; h2r = xr2; h3r = xr3;"
+    assert code.splitlines()[-1] == "ispr = max(max(abs(yr1), abs(yr2)), abs(yr3));"
