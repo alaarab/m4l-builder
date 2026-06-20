@@ -27,6 +27,7 @@ __all__ = [
     "soft_knee_gain_computer",
     "dynamics_band",
     "biquad_df1",
+    "rbj_peaking",
 ]
 
 
@@ -339,4 +340,48 @@ def biquad_df1(
     return (
         f"{out} = {b0} * {x} + {b1} * {x1} + {b2} * {x2} - {a1} * {y1} - {a2} * {y2};\n"
         f"{x2} = {x1}; {x1} = {x}; {y2} = {y1}; {y1} = {out};"
+    )
+
+
+def rbj_peaking(
+    freq: str,
+    q: str,
+    gain_db: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha", a0: str = "a0",
+) -> str:
+    """Runtime RBJ peaking-EQ biquad coefficients (Audio-EQ-Cookbook, a0-normalised).
+
+    Computes the Direct-Form-I coefficients ``b0 b1 b2 a1 a2`` for a peaking
+    (bell) EQ band from ``freq`` (Hz), ``q``, and ``gain_db``, at the running
+    ``samplerate`` — so the band is tunable LIVE (unlike the build-time-baked
+    ``_biquad_shelf`` or the ``filtercoeff~`` object path). Pair with
+    :func:`biquad_df1` to apply it. Emits::
+
+        A = pow(10., gain_db / 40.);
+        w0 = 2 * pi * freq / samplerate;
+        cw = cos(w0);  alpha = sin(w0) / (2 * q);
+        a0 = 1 + alpha / A;
+        b0 = (1 + alpha * A) / a0;   b1 = (-2 * cw) / a0;   b2 = (1 - alpha * A) / a0;
+        a1 = (-2 * cw) / a0;         a2 = (1 - alpha / A) / a0;
+
+    At ``gain_db == 0`` the b coeffs equal the a coeffs -> unity (flat); the band
+    is unity at DC and Nyquist for any gain. This is the runtime peaking-band
+    coefficient half of the cascaded-filter foundation (the apply half is
+    :func:`biquad_df1`). ``A w0 cw alpha a0`` are scratch var names (override to
+    use the primitive twice in one codebox).
+    """
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = 1. + {alpha} / {A};\n"
+        f"{b0} = (1. + {alpha} * {A}) / {a0};\n"
+        f"{b1} = (-2. * {cw}) / {a0};\n"
+        f"{b2} = (1. - {alpha} * {A}) / {a0};\n"
+        f"{a1} = (-2. * {cw}) / {a0};\n"
+        f"{a2} = (1. - {alpha} / {A}) / {a0};"
     )
