@@ -15,7 +15,14 @@ no leading/trailing newline, so a caller splices it between its own lines.
 
 from __future__ import annotations
 
-__all__ = ["ms_encode", "ms_decode", "ms_width", "drive_blend", "peak_follower"]
+__all__ = [
+    "ms_encode",
+    "ms_decode",
+    "ms_width",
+    "drive_blend",
+    "peak_follower",
+    "isp_catmull_4x",
+]
 
 
 def ms_encode(left: str, right: str, mid: str, side: str) -> str:
@@ -105,4 +112,42 @@ def peak_follower(
     return (
         f"{coeff} = {peak} > {state} ? {attack_coeff} : {release_coeff};\n"
         f"{state} = {peak} + {coeff} * ({state} - {peak});"
+    )
+
+
+def isp_catmull_4x(x: str, h1: str, h2: str, h3: str, out: str, *, ch: str = "l") -> str:
+    """4x inter-sample-peak (ISP) estimate for one channel via cubic Catmull-Rom.
+
+    ITU-R BS.1770-style true-peak detection: fit a cubic Catmull-Rom spline
+    through the 4-sample window ``h3..h0`` (oldest..newest) and evaluate the
+    inter-sample positions ``t = .25/.5/.75`` between ``h2`` and ``h1``; ``out``
+    is the max absolute of those three estimates. ~1-sample detector group
+    delay. Emits, with ``ch`` the channel suffix used for the scratch vars::
+
+        h0{ch} = {x}; h1{ch} = {h1}; h2{ch} = {h2}; h3{ch} = {h3};
+        k{ch}0 = h2{ch};
+        k{ch}1 = 0.5 * (h1{ch} - h3{ch});
+        k{ch}2 = h3{ch} - 2.5 * h2{ch} + 2.0 * h1{ch} - 0.5 * h0{ch};
+        k{ch}3 = 0.5 * (h0{ch} - h3{ch}) + 1.5 * (h2{ch} - h1{ch});
+        y{ch}1 = k{ch}0 + 0.25 * (k{ch}1 + 0.25 * (k{ch}2 + 0.25 * k{ch}3));
+        y{ch}2 = k{ch}0 + 0.5 * (k{ch}1 + 0.5 * (k{ch}2 + 0.5 * k{ch}3));
+        y{ch}3 = k{ch}0 + 0.75 * (k{ch}1 + 0.75 * (k{ch}2 + 0.75 * k{ch}3));
+        {out} = max(max(abs(y{ch}1), abs(y{ch}2)), abs(y{ch}3));
+
+    ``x`` is the newest sample; ``h1``/``h2``/``h3`` are the caller's 3 history
+    vars (the caller shifts them each sample). Call once per channel (``ch="l"``
+    / ``ch="r"``) then take ``tp = max(sp, max(ispl, ispr))``. This is the
+    detector behind a provable dBTP limiter / true-peak meter — shared so the
+    limiter (Ceiling) and the analyzer (Spectrum Analyzer) stop copy-pasting it.
+    """
+    return (
+        f"h0{ch} = {x}; h1{ch} = {h1}; h2{ch} = {h2}; h3{ch} = {h3};\n"
+        f"k{ch}0 = h2{ch};\n"
+        f"k{ch}1 = 0.5 * (h1{ch} - h3{ch});\n"
+        f"k{ch}2 = h3{ch} - 2.5 * h2{ch} + 2.0 * h1{ch} - 0.5 * h0{ch};\n"
+        f"k{ch}3 = 0.5 * (h0{ch} - h3{ch}) + 1.5 * (h2{ch} - h1{ch});\n"
+        f"y{ch}1 = k{ch}0 + 0.25 * (k{ch}1 + 0.25 * (k{ch}2 + 0.25 * k{ch}3));\n"
+        f"y{ch}2 = k{ch}0 + 0.5 * (k{ch}1 + 0.5 * (k{ch}2 + 0.5 * k{ch}3));\n"
+        f"y{ch}3 = k{ch}0 + 0.75 * (k{ch}1 + 0.75 * (k{ch}2 + 0.75 * k{ch}3));\n"
+        f"{out} = max(max(abs(y{ch}1), abs(y{ch}2)), abs(y{ch}3));"
     )
