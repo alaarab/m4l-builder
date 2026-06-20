@@ -11,6 +11,15 @@ from ..device import (
     MidiGenerator,
     MidiTransformation,
 )
+from ..gen_lint import lint_genexpr
+from ..gen_patcher import build_gendsp
+from ..gen_snippets import (
+    drive_blend,
+    ms_decode,
+    ms_encode,
+    ms_width,
+    peak_follower,
+)
 from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
 from ..jsui_contract import (
     JsuiContractError,
@@ -72,6 +81,13 @@ __all__ = [
     "validate_jsui_contract",
     "find_v8ui_contract_issues",
     "validate_v8ui_contract",
+    "build_gendsp",
+    "lint_genexpr",
+    "ms_encode",
+    "ms_decode",
+    "ms_width",
+    "drive_blend",
+    "peak_follower",
     "Stage",
     "StageResult",
     "stage_result",
