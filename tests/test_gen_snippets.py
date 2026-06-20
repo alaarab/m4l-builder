@@ -9,6 +9,7 @@ from math import pow, tan, tanh
 
 from m4l_builder.gen_snippets import (
     drive_blend,
+    dynamics_band,
     exp_pole,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
@@ -326,3 +327,56 @@ def test_gain_computer_custom_scratch_names_avoid_clash():
                                   over="o2", half_knee="hk2", slope="sl2", t="t2")
     assert "o2 = L - th;" in out and "t2 = o2 + hk2;" in out
     assert "\nover " not in out and " over " not in out
+
+
+# --- dynamics_band: detector -> knee -> makeup, end-to-end compressor gain path
+from math import exp as _exp  # noqa: E402
+
+
+def _band_kernel():
+    atk = _exp(-1 / (0.001 * 48000))   # 1 ms attack
+    rel = _exp(-1 / (0.100 * 48000))   # 100 ms release
+    return ("History env(-90.);\n"
+            "Param threshold(-18.);\nParam ratio(4.);\nParam knee(6.);\nParam makeup(0.);\n"
+            + dynamics_band("in1", "env", f"{atk}", f"{rel}", "threshold", "ratio",
+                            "knee", "makeup", "g")
+            + "\nout1 = g;\nout2 = env;")
+
+
+def _band(level, n, **params):
+    return _sim(_band_kernel(), {"in1": [level] * n}, params=params, num_samples=n)
+
+
+def test_dynamics_band_unity_ratio_is_transparent():
+    # ratio == 1, makeup == 0 -> g converges to 1 at any input (transparent).
+    out = _band(0.5, 1024, ratio=1.0, makeup=0.0, threshold=-18.0, knee=6.0)["out1"]
+    assert abs(out[-1] - 1.0) < 1e-9
+
+
+def test_dynamics_band_below_threshold_is_unity():
+    out = _band(0.01, 1024, ratio=4.0, makeup=0.0, threshold=-18.0, knee=6.0)["out1"]
+    assert abs(out[-1] - 1.0) < 1e-6   # -40 dB in, well below -18 threshold
+
+
+def test_dynamics_band_hot_signal_attenuates():
+    out = _band(0.9, 1024, ratio=4.0, makeup=0.0, threshold=-18.0, knee=6.0)["out1"]
+    assert out[-1] < 1.0
+
+
+def test_dynamics_band_makeup_raises_gain():
+    out = _band(0.01, 512, ratio=4.0, makeup=6.0, threshold=-18.0, knee=6.0)["out1"]
+    assert abs(out[-1] - 10 ** (6.0 / 20.0)) < 1e-4   # below threshold -> pure makeup
+
+
+def test_dynamics_band_attack_is_faster_than_release():
+    # a 1 ms attack settles the dB envelope near the input level within ~1000
+    # samples; the 100 ms release does NOT return to the floor in the same window.
+    kern = _band_kernel()
+    seq = [0.9] * 1000 + [0.0001] * 1000
+    env = _sim(kern, {"in1": seq}, params={"ratio": 4.0, "makeup": 0.0},
+               num_samples=2000)["out2"]
+    # attack: env reached close to atodb(0.9) ~= -0.9 dB by the end of the loud run
+    assert env[999] > -2.0
+    # release: 1000 samples later env has fallen but is FAR from the -90 floor
+    assert env[1999] > -40.0
+    assert env[1999] < env[999]   # it is releasing (falling)

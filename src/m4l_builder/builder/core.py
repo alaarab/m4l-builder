@@ -16,6 +16,7 @@ from ..gen_patcher import build_gendsp
 from ..gen_sim import GenKernel, UnsupportedKernel, simulate
 from ..gen_snippets import (
     drive_blend,
+    dynamics_band,
     exp_pole,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
@@ -97,6 +98,7 @@ __all__ = [
     "kweight_coeffs_bs1770",
     "exp_pole",
     "soft_knee_gain_computer",
+    "dynamics_band",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
