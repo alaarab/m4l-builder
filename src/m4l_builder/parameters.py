@@ -98,9 +98,38 @@ class ParameterSpec:
             normalized = [_normalize_label(option, field_name="enum option") for option in self.enum]
             if not normalized:
                 raise ValueError("enumerated parameters require at least one option")
+            # Duplicate options in a real MENU (3+ choices) are a typo bug; a
+            # 2-option enum with identical labels is the legitimate toggle pattern
+            # (a button that keeps one label and only changes its highlight).
+            if len(normalized) > 2 and len(set(normalized)) != len(normalized):
+                raise ValueError(f"enumerated parameter {self.name!r} has duplicate options: {normalized}")
             self.enum = normalized
         elif self.parameter_type == 2:
             raise ValueError("enumerated parameters require options")
+        # Exponent drives Max's log/exp fader scaling; <= 0 silently breaks it.
+        if self.exponent is not None and self.exponent <= 0:
+            raise ValueError(f"parameter {self.name!r} exponent must be > 0, got {self.exponent}")
+        # An out-of-range initial is silently clamped (continuous) or mis-indexed
+        # (enumerated) at load — turn it into a build error. allow_wide_range opts
+        # out, matching the existing integer-range escape hatch.
+        if self.initial is not _UNSET and self.initial is not None and not self.allow_wide_range:
+            inits = self.initial if isinstance(self.initial, (list, tuple)) else [self.initial]
+            for v in inits:
+                if not isinstance(v, (int, float)) or isinstance(v, bool):
+                    continue
+                if self.enum is not None:
+                    if _is_int_like(v) and not (0 <= int(v) <= len(self.enum) - 1):
+                        raise ValueError(
+                            f"parameter {self.name!r} enumerated initial index {v} "
+                            f"out of range 0..{len(self.enum) - 1}"
+                        )
+                else:
+                    if self.minimum is not None and v < self.minimum:
+                        raise ValueError(
+                            f"parameter {self.name!r} initial {v} below minimum {self.minimum}")
+                    if self.maximum is not None and v > self.maximum:
+                        raise ValueError(
+                            f"parameter {self.name!r} initial {v} above maximum {self.maximum}")
 
     def copy(self, **changes: Any) -> ParameterSpec:
         """Return a copied spec with optional overrides."""
