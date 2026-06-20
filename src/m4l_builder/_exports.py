@@ -54,6 +54,7 @@ CORE_EXPORTS = [
     "exp_pole",
     "soft_knee_gain_computer",
     "dynamics_band",
+    "biquad_df1",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",
