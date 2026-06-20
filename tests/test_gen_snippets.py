@@ -5,11 +5,12 @@ Python — we can exec it to behaviourally verify the math (round-trip identity,
 mono/wide), not just snapshot the text.
 """
 import re
-from math import tanh
+from math import pow, tan, tanh
 
 from m4l_builder.gen_snippets import (
     drive_blend,
     isp_catmull_4x,
+    kweight_coeffs_bs1770,
     ms_decode,
     ms_encode,
     ms_width,
@@ -196,3 +197,47 @@ def test_isp_right_channel_uses_r_suffix():
     code = isp_catmull_4x("inR", "xr1", "xr2", "xr3", "ispr", ch="r")
     assert code.splitlines()[0] == "h0r = inR; h1r = xr1; h2r = xr2; h3r = xr3;"
     assert code.splitlines()[-1] == "ispr = max(max(abs(yr1), abs(yr2)), abs(yr3));"
+
+
+# --- kweight_coeffs_bs1770: ITU-R BS.1770-4 K-weight biquad coefficients ------
+# The block carries two // comments (the magic constants are opaque), so strip
+# them before exec; the math is tan/pow on the samplerate.
+
+def _run_kweight(samplerate):
+    code = kweight_coeffs_bs1770()
+    py = "\n".join(l for l in code.splitlines() if not l.strip().startswith("//"))
+    ns = {"tan": tan, "pow": pow, "samplerate": float(samplerate)}
+    exec(py, ns)  # noqa: S102
+    return ns
+
+
+def test_kweight_reproduces_bs1770_48k_reference():
+    # The canonical ITU-R BS.1770-4 coefficients are tabulated at 48 kHz; the gen
+    # bilinear-transforms them at the live rate and must reproduce the reference.
+    ns = _run_kweight(48000)
+    # Stage 1 high-shelf (normalized by a0)
+    assert abs(ns["sb0"] - 1.53512485958697) < 1e-9
+    assert abs(ns["sb1"] - -2.69169618940638) < 1e-9
+    assert abs(ns["sb2"] - 1.19839281085285) < 1e-9
+    assert abs(ns["sa1"] - -1.69065929318241) < 1e-9
+    assert abs(ns["sa2"] - 0.73248077421585) < 1e-9
+    # Stage 2 RLB high-pass feedback coeffs
+    assert abs(ns["ha1"] - -1.99004745483398) < 1e-9
+    assert abs(ns["ha2"] - 0.99007225036621) < 1e-9
+
+
+def test_kweight_is_samplerate_dependent():
+    # not hardcoded to one rate: 96k must yield different coefficients than 48k
+    c48 = _run_kweight(48000)
+    c96 = _run_kweight(96000)
+    assert c48["sb0"] != c96["sb0"]
+    assert c48["ha1"] != c96["ha1"]
+
+
+def test_kweight_matches_shipped_form():
+    # guards the byte-identical migration in Ceiling + Spectrum Analyzer
+    code = kweight_coeffs_bs1770()
+    assert code.startswith("KPI = 3.14159265358979;\n")
+    assert "Ks = tan(KPI * 1681.9744509555319 / samplerate);" in code
+    assert "Kh = tan(KPI * 38.13547087613982 / samplerate);" in code
+    assert code.rstrip().endswith("ha2 = (1. - Kh / 0.5003270373253953 + Kh * Kh) / a0h;")
