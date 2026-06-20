@@ -8,7 +8,9 @@ import re
 from math import pow, tan, tanh
 
 from m4l_builder.gen_snippets import (
+    biquad_cascade,
     biquad_df1,
+    butterworth_q_table,
     drive_blend,
     dynamics_band,
     exciter_harmonics,
@@ -22,6 +24,8 @@ from m4l_builder.gen_snippets import (
     one_pole_hp,
     one_pole_lp,
     peak_follower,
+    rbj_highpass,
+    rbj_lowpass,
     rbj_peaking,
     rbj_shelf,
     soft_knee_gain_computer,
@@ -677,3 +681,137 @@ def test_exciter_harmonics_stays_finite_under_extremes():
             for even in (0.0, 1.0):
                 v = _exc_harm(band, k, even)
                 assert math.isfinite(v)
+
+
+# --- rbj_lowpass / rbj_highpass: runtime 2nd-order LP/HP coefficients ----------
+def _lphp_coeffs(fn, freq, q, sr=48000.0):
+    code = ("Param f(1000.);\nParam q(0.7071);\n"
+            + fn("f", "q", "b0", "b1", "b2", "a1", "a2")
+            + "\nout1 = b0;\nout2 = b1;\nout3 = b2;\nout4 = a1;\nout5 = a2;")
+    o = _sim(code, {"in1": [0.0]}, params={"f": freq, "q": q},
+             samplerate=sr, num_samples=1)
+    return [o[f"out{k}"][0] for k in range(1, 6)]
+
+
+def _lphp_run(fn, x_seq, freq, q, sr=48000.0):
+    code = ("Param f(1000.);\nParam q(0.7071);\n"
+            "History x1(0.); History x2(0.); History y1(0.); History y2(0.);\n"
+            + fn("f", "q", "b0", "b1", "b2", "a1", "a2") + "\n"
+            + biquad_df1("in1", "b0", "b1", "b2", "a1", "a2",
+                         "x1", "x2", "y1", "y2", "y") + "\nout1 = y;")
+    return _sim(code, {"in1": list(x_seq)}, params={"f": freq, "q": q},
+                samplerate=sr, num_samples=len(x_seq))["out1"]
+
+
+def test_rbj_lowpass_matches_reference_coeffs():
+    # independently cross-checked (numpy + scipy): RBJ LPF f=1k Q=0.70710678 48k,
+    # normalised for the biquad_df1 MINUS convention (a1,a2 are +a1/a0,+a2/a0).
+    ref = [0.00391612666, 0.00783225332, 0.00391612666, -1.81534108245, 0.83100558909]
+    got = _lphp_coeffs(rbj_lowpass, 1000.0, 0.70710678)
+    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref)), got
+
+
+def test_rbj_highpass_matches_reference_coeffs():
+    ref = [0.91158666788, -1.82317333577, 0.91158666788, -1.81534108245, 0.83100558909]
+    got = _lphp_coeffs(rbj_highpass, 1000.0, 0.70710678)
+    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref)), got
+
+
+def test_rbj_lowpass_passes_dc_blocks_nyquist():
+    # LP: unity at DC, zero at Nyquist (alternating +/-1).
+    dc = _lphp_run(rbj_lowpass, [1.0] * 400, 1000.0, 0.70710678)
+    nyq = _lphp_run(rbj_lowpass, [(-1.0) ** n for n in range(400)], 1000.0, 0.70710678)
+    assert abs(dc[-1] - 1.0) < 1e-6
+    assert max(abs(v) for v in nyq[300:]) < 1e-3
+
+
+def test_rbj_highpass_blocks_dc_passes_nyquist():
+    # HP: zero at DC, unity at Nyquist (the complement of the low-pass).
+    dc = _lphp_run(rbj_highpass, [1.0] * 400, 1000.0, 0.70710678)
+    nyq = _lphp_run(rbj_highpass, [(-1.0) ** n for n in range(400)], 1000.0, 0.70710678)
+    assert abs(dc[-1]) < 1e-6
+    assert abs(max(abs(v) for v in nyq[300:]) - 1.0) < 1e-3
+
+
+def test_lphp_coeff_dc_nyquist_gains_analytic():
+    # closed-form DC/Nyquist gains from the coeffs (no recurrence): LP 1/0, HP 0/1.
+    lb0, lb1, lb2, la1, la2 = _lphp_coeffs(rbj_lowpass, 1000.0, 0.70710678)
+    hb0, hb1, hb2, ha1, ha2 = _lphp_coeffs(rbj_highpass, 1000.0, 0.70710678)
+    assert abs((lb0 + lb1 + lb2) / (1 + la1 + la2) - 1.0) < 1e-9   # LP DC = 1
+    assert abs((lb0 - lb1 + lb2) / (1 - la1 + la2)) < 1e-9         # LP Nyquist = 0
+    assert abs((hb0 + hb1 + hb2) / (1 + ha1 + ha2)) < 1e-9         # HP DC = 0
+    assert abs((hb0 - hb1 + hb2) / (1 - ha1 + ha2) - 1.0) < 1e-9   # HP Nyquist = 1
+
+
+# --- butterworth_q_table: per-stage Q for an even-order cascade ----------------
+def test_butterworth_q_table_known_values():
+    import pytest
+    # cross-checked closed-form Q_k = 1/(2 cos((2k-1) pi / (2n))).
+    assert butterworth_q_table(2) == pytest.approx([0.7071067811865475], abs=1e-9)
+    assert butterworth_q_table(4) == pytest.approx([0.5411961001, 1.3065629649], abs=1e-9)
+    assert butterworth_q_table(6) == pytest.approx(
+        [0.5176380902, 0.7071067812, 1.9318516526], abs=1e-9)
+    assert butterworth_q_table(8) == pytest.approx(
+        [0.5097955791, 0.6013448869, 0.8999762231, 2.5629154477], abs=1e-9)
+    assert len(butterworth_q_table(16)) == 8   # 96 dB/oct
+
+
+def test_butterworth_q_table_rejects_odd_and_small():
+    import pytest
+    for bad in (0, 1, 3, 5, 7):
+        with pytest.raises(ValueError, match="even and >= 2"):
+            butterworth_q_table(bad)
+
+
+# --- biquad_cascade: variable-slope Butterworth low/high-pass ------------------
+def _cascade_mag_db(kind, order, f, fc=1000.0, sr=48000.0, n=8192):
+    from math import log10, pi, sin
+    code = biquad_cascade("in1", "out1", f"{fc}", kind, order)
+    seq = [sin(2 * pi * f * k / sr) for k in range(n)]
+    out = _sim(code, {"in1": seq}, samplerate=sr, num_samples=n)["out1"]
+    return 20 * log10(max(abs(v) for v in out[n // 2:]))
+
+
+def test_biquad_cascade_4th_order_lowpass_response():
+    # cross-checked composite: -0.017 dB at 0.5fc, -3.01 at fc, -24.25 at 2fc.
+    assert abs(_cascade_mag_db("low", 4, 500.0) - (-0.0167)) < 0.05
+    assert abs(_cascade_mag_db("low", 4, 1000.0) - (-3.0100)) < 0.05
+    assert abs(_cascade_mag_db("low", 4, 2000.0) - (-24.248)) < 0.30
+
+
+def test_biquad_cascade_is_minus3db_at_cutoff_every_order():
+    # the maximally-flat Butterworth invariant: -3.01 dB at fc for ANY even order.
+    for order in (2, 4, 6, 8):
+        assert abs(_cascade_mag_db("low", order, 1000.0) - (-3.0103)) < 0.06, order
+
+
+def test_biquad_cascade_highpass_is_complementary():
+    # HP cascade: deep cut a half-octave below fc, ~0 dB a half-octave above.
+    assert _cascade_mag_db("high", 4, 1000.0) == _cascade_mag_db("high", 4, 1000.0)
+    assert abs(_cascade_mag_db("high", 4, 2000.0) - 0.0) < 0.05      # passband above fc
+    assert _cascade_mag_db("high", 4, 500.0) < -20.0                 # stopband below fc
+    assert abs(_cascade_mag_db("high", 4, 1000.0) - (-3.0103)) < 0.06   # -3 dB at fc
+
+
+def test_biquad_cascade_slope_steepens_with_order():
+    # at 2*fc the attenuation deepens ~6 dB/oct per order (24/oct per +order step).
+    a4 = _cascade_mag_db("low", 4, 2000.0)
+    a8 = _cascade_mag_db("low", 8, 2000.0)
+    assert a8 < a4 - 20.0    # 8th-order is far steeper than 4th at 2fc
+
+
+def test_biquad_cascade_is_self_contained_and_namespaced():
+    code = biquad_cascade("in1", "out1", "1000.", "low", 6)
+    assert "History cas0_x1(0.);" in code      # declares its own state
+    assert code.count("History ") == 3 * 4     # 3 stages x 4 cells (decl lines)
+    # prefix namespaces everything so two cascades coexist in one codebox
+    other = biquad_cascade("in1", "out1", "1000.", "low", 6, prefix="lp")
+    assert "lp0_x1" in other and "cas" not in other
+
+
+def test_biquad_cascade_invalid_args_raise():
+    import pytest
+    with pytest.raises(ValueError, match="must be 'low' or 'high'"):
+        biquad_cascade("in1", "out1", "f", "band", 4)
+    with pytest.raises(ValueError, match="even and >= 2"):
+        biquad_cascade("in1", "out1", "f", "low", 3)
