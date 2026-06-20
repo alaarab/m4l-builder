@@ -12,7 +12,13 @@ from ..device import (
     MidiTransformation,
 )
 from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
-from ..jsui_contract import JsuiContractError, find_jsui_contract_issues, validate_jsui_contract
+from ..jsui_contract import (
+    JsuiContractError,
+    find_jsui_contract_issues,
+    find_v8ui_contract_issues,
+    validate_jsui_contract,
+    validate_v8ui_contract,
+)
 from ..layout import Column, Columns, Grid, Row, inset_rect
 from ..modules import ModuleSpec, module_from_block, mount_module
 from ..notes import NoteEvent, notes_dict
@@ -64,6 +70,8 @@ __all__ = [
     "JsuiContractError",
     "find_jsui_contract_issues",
     "validate_jsui_contract",
+    "find_v8ui_contract_issues",
+    "validate_v8ui_contract",
     "Stage",
     "StageResult",
     "stage_result",

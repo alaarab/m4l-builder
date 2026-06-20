@@ -40,6 +40,8 @@ CORE_EXPORTS = [
     "JsuiContractError",
     "find_jsui_contract_issues",
     "validate_jsui_contract",
+    "find_v8ui_contract_issues",
+    "validate_v8ui_contract",
     "Stage",
     "StageResult",
     "stage_result",

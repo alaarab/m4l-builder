@@ -7489,6 +7489,9 @@ def _box_builder_statement(box: dict, support_files_by_name: dict[str, dict] | N
                     "js_filename": filename,
                     "numinlets": box.get("numinlets", 1),
                     "numoutlets": numoutlets,
+                    # reconstructing an arbitrary real device: its extracted v8ui
+                    # JS need not satisfy the authoring mgraphics contract.
+                    "validate_contract": False,
                     **kwargs,
                 },
             )

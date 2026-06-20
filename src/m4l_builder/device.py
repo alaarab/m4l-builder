@@ -8,7 +8,7 @@ from typing import Any
 from .amxd import build_device, device_from_amxd, device_to_bytes, device_to_patcher
 from .dsp import stereo_io
 from .graph import BoxRef, GraphContainer
-from .jsui_contract import validate_jsui_contract
+from .jsui_contract import validate_jsui_contract, validate_v8ui_contract
 from .layout import Column, Columns, Grid, Row
 from .parameters import ParameterSpec
 from .profiles import DEFAULT_PATCHER_PROFILE
@@ -151,9 +151,17 @@ class Device(GraphContainer):
         js_filename: str = None,
         numinlets: int = 1,
         numoutlets: int = 0,
+        validate_contract: bool = True,
         **kwargs,
     ) -> str:
-        """Add a v8ui with embedded JavaScript code for pointer-aware custom UI."""
+        """Add a v8ui with embedded JavaScript code for pointer-aware custom UI.
+
+        validate_contract checks the shared mgraphics bootstrap (init/paint/redraw)
+        without imposing jsui's ES5 restriction — v8ui runs on V8 and ES6+ is
+        intended. Pass validate_contract=False to bypass.
+        """
+        if validate_contract:
+            validate_v8ui_contract(js_code)
         js_filename = js_filename or f"{id}.js"
         self.register_asset(js_filename, js_code, asset_type="TEXT", category="js")
         return self.add_box(

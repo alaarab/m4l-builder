@@ -14,9 +14,11 @@ from m4l_builder import (
     PatcherProfile,
     Subpatcher,
     find_jsui_contract_issues,
+    find_v8ui_contract_issues,
     lint_graph,
     module_from_block,
     validate_jsui_contract,
+    validate_v8ui_contract,
 )
 from m4l_builder.engines.filter_curve import filter_curve_js
 from m4l_builder.stages import StageResult
@@ -152,6 +154,51 @@ class TestJsuiContract:
             validate_contract=False,
         )
 
+        assert str(box_id) == "raw"
+
+
+class TestV8uiContract:
+    """v8ui runs on V8 (ES6+ allowed); only the mgraphics bootstrap is required."""
+
+    _ES6 = (
+        "mgraphics.init();\n"
+        "mgraphics.relative_coords = 0;\n"
+        "mgraphics.autofill = 0;\n"
+        "const draw = () => 1;\n"        # ES6 — must be allowed on v8ui
+        "function paint() { let x = `${draw()}`; }\n"
+        "mgraphics.redraw();\n"
+    )
+
+    def test_v8ui_contract_allows_es6(self):
+        # the exact constructs the jsui (ES5) contract forbids
+        assert find_v8ui_contract_issues(self._ES6) == []
+        assert validate_v8ui_contract(self._ES6) == self._ES6
+        # ...and the jsui contract WOULD reject the same source
+        assert find_jsui_contract_issues(self._ES6) != []
+
+    def test_v8ui_contract_requires_mgraphics_bootstrap(self):
+        issues = find_v8ui_contract_issues("const f = () => 1;")
+        assert any("mgraphics.init()" in i for i in issues)
+        assert any("paint()" in i for i in issues)
+        with pytest.raises(JsuiContractError):
+            validate_v8ui_contract("const f = () => 1;")
+
+    def test_device_add_v8ui_validates_by_default(self):
+        device = AudioEffect("test", width=200, height=100)
+        with pytest.raises(JsuiContractError):
+            device.add_v8ui("bad", [0, 0, 20, 20], js_code="function paint() {}")
+
+    def test_device_add_v8ui_accepts_es6_bootstrap(self):
+        device = AudioEffect("test", width=200, height=100)
+        box_id = device.add_v8ui("good", [0, 0, 20, 20], js_code=self._ES6)
+        assert str(box_id) == "good"
+
+    def test_device_add_v8ui_can_opt_out(self):
+        device = AudioEffect("test", width=200, height=100)
+        box_id = device.add_v8ui(
+            "raw", [0, 0, 20, 20],
+            js_code="function paint() {}", validate_contract=False,
+        )
         assert str(box_id) == "raw"
 
 

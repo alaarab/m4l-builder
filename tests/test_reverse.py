@@ -2832,10 +2832,11 @@ class TestGeneratedPython:
         device.add_v8ui(
             "canvas",
             [10, 10, 140, 60],
-            js_code="mgraphics.init();\n",
+            js_code="mgraphics.init();\n",  # placeholder: structural round-trip, not a real engine
             js_filename="canvas.js",
             numinlets=2,
             numoutlets=1,
+            validate_contract=False,
         )
         device.add_adsrui("env", [160, 10, 120, 60], bgcolor=[0.1, 0.1, 0.1, 1.0])
         device.add_live_drop("drop", [290, 10, 100, 40], bgcolor=[0.2, 0.2, 0.2, 1.0])
