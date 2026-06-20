@@ -15,7 +15,7 @@ no leading/trailing newline, so a caller splices it between its own lines.
 
 from __future__ import annotations
 
-__all__ = ["ms_encode", "ms_decode", "ms_width", "drive_blend"]
+__all__ = ["ms_encode", "ms_decode", "ms_width", "drive_blend", "peak_follower"]
 
 
 def ms_encode(left: str, right: str, mid: str, side: str) -> str:
@@ -82,3 +82,27 @@ def drive_blend(x: str, out: str, k: str, drive: str) -> str:
     ``1 + drive*5``).
     """
     return f"{out} = {x} + (tanh({x} * {k}) / tanh({k}) - {x}) * {drive};"
+
+
+def peak_follower(
+    peak: str,
+    state: str,
+    attack_coeff: str,
+    release_coeff: str,
+    coeff: str = "acoeff",
+) -> str:
+    """Attack/release peak envelope follower (the dynamics detector core). Emits::
+
+        coeff = peak > state ? attack_coeff : release_coeff;
+        state = peak + coeff * (state - peak);
+
+    A one-pole that chases ``peak`` with separate rise/fall rates: when the input
+    rises above the envelope it uses ``attack_coeff``, otherwise ``release_coeff``
+    (each a per-sample one-pole pole 0..1 — SMALLER = faster). This is the
+    detector every compressor / limiter / ducker / de-esser sits on. ``peak`` is
+    typically ``max(abs(L), abs(R))``; ``coeff`` names the scratch coefficient var.
+    """
+    return (
+        f"{coeff} = {peak} > {state} ? {attack_coeff} : {release_coeff};\n"
+        f"{state} = {peak} + {coeff} * ({state} - {peak});"
+    )

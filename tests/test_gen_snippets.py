@@ -4,9 +4,16 @@ The M/S primitives are pure arithmetic, so the emitted GenExpr is also valid
 Python — we can exec it to behaviourally verify the math (round-trip identity,
 mono/wide), not just snapshot the text.
 """
+import re
 from math import tanh
 
-from m4l_builder.gen_snippets import drive_blend, ms_decode, ms_encode, ms_width
+from m4l_builder.gen_snippets import (
+    drive_blend,
+    ms_decode,
+    ms_encode,
+    ms_width,
+    peak_follower,
+)
 
 
 def _run(code, **vars):
@@ -14,6 +21,13 @@ def _run(code, **vars):
     ns.update(vars)
     exec(code, ns)  # GenExpr +,-,*,tanh and numeric literals are valid Python
     return ns
+
+
+def _gen_to_py(code):
+    # rewrite a single GenExpr ternary "lhs = cond ? a : b;" as Python so _run
+    # can exec it (GenExpr ?: is not Python syntax).
+    return re.sub(r"(\w+)\s*=\s*(.+?)\s*\?\s*(.+?)\s*:\s*(.+?);",
+                  r"\1 = (\3 if \2 else \4)", code)
 
 
 def test_ms_encode_text():
@@ -92,4 +106,30 @@ def test_drive_blend_soft_compresses_midlevel_at_full_drive():
 def test_drive_blend_matches_echotide_shipped_form():
     assert drive_blend("fbcL", "fbL", "k", "drv") == (
         "fbL = fbcL + (tanh(fbcL * k) / tanh(k) - fbcL) * drv;"
+    )
+
+
+def test_peak_follower_text():
+    assert peak_follower("dpk", "denv", "0.6", "0.9997", "dcoeff") == (
+        "dcoeff = dpk > denv ? 0.6 : 0.9997;\n"
+        "denv = dpk + dcoeff * (denv - dpk);"
+    )
+
+
+def test_peak_follower_attack_fast_release_slow():
+    code = _gen_to_py(peak_follower("P", "S", "AC", "RC", "C"))
+    # attack: input above the envelope -> uses AC (small pole = fast rise)
+    ns = _run(code, P=1.0, S=0.0, AC=0.1, RC=0.9)
+    assert abs(ns["S"] - 0.9) < 1e-12       # rose 0 -> 0.9 in one step
+    assert abs(ns["C"] - 0.1) < 1e-12       # picked the attack coeff
+    # release: input below the envelope -> uses RC (big pole = slow fall)
+    ns2 = _run(code, P=0.0, S=1.0, AC=0.1, RC=0.9)
+    assert abs(ns2["S"] - 0.9) < 1e-12      # fell only 1.0 -> 0.9
+    assert abs(ns2["C"] - 0.9) < 1e-12      # picked the release coeff
+
+
+def test_peak_follower_matches_echotide_wet_env_form():
+    assert peak_follower("wpk", "env", "0.6", "0.995", "coeff") == (
+        "coeff = wpk > env ? 0.6 : 0.995;\n"
+        "env = wpk + coeff * (env - wpk);"
     )
