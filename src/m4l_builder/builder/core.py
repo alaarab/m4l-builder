@@ -23,6 +23,7 @@ from ..gen_snippets import (
     ms_encode,
     ms_width,
     peak_follower,
+    soft_knee_gain_computer,
 )
 from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
 from ..jsui_contract import (
@@ -95,6 +96,7 @@ __all__ = [
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
     "exp_pole",
+    "soft_knee_gain_computer",
     "simulate",
     "GenKernel",
     "UnsupportedKernel",

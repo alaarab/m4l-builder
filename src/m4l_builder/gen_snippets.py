@@ -24,6 +24,7 @@ __all__ = [
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
     "exp_pole",
+    "soft_knee_gain_computer",
 ]
 
 
@@ -211,3 +212,55 @@ def exp_pole(out: str, tau_seconds: str) -> str:
     samplerate-coefficient cache will wrap.
     """
     return f"{out} = exp(-1.0 / ({tau_seconds} * samplerate));"
+
+
+def soft_knee_gain_computer(
+    level: str,
+    threshold: str,
+    ratio: str,
+    knee: str,
+    out: str,
+    *,
+    over: str = "over",
+    half_knee: str = "half_knee",
+    slope: str = "slope",
+    t: str = "t",
+) -> str:
+    """Soft-knee downward-compression gain computer (the dB gain-reduction curve).
+
+    Given a detector ``level`` (dB), a ``threshold`` (dB), a ``ratio`` (>= 1) and a
+    ``knee`` width (dB), emit the gain reduction ``out`` (dB, <= 0). Below the knee
+    there is no reduction; within +/- half the knee a quadratic soft transition; above
+    it the hard ``over * (1/ratio - 1)`` slope. This is the static compressor/limiter
+    curve — pair it with a :func:`peak_follower` (or instant-attack envelope) feeding
+    ``level`` and a ``dbtoa(out + makeup)`` applied to the audio. It is the
+    gain-computer half of the audio-rate dynamics foundation (the detector half is
+    peak_follower) that the dynamic-EQ bands compose. Emits an ``if``/``else if``
+    block::
+
+        over = level - threshold;
+        half_knee = knee * 0.5;
+        slope = (1.0 / max(ratio, 1.0)) - 1.0;
+        out = 0.;
+        if (over > half_knee) {
+            out = over * slope;
+        } else if (over > -half_knee && knee > 0.01) {
+            t = over + half_knee;
+            out = (t * t) / (2.0 * knee) * slope;
+        }
+
+    ``over``/``half_knee``/``slope``/``t`` are the scratch var names (override to
+    avoid a clash when the primitive is used twice in one codebox).
+    """
+    return (
+        f"{over} = {level} - {threshold};\n"
+        f"{half_knee} = {knee} * 0.5;\n"
+        f"{slope} = (1.0 / max({ratio}, 1.0)) - 1.0;\n"
+        f"{out} = 0.;\n"
+        f"if ({over} > {half_knee}) {{\n"
+        f"    {out} = {over} * {slope};\n"
+        f"}} else if ({over} > -{half_knee} && {knee} > 0.01) {{\n"
+        f"    {t} = {over} + {half_knee};\n"
+        f"    {out} = ({t} * {t}) / (2.0 * {knee}) * {slope};\n"
+        f"}}"
+    )

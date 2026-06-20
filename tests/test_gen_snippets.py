@@ -16,6 +16,7 @@ from m4l_builder.gen_snippets import (
     ms_encode,
     ms_width,
     peak_follower,
+    soft_knee_gain_computer,
 )
 
 
@@ -270,3 +271,58 @@ def test_exp_pole_matches_ceiling_and_pressure_shipped_forms():
         "rel = exp(-1.0 / (max(release, 5.) * 0.001 * samplerate));"
     assert exp_pole("rel_fast", "clamp(rel_ms * 0.12, 20., 120.) * 0.001") == \
         "rel_fast = exp(-1.0 / (clamp(rel_ms * 0.12, 20., 120.) * 0.001 * samplerate));"
+
+
+# --- soft_knee_gain_computer: the compressor/limiter gain-reduction curve ------
+# An if/else block; null-tested behaviourally via the gen_sim simulator.
+from m4l_builder.gen_sim import simulate as _sim  # noqa: E402
+
+
+def _grdb(level, *, threshold=-18.0, ratio=4.0, knee=6.0):
+    code = ("Param threshold(-18.);\nParam ratio(4.);\nParam knee(6.);\n"
+            + soft_knee_gain_computer("in1", "threshold", "ratio", "knee", "grdb")
+            + "\nout1 = grdb;")
+    return _sim(code, {"in1": [level]}, params={"threshold": threshold,
+                "ratio": ratio, "knee": knee}, num_samples=1)["out1"][0]
+
+
+def test_soft_knee_gain_computer_matches_pressure_shipped_form():
+    assert soft_knee_gain_computer("env", "threshold", "ratio", "knee", "grdb") == (
+        "over = env - threshold;\n"
+        "half_knee = knee * 0.5;\n"
+        "slope = (1.0 / max(ratio, 1.0)) - 1.0;\n"
+        "grdb = 0.;\n"
+        "if (over > half_knee) {\n"
+        "    grdb = over * slope;\n"
+        "} else if (over > -half_knee && knee > 0.01) {\n"
+        "    t = over + half_knee;\n"
+        "    grdb = (t * t) / (2.0 * knee) * slope;\n"
+        "}"
+    )
+
+
+def test_gain_computer_unity_ratio_is_transparent():
+    # ratio == 1 -> slope 0 -> zero reduction at every level (the null test).
+    for level in (-40.0, -18.0, 0.0, 12.0):
+        assert abs(_grdb(level, ratio=1.0)) < 1e-12
+
+
+def test_gain_computer_below_threshold_no_reduction():
+    assert abs(_grdb(-40.0)) < 1e-12       # far below knee
+
+
+def test_gain_computer_only_attenuates():
+    for level in (-60.0, -18.0, -6.0, 0.0, 12.0):
+        assert _grdb(level) <= 1e-12
+
+
+def test_gain_computer_above_knee_is_hard_slope():
+    # over = 0 - (-18) = 18, slope = 1/4 - 1 = -0.75 -> grdb = -13.5
+    assert abs(_grdb(0.0) - (18.0 * (0.25 - 1.0))) < 1e-9
+
+
+def test_gain_computer_custom_scratch_names_avoid_clash():
+    out = soft_knee_gain_computer("L", "th", "rt", "kn", "gr",
+                                  over="o2", half_knee="hk2", slope="sl2", t="t2")
+    assert "o2 = L - th;" in out and "t2 = o2 + hk2;" in out
+    assert "\nover " not in out and " over " not in out
