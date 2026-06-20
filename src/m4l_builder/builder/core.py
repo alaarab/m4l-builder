@@ -13,6 +13,7 @@ from ..device import (
 )
 from ..gen_lint import lint_genexpr
 from ..gen_patcher import build_gendsp
+from ..gen_sim import GenKernel, UnsupportedKernel, simulate
 from ..gen_snippets import (
     drive_blend,
     exp_pole,
@@ -94,6 +95,9 @@ __all__ = [
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
     "exp_pole",
+    "simulate",
+    "GenKernel",
+    "UnsupportedKernel",
     "Stage",
     "StageResult",
     "stage_result",

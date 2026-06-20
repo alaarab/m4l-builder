@@ -3,7 +3,6 @@
 import pytest
 
 from m4l_builder.amxd import WIRING_INTEGRITY_CODES
-from m4l_builder.validation import lint_graph
 from m4l_builder.dsp import (
     adsr_envelope,
     aftertouch_in,
@@ -111,6 +110,7 @@ from m4l_builder.dsp import (
     wavetable_osc,
     xfade_matrix,
 )
+from m4l_builder.validation import lint_graph
 
 # -- helpers --
 

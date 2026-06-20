@@ -5,9 +5,16 @@ import tempfile
 import pytest
 
 from m4l_builder import MIDNIGHT, AudioEffect
+from m4l_builder.engines.ballistics_curve import ballistics_curve_js
 from m4l_builder.engines.crossover_display import (
     CROSSOVER_DISPLAY_INLETS,
     crossover_display_js,
+)
+from m4l_builder.engines.delay_trail import delay_trail_js
+from m4l_builder.engines.design_system import (
+    DESIGN_SYSTEM_VERSION,
+    design_system_js,
+    version_tag,
 )
 from m4l_builder.engines.envelope_display import ENVELOPE_INLETS, envelope_display_js
 from m4l_builder.engines.eq_band_column import (
@@ -15,17 +22,7 @@ from m4l_builder.engines.eq_band_column import (
     EQ_BAND_COLUMN_OUTLETS,
     eq_band_column_js,
 )
-from m4l_builder.engines.ballistics_curve import ballistics_curve_js
-from m4l_builder.engines.delay_trail import delay_trail_js
-from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
-from m4l_builder.engines.waveshape_curve import waveshape_curve_js
-from m4l_builder.engines.design_system import (
-    DESIGN_SYSTEM_VERSION,
-    design_system_js,
-    version_tag,
-)
 from m4l_builder.engines.eq_curve import EQ_CURVE_INLETS, eq_curve_js
-from m4l_builder.engines.transfer_curve import transfer_curve_js
 from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, filter_curve_js
 from m4l_builder.engines.grain_display import (
     GRAIN_DISPLAY_INLETS,
@@ -48,6 +45,7 @@ from m4l_builder.engines.linear_phase_eq_display import (
     LINEAR_PHASE_EQ_DISPLAY_OUTLETS,
     linear_phase_eq_display_js,
 )
+from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
 from m4l_builder.engines.peaking_eq_display import (
     PEAKING_EQ_DISPLAY_INLETS,
     PEAKING_EQ_DISPLAY_OUTLETS,
@@ -94,12 +92,14 @@ from m4l_builder.engines.step_grid_display import (
     STEP_GRID_DISPLAY_OUTLETS,
     step_grid_display_js,
 )
+from m4l_builder.engines.transfer_curve import transfer_curve_js
 from m4l_builder.engines.velocity_curve_display import (
     VELOCITY_CURVE_INLETS,
     VELOCITY_CURVE_OUTLETS,
     velocity_curve_display_js,
 )
 from m4l_builder.engines.waveform_display import WAVEFORM_INLETS, waveform_display_js
+from m4l_builder.engines.waveshape_curve import waveshape_curve_js
 from m4l_builder.engines.wavetable_display import (
     WAVETABLE_DISPLAY_INLETS,
     WAVETABLE_DISPLAY_OUTLETS,
