@@ -49,6 +49,8 @@ CORE_EXPORTS = [
     "ms_width",
     "drive_blend",
     "peak_follower",
+    "isp_catmull_4x",
+    "kweight_coeffs_bs1770",
     "Stage",
     "StageResult",
     "stage_result",

@@ -15,6 +15,8 @@ from ..gen_lint import lint_genexpr
 from ..gen_patcher import build_gendsp
 from ..gen_snippets import (
     drive_blend,
+    isp_catmull_4x,
+    kweight_coeffs_bs1770,
     ms_decode,
     ms_encode,
     ms_width,
@@ -88,6 +90,8 @@ __all__ = [
     "ms_width",
     "drive_blend",
     "peak_follower",
+    "isp_catmull_4x",
+    "kweight_coeffs_bs1770",
     "Stage",
     "StageResult",
     "stage_result",
