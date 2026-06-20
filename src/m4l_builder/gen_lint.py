@@ -74,5 +74,10 @@ def lint_genexpr(code: str, numins: int, numouts: int) -> list[str]:
             )
 
     # de-dup while preserving order
-    seen = set()
-    return [x for x in issues if not (x in seen or seen.add(x))]
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for issue in issues:
+        if issue not in seen:
+            seen.add(issue)
+            deduped.append(issue)
+    return deduped

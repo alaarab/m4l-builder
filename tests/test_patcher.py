@@ -1,6 +1,5 @@
 """Tests for patcher.py — build_patcher() function."""
 
-import os
 
 import pytest
 

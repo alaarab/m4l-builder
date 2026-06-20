@@ -283,7 +283,7 @@ class Device(GraphContainer):
                "fontsize": 7.5, "mode": 1}
         if button_kwargs:
             bkw.update(button_kwargs)
-        self.add_live_text(button_id, param_name, expand_rect,
+        self.add_live_text(button_id, param_name, expand_rect,  # type: ignore[attr-defined]  # generated via setattr below
                            parameter=ParameterSpec(
                                name=param_name, parameter_type=2,
                                enum=["HIDE", "SHOW"], initial=[0],
@@ -333,7 +333,7 @@ class Device(GraphContainer):
                "fontsize": 7.5, "mode": 1}
         if button_kwargs:
             bkw.update(button_kwargs)
-        self.add_live_text(button_id, param_name, rect,
+        self.add_live_text(button_id, param_name, rect,  # type: ignore[attr-defined]  # generated via setattr below
                            parameter=ParameterSpec(
                                name=param_name, parameter_type=2,
                                enum=[text_full, text_mini], initial=[0],
