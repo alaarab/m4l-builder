@@ -37,6 +37,7 @@ __all__ = [
     "biquad_cascade",
     "lr_crossover",
     "multiband_split",
+    "tpt_svf",
     "one_pole_coeff",
     "one_pole_lp",
     "one_pole_hp",
@@ -812,3 +813,54 @@ def multiband_split(x: str, band_outs: list, freqs: list, order: int = 4,
             parts.append(f"{out_var} = {c_lo} + {c_hi};")
             sig = out_var
     return "\n".join(parts)
+
+
+def tpt_svf(
+    x: str,
+    freq: str,
+    q: str,
+    lp: str, bp: str, hp: str, notch: str,
+    ic1: str, ic2: str,
+    *,
+    g: str = "g", k: str = "k", a1: str = "a1", a2: str = "a2", a3: str = "a3",
+    v1: str = "v1", v2: str = "v2", v3: str = "v3",
+) -> str:
+    """Zero-delay-feedback / TPT state-variable filter (Zavalishin).
+
+    A single 2nd-order structure that yields the four classic responses at once
+    from input ``x`` at runtime cutoff ``freq`` (Hz) and resonance ``q``: writes
+    ``lp`` (low-pass), ``bp`` (band-pass), ``hp`` (high-pass) and ``notch``. This
+    is the MODULATION-FRIENDLY resonant filter — the bilinear/topology-preserving
+    transform makes it stable and zipper-free under fast cutoff/Q sweeps (where a
+    static biquad zippers), and it is the gen-domain workaround for Live 12's
+    silent ``svf~``. Emits::
+
+        g = tan(pi * freq / samplerate);  k = 1 / q;
+        a1 = 1/(1 + g*(g+k));  a2 = g*a1;  a3 = g*a2;
+        v3 = x - ic2;  v1 = a1*ic1 + a2*v3;  v2 = ic2 + a2*ic1 + a3*v3;
+        ic1 = 2*v1 - ic1;  ic2 = 2*v2 - ic2;          # trapezoidal integrators
+        lp = v2;  bp = v1;  hp = x - k*v1 - v2;  notch = x - k*v1;
+
+    At ``q = 0.70710678`` it is a Butterworth corner (all three of LP/BP/HP are
+    -3 dB at ``freq``, notch is a deep null there); higher ``q`` resonates. The
+    identity ``notch == lp + hp`` holds. ``ic1 ic2`` are the caller's two History
+    integrator states (declare ``History {ic1}(0.); History {ic2}(0.);``); the
+    other names are per-sample scratch (override to place several SVFs in one
+    codebox).
+    """
+    return (
+        f"{g} = tan(3.14159265358979 * {freq} / samplerate);\n"
+        f"{k} = 1. / {q};\n"
+        f"{a1} = 1. / (1. + {g} * ({g} + {k}));\n"
+        f"{a2} = {g} * {a1};\n"
+        f"{a3} = {g} * {a2};\n"
+        f"{v3} = {x} - {ic2};\n"
+        f"{v1} = {a1} * {ic1} + {a2} * {v3};\n"
+        f"{v2} = {ic2} + {a2} * {ic1} + {a3} * {v3};\n"
+        f"{ic1} = 2. * {v1} - {ic1};\n"
+        f"{ic2} = 2. * {v2} - {ic2};\n"
+        f"{lp} = {v2};\n"
+        f"{bp} = {v1};\n"
+        f"{hp} = {x} - {k} * {v1} - {v2};\n"
+        f"{notch} = {x} - {k} * {v1};"
+    )
