@@ -33,6 +33,7 @@ from m4l_builder.gen_snippets import (
     rbj_peaking,
     rbj_shelf,
     soft_knee_gain_computer,
+    square_adaa,
     tanh_adaa,
     tilt_shelf,
     tpt_svf,
@@ -1273,3 +1274,53 @@ def test_hardclip_adaa_is_self_contained_and_namespaced():
     other = hardclip_adaa("a", "b", "ap", ax="q_ax", fx="q_fx", dx="q_dx",
                           axp="q_axp", fxp="q_fxp", mid="q_mid")
     assert "hca_" not in other and "q_dx = a - ap;" in other
+
+
+# --- square_adaa: antiderivative anti-aliased squarer (x^2) -------------------
+def _sq(seq, sr=48000.0):
+    return _sim("History xp(0.);\n" + square_adaa("in1", "out1", "xp"),
+                {"in1": list(seq)}, samplerate=sr, num_samples=len(seq))["out1"]
+
+
+def test_square_adaa_matches_mean_of_square_reference():
+    from math import pi, sin
+    seq = [1.2 * sin(2 * pi * 3000 * i / 48000.0) for i in range(3000)]
+    xp, ref = 0.0, []
+    for x in seq:
+        ref.append((x * x + x * xp + xp * xp) / 3.0)
+        xp = x
+    assert max(abs(a - b) for a, b in zip(_sq(seq), ref)) < 1e-12
+
+
+def test_square_adaa_slow_signal_is_square():
+    from math import pi, sin
+    slow = [0.5 * sin(2 * pi * 60 * i / 48000.0) for i in range(2000)]
+    got = _sq(slow)
+    assert max(abs(a - b * b) for a, b in zip(got[1:], slow[1:])) < 0.005
+
+
+def test_square_adaa_suppresses_aliasing_vs_naive_square():
+    # x^2 doubles frequency: a 14 kHz tone's 2nd harmonic (28 kHz) folds to 20 kHz.
+    from math import pi, sin
+    n, f0 = 8192, 14000.0
+    xs = [0.8 * sin(2 * pi * f0 * i / 48000.0) for i in range(n)]
+    naive = [v * v for v in xs]
+    assert _dft_mag(_sq(xs), 20000.0) < 0.4 * _dft_mag(naive, 20000.0)
+
+
+def test_square_adaa_is_branch_free_and_stateful():
+    code = square_adaa("a", "b", "ap")
+    assert "Delay" not in code and "?" not in code            # closed form, no fallback
+    assert code == ("b = (a * a + a * ap + ap * ap) * 0.3333333333333333;\n"
+                    "ap = a;")
+
+
+def test_exciter_harmonics_anti_aliased_squarer():
+    # sq_state opt-in swaps the naive band^2 for the ADAA squarer; the rest of the
+    # macro (odd tanh term, the out sum, the even==0 null) is unchanged.
+    naive = exciter_harmonics("bnd", "k", "ev", "h")
+    aa = exciter_harmonics("bnd", "k", "ev", "h", sq_state="sqx")
+    assert "hx_sq = bnd * bnd;" in naive                       # naive default unchanged
+    assert "hx_sq = (bnd * bnd + bnd * sqx + sqx * sqx) * 0.3333333333333333;" in aa
+    assert "sqx = bnd;" in aa                                  # advances the state
+    assert "h = (hx_odd - bnd) + ev * hx_sq;" in aa            # sum line intact
