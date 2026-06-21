@@ -38,6 +38,7 @@ __all__ = [
     "lr_crossover",
     "multiband_split",
     "tpt_svf",
+    "lfo",
     "one_pole_coeff",
     "one_pole_lp",
     "one_pole_hp",
@@ -863,4 +864,44 @@ def tpt_svf(
         f"{bp} = {v1};\n"
         f"{hp} = {x} - {k} * {v1} - {v2};\n"
         f"{notch} = {x} - {k} * {v1};"
+    )
+
+
+def lfo(
+    out: str,
+    rate: str,
+    shape: str,
+    phase: str,
+    *,
+    sq: str = "lfo_sq", tri: str = "lfo_tri", saw: str = "lfo_saw", sn: str = "lfo_sn",
+) -> str:
+    """In-gen low-frequency oscillator (phase accumulator -> selectable shape).
+
+    A bipolar (-1..1) LFO at runtime ``rate`` (Hz) for modulating gen parameters
+    INSIDE a codebox — filter-sweep / auto-wah cutoff (pair with :func:`tpt_svf`),
+    tape wobble, tremolo, drive movement — without leaving gen for a ``cycle~``.
+    ``shape``: 0 = sine, 1 = triangle, 2 = saw (rising), 3 = square. Emits::
+
+        phase = phase + rate / samplerate;
+        phase = phase >= 1. ? phase - 1. : phase;     # wrap 0..1
+        sq  = phase < 0.5 ? 1. : -1.;
+        tri = 1. - 4. * abs(phase - 0.5);             # -1 at 0/1, +1 at 0.5
+        saw = 2. * phase - 1.;
+        sn  = sin(2 * pi * phase);
+        out = shape==1 ? tri : (shape==2 ? saw : (shape==3 ? sq : sn));
+
+    ``phase`` is the caller's History cell (declare ``History {phase}(0.);``).
+    Single-subtract wrap is exact for LFO rates (rate << samplerate). Scale/offset
+    ``out`` at the call site to map the -1..1 swing onto a target range. ``sq tri
+    saw sn`` are scratch names (override to place several LFOs in one codebox).
+    """
+    return (
+        f"{phase} = {phase} + {rate} / samplerate;\n"
+        f"{phase} = {phase} >= 1. ? {phase} - 1. : {phase};\n"
+        f"{sq} = {phase} < 0.5 ? 1. : -1.;\n"
+        f"{tri} = 1. - 4. * abs({phase} - 0.5);\n"
+        f"{saw} = 2. * {phase} - 1.;\n"
+        f"{sn} = sin(6.28318530717959 * {phase});\n"
+        f"{out} = {shape} == 1 ? {tri} : "
+        f"({shape} == 2 ? {saw} : ({shape} == 3 ? {sq} : {sn}));"
     )

@@ -17,6 +17,7 @@ from m4l_builder.gen_snippets import (
     exp_pole,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
+    lfo,
     lr_crossover,
     ms_decode,
     ms_encode,
@@ -1020,3 +1021,52 @@ def test_tpt_svf_is_stable_under_fast_cutoff_sweep():
     seq = [math.sin(2 * math.pi * 500 * k / 48000) for k in range(8000)]
     o = _sim(code, {"in1": seq}, params={"q": 4.0}, num_samples=8000)["out1"]
     assert all(abs(v) < 50.0 for v in o)      # bounded (no ZDF instability)
+
+
+# --- lfo: in-gen low-frequency oscillator (sine/tri/saw/square) ---------------
+def _lfo_run(shape, rate=2.0, sr=48000.0, n=48000):
+    code = ("Param rate(2.); Param shape(0.);\nHistory ph(0.);\n"
+            + lfo("out1", "rate", "shape", "ph"))
+    return _sim(code, {"in1": [0.0] * n}, params={"rate": rate, "shape": shape},
+                samplerate=sr, num_samples=n)["out1"]
+
+
+def test_lfo_all_shapes_are_bipolar_unit():
+    for sh in (0, 1, 2, 3):
+        o = _lfo_run(sh)
+        assert min(o) >= -1.0001 and max(o) <= 1.0001, sh
+        assert min(o) < -0.9 and max(o) > 0.9, sh   # full ±1 swing
+
+
+def test_lfo_rate_is_in_hz():
+    # rate Hz == cycles per second == zero-up-crossings in one second of audio.
+    for hz in (1.0, 2.0, 5.0, 10.0):
+        o = _lfo_run(0, rate=hz)
+        ups = sum(1 for i in range(1, len(o)) if o[i - 1] < 0 <= o[i])
+        assert ups == int(hz), (hz, ups)
+
+
+def test_lfo_shapes_are_distinct():
+    sn, tri, saw, sq = (_lfo_run(s) for s in (0, 1, 2, 3))
+    # the accumulator advances one step before the first output, so "start"
+    # values are within ~one step of the ideal (0.01 covers it at LFO rates).
+    assert abs(sn[0]) < 0.01                        # sine starts ~0
+    assert abs(tri[0] - (-1.0)) < 0.01              # triangle starts ~-1
+    assert abs(saw[0] - (-1.0)) < 0.01              # saw starts ~-1 (rising)
+    # square only ever takes +/-1
+    assert all(abs(abs(v) - 1.0) < 1e-9 for v in sq)
+    # saw is (mostly) monotonically rising within a cycle, the triangle is not
+    cyc = len(saw) // 2     # one 2 Hz cycle in 1 s of 48k = 24000 samples
+    saw_rises = sum(1 for i in range(1, cyc) if saw[i] > saw[i - 1])
+    assert saw_rises > cyc * 0.95                  # saw climbs almost everywhere
+
+
+def test_lfo_square_is_50pct_duty():
+    o = _lfo_run(3, rate=4.0)
+    assert abs(sum(1 for v in o if v > 0) / len(o) - 0.5) < 0.01
+
+
+def test_lfo_phase_stays_bounded():
+    # the wrap keeps the accumulator in 0..1 over a long run (no drift/blowup).
+    o = _lfo_run(2, rate=7.0, n=96000)   # saw exposes the raw phase
+    assert all(-1.0001 <= v <= 1.0001 for v in o)
