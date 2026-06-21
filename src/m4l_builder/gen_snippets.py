@@ -24,6 +24,7 @@ __all__ = [
     "drive_blend",
     "tanh_adaa",
     "hardclip_adaa",
+    "square_adaa",
     "peak_follower",
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
@@ -204,6 +205,32 @@ def hardclip_adaa(
         f"({fx} - {fxp}) / {dx} : clamp({mid}, -1., 1.);",
         f"{xprev} = {x};",
     ])
+
+
+def square_adaa(x: str, out: str, xprev: str) -> str:
+    """First-order antiderivative-anti-aliased SQUARER (``x^2``). Emits::
+
+        out = (x*x + x*xprev + xprev*xprev) * 0.3333333333333333;
+        xprev = x;
+
+    The squarer ``f(x)=x^2`` is the even-harmonic generator at the heart of every
+    exciter / "warm" tube colour — and the worst aliaser, since it DOUBLES the
+    input's frequency content (a 7 kHz tone -> 14 kHz that folds). This is the
+    1st-order ADAA squarer: the mean of ``x^2`` over each sample step via the
+    antiderivative ``F(x)=x^3/3``. Uniquely it needs NO div / no fallback — the
+    difference quotient ``(x^3 - xprev^3) / (3 (x - xprev))`` reduces EXACTLY to the
+    polynomial ``(x^2 + x*xprev + xprev^2)/3`` (which equals ``x^2`` when
+    ``x == xprev``), so it is unconditional, branch-free, and bit-cheap. Output
+    equals ``x^2`` for slow signals (modulo a 0.5-sample average) but suppresses
+    the aliased second harmonic. ``xprev`` is the caller's 1-sample state (declare
+    ``History {xprev}(0.);``). The squarer member of the anti-aliased-shaper set
+    (soft = tanh_adaa, hard = hardclip_adaa); pairs with :func:`exciter_harmonics`.
+    """
+    return (
+        f"{out} = ({x} * {x} + {x} * {xprev} + {xprev} * {xprev}) "
+        f"* 0.3333333333333333;\n"
+        f"{xprev} = {x};"
+    )
 
 
 def peak_follower(
@@ -507,7 +534,8 @@ def one_pole_hp(x: str, state: str, coeff: str, out: str) -> str:
 
 
 def exciter_harmonics(band: str, k: str, even: str, out: str,
-                      *, odd: str = "hx_odd", sq: str = "hx_sq") -> str:
+                      *, odd: str = "hx_odd", sq: str = "hx_sq",
+                      sq_state: str | None = None) -> str:
     """Generated harmonic content of a band-limited signal (the exciter core). Emits::
 
         odd = tanh(band * k) / tanh(k);
@@ -528,12 +556,21 @@ def exciter_harmonics(band: str, k: str, even: str, out: str,
     At ``band == 0`` -> ``out == 0`` (silence in, silence added). The caller scales
     ``out`` by a per-band amount and adds it to dry, so amount 0 is a perfect null.
     ``odd``/``sq`` are scratch var names (override to use the macro twice — e.g. a
-    LOW and a HIGH band — in one codebox).
+    LOW and a HIGH band — in one codebox). Pass ``sq_state`` (a ``History`` cell var
+    name) to ANTI-ALIAS the squarer via :func:`square_adaa` — the squarer doubles
+    the band's frequency content and aliases worst at high ``even``, so on a HIGH
+    exciter band ``sq_state`` swaps the naive ``band^2`` for the bandlimited mean of
+    ``band^2`` (the caller declares ``History {sq_state}(0.);``). ``even == 0`` is a
+    perfect null either way.
     """
+    if sq_state is not None:
+        sq_line = square_adaa(band, sq, sq_state)
+    else:
+        sq_line = f"{sq} = {band} * {band};"
     return (
         f"{odd} = tanh({band} * {k}) / tanh({k});\n"
-        f"{sq} = {band} * {band};\n"
-        f"{out} = ({odd} - {band}) + {even} * {sq};"
+        + sq_line + "\n"
+        + f"{out} = ({odd} - {band}) + {even} * {sq};"
     )
 
 
