@@ -15,6 +15,7 @@ from m4l_builder.gen_snippets import (
     dynamics_band,
     exciter_harmonics,
     exp_pole,
+    hardclip_adaa,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
     lfo,
@@ -1199,3 +1200,76 @@ def test_tanh_adaa_is_self_contained_and_namespaced():
     assert "adaa_dx = in1 - xp;" in code
     other = tanh_adaa("a", "b", "ap", dx="dd", fx="ff", fxp="ffp", ax="aa", axp="aap")
     assert "adaa_" not in other and "dd = a - ap;" in other
+
+
+# --- hardclip_adaa: antiderivative anti-aliased hard clipper ------------------
+def _hc(code, seq, sr=48000.0):
+    return _sim("History xp(0.);\n" + code, {"in1": list(seq)},
+                samplerate=sr, num_samples=len(seq))["out1"]
+
+
+def _hc_ref(seq):
+    # independent 1st-order ADAA hard-clip reference (F piecewise; clamp fallback).
+    def F(v):
+        return v * v * 0.5 if abs(v) <= 1.0 else abs(v) - 0.5
+    out, xp = [], 0.0
+    for x in seq:
+        dx = x - xp
+        out.append((F(x) - F(xp)) / dx if abs(dx) > 1e-5
+                   else max(-1.0, min(1.0, 0.5 * (x + xp))))
+        xp = x
+    return out
+
+
+def test_hardclip_adaa_matches_independent_reference():
+    from math import pi, sin
+    seq = [3.0 * sin(2 * pi * 2000 * i / 48000.0) for i in range(3000)]
+    got = _hc(hardclip_adaa("in1", "out1", "xp"), seq)
+    assert max(abs(a - b) for a, b in zip(got, _hc_ref(seq))) < 1e-12
+
+
+def test_hardclip_adaa_constant_input_falls_back_to_clamp():
+    got_lo = _hc(hardclip_adaa("in1", "out1", "xp"), [0.5] * 32)
+    got_hi = _hc(hardclip_adaa("in1", "out1", "xp"), [2.0] * 32)
+    assert all(abs(v - 0.5) < 1e-12 for v in got_lo[2:])   # below ceiling: unclipped
+    assert all(abs(v - 1.0) < 1e-12 for v in got_hi[2:])   # above ceiling: clamped to 1
+
+
+def test_hardclip_adaa_transparent_below_ceiling():
+    # |x| < 1 everywhere -> output is the input (modulo the tiny 0.5-sample avg),
+    # NOT compressed like a soft tanh: a clipper leaves quiet signal alone.
+    from math import pi, sin
+    lo = [0.4 * sin(2 * pi * 100 * i / 48000.0) for i in range(2000)]
+    got = _hc(hardclip_adaa("in1", "out1", "xp"), lo)
+    assert max(abs(a - b) for a, b in zip(got[1:], lo[1:])) < 0.01
+
+
+def test_hardclip_adaa_is_bounded_and_finite():
+    import math
+    seq = [(-1.0 if i % 2 else 1.0) * 4.0 for i in range(300)] + [0.0] * 60
+    got = _hc(hardclip_adaa("in1", "out1", "xp"), seq)
+    assert all(math.isfinite(v) and abs(v) <= 1.0 + 1e-9 for v in got)
+
+
+def test_hardclip_adaa_suppresses_aliasing_vs_naive_clamp():
+    # hard clipping a 5 kHz tone (drive 2.5) makes odd harmonics whose 7th (->13k)
+    # and 9th (->3k) fold back; ADAA must cut both well below a naive clamp while
+    # keeping the fundamental.
+    from math import pi, sin
+    sr, f0, n = 48000.0, 5000.0, 8192
+    xs = [2.5 * sin(2 * pi * f0 * i / sr) for i in range(n)]
+    naive = [max(-1.0, min(1.0, v)) for v in xs]
+    adaa = _hc(hardclip_adaa("in1", "out1", "xp"), xs)
+    for fb in (13000.0, 3000.0):
+        assert _dft_mag(adaa, fb) < 0.4 * _dft_mag(naive, fb), fb
+    assert _dft_mag(adaa, f0) > 0.9 * _dft_mag(naive, f0)
+
+
+def test_hardclip_adaa_is_self_contained_and_namespaced():
+    code = hardclip_adaa("in1", "out1", "xp")
+    assert "Delay" not in code                              # arithmetic+clamp only
+    assert "clamp(hca_mid, -1., 1.)" in code                # the |dx|->0 fallback
+    assert "hca_fx = hca_ax <= 1. ? in1 * in1 * 0.5 : hca_ax - 0.5;" in code
+    other = hardclip_adaa("a", "b", "ap", ax="q_ax", fx="q_fx", dx="q_dx",
+                          axp="q_axp", fxp="q_fxp", mid="q_mid")
+    assert "hca_" not in other and "q_dx = a - ap;" in other

@@ -23,6 +23,7 @@ __all__ = [
     "ms_width",
     "drive_blend",
     "tanh_adaa",
+    "hardclip_adaa",
     "peak_follower",
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
@@ -155,6 +156,52 @@ def tanh_adaa(
         f"{dx} = {x} - {xprev};",
         f"{out} = abs({dx}) > 0.00001 ? "
         f"({fx} - {fxp}) / {dx} : tanh(0.5 * ({x} + {xprev}));",
+        f"{xprev} = {x};",
+    ])
+
+
+def hardclip_adaa(
+    x: str,
+    out: str,
+    xprev: str,
+    *,
+    ax: str = "hca_ax", axp: str = "hca_axp",
+    fx: str = "hca_fx", fxp: str = "hca_fxp", dx: str = "hca_dx", mid: str = "hca_mid",
+) -> str:
+    """First-order antiderivative-anti-aliased HARD clipper (clamp at +/-1).
+
+    The brickwall counterpart to :func:`tanh_adaa`: a ``clamp(x, -1, 1)`` clipper
+    that SUPPRESSES the aliasing a naive per-sample clipper folds back into the
+    band — the loudness-clipper move (Pro-L 2 / Ableton Soft Clip / Ozone
+    clipper / mastering clip) without oversampling. Unlike a soft tanh, a clipper
+    is TRANSPARENT below the ceiling (no level loss on already-quiet signal), so
+    it is the right shape for a true-peak limiter's clip stage. Uses the mean of
+    ``f(x)=clamp(x,-1,1)`` over each sample step via its antiderivative
+    ``F(x) = |x|<=1 ? x^2/2 : |x| - 1/2`` (Parker/Bilbao 1st-order ADAA)::
+
+        hca_dx = x - xprev;
+        out = abs(hca_dx) > 0.00001
+            ? (F(x) - F(xprev)) / hca_dx        # mean of clamp over [xprev, x]
+            : clamp(0.5*(x + xprev), -1., 1.);   # |dx|->0 limit (avoids 0/0)
+        xprev = x;
+
+    Output is bounded in ``[-1, 1]`` (a mean of clamp values) and equals the input
+    (modulo a 0.5-sample average) while ``|x| <= 1``; scale ``x`` by a drive
+    pre-gain and the result by its inverse at the call site to set the clip
+    ceiling. Arithmetic + ``clamp`` only (no log/exp) — fully gen_sim-verifiable.
+    ``xprev`` is the caller's 1-sample state (declare ``History {xprev}(0.);``);
+    ``ax axp fx fxp dx mid`` are scratch var names. Adds a constant 0.5-sample
+    group delay. The clip half of the anti-aliased-shaper set (soft = tanh_adaa).
+    """
+    return "\n".join([
+        f"{ax} = abs({x});",
+        f"{fx} = {ax} <= 1. ? {x} * {x} * 0.5 : {ax} - 0.5;",
+        f"{axp} = abs({xprev});",
+        f"{fxp} = {axp} <= 1. ? {xprev} * {xprev} * 0.5 : {axp} - 0.5;",
+        f"{dx} = {x} - {xprev};",
+        f"{mid} = 0.5 * ({x} + {xprev});",
+        f"{out} = abs({dx}) > 0.00001 ? "
+        f"({fx} - {fxp}) / {dx} : clamp({mid}, -1., 1.);",
         f"{xprev} = {x};",
     ])
 
