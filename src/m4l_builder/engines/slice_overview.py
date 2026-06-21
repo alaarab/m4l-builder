@@ -21,16 +21,25 @@ Named messages (slicer control, inlet 0):
     set_sensitivity <0-100> -- transient threshold (higher = more slices)
     set_min_spacing <ms>    -- minimum inter-onset spacing
     set_pitch <semitones>   -- global playback transpose (shortens dur_ms)
+    set_editable <0|1>      -- 1 = this instance is the EDITOR (click/drag dividers)
+    set_display_bounds <b0 b1 ...> -- adopt edited normalized boundaries (no re-detect)
     analyze                 -- (re)compute slice boundaries from the buffer
 
+Editing (editor instance only, set_editable 1): click near a divider grabs and
+drags it (clamped between neighbours); click in empty space inserts one;
+option/ctrl-click removes the nearest one. Each edit emits the full normalized
+boundary list on outlet 3 -> mirror to the display instance via set_display_bounds
+(which re-emits the coll-store lists), so the two jsui share ONE edited grid.
+
 Outlets:
-    0 -- clicked position (float 0.0-1.0)
+    0 -- clicked position (float 0.0-1.0)   [display/scan instance]
     1 -- per-slice coll-store list ``k start_ms 0 end_ms dur_ms`` (one per slice)
     2 -- slice count (int)
+    3 -- edited normalized boundary list (editor instance -> set_display_bounds)
 """
 
 SLICE_OVERVIEW_INLETS = 7
-SLICE_OVERVIEW_OUTLETS = 3
+SLICE_OVERVIEW_OUTLETS = 4
 
 
 def slice_overview_js(
@@ -54,7 +63,7 @@ def slice_overview_js(
         "mgraphics.autofill = 0;\n"
         "\n"
         "inlets = 7;\n"
-        "outlets = 3;\n"
+        "outlets = 4;\n"
         "\n"
         "var loaded = 0;\n"
         "var region_start = 0.0;\n"
@@ -78,6 +87,11 @@ def slice_overview_js(
         "var min_spacing_ms = 40.0;\n"
         "var pitch_ratio = 1.0;\n"
         "var slice_boundaries = [];\n"   # normalized 0..1 cut points (len = slices+1)
+        "var editable = 0;\n"            # 1 = EDITOR instance (drag dividers); 0 = display/scan
+        "var drag_index = -1;\n"         # interior divider being dragged (-1 = none)
+        "var manual_edit = 0;\n"         # the grid was hand-edited (skip env-driven re-detect)
+        "var GRAB_PX = 6;\n"             # px radius to grab a divider
+        "var MIN_GAP = 0.004;\n"         # min normalized gap between dividers
         "var RMS_WIN = 512;\n"
         "var RMS_HOP = 256;\n"
         "\n"
@@ -164,17 +178,100 @@ def slice_overview_js(
         "    }\n"
         "}\n"
         "\n"
+        "function x_to_pos(x) {\n"
+        "    var inner_w = mgraphics.size[0] - PADDING * 2;\n"
+        "    if (inner_w <= 0) return 0.0;\n"
+        "    return clamp((x - PADDING) / inner_w, 0.0, 1.0);\n"
+        "}\n"
+        "\n"
+        "function nearest_divider(pos) {\n"
+        "    var inner_w = mgraphics.size[0] - PADDING * 2;\n"
+        "    var best = -1, bestd = 1e9, i, d;\n"
+        "    for (i = 1; i <= slice_boundaries.length - 2; i++) {\n"
+        "        d = Math.abs(pos - slice_boundaries[i]) * inner_w;\n"
+        "        if (d < bestd) { bestd = d; best = i; }\n"
+        "    }\n"
+        "    if (best >= 1 && bestd <= GRAB_PX) return best;\n"
+        "    return -1;\n"
+        "}\n"
+        "\n"
+        "function add_divider(pos) {\n"
+        "    if (slice_boundaries.length < 2) slice_boundaries = [0.0, 1.0];\n"
+        "    if (pos <= MIN_GAP || pos >= 1.0 - MIN_GAP) return 0;\n"
+        "    if (slice_boundaries.length - 1 >= 64) return 0;\n"
+        "    var i, ins = -1;\n"
+        "    for (i = 0; i < slice_boundaries.length; i++) {\n"
+        "        if (Math.abs(pos - slice_boundaries[i]) < MIN_GAP) return 0;\n"
+        "        if (ins < 0 && slice_boundaries[i] > pos) ins = i;\n"
+        "    }\n"
+        "    if (ins < 0) ins = slice_boundaries.length - 1;\n"
+        "    slice_boundaries.splice(ins, 0, pos);\n"
+        "    return 1;\n"
+        "}\n"
+        "\n"
+        "function remove_divider(idx) {\n"
+        "    if (idx >= 1 && idx <= slice_boundaries.length - 2) {\n"
+        "        slice_boundaries.splice(idx, 1);\n"
+        "        return 1;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n"
+        "\n"
+        "function emit_display_bounds() {\n"
+        "    var args = [3], i;\n"
+        "    for (i = 0; i < slice_boundaries.length; i++) args.push(slice_boundaries[i]);\n"
+        "    outlet.apply(this, args);\n"
+        "}\n"
+        "\n"
+        "function after_edit() {\n"
+        "    manual_edit = 1;\n"
+        "    slice_count = Math.max(1, Math.min(64, slice_boundaries.length - 1));\n"
+        "    emit_display_bounds();\n"   # -> the display instance mirrors + drives the coll
+        "    mgraphics.redraw();\n"
+        "}\n"
+        "\n"
+        "function set_editable(v) {\n"
+        "    editable = v > 0 ? 1 : 0;\n"
+        "}\n"
+        "\n"
+        "function set_display_bounds() {\n"
+        "    if (arguments.length < 2) return;\n"
+        "    var nb = [], i;\n"
+        "    for (i = 0; i < arguments.length; i++) nb.push(clamp(arguments[i], 0.0, 1.0));\n"
+        "    slice_boundaries = nb;\n"
+        "    slice_count = Math.max(1, Math.min(64, nb.length - 1));\n"
+        "    manual_edit = 1;\n"
+        "    emit_slices();\n"           # adopt the edited grid + push it to the coll (playback)
+        "    mgraphics.redraw();\n"
+        "}\n"
+        "\n"
         "function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {\n"
-        "    var w = mgraphics.size[0];\n"
-        "    var inner_x = PADDING;\n"
-        "    var inner_w = w - PADDING * 2;\n"
-        "    var pos = clamp((x - inner_x) / inner_w, 0.0, 1.0);\n"
-        "    outlet(0, pos);\n"
+        "    var pos = x_to_pos(x);\n"
+        "    if (!editable) { outlet(0, pos); return; }\n"
+        "    var idx = nearest_divider(pos);\n"
+        "    if (option || ctrl) {\n"          # alt/ctrl-click removes the grabbed divider
+        "        if (remove_divider(idx)) after_edit();\n"
+        "        drag_index = -1;\n"
+        "        return;\n"
+        "    }\n"
+        "    if (idx >= 1) { drag_index = idx; return; }\n"   # grab an existing divider
+        "    if (add_divider(pos)) { drag_index = nearest_divider(pos); after_edit(); }\n"
         "}\n"
         "\n"
         "function ondrag(x, y, but, cmd, shift, capslock, option, ctrl) {\n"
-        "    if (!but) return;\n"
-        "    onclick(x, y, but, cmd, shift, capslock, option, ctrl);\n"
+        "    if (!editable) {\n"
+        "        if (but) onclick(x, y, but, cmd, shift, capslock, option, ctrl);\n"
+        "        return;\n"
+        "    }\n"
+        "    if (!but) { drag_index = -1; return; }\n"
+        "    if (drag_index < 1 || drag_index > slice_boundaries.length - 2) return;\n"
+        "    var pos = x_to_pos(x);\n"
+        "    var lo = slice_boundaries[drag_index - 1] + MIN_GAP;\n"
+        "    var hi = slice_boundaries[drag_index + 1] - MIN_GAP;\n"
+        "    if (pos < lo) pos = lo;\n"
+        "    if (pos > hi) pos = hi;\n"
+        "    slice_boundaries[drag_index] = pos;\n"
+        "    after_edit();\n"
         "}\n"
         "\n"
         "function draw_waveform(x, y, w, h) {\n"
@@ -232,7 +329,7 @@ def slice_overview_js(
         "\n"
         "function set_samplerate(v) {\n"
         "    if (v > 0) sample_rate = v;\n"
-        "    if (loaded) analyze();\n"
+        "    if (loaded && !manual_edit) analyze();\n"   # don't let an env re-fire wipe hand edits
         "}\n"
         "\n"
         "function set_mode(v) {\n"
@@ -370,6 +467,7 @@ def slice_overview_js(
         "\n"
         "function analyze() {\n"
         "    if (!loaded) return;\n"
+        "    manual_edit = 0;\n"             # a real (re)detection supersedes hand edits
         "    if (slice_mode === 1) slice_boundaries = compute_grid();\n"
         "    else slice_boundaries = compute_onsets();\n"
         "    slice_count = Math.max(1, Math.min(64, slice_boundaries.length - 1));\n"
