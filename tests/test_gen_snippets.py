@@ -32,6 +32,7 @@ from m4l_builder.gen_snippets import (
     rbj_peaking,
     rbj_shelf,
     soft_knee_gain_computer,
+    tilt_shelf,
     tpt_svf,
 )
 
@@ -819,6 +820,56 @@ def test_biquad_cascade_invalid_args_raise():
         biquad_cascade("in1", "out1", "f", "band", 4)
     with pytest.raises(ValueError, match="even and >= 2"):
         biquad_cascade("in1", "out1", "f", "low", 3)
+
+
+# --- tilt_shelf: constant-slope spectral tilt about a pivot -------------------
+def _tilt_mag_db(f, tilt_db, piv=1000.0, sr=48000.0, n=8192):
+    from math import log10, pi, sin
+    code = (
+        "Param tilt(0.); Param fpiv(1000.);\n"
+        + tilt_shelf("in1", "out1", "fpiv", "tilt", prefix="t")
+    )
+    seq = [sin(2 * pi * f * k / sr) for k in range(n)]
+    out = _sim(code, {"in1": seq}, params={"tilt": tilt_db, "fpiv": piv},
+               samplerate=sr, num_samples=n)["out1"]
+    return 20 * log10(max(abs(v) for v in out[n // 2:]))
+
+
+def test_tilt_shelf_zero_is_flat():
+    # tilt_db == 0 -> each shelf is unity -> transparent at every frequency.
+    for f in (40.0, 200.0, 1000.0, 5000.0, 14000.0):
+        assert abs(_tilt_mag_db(f, 0.0)) < 1e-3, f
+
+
+def test_tilt_shelf_asymptotes_and_pivot():
+    # positive tilt: cut below the pivot, boost above, ~flat AT the pivot.
+    # asymptotes approach -/+ tilt_db; total spread ~= 2 * tilt_db.
+    assert abs(_tilt_mag_db(40.0, 6.0) - (-6.0)) < 0.25      # DC end ~ -tilt
+    assert abs(_tilt_mag_db(14000.0, 6.0) - (+6.0)) < 0.25   # Nyquist end ~ +tilt
+    assert abs(_tilt_mag_db(1000.0, 6.0)) < 0.10             # pivot ~ flat
+
+
+def test_tilt_shelf_is_monotonic_and_signed():
+    # response rises monotonically with frequency for +tilt, falls for -tilt,
+    # and -tilt is the mirror image of +tilt about the pivot.
+    fs = (40.0, 200.0, 1000.0, 5000.0, 14000.0)
+    up = [_tilt_mag_db(f, 6.0) for f in fs]
+    dn = [_tilt_mag_db(f, -6.0) for f in fs]
+    assert all(b > a for a, b in zip(up, up[1:]))     # +tilt strictly increasing
+    assert all(b < a for a, b in zip(dn, dn[1:]))     # -tilt strictly decreasing
+    for u, d in zip(up, dn):
+        # +tilt and -tilt are mirror images about the pivot; RBJ shelves carry a
+        # tiny (~0.03 dB) gain-sign asymmetry at the extremes, so allow for it.
+        assert abs(u + d) < 0.06                      # mirror images (sum ~ 0)
+
+
+def test_tilt_shelf_is_self_contained_and_namespaced():
+    code = tilt_shelf("in1", "out1", "1000.", "amt")
+    assert "History tilt_lo_x1(0.);" in code          # declares its own state
+    assert code.count("History ") == 2 * 4            # two biquads x 4 cells
+    assert "Delay" not in code                        # gen_sim-safe (no Delay)
+    other = tilt_shelf("in1", "out1", "1000.", "amt", prefix="tn")
+    assert "tn_lo_x1" in other and "tilt_lo" not in other
 
 
 # --- lr_crossover: Linkwitz-Riley complementary crossover split ---------------

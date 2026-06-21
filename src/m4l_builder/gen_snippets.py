@@ -35,6 +35,7 @@ __all__ = [
     "rbj_highpass",
     "butterworth_q_table",
     "biquad_cascade",
+    "tilt_shelf",
     "lr_crossover",
     "multiband_split",
     "tpt_svf",
@@ -693,6 +694,65 @@ def biquad_cascade(
             )
         )
     return "\n".join(decls) + "\n" + "\n".join(body)
+
+
+def tilt_shelf(
+    x: str,
+    out: str,
+    freq: str,
+    tilt_db: str,
+    *,
+    prefix: str = "tilt",
+) -> str:
+    """Constant-slope spectral TILT around a pivot frequency (self-contained).
+
+    A tilt EQ pivots the whole spectrum about ``freq``: positive ``tilt_db``
+    CUTS everything below ``freq`` and BOOSTS everything above it (the mastering
+    "tilt"/"tone" control — Tonelux/Niveau, FabFilter Pro-Q's tilt-shelf shape).
+    Built as a complementary shelf pair on the shared runtime :func:`rbj_shelf` +
+    :func:`biquad_df1`: a LOW-shelf at ``-tilt_db`` in series with a HIGH-shelf at
+    ``+tilt_db``, both at cutoff ``freq``. Asymptotes: ``-tilt_db`` at DC,
+    ``+tilt_db`` at Nyquist (a ``2 * tilt_db`` total spread), and ~0 dB at the
+    pivot (the two shelves cross). ``tilt_db == 0`` is flat (each shelf unity), so
+    a hosted Tilt control is transparent at center.
+
+    SELF-CONTAINED: emits its own ``History`` state (two biquads = 8 cells, named
+    ``{prefix}_lo_*`` / ``{prefix}_hi_*``) plus per-stage scratch coeff vars and
+    one intermediate signal ``{prefix}_mid``, so the caller just splices the block
+    in. ``freq`` and ``tilt_db`` are gen expressions (var names or literals), both
+    tunable LIVE. ``prefix`` namespaces all generated vars (override for more than
+    one tilt in a codebox). Gives both EQs the "audio tilt" feature and any tone
+    stage a one-knob spectral tilt — the last piece of the cascaded-filter layer.
+    """
+    lo, hi = f"{prefix}_lo", f"{prefix}_hi"
+    mid = f"{prefix}_mid"
+    decls = (
+        f"History {lo}_x1(0.); History {lo}_x2(0.); "
+        f"History {lo}_y1(0.); History {lo}_y2(0.);\n"
+        f"History {hi}_x1(0.); History {hi}_x2(0.); "
+        f"History {hi}_y1(0.); History {hi}_y2(0.);"
+    )
+    coeff_lo = rbj_shelf(
+        freq, f"-1. * ({tilt_db})", "low",
+        f"{lo}_b0", f"{lo}_b1", f"{lo}_b2", f"{lo}_a1", f"{lo}_a2",
+        A=f"{lo}_A", w0=f"{lo}_w0", cw=f"{lo}_cw", alpha=f"{lo}_al",
+        a0=f"{lo}_a0", sqA=f"{lo}_sqA", tsa=f"{lo}_tsa",
+    )
+    apply_lo = biquad_df1(
+        x, f"{lo}_b0", f"{lo}_b1", f"{lo}_b2", f"{lo}_a1", f"{lo}_a2",
+        f"{lo}_x1", f"{lo}_x2", f"{lo}_y1", f"{lo}_y2", mid,
+    )
+    coeff_hi = rbj_shelf(
+        freq, f"{tilt_db}", "high",
+        f"{hi}_b0", f"{hi}_b1", f"{hi}_b2", f"{hi}_a1", f"{hi}_a2",
+        A=f"{hi}_A", w0=f"{hi}_w0", cw=f"{hi}_cw", alpha=f"{hi}_al",
+        a0=f"{hi}_a0", sqA=f"{hi}_sqA", tsa=f"{hi}_tsa",
+    )
+    apply_hi = biquad_df1(
+        mid, f"{hi}_b0", f"{hi}_b1", f"{hi}_b2", f"{hi}_a1", f"{hi}_a2",
+        f"{hi}_x1", f"{hi}_x2", f"{hi}_y1", f"{hi}_y2", out,
+    )
+    return "\n".join([decls, coeff_lo, apply_lo, coeff_hi, apply_hi])
 
 
 def lr_crossover(
