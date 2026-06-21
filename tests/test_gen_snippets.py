@@ -32,6 +32,7 @@ from m4l_builder.gen_snippets import (
     rbj_peaking,
     rbj_shelf,
     soft_knee_gain_computer,
+    tanh_adaa,
     tilt_shelf,
     tpt_svf,
 )
@@ -1121,3 +1122,80 @@ def test_lfo_phase_stays_bounded():
     # the wrap keeps the accumulator in 0..1 over a long run (no drift/blowup).
     o = _lfo_run(2, rate=7.0, n=96000)   # saw exposes the raw phase
     assert all(-1.0001 <= v <= 1.0001 for v in o)
+
+
+# --- tanh_adaa: antiderivative anti-aliased tanh saturation -------------------
+def _adaa_tanh(code, seq, sr=48000.0):
+    return _sim("History xp(0.);\n" + code, {"in1": list(seq)},
+                samplerate=sr, num_samples=len(seq))["out1"]
+
+
+def _adaa_ref(seq):
+    # independent 1st-order ADAA-tanh reference (F = ln cosh; midpoint fallback).
+    from math import cosh, log, tanh
+    out, xp = [], 0.0
+    for x in seq:
+        dx = x - xp
+        out.append((log(cosh(x)) - log(cosh(xp))) / dx if abs(dx) > 1e-5
+                   else tanh(0.5 * (x + xp)))
+        xp = x
+    return out
+
+
+def _dft_mag(seq, f, sr=48000.0):
+    from math import cos, hypot, pi, sin
+    re = im = 0.0
+    for n, x in enumerate(seq):
+        a = 2.0 * pi * f * n / sr
+        re += x * cos(a)
+        im -= x * sin(a)
+    return 2.0 * hypot(re, im) / len(seq)
+
+
+def test_tanh_adaa_matches_independent_reference():
+    from math import pi, sin
+    code = tanh_adaa("in1", "out1", "xp")
+    seq = [2.5 * sin(2 * pi * 3000 * i / 48000.0) for i in range(3000)]
+    got = _adaa_tanh(code, seq)
+    ref = _adaa_ref(seq)
+    assert max(abs(a - b) for a, b in zip(got, ref)) < 1e-12
+
+
+def test_tanh_adaa_constant_input_falls_back_to_tanh():
+    # dx==0 every sample after the first -> the midpoint fallback == tanh(x) exactly.
+    from math import tanh
+    got = _adaa_tanh(tanh_adaa("in1", "out1", "xp"), [0.5] * 32)
+    assert all(abs(v - tanh(0.5)) < 1e-12 for v in got[2:])
+
+
+def test_tanh_adaa_is_bounded_and_finite():
+    # a mean of tanh values stays within [-1, 1]; full-scale*4 square + silence.
+    import math
+    seq = [(-1.0 if i % 2 else 1.0) * 4.0 for i in range(300)] + [0.0] * 60
+    got = _adaa_tanh(tanh_adaa("in1", "out1", "xp"), seq)
+    assert all(math.isfinite(v) and abs(v) <= 1.0 + 1e-9 for v in got)
+
+
+def test_tanh_adaa_suppresses_aliasing_vs_naive_tanh():
+    # the defining claim: ADAA attenuates the harmonics a naive per-sample tanh
+    # folds back into the band. 7 kHz @ 48k drive 3.0 -> 5th harm aliases to
+    # 13 kHz, 7th to 1 kHz; ADAA must cut both well below naive, keeping the
+    # fundamental. (Naive tanh has NO state, so it's the plain pointwise shaper.)
+    from math import pi, sin, tanh
+    sr, f0, n = 48000.0, 7000.0, 8192
+    xs = [3.0 * sin(2 * pi * f0 * i / sr) for i in range(n)]
+    naive = [tanh(v) for v in xs]
+    adaa = _adaa_tanh(tanh_adaa("in1", "out1", "xp"), xs)
+    for fb in (13000.0, 1000.0):                       # 5th- / 7th-harmonic aliases
+        assert _dft_mag(adaa, fb) < 0.5 * _dft_mag(naive, fb), fb
+    # fundamental kept (mild HF loss from the 0.5-sample averaging is allowed).
+    assert _dft_mag(adaa, f0) > 0.9 * _dft_mag(naive, f0)
+
+
+def test_tanh_adaa_is_self_contained_and_namespaced():
+    code = tanh_adaa("in1", "out1", "xp")
+    assert "Delay" not in code                          # History-only -> gen_sim-safe
+    assert "tanh(0.5 * (in1 + xp))" in code             # the |dx|->0 fallback
+    assert "adaa_dx = in1 - xp;" in code
+    other = tanh_adaa("a", "b", "ap", dx="dd", fx="ff", fxp="ffp", ax="aa", axp="aap")
+    assert "adaa_" not in other and "dd = a - ap;" in other

@@ -22,6 +22,7 @@ __all__ = [
     "ms_decode",
     "ms_width",
     "drive_blend",
+    "tanh_adaa",
     "peak_follower",
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
@@ -111,6 +112,51 @@ def drive_blend(x: str, out: str, k: str, drive: str) -> str:
     ``1 + drive*5``).
     """
     return f"{out} = {x} + (tanh({x} * {k}) / tanh({k}) - {x}) * {drive};"
+
+
+def tanh_adaa(
+    x: str,
+    out: str,
+    xprev: str,
+    *,
+    ax: str = "adaa_ax", axp: str = "adaa_axp",
+    fx: str = "adaa_fx", fxp: str = "adaa_fxp", dx: str = "adaa_dx",
+) -> str:
+    """First-order antiderivative-anti-aliased (ADAA) tanh saturation.
+
+    A drop-in for ``tanh(x)`` that SUPPRESSES the aliasing a naive per-sample
+    waveshaper folds back into the audio band — the transparency move every
+    flagship saturator/clipper makes (FabFilter Saturn, Pro-C/Pro-L soft-clip)
+    but WITHOUT oversampling. Instead of sampling ``f(x)=tanh(x)`` it uses the
+    average of ``f`` over each sample step via the antiderivative
+    ``F(x)=ln(cosh(x))`` (Parker/Bilbao 2016)::
+
+        adaa_dx = x - xprev;
+        out = abs(adaa_dx) > 0.00001
+            ? (F(x) - F(xprev)) / adaa_dx       # mean of tanh over [xprev, x]
+            : tanh(0.5 * (x + xprev));           # |dx|->0 limit (avoids 0/0)
+        xprev = x;
+
+    ``F`` is evaluated in the overflow-stable form ``|x| + log(1 + exp(-2|x|)) -
+    ln2`` (no ``cosh`` blow-up at high drive). Output is bounded in ``[-1, 1]``
+    (a mean of ``tanh`` values) and matches ``tanh`` for slow signals; it adds a
+    constant 0.5-sample group delay (1st-order ADAA). ``xprev`` is the caller's
+    1-sample state (declare ``History {xprev}(0.);``). Scale ``x`` by a drive
+    pre-gain and level-match at the call site (as :func:`drive_blend` does);
+    ``ax axp fx fxp dx`` are scratch var names (override to place several in one
+    codebox). The anti-aliased upgrade path for Heat/Ceiling/Pressure/Echotide.
+    """
+    ln2 = "0.6931471805599453"
+    return "\n".join([
+        f"{ax} = abs({x});",
+        f"{fx} = {ax} + log(1. + exp(-2. * {ax})) - {ln2};",
+        f"{axp} = abs({xprev});",
+        f"{fxp} = {axp} + log(1. + exp(-2. * {axp})) - {ln2};",
+        f"{dx} = {x} - {xprev};",
+        f"{out} = abs({dx}) > 0.00001 ? "
+        f"({fx} - {fxp}) / {dx} : tanh(0.5 * ({x} + {xprev}));",
+        f"{xprev} = {x};",
+    ])
 
 
 def peak_follower(
