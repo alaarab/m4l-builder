@@ -1907,3 +1907,130 @@ class TestSliceOnsetDetection:
         """)
         assert result.state["n"] == 0
         assert result.outlets == []
+
+
+class TestSliceDividerEdit:
+    # The EDITOR instance (set_editable 1) makes the slice dividers click/drag-
+    # editable; each edit emits the full normalized boundary list on outlet 3,
+    # which the display instance adopts via set_display_bounds (single grid).
+    # Inner width with the default 660 px harness: 660 - 2*PADDING(8) = 644.
+
+    @staticmethod
+    def _x(pos):
+        return 8 + pos * 644.0
+
+    def test_drag_moves_a_divider_and_emits_bounds(self):
+        x05, x06 = self._x(0.5), self._x(0.6)
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            slice_boundaries = [0.0, 0.25, 0.5, 0.75, 1.0]; slice_count = 4;
+            set_editable(1);
+            onclick(%f, 50, 1, 0, 0, 0, 0, 0);   // grab the 0.5 divider (idx 2)
+            ondrag(%f, 50, 1, 0, 0, 0, 0, 0);     // drag it to ~0.6
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);       // release
+            dump({b: slice_boundaries, di: drag_index});
+        """ % (x05, x06))
+        b = result.state["b"]
+        assert len(b) == 5 and b[0] == 0.0 and b[-1] == 1.0
+        assert abs(b[2] - 0.6) < 0.01           # the dragged divider moved
+        assert result.state["di"] == -1          # released
+        bounds = [o for o in result.outlets if o[0] == 3]
+        assert bounds, "outlet 3 (edited bounds) should fire on drag"
+        assert abs(bounds[-1][3] - 0.6) < 0.01   # [outlet, b0, b1, b2, ...]
+
+    def test_drag_clamps_between_neighbours(self):
+        # dragging far past a neighbour clamps (never crosses / reorders).
+        x05, xfar = self._x(0.5), self._x(0.95)
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            slice_boundaries = [0.0, 0.25, 0.5, 0.75, 1.0]; slice_count = 4;
+            set_editable(1);
+            onclick(%f, 50, 1, 0, 0, 0, 0, 0);
+            ondrag(%f, 50, 1, 0, 0, 0, 0, 0);   // try to drag 0.5 past 0.75
+            dump({b: slice_boundaries});
+        """ % (x05, xfar))
+        b = result.state["b"]
+        assert b[1] < b[2] < b[3]                # still ordered
+        assert b[2] <= 0.75 - 0.003              # clamped below the 0.75 neighbour
+
+    def test_click_empty_space_adds_a_divider(self):
+        x025 = self._x(0.25)
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            slice_boundaries = [0.0, 0.5, 1.0]; slice_count = 2;
+            set_editable(1);
+            onclick(%f, 50, 1, 0, 0, 0, 0, 0);   // click empty -> insert at ~0.25
+            dump({b: slice_boundaries});
+        """ % x025)
+        b = result.state["b"]
+        assert len(b) == 4
+        assert any(abs(p - 0.25) < 0.01 for p in b)
+        assert b == sorted(b)
+        assert [o for o in result.outlets if o[0] == 3]
+
+    def test_option_click_removes_nearest_divider(self):
+        x05 = self._x(0.5)
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            slice_boundaries = [0.0, 0.25, 0.5, 0.75, 1.0]; slice_count = 4;
+            set_editable(1);
+            onclick(%f, 50, 1, 0, 0, 0, 1, 0);   // option-click near 0.5 -> remove
+            dump({b: slice_boundaries});
+        """ % x05)
+        b = result.state["b"]
+        assert len(b) == 4
+        assert all(abs(p - 0.5) > 0.01 for p in b)   # 0.5 removed
+        assert [o for o in result.outlets if o[0] == 3]
+
+    def test_display_instance_click_scans_not_edits(self):
+        # editable defaults to 0 -> onclick is the scan outlet (0), grid untouched.
+        x05 = self._x(0.5)
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            slice_boundaries = [0.0, 0.5, 1.0];
+            onclick(%f, 50, 1, 0, 0, 0, 0, 0);
+            dump({b: slice_boundaries});
+        """ % x05)
+        scan = [o for o in result.outlets if o[0] == 0]
+        assert len(scan) == 1 and abs(scan[0][1] - 0.5) < 0.01
+        assert result.state["b"] == [0.0, 0.5, 1.0]   # unchanged
+        assert [o for o in result.outlets if o[0] == 3] == []
+
+    def test_set_display_bounds_adopts_grid_and_drives_coll(self):
+        # the display instance adopts edited bounds and re-emits the coll-store
+        # lists (so a manual edit in the editor reaches playback).
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            set_display_bounds(0.0, 0.3, 0.7, 1.0);
+            dump({b: slice_boundaries, sc: slice_count});
+        """)
+        assert result.state["sc"] == 3
+        assert result.state["b"] == [0.0, 0.3, 0.7, 1.0]
+        stores = [o for o in result.outlets if o[0] == 1]
+        assert len(stores) == 3                       # one coll store per slice
+        assert abs(stores[1][2] - 300.0) < 1e-3       # slice 1 start_ms (0.3*1000)
+
+    def test_set_editable_never_echoes_an_outlet(self):
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            loaded = 0;
+            set_editable(1);
+            set_editable(0);
+            dump({n: __captured.outlets.length});
+        """)
+        assert result.state["n"] == 0
+
+    def test_manual_edit_survives_samplerate_refire(self):
+        # after a hand edit, an environmental set_samplerate must NOT re-detect
+        # (which would wipe the edit); a real param re-analyze still supersedes.
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, [0.2, 0.4, 0.6, 0.8]); loaded = 1; sample_rate = 44100;
+            set_mode(0); analyze();
+            set_display_bounds(0.0, 0.5, 1.0);   // hand edit -> 2 slices, manual_edit=1
+            set_samplerate(48000);               // env re-fire: must keep the edit
+            var kept = slice_boundaries.length;
+            set_sensitivity(50);                 // a real re-slice supersedes
+            dump({kept: kept, after: slice_boundaries.length, me: manual_edit});
+        """)
+        assert result.state["kept"] == 3          # edit survived the samplerate re-fire
+        assert result.state["after"] > 3          # the sensitivity re-analyze re-detected
+        assert result.state["me"] == 0            # manual flag cleared by the re-detect
