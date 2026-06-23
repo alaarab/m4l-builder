@@ -14,6 +14,7 @@ from ..recipes import (
     midi_note_gate,
     parametric_eq_band_backend,
     poly_midi_gate,
+    sample_drop_target,
     sidechain_compressor_recipe,
     spectral_gate_stage,
     stereo_width_stage,
@@ -46,4 +47,5 @@ __all__ = [
     "midi_learn_macro_assignment",
     "generative_midi_stage",
     "euclidean_sequencer_stage",
+    "sample_drop_target",
 ]

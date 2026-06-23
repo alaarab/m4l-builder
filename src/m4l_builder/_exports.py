@@ -370,6 +370,7 @@ ROOT_RECIPE_EXPORTS = [
     "midi_learn_macro_assignment",
     "generative_midi_stage",
     "euclidean_sequencer_stage",
+    "sample_drop_target",
 ]
 
 BUILDER_RECIPE_EXPORTS = _dedupe(

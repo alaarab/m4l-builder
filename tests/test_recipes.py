@@ -12,6 +12,7 @@ from m4l_builder.recipes import (
     midi_note_gate,
     parametric_eq_band_backend,
     poly_midi_gate,
+    sample_drop_target,
     sidechain_compressor_recipe,
     spectral_gate_stage,
     stereo_width_stage,
@@ -31,6 +32,58 @@ def _line_pairs(device):
         (line["patchline"]["source"][0], line["patchline"]["destination"][0])
         for line in device.lines
     }
+
+
+def _box_texts(device):
+    return {b["box"].get("text") for b in device.boxes if b["box"].get("text")}
+
+
+def _box_classes(device):
+    return {b["box"].get("maxclass") for b in device.boxes}
+
+
+class TestSampleDropTarget:
+    def _device(self):
+        device = AudioEffect("test", width=300, height=168)
+        device.add_newobj("mybuf", "buffer~ mybuf_smp", numinlets=1,
+                          numoutlets=1, outlettype=["bang"],
+                          patching_rect=[20, 200, 150, 20])
+        res = sample_drop_target(device, "smp", "mybuf", [10, 24, 280, 100])
+        return device, res
+
+    def test_uses_live_drop_not_dropfile(self):
+        # live.drop accepts drags from the Live browser; dropfile does not.
+        device, _ = self._device()
+        classes = _box_classes(device)
+        assert "live.drop" in classes
+        assert "dropfile" not in classes
+
+    def test_intake_chain_present(self):
+        device, _ = self._device()
+        texts = _box_texts(device)
+        assert "t b l" in texts
+        assert "prepend replace" in texts
+        assert "delay 600" in texts
+
+    def test_wires_replace_into_buffer_and_settle(self):
+        device, _ = self._device()
+        pairs = _line_pairs(device)
+        assert ("smp_drop", "smp_trig") in pairs
+        assert ("smp_trig", "smp_replace") in pairs
+        assert ("smp_replace", "mybuf") in pairs       # path -> the buffer~
+        assert ("smp_trig", "smp_loaded") in pairs      # bang -> settle delay
+
+    def test_returns_loaded_id_for_redraw_wiring(self):
+        device, res = self._device()
+        assert res["loaded"] == "smp_loaded"
+        assert res["drop"] == "smp_drop"
+
+    def test_custom_settle_ms(self):
+        device = AudioEffect("test", width=300, height=168)
+        device.add_newobj("b", "buffer~ b_smp", numinlets=1, numoutlets=1,
+                          outlettype=["bang"], patching_rect=[20, 200, 150, 20])
+        sample_drop_target(device, "s", "b", [10, 24, 280, 100], settle_ms=400)
+        assert "delay 400" in _box_texts(device)
 
 
 class TestGainControlledStage:

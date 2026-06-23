@@ -30,6 +30,7 @@ from .dsp import notein as dsp_notein
 from .engines.sidechain_display import SIDECHAIN_DISPLAY_INLETS, sidechain_display_js
 from .engines.spectral_display import SPECTRAL_DISPLAY_INLETS, spectral_display_js
 from .stages import stage_result
+from .ui import live_drop
 
 
 def gain_controlled_stage(device, id_prefix, dial_rect, x=30, y=30):
@@ -1356,4 +1357,75 @@ def euclidean_sequencer_stage(device, id_prefix, rate_rect, *, steps=16, pulses=
         },
         name="euclidean_sequencer_stage",
         params={"rate": device.parameter(rate_id)},
+    )
+
+
+def sample_drop_target(device, id_prefix, buffer_box_id, drop_rect, *,
+                       settle_ms=600, x=600, y=520,
+                       textcolor=None, bgcolor=None, bordercolor=None):
+    """Add a drag-and-drop audio sample intake over ``drop_rect``.
+
+    Uses ``live.drop`` (NOT ``dropfile``) so the target accepts samples dragged
+    from BOTH Ableton's own browser AND the Finder. ``dropfile`` only catches
+    Finder drops, which is the usual reason "drag a sample onto the device"
+    silently fails inside Live.
+
+    The dropped file path is sent to the *existing* ``buffer~`` (box id
+    ``buffer_box_id``) via ``prepend replace``. ``buffer~`` reads
+    asynchronously and its own read-complete bang fires before the samples are
+    in memory, so a ``delay {settle_ms}`` gives the reliable "now it's loaded"
+    bang on ``{prefix}_loaded`` outlet 0 — wire that to your display/analysis
+    redraw.
+
+    Place a ``buffer~ <name>`` in the device yourself (DSP recipes such as
+    ``slice_pool`` own the shared buffer) and pass its box id here.
+
+    Args:
+        device: Device instance to add objects to.
+        id_prefix: Prefix for all object IDs in this stage.
+        buffer_box_id: Box id of the existing ``buffer~`` to load into.
+        drop_rect: [x, y, w, h] presentation rect for the (transparent) drop
+            target — overlay it on the hero/waveform display.
+        settle_ms: Delay after a drop before the "loaded" bang fires.
+        x, y: Patching-canvas offset for the (off-presentation) plumbing.
+        textcolor, bgcolor, bordercolor: optional ``live.drop`` colors.
+
+    Returns:
+        StageResult with ids ``{"drop", "trig", "replace", "loaded"}``. Wire
+        ``loaded`` outlet 0 to your redraw/analysis trigger(s).
+    """
+    p = id_prefix
+
+    drop_id = device.add_box(live_drop(
+        f"{p}_drop", drop_rect,
+        patching_rect=[x, y, 120, 28],
+        textcolor=textcolor, bgcolor=bgcolor, bordercolor=bordercolor,
+    ))
+    trig_id = device.add_newobj(
+        f"{p}_trig", "t b l", numinlets=1, numoutlets=2,
+        outlettype=["bang", ""], patching_rect=[x, y + 34, 60, 20],
+    )
+    replace_id = device.add_newobj(
+        f"{p}_replace", "prepend replace", numinlets=1, numoutlets=1,
+        outlettype=[""], patching_rect=[x + 70, y + 34, 130, 20],
+    )
+    loaded_id = device.add_newobj(
+        f"{p}_loaded", f"delay {settle_ms}", numinlets=2, numoutlets=1,
+        outlettype=["bang"], patching_rect=[x, y + 64, 80, 20],
+    )
+
+    # live.drop path -> split: path replaces the buffer, bang starts the settle.
+    device.add_line(drop_id, 0, trig_id, 0)
+    device.add_line(trig_id, 1, replace_id, 0)
+    device.add_line(replace_id, 0, buffer_box_id, 0)
+    device.add_line(trig_id, 0, loaded_id, 0)
+
+    return stage_result(
+        {
+            "drop": drop_id,
+            "trig": trig_id,
+            "replace": replace_id,
+            "loaded": loaded_id,
+        },
+        name="sample_drop_target",
     )
