@@ -23,6 +23,7 @@ Named messages (slicer control, inlet 0):
     set_pitch <semitones>   -- global playback transpose (shortens dur_ms)
     set_editable <0|1>      -- 1 = this instance is the EDITOR (click/drag dividers)
     set_display_bounds <b0 b1 ...> -- adopt edited normalized boundaries (no re-detect)
+    set_active_index <n>    -- light up slice n + register a hit (playback feedback)
     analyze                 -- (re)compute slice boundaries from the buffer
 
 Editing (editor instance only, set_editable 1): click near a divider grabs and
@@ -242,6 +243,20 @@ def slice_overview_js(
         "    slice_count = Math.max(1, Math.min(64, nb.length - 1));\n"
         "    manual_edit = 1;\n"
         "    emit_slices();\n"           # adopt the edited grid + push it to the coll (playback)
+        "    mgraphics.redraw();\n"
+        "}\n"
+        "\n"
+        # set_active_index <n>: light up + register a hit on the slice that just
+        # triggered (n -> [slice_boundaries[n], slice_boundaries[n+1]]), so the
+        # display animates during playback. Wire the playing slice index here.
+        "function set_active_index(n) {\n"
+        "    if (slice_boundaries.length < 2) return;\n"
+        "    var i = Math.round(n);\n"
+        "    if (i < 0) i = 0;\n"
+        "    if (i > slice_boundaries.length - 2) i = slice_boundaries.length - 2;\n"
+        "    active_start = slice_boundaries[i];\n"
+        "    active_end = slice_boundaries[i + 1];\n"
+        "    register_hit();\n"
         "    mgraphics.redraw();\n"
         "}\n"
         "\n"
