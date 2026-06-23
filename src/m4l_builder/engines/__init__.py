@@ -17,6 +17,7 @@ from .delay_trail import (
     DELAY_TRAIL_OUTLETS,
     delay_trail_js,
 )
+from .energy_history import energy_history_inlets, energy_history_js
 from .envelope_display import envelope_display_js
 from .eq_band_column import eq_band_column_js
 from .eq_curve import eq_curve_js
@@ -117,6 +118,8 @@ __all__ = [
     "FFT_ANALYZER_DEFAULT_SIZE",
     "FFT_ANALYZER_DEFAULT_OVERLAP",
     "linear_phase_eq_display_js",
+    "energy_history_inlets",
+    "energy_history_js",
     "envelope_display_js",
     "spectrum_analyzer_js",
     "waveform_display_js",
