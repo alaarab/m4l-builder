@@ -24,6 +24,8 @@ Named messages (slicer control, inlet 0):
     set_editable <0|1>      -- 1 = this instance is the EDITOR (click/drag dividers)
     set_display_bounds <b0 b1 ...> -- adopt edited normalized boundaries (no re-detect)
     set_active_index <n>    -- light up slice n + register a hit (playback feedback)
+    playhead_ms <ms>        -- live read position in ms (normalized by buffer length);
+                               feed a snapshot~ of the playing line~ for a moving playhead
     analyze                 -- (re)compute slice boundaries from the buffer
 
 Editing (editor instance only, set_editable 1): click near a divider grabs and
@@ -122,6 +124,7 @@ def slice_overview_js(
         "function msg_float(v) {\n"
         "    if (inlet === 0) {\n"
         "        loaded = v > 0 ? 1 : 0;\n"
+        "        playhead = 0.0;\n"
         "        rebuild_waveform_cache();\n"
         "    } else if (inlet === 1) {\n"
         "        region_start = clamp(v, 0.0, 1.0);\n"
@@ -257,6 +260,21 @@ def slice_overview_js(
         "    active_start = slice_boundaries[i];\n"
         "    active_end = slice_boundaries[i + 1];\n"
         "    register_hit();\n"
+        "    mgraphics.redraw();\n"
+        "}\n"
+        "\n"
+        # playhead_ms <ms>: the live read position of the playing voice (a snapshot~
+        # of its line~ ramp, in ms). Normalize by the buffer length so the marker
+        # sweeps across the whole waveform; gate redraws to moving frames only so an
+        # idle (parked) read-head doesn't repaint every snapshot tick.
+        "function playhead_ms(ms) {\n"
+        "    var fc = buffer_frames();\n"
+        "    if (fc <= 0 || sample_rate <= 0) return;\n"
+        "    var len_ms = (fc / sample_rate) * 1000.0;\n"
+        "    if (len_ms <= 0) return;\n"
+        "    var np = clamp(ms / len_ms, 0.0, 1.0);\n"
+        "    if (Math.abs(np - playhead) < 0.0005) return;\n"
+        "    playhead = np;\n"
         "    mgraphics.redraw();\n"
         "}\n"
         "\n"
