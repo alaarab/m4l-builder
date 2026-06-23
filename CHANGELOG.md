@@ -2,8 +2,26 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-22
+
 ### Added
 
+- **Device freezing for portability** (`m4l_builder.freeze`): build self-contained
+  `.amxd` files that embed every dependency (jsui `.js`, `gen~` `.gendsp`/`.genjit`,
+  `.maxpat` abstractions, images) inside the device — so a single file works on
+  another computer instead of rendering blank UIs / dead DSP when its loose
+  sidecars are missing. `assemble_frozen_amxd`, `device_to_frozen_bytes`,
+  `freeze_amxd_file` (freeze an already-built device in place/to a copy), plus
+  `Device.build(out, freeze=True)` / `Device.to_bytes(freeze=True)`. The binary
+  freeze footer (`mx@c` header + `dlst`/`dire` directory, `meta=7`) is
+  conformance-tested byte-for-byte against Ableton's own `maxdevtools` reference
+  parser. Max's "Freeze Device" is GUI-only (no message/API/CLI), so the writer
+  reproduces it directly.
+- `sample_drop_target` recipe: a drag-and-drop audio sample intake using
+  `live.drop` (which accepts drags from BOTH the Live browser AND the Finder —
+  `dropfile` only catches Finder drops, the usual reason sample-drop "doesn't
+  work" inside Live). Wires `live.drop -> t b l -> prepend replace -> buffer~`
+  with a settle delay that exposes a reliable "loaded" bang for redraw/analysis.
 - `gen_snippets` harmonic-exciter foundation: `one_pole_coeff` (cutoff-frequency
   `1 - exp(-2*pi*f/fs)` coefficient), `one_pole_lp` / `one_pole_hp` (the shared
   1st-order low-/high-pass split), and `exciter_harmonics` (the harmonic-exciter
