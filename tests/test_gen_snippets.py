@@ -7,6 +7,7 @@ mono/wide), not just snapshot the text.
 import re
 from math import pow, tan, tanh
 
+from m4l_builder.gen_sim import simulate
 from m4l_builder.gen_snippets import (
     biquad_cascade,
     biquad_df1,
@@ -22,6 +23,8 @@ from m4l_builder.gen_snippets import (
     lr_crossover,
     ms_decode,
     ms_encode,
+    ms_mode_merge,
+    ms_mode_split,
     ms_width,
     multiband_split,
     one_pole_coeff,
@@ -1324,3 +1327,62 @@ def test_exciter_harmonics_anti_aliased_squarer():
     assert "hx_sq = (bnd * bnd + bnd * sqx + sqx * sqx) * 0.3333333333333333;" in aa
     assert "sqx = bnd;" in aa                                  # advances the state
     assert "h = (hx_odd - bnd) + ev * hx_sq;" in aa            # sum line intact
+
+
+# ── M/S processing-mode matrices (ms_mode_split / ms_mode_merge) ───────────
+# Two complete gen patches that wrap a stereo cascade so one Mode param routes
+# STEREO / MID / SIDE. Verified end-to-end via the gen simulator: the cascade
+# between split and merge is modelled as a gain g, so we can see WHICH stereo
+# domain the EQ acted on. (Shared by Parametric EQ V2 + Linear Phase EQ V2.)
+def _ms_through(L, R, mode, g):
+    n = len(L)
+    pre = simulate(ms_mode_split(), {"in1": list(L), "in2": list(R)},
+                   params={"msmode": mode}, num_samples=n)
+    LO = [v * g for v in pre["out1"]]
+    RO = [v * g for v in pre["out2"]]
+    post = simulate(ms_mode_merge(), {"in1": LO, "in2": RO,
+                                      "in3": pre["out3"], "in4": pre["out4"]},
+                    params={"msmode": mode}, num_samples=n)
+    return pre, post
+
+
+def _close(a, b, tol=1e-9):
+    return len(a) == len(b) and all(abs(x - y) < tol for x, y in zip(a, b))
+
+
+def test_ms_mode_split_text_is_a_2in_4out_router():
+    code = ms_mode_split()
+    assert "Param msmode(0);" in code
+    assert "out1 = msmode == 0 ? L : M;" in code
+    assert "out3 = M;" in code and "out4 = S;" in code
+
+
+def test_ms_mode_stereo_is_byte_identical():
+    L = [0.3, -0.7, 0.55, -0.2, 0.9]
+    R = [-0.4, 0.6, -0.15, 0.8, -0.5]
+    pre, post = _ms_through(L, R, mode=0, g=2.5)
+    assert _close(pre["out1"], L) and _close(pre["out2"], R)   # chains see L/R
+    assert _close(post["out1"], [v * 2.5 for v in L])          # both scaled
+    assert _close(post["out2"], [v * 2.5 for v in R])
+
+
+def test_ms_mode_mid_eqs_only_the_mid():
+    # pure SIDE input (L = -R, mid == 0) passes dry; pure MONO (side == 0) scales.
+    Ls, Rs = [0.5, -0.3, 0.8], [-0.5, 0.3, -0.8]
+    _, post = _ms_through(Ls, Rs, mode=1, g=4.0)
+    assert _close(post["out1"], Ls) and _close(post["out2"], Rs)
+    Lm = [0.4, -0.6, 0.2]
+    _, post = _ms_through(Lm, Lm, mode=1, g=3.0)
+    assert _close(post["out1"], [v * 3.0 for v in Lm])
+    assert _close(post["out2"], [v * 3.0 for v in Lm])
+
+
+def test_ms_mode_side_eqs_only_the_side():
+    # pure MONO passes dry; pure SIDE scales.
+    Lm = [0.4, -0.6, 0.2]
+    _, post = _ms_through(Lm, Lm, mode=2, g=4.0)
+    assert _close(post["out1"], Lm) and _close(post["out2"], Lm)
+    Ls, Rs = [0.5, -0.3, 0.8], [-0.5, 0.3, -0.8]
+    _, post = _ms_through(Ls, Rs, mode=2, g=3.0)
+    assert _close(post["out1"], [v * 3.0 for v in Ls])
+    assert _close(post["out2"], [v * 3.0 for v in Rs])

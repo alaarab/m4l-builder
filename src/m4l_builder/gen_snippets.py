@@ -21,6 +21,8 @@ __all__ = [
     "ms_encode",
     "ms_decode",
     "ms_width",
+    "ms_mode_split",
+    "ms_mode_merge",
     "drive_blend",
     "tanh_adaa",
     "hardclip_adaa",
@@ -98,6 +100,58 @@ def ms_width(
         f"{side} = ({left} - {right}) * 0.5 * {width};\n"
         f"{out_left} = {mid} + {side};\n"
         f"{out_right} = {mid} - {side};"
+    )
+
+
+def ms_mode_split(param: str = "msmode") -> str:
+    """Complete gen~ code for a processing-Mode M/S SPLIT matrix (2 in, 4 out).
+
+    Wraps the INPUT of a stereo EQ/dynamics cascade so a single Mode param routes
+    STEREO / MID / SIDE. ``in1``/``in2`` = L/R. Outputs::
+
+        out1/out2 -> the two processing chains (STEREO: L/R; MID/SIDE: M/S)
+        out3/out4 -> the DRY mid / side (for the recombine stage)
+
+    ``param`` (0 STEREO, 1 MID, 2 SIDE) is a gen Param a host menu sets via a
+    ``<param> <v>`` message. STEREO is byte-identical (out1==L, out2==R), so the
+    whole wrap is a no-op at the default. Pair with :func:`ms_mode_merge`. Build
+    it with ``build_gendsp(ms_mode_split(), 2, 4)``.
+    """
+    return (
+        f"Param {param}(0);\n"
+        "L = in1;\n"
+        "R = in2;\n"
+        "M = (L + R) * 0.5;\n"
+        "S = (L - R) * 0.5;\n"
+        f"out1 = {param} == 0 ? L : M;\n"
+        f"out2 = {param} == 0 ? R : S;\n"
+        "out3 = M;\n"
+        "out4 = S;\n"
+    )
+
+
+def ms_mode_merge(param: str = "msmode") -> str:
+    """Complete gen~ code for the M/S RECOMBINE matrix (4 in, 2 out).
+
+    Pairs with :func:`ms_mode_split` on the OUTPUT side of the cascade. ``in1``/
+    ``in2`` = the two processed chain outputs; ``in3``/``in4`` = the DRY mid/side
+    from the split (for a LATENCY device — e.g. a linear-phase FFT EQ — these
+    must be delayed to match the chain latency). Outputs L/R::
+
+        STEREO -> chain L/R straight through (byte-identical)
+        MID    -> processed mid + dry side   (only the mid was EQ'd)
+        SIDE   -> dry mid + processed side    (only the side was EQ'd)
+
+    Build it with ``build_gendsp(ms_mode_merge(), 4, 2)``.
+    """
+    return (
+        f"Param {param}(0);\n"
+        "LO = in1;\n"
+        "RO = in2;\n"
+        "M = in3;\n"
+        "S = in4;\n"
+        f"out1 = {param} == 0 ? LO : ({param} == 1 ? LO + S : M + RO);\n"
+        f"out2 = {param} == 0 ? RO : ({param} == 1 ? LO - S : M - RO);\n"
     )
 
 
