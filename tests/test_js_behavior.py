@@ -1358,6 +1358,19 @@ class TestWaveshapeDrag:
 
 
 class TestDelayTrailDrag:
+    def test_set_character_sets_state_clamped_without_echo(self):
+        from m4l_builder.engines.delay_trail import delay_trail_js
+        r = run_jsui(delay_trail_js(), """
+            set_character(2); var bbd = character;
+            set_character(1); var tape = character;
+            set_character(0); var digital = character;
+            set_character(9);                       // out of range -> clamps to 2
+            dump({bbd: bbd, tape: tape, digital: digital, clamped: character});
+        """, size=(326, 152))
+        assert r.state["bbd"] == 2 and r.state["tape"] == 1 and r.state["digital"] == 0
+        assert r.state["clamped"] == 2
+        assert r.outlets == []   # a display setter must never echo an outlet
+
     def test_horizontal_drag_maps_time_and_emits(self):
         # ABSOLUTE pad: pointer x maps directly to time along the ruler.
         from m4l_builder.engines.delay_trail import delay_trail_js

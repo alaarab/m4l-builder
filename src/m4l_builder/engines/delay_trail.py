@@ -102,6 +102,7 @@ var pingpong = 0;
 var sync_label = "FREE";
 var wet_lvl = 0.0;
 var duck_lvl = 0.0;
+var character = 0;   // 0 DIGITAL (clean), 1 TAPE, 2 BBD -> warms/dims late repeats
 var dragging = 0;
 var hovering = 0;
 var hover_x = 0.0;
@@ -201,11 +202,18 @@ function paint() {
         x = ms_to_x(t);
         stem = amp * plot_h() * 0.16;
         active_lane = (n % 2 === 0) ? 1 : 0;  // ping-pong: which lane this repeat
+        // CHARACTER tint: warm + dim later repeats for TAPE (gentle) / BBD (more);
+        // DIGITAL (0) -> w == 0 -> tcl == TAP_CLR (the trail is unchanged).
+        var cw = character > 0.5 ? clamp(n / 5.0, 0, 1) * (character > 1.5 ? 0.85 : 0.55) : 0;
+        var tcl = [TAP_CLR[0] + (0.95 - TAP_CLR[0]) * cw,
+                   TAP_CLR[1] + (0.55 - TAP_CLR[1]) * cw,
+                   TAP_CLR[2] + (0.22 - TAP_CLR[2]) * cw];
+        var cdim = dim * (1.0 - cw * 0.34);
         for (li = 0; li < 2; li++) {
             if (pingpong && li !== active_lane) continue;
             ly = lane_y(li);
             // Stem.
-            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], amp * 0.35 * dim);
+            mgraphics.set_source_rgba(tcl[0], tcl[1], tcl[2], amp * 0.35 * cdim);
             mgraphics.set_line_width(1.0);
             mgraphics.move_to(x, ly - stem);
             mgraphics.line_to(x, ly + stem);
@@ -213,9 +221,9 @@ function paint() {
             // Glowing tap: a radial glow (design-system) that fades with the
             // echo amplitude, then a solid dot core — louder/earlier taps read
             // as brighter lights fading down the trail (and dim under ducking).
-            ds_node_glow(x, ly, TAP_CLR, size + 5.0 + amp * 6.0,
-                         (0.20 + clamp(amp, 0, 1) * 0.45) * dim);
-            mgraphics.set_source_rgba(TAP_CLR[0], TAP_CLR[1], TAP_CLR[2], clamp(amp, 0, 1) * dim);
+            ds_node_glow(x, ly, tcl, size + 5.0 + amp * 6.0,
+                         (0.20 + clamp(amp, 0, 1) * 0.45) * cdim);
+            mgraphics.set_source_rgba(tcl[0], tcl[1], tcl[2], clamp(amp, 0, 1) * cdim);
             mgraphics.arc(x, ly, size, 0, Math.PI * 2);
             mgraphics.fill();
         }
@@ -294,6 +302,10 @@ function set_pingpong(v)   { pingpong = v ? 1 : 0; mgraphics.redraw(); }
 function set_sync_label(v) { sync_label = "" + v; mgraphics.redraw(); }
 function wet_level(v) { wet_lvl = v; mgraphics.redraw(); }
 function set_duck(v) { duck_lvl = clamp(v, 0.0, 1.0); mgraphics.redraw(); }
+// CHARACTER (DIGITAL/TAPE/BBD): tape + bucket-brigade lose top end each pass, so
+// later repeats warm toward amber and dim. DIGITAL (0, default) leaves the taps
+// the clean accent colour -> the trail is unchanged at the default.
+function set_character(v) { character = clamp(Math.round(v), 0, 2); mgraphics.redraw(); }
 
 // ── Interaction: ABSOLUTE X/Y pad ────────────────────────────────────
 // Robust pointer-coordinate resolution. Max's v8ui pointer events expose the
