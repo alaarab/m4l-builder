@@ -2010,6 +2010,29 @@ class TestSliceDividerEdit:
         assert len(stores) == 3                       # one coll store per slice
         assert abs(stores[1][2] - 300.0) < 1e-3       # slice 1 start_ms (0.3*1000)
 
+    def test_set_active_index_lights_up_the_triggered_slice(self):
+        # playback feedback: set_active_index(n) highlights slice n
+        # ([boundaries[n], boundaries[n+1]]) and registers a fading hit.
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            set_display_bounds(0.0, 0.25, 0.5, 0.75, 1.0);   // 4 slices
+            set_active_index(2);
+            dump({as: active_start, ae: active_end, hits: recent_hits.length});
+        """)
+        assert abs(result.state["as"] - 0.5) < 1e-6   # slice 2 start
+        assert abs(result.state["ae"] - 0.75) < 1e-6  # slice 2 end
+        assert result.state["hits"] == 1              # registered one hit marker
+
+    def test_set_active_index_clamps_out_of_range(self):
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(44100, []); loaded = 1; sample_rate = 44100;
+            set_display_bounds(0.0, 0.5, 1.0);   // 2 slices (indices 0, 1)
+            set_active_index(99);
+            dump({as: active_start, ae: active_end});
+        """)
+        assert abs(result.state["as"] - 0.5) < 1e-6   # clamped to the last slice
+        assert abs(result.state["ae"] - 1.0) < 1e-6
+
     def test_set_editable_never_echoes_an_outlet(self):
         result = run_jsui(slice_overview_js(), _SLICE_BUF + """
             loaded = 0;
