@@ -16,6 +16,10 @@ from m4l_builder.engines.design_system import (
     design_system_js,
     version_tag,
 )
+from m4l_builder.engines.energy_history import (
+    energy_history_inlets,
+    energy_history_js,
+)
 from m4l_builder.engines.envelope_display import ENVELOPE_INLETS, envelope_display_js
 from m4l_builder.engines.eq_band_column import (
     EQ_BAND_COLUMN_INLETS,
@@ -144,7 +148,41 @@ ALL_JSUI_FACTORIES = [
     loop_filter_curve_js,
     waveshape_curve_js,
     level_meter_js,
+    lambda: energy_history_js([
+        {"color": "0.30, 0.74, 0.68, 0.85", "mode": "fill"},
+        {"color": "0.94, 0.42, 0.62, 1.0", "mode": "line", "line_width": 1.8},
+    ]),
 ]
+
+
+class TestEnergyHistory:
+    BANDS = [
+        {"color": "0.30, 0.74, 0.68, 0.85", "mode": "fill"},
+        {"color": "0.62, 0.83, 0.30, 0.55", "mode": "fill"},
+        {"color": "0.94, 0.42, 0.62, 1.0", "mode": "line", "line_width": 1.8},
+    ]
+
+    def test_inlets_match_band_count(self):
+        assert energy_history_inlets(self.BANDS) == 3
+        js = energy_history_js(self.BANDS)
+        assert "inlets = NB;" in js and "var NB = BANDS.length;" in js
+
+    def test_bands_and_modes_embedded(self):
+        js = energy_history_js(self.BANDS)
+        # fill = m:0, line = m:1
+        assert "{c:[0.30, 0.74, 0.68, 0.85], m:0" in js
+        assert "{c:[0.94, 0.42, 0.62, 1.0], m:1, lw:1.8}" in js
+
+    def test_rate_sets_task_interval(self):
+        js = energy_history_js(self.BANDS, rate_hz=20.0)
+        assert "_task.interval = 50;" in js  # 1000/20
+
+    def test_requires_at_least_one_band(self):
+        with pytest.raises(ValueError):
+            energy_history_js([])
+
+    def test_follows_jsui_contract(self):
+        assert find_jsui_contract_issues(energy_history_js(self.BANDS)) == []
 
 
 def test_design_system_snippet_is_es5_clean():
