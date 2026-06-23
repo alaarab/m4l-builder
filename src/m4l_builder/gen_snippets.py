@@ -49,6 +49,7 @@ __all__ = [
     "one_pole_lp",
     "one_pole_hp",
     "exciter_harmonics",
+    "tpdf_dither",
 ]
 
 
@@ -405,6 +406,40 @@ def exp_pole(out: str, tau_seconds: str) -> str:
     samplerate-coefficient cache will wrap.
     """
     return f"{out} = exp(-1.0 / ({tau_seconds} * samplerate));"
+
+
+def tpdf_dither(
+    param: str = "dither",
+    in_l: str = "in1",
+    in_r: str = "in2",
+    out_l: str = "out1",
+    out_r: str = "out2",
+) -> str:
+    """TPDF-dithered requantization for a final mastering stage (stereo).
+
+    ``param`` selects the target bit depth as a small index: ``0`` = OFF
+    (a transparent, byte-identical passthrough — ``out == in``), ``1`` = 16-bit,
+    ``2`` = 24-bit. The classic dither recipe: add **triangular-PDF** noise — the
+    sum of two independent uniform sources, ``±1 LSB`` peak — *before* rounding to
+    the target quantization grid, so the quantization error is decorrelated from
+    the signal (no harmonic distortion / no noise modulation) when the signal is
+    later truncated to that depth downstream. OFF leaves the signal bit-identical,
+    so dropping this on the end of a chain is safe.
+
+    Reach for it as the LAST stage of a limiter / mastering device (engage when
+    the device is the final plugin before a 16/24-bit bounce). Uses ``noise()``,
+    so the kernel is intentionally **not** ``gen_sim``-able — host it in its own
+    downstream ``gen~`` so the upstream (testable) DSP stays simulator-clean.
+    """
+    return (
+        f"{param}_bits = {param} > 1.5 ? 24. : ({param} > 0.5 ? 16. : 0.);\n"
+        f"{param}_on = {param}_bits > 0.5 ? 1. : 0.;\n"
+        f"{param}_q = pow(2., {param}_bits - 1.);\n"
+        f"{out_l} = {in_l} + {param}_on * "
+        f"(round({in_l} * {param}_q + (noise() + noise()) * 0.5) / {param}_q - {in_l});\n"
+        f"{out_r} = {in_r} + {param}_on * "
+        f"(round({in_r} * {param}_q + (noise() + noise()) * 0.5) / {param}_q - {in_r});"
+    )
 
 
 def soft_knee_gain_computer(
