@@ -56,10 +56,14 @@ def exciter_curve_js(
     hi_color="0.36, 0.78, 0.96, 1.0",
     curve_color="0.95, 0.97, 0.99, 0.95",
     accent_color="0.95, 0.62, 0.28, 1.0",
+    spec_fill_color="0.46, 0.62, 0.72, 0.16",
+    spec_line_color="0.58, 0.76, 0.86, 0.42",
 ):
     """Return JavaScript source for the harmonic-exciter band display.
 
     ``lo_color`` / ``hi_color`` tint the LOW and HIGH band fills/handles.
+    ``spec_fill_color`` / ``spec_line_color`` tint the live FFT spectrum drawn
+    behind the band curves (a dim neutral so the colored bands stay dominant).
     All color arguments are RGBA strings, e.g. ``"0.96, 0.55, 0.22, 1.0"``.
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
@@ -73,6 +77,8 @@ def exciter_curve_js(
         hi_color=hi_color,
         curve_color=curve_color,
         accent_color=accent_color,
+        spec_fill_color=spec_fill_color,
+        spec_line_color=spec_line_color,
     )
 
 
@@ -96,6 +102,8 @@ var LO_CLR     = [$lo_color];
 var HI_CLR     = [$hi_color];
 var CURVE_CLR  = [$curve_color];
 var ACCENT_CLR = [$accent_color];
+var SPEC_FILL_CLR = [$spec_fill_color];
+var SPEC_LINE_CLR = [$spec_line_color];
 
 var MARGIN_L = 6, MARGIN_R = 6, MARGIN_T = 6, MARGIN_B = 16;
 var MIN_FREQ = 20.0, MAX_FREQ = 20000.0;
@@ -120,6 +128,20 @@ var env = 0.0;
 
 var dragging = 0;     // 0 none, 1 LOW handle, 2 HIGH handle
 var hovering = 0;
+
+// ── Live FFT spectrum: magnitudes poked into a buffer~ by the fft_analyzer
+// backend, polled here ~30 fps and drawn behind the band curves so you SEE the
+// harmonics each band is adding (Saturn/Ozone-style). Absolute-level backdrop;
+// its own dB axis, independent of the band-lift axis the curves use.
+var SPEC_BINS    = 160;          // log-spaced display bins (20 Hz .. 20 kHz)
+var SPEC_MIN_DB  = -72.0;
+var SPEC_MAX_DB  = 6.0;
+var SPEC_TRIM_DB = 12.0;          // lift so a typical mix sits mid-graph
+var sample_rate = 44100.0;
+var analyzer_buffer_name = "";
+var analyzer_buffer_bins = 0;
+var analyzer_poll_task = null;
+var analyzer_display = [];        // smoothed dB per display bin (fast atk/slow rel)
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -222,6 +244,9 @@ function paint() {
     mgraphics.set_source_rgba(BG_CLR);
     mgraphics.rectangle(plot_l(), plot_t(), plot_w(), plot_h());
     mgraphics.fill();
+
+    // Live FFT spectrum backdrop (behind the grid + band curves).
+    draw_spectrum();
 
     // Frequency grid + labels.
     mgraphics.set_line_width(1.0);
@@ -326,6 +351,123 @@ function set_hi_tune(v)   { hi_tune = clamp(v, HI_MIN, HI_MAX); mgraphics.redraw
 function set_character(v) { character = clamp(Math.round(v), 0, 2); mgraphics.redraw(); }
 function set_listen(v)    { listen = clamp(Math.round(v), 0, 3); mgraphics.redraw(); }
 function io_level(e) { env = (e === e) ? clamp(e, 0.0, 1.0) : 0.0; mgraphics.redraw(); }
+
+// ── Live FFT spectrum: poll the analyzer buffer~, smooth into display bins ─
+// The fft_analyzer backend (set_analyzer_buffer <name> <bins>) pokes
+// fft_size/2 linear magnitudes into a named buffer~ every spectral frame; we
+// read it on a ~30 fps Task (scheduler-message frames proved unreliable in
+// Live — see fft_analyzer.py). set_samplerate maps bins -> Hz.
+function spec_ensure() {
+    if (analyzer_display.length === SPEC_BINS) return;
+    analyzer_display = [];
+    var i;
+    for (i = 0; i < SPEC_BINS; i++) analyzer_display[i] = SPEC_MIN_DB;
+}
+
+function read_buffer_frame(nm, bins) {
+    if (nm === "") return null;
+    try {
+        var b = new Buffer(nm);
+        var n = bins > 0 ? bins : 1024;
+        return b.peek(1, 0, n);
+    } catch (e) { return null; }
+}
+
+function update_spectrum(mags) {
+    var m = mags.length;
+    if (m < 4) return;
+    spec_ensure();
+    var hz_per_bin = (sample_rate * 0.5) / m;   // mags = FFT_SIZE/2 bins -> Nyquist
+    var half = 0.0065;
+    var i, k, klo, khi, norm, f_lo, f_hi, peak, sum, cnt, mag, energy, db;
+    for (i = 0; i < SPEC_BINS; i++) {
+        norm = i / (SPEC_BINS - 1);
+        f_lo = Math.pow(10, LOG_MIN + (norm - half) * LOG_RANGE);
+        f_hi = Math.pow(10, LOG_MIN + (norm + half) * LOG_RANGE);
+        klo = Math.floor(f_lo / hz_per_bin);
+        khi = Math.ceil(f_hi / hz_per_bin);
+        if (klo < 0) klo = 0;
+        if (khi >= m) khi = m - 1;
+        if (khi < klo) khi = klo;
+        peak = 0.0; sum = 0.0; cnt = 0;
+        for (k = klo; k <= khi; k++) {
+            mag = mags[k];
+            if (mag < 0.0) mag = -mag;
+            if (mag !== mag) mag = 0.0;          // NaN guard
+            if (mag > peak) peak = mag;
+            sum += mag; cnt++;
+        }
+        // peak-dominant so a tone reads as a tight spike; mean lifts valleys
+        // so harmonics stay connected (same recipe as the EQ spectrum).
+        energy = cnt > 0 ? (0.6 * peak + 0.4 * (sum / cnt)) : 0.0;
+        db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : SPEC_MIN_DB;
+        db += SPEC_TRIM_DB;
+        db = clamp(db, SPEC_MIN_DB, SPEC_MAX_DB);
+        if (db > analyzer_display[i]) {
+            analyzer_display[i] = analyzer_display[i] * 0.4 + db * 0.6;   // fast attack
+        } else {
+            analyzer_display[i] = analyzer_display[i] * 0.82 + db * 0.18; // slow release
+        }
+    }
+    mgraphics.redraw();
+}
+
+function poll_analyzer_buffer() {
+    if (analyzer_buffer_name === "") return;
+    var vals = read_buffer_frame(analyzer_buffer_name, analyzer_buffer_bins);
+    if (vals && vals.length >= 4) update_spectrum(vals);
+}
+
+function start_analyzer_poll() {
+    if (analyzer_poll_task !== null) return;
+    if (typeof Task !== "undefined") {
+        analyzer_poll_task = new Task(poll_analyzer_buffer);
+        analyzer_poll_task.interval = 33;
+        analyzer_poll_task.repeat();
+    } else if (typeof setInterval !== "undefined") {
+        analyzer_poll_task = setInterval(poll_analyzer_buffer, 33);
+    }
+}
+
+function set_analyzer_buffer(name, bins) {
+    analyzer_buffer_name = "" + name;
+    analyzer_buffer_bins = bins ? Math.floor(bins) : 0;
+    spec_ensure();
+    start_analyzer_poll();
+}
+
+function set_samplerate(hz) {
+    if (hz > 1000.0 && hz < 768000.0) sample_rate = hz;
+}
+
+function spec_y(db) {
+    var nrm = (clamp(db, SPEC_MIN_DB, SPEC_MAX_DB) - SPEC_MIN_DB) / (SPEC_MAX_DB - SPEC_MIN_DB);
+    return plot_b() - nrm * plot_h();
+}
+
+function draw_spectrum() {
+    if (analyzer_display.length !== SPEC_BINS) return;
+    var i, x, y, bottom = plot_b();
+    mgraphics.set_source_rgba(SPEC_FILL_CLR);
+    mgraphics.move_to(plot_l(), bottom);
+    for (i = 0; i < SPEC_BINS; i++) {
+        x = plot_l() + (i / (SPEC_BINS - 1)) * plot_w();
+        y = spec_y(analyzer_display[i]);
+        mgraphics.line_to(x, y);
+    }
+    mgraphics.line_to(plot_r(), bottom);
+    mgraphics.close_path();
+    mgraphics.fill();
+    mgraphics.set_source_rgba(SPEC_LINE_CLR);
+    mgraphics.set_line_width(1.0);
+    for (i = 0; i < SPEC_BINS; i++) {
+        x = plot_l() + (i / (SPEC_BINS - 1)) * plot_w();
+        y = spec_y(analyzer_display[i]);
+        if (i === 0) mgraphics.move_to(x, y);
+        else mgraphics.line_to(x, y);
+    }
+    mgraphics.stroke();
+}
 
 // ── Interaction: grab the nearest handle, drag X = tune, Y = amount ───────
 function pointer_x(pe, fb) {

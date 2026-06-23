@@ -221,6 +221,27 @@ def test_exciter_curve_reflects_delta_listen_state():
     assert find_jsui_contract_issues(js) == []
 
 
+def test_exciter_curve_draws_live_fft_spectrum():
+    # The hero now reads the fft_analyzer buffer~ (set_analyzer_buffer +
+    # set_samplerate, polled ~30 fps) and draws a spectrum behind the band
+    # curves so you SEE the harmonics each band adds (Saturn/Ozone-style).
+    from m4l_builder.engines.exciter_curve import exciter_curve_js
+    js = exciter_curve_js()
+    for fn in ("function set_analyzer_buffer(name, bins)",
+               "function set_samplerate(hz)",
+               "function update_spectrum(mags)",
+               "function poll_analyzer_buffer()",
+               "function draw_spectrum()"):
+        assert fn in js, fn
+    # the spectrum is a display-only backdrop: it must never emit an outlet.
+    assert "draw_spectrum()" in js          # wired into paint()
+    assert "new Buffer(" in js              # reads the analyzer buffer~
+    # custom fill/line colors are substitutable (kept dim by default).
+    js2 = exciter_curve_js(spec_line_color="1.0, 0.0, 0.0, 1.0")
+    assert "var SPEC_LINE_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+    assert find_jsui_contract_issues(js) == []
+
+
 class TestCrossoverDisplayEngine:
     def test_returns_string(self):
         js = crossover_display_js()
