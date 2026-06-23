@@ -39,6 +39,7 @@ from m4l_builder.gen_snippets import (
     square_adaa,
     tanh_adaa,
     tilt_shelf,
+    tpdf_dither,
     tpt_svf,
 )
 
@@ -274,6 +275,45 @@ def test_exp_pole_text():
     assert exp_pole("sm", "0.0004") == "sm = exp(-1.0 / (0.0004 * samplerate));"
     assert exp_pole("atk", "atk_ms * 0.001") == \
         "atk = exp(-1.0 / (atk_ms * 0.001 * samplerate));"
+
+
+def test_tpdf_dither_text_and_identity_guard():
+    code = tpdf_dither("dither")
+    # bit-depth select: 0 OFF / 1 -> 16-bit / 2 -> 24-bit
+    assert "dither_bits = dither > 1.5 ? 24. : (dither > 0.5 ? 16. : 0.);" in code
+    assert "dither_on = dither_bits > 0.5 ? 1. : 0.;" in code
+    assert "dither_q = pow(2., dither_bits - 1.);" in code
+    # TPDF = two independent uniform sources summed, added before round()
+    assert "(noise() + noise()) * 0.5" in code
+    assert "round(in1 * dither_q + (noise() + noise()) * 0.5) / dither_q" in code
+    # OFF must be a transparent passthrough: out = in + on*(quantized - in)
+    assert "out1 = in1 + dither_on *" in code
+    assert "out2 = in2 + dither_on *" in code
+    assert "- in1);" in code and "- in2);" in code
+
+
+def test_tpdf_dither_quantization_grid():
+    # Mirror the emitted math in Python (noise() -> 0) to prove OFF = identity and
+    # ON lands the output on the target bit-depth grid.
+    def q_out(x, dither):
+        bits = 24.0 if dither > 1.5 else (16.0 if dither > 0.5 else 0.0)
+        on = 1.0 if bits > 0.5 else 0.0
+        q = pow(2.0, bits - 1.0)
+        return x + on * (round(x * q + 0.0) / q - x)
+
+    for x in (0.0, 0.3333, -0.7, 0.99999):
+        assert q_out(x, 0) == x                     # OFF: byte-identical
+    y16 = q_out(0.3333, 1)
+    assert abs(y16 * 32768.0 - round(y16 * 32768.0)) < 1e-9   # on the 16-bit grid
+    assert y16 != 0.3333                            # actually requantized
+    y24 = q_out(0.3333, 2)
+    assert abs(y24 * 8388608.0 - round(y24 * 8388608.0)) < 1e-6   # 24-bit grid
+
+
+def test_tpdf_dither_custom_names():
+    code = tpdf_dither("dth", in_l="a", in_r="b", out_l="oa", out_r="ob")
+    assert "oa = a + dth_on *" in code
+    assert "ob = b + dth_on *" in code
 
 
 def test_exp_pole_value_matches_time_constant():
