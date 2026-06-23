@@ -2057,3 +2057,40 @@ class TestSliceDividerEdit:
         assert result.state["kept"] == 3          # edit survived the samplerate re-fire
         assert result.state["after"] > 3          # the sensitivity re-analyze re-detected
         assert result.state["me"] == 0            # manual flag cleared by the re-detect
+
+
+class TestSlicePlayhead:
+    # playhead_ms feeds a live read position (ms) and normalizes by buffer length
+    # so the marker sweeps the whole waveform during playback.
+    def test_playhead_ms_normalizes_by_buffer_length(self):
+        # 48000 frames @ 48000 Hz = 1000 ms; 250 ms -> 0.25, 750 ms -> 0.75.
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(48000, []); loaded = 1; sample_rate = 48000;
+            playhead_ms(250.0); var p1 = playhead;
+            playhead_ms(750.0);
+            dump({p1: p1, p2: playhead});
+        """)
+        assert abs(result.state["p1"] - 0.25) < 1e-6
+        assert abs(result.state["p2"] - 0.75) < 1e-6
+
+    def test_playhead_ms_clamps_and_is_inert_without_buffer(self):
+        # past the end clamps to 1.0; with no buffer (fc=0) the call is a no-op.
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(48000, []); loaded = 1; sample_rate = 48000;
+            playhead_ms(5000.0); var clamped = playhead;     // > length -> 1.0
+            _bursts(0, []);                                   // buffer gone
+            playhead_ms(250.0);                               // must not move it
+            dump({clamped: clamped, after: playhead});
+        """)
+        assert abs(result.state["clamped"] - 1.0) < 1e-6
+        assert abs(result.state["after"] - 1.0) < 1e-6      # unchanged (no buffer)
+
+    def test_load_resets_playhead_to_start(self):
+        result = run_jsui(slice_overview_js(), _SLICE_BUF + """
+            _bursts(48000, []); loaded = 1; sample_rate = 48000;
+            playhead_ms(750.0); var before = playhead;
+            inlet = 0; msg_float(1.0);                        // re-load (inlet 0)
+            dump({before: before, after: playhead});
+        """)
+        assert abs(result.state["before"] - 0.75) < 1e-6
+        assert abs(result.state["after"] - 0.0) < 1e-6
