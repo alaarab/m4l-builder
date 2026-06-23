@@ -11,6 +11,11 @@ from ..device import (
     MidiGenerator,
     MidiTransformation,
 )
+from ..freeze import (
+    assemble_frozen_amxd,
+    device_to_frozen_bytes,
+    freeze_amxd_file,
+)
 from ..gen_lint import lint_genexpr
 from ..gen_patcher import build_gendsp
 from ..gen_sim import GenKernel, UnsupportedKernel, simulate
@@ -127,6 +132,9 @@ __all__ = [
     "inset_rect",
     "build_amxd",
     "write_amxd",
+    "assemble_frozen_amxd",
+    "device_to_frozen_bytes",
+    "freeze_amxd_file",
     "newobj",
     "patchline",
     "AUDIO_EFFECT",

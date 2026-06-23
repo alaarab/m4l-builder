@@ -424,12 +424,31 @@ class Device(GraphContainer):
     def to_patcher(self, *, profile=None) -> dict:
         return device_to_patcher(self, profile=profile)
 
-    def to_bytes(self, *, validate=None) -> bytes:
-        """Build the .amxd binary in memory."""
+    def to_bytes(self, *, validate=None, freeze: bool = False) -> bytes:
+        """Build the .amxd binary in memory.
+
+        When ``freeze`` is True, dependencies (jsui scripts, gen~ patchers,
+        support files) are embedded inside the .amxd so the single file is
+        self-contained and portable to other machines.
+        """
+        if freeze:
+            from .freeze import device_to_frozen_bytes
+
+            return device_to_frozen_bytes(self, validate=validate)
         return device_to_bytes(self, validate=validate)
 
-    def build(self, output_path: str, *, validate=None) -> int:
-        """Build and write the .amxd file. Returns bytes written."""
+    def build(self, output_path: str, *, validate=None, freeze: bool = False) -> int:
+        """Build and write the .amxd file. Returns bytes written.
+
+        When ``freeze`` is True, the written .amxd is self-contained (all
+        dependencies embedded) and no sidecar files are emitted.
+        """
+        if freeze:
+            from pathlib import Path
+
+            data = self.to_bytes(validate=validate, freeze=True)
+            Path(output_path).write_bytes(data)
+            return len(data)
         return build_device(self, output_path, validate=validate)
 
 
