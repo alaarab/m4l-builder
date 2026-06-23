@@ -18,6 +18,7 @@ Messages in (inlet 0):
     set_lo_tune <hz>        30..1000   (LOW band crossover)
     set_hi_tune <hz>        800..18000 (HIGH band crossover)
     set_character <idx>     0 WARM / 1 CLASSIC / 2 CLEAR (tints the fill)
+    set_listen <idx>        0 OFF / 1 ALL / 2 HIGH / 3 LOW (delta-solo badge)
     io_level <env_lin>      live |output| 0..1 (~30 ms) — drives the glow
 
 Messages out (outlet 0):
@@ -113,6 +114,7 @@ var MAJOR_FREQS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
 // State (mirrors the params; set_* updates these, never emits).
 var lo_amount = 0.0, hi_amount = 0.0;
 var lo_tune = 150.0, hi_tune = 3500.0;
+var listen = 0;   // 0 OFF / 1 ALL / 2 HIGH / 3 LOW (delta-solo of the harmonics)
 var character = 1;
 var env = 0.0;
 
@@ -293,6 +295,18 @@ function paint() {
     mgraphics.move_to(plot_r() - (t2.length * 4.6) - 5, plot_t() + 11);
     mgraphics.show_text(t2);
 
+    // DELTA / Listen indicator (top-centre): when soloing just the added
+    // harmonics, show WHICH band you are auditioning. The menu had no display
+    // sync before -- you could not see the delta state on the hero.
+    if (listen > 0) {
+        var dlbl = listen === 1 ? "DELTA ALL" : (listen === 2 ? "DELTA HIGH" : "DELTA LOW");
+        mgraphics.select_font_face("Arial Bold");
+        mgraphics.set_font_size(8.5);
+        mgraphics.set_source_rgba(CURVE_CLR[0], CURVE_CLR[1], CURVE_CLR[2], 0.96);
+        mgraphics.move_to(plot_l() + plot_w() * 0.5 - dlbl.length * 2.5, plot_t() + 12);
+        mgraphics.show_text(dlbl);
+    }
+
     // Border.
     mgraphics.set_source_rgba(BORDER_CLR);
     mgraphics.set_line_width(1.0);
@@ -310,6 +324,7 @@ function set_hi_amount(v) { hi_amount = clamp(v, 0.0, 100.0); mgraphics.redraw()
 function set_lo_tune(v)   { lo_tune = clamp(v, LO_MIN, LO_MAX); mgraphics.redraw(); }
 function set_hi_tune(v)   { hi_tune = clamp(v, HI_MIN, HI_MAX); mgraphics.redraw(); }
 function set_character(v) { character = clamp(Math.round(v), 0, 2); mgraphics.redraw(); }
+function set_listen(v)    { listen = clamp(Math.round(v), 0, 3); mgraphics.redraw(); }
 function io_level(e) { env = (e === e) ? clamp(e, 0.0, 1.0) : 0.0; mgraphics.redraw(); }
 
 // ── Interaction: grab the nearest handle, drag X = tune, Y = amount ───────

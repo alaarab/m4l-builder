@@ -209,6 +209,18 @@ def test_all_engine_outputs_follow_shared_jsui_contract(factory):
     assert find_jsui_contract_issues(factory()) == []
 
 
+def test_exciter_curve_reflects_delta_listen_state():
+    # set_listen <0-3> draws a DELTA ALL/HIGH/LOW badge so the hero shows which
+    # band's harmonics are being soloed (the menu had no display sync before).
+    from m4l_builder.engines.exciter_curve import exciter_curve_js
+    js = exciter_curve_js()
+    assert "function set_listen(v)" in js
+    assert "listen = clamp(Math.round(v), 0, 3)" in js
+    for badge in ("DELTA ALL", "DELTA HIGH", "DELTA LOW"):
+        assert badge in js
+    assert find_jsui_contract_issues(js) == []
+
+
 class TestCrossoverDisplayEngine:
     def test_returns_string(self):
         js = crossover_display_js()
