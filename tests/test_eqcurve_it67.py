@@ -262,3 +262,81 @@ class TestMotionHandlersEchoSafe:
             dump({motion: bands[0].motion});
         """)
         assert result.state["motion"] == 0, "echoed rate/depth never re-enable"
+
+
+class TestProQCreateGestures:
+    """Pro-Q-style create gestures: the band TYPE depends on WHERE you click, a
+    plain press on the empty graph creates + drags a band, and cmd-drag changes Q
+    without lifting the mouse button (user request)."""
+
+    def test_band_type_depends_on_click_x(self):
+        # Far edges -> pass filters (HP at the low end, LP at the high end), just
+        # inside -> shelves, the broad middle -> bell.
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            var l = plot_left(), r = plot_right(), w = r - l;
+            dump({
+                far_left:   band_type_for_x(l + w * 0.02),
+                near_left:  band_type_for_x(l + w * 0.12),
+                middle:     band_type_for_x(l + w * 0.50),
+                near_right: band_type_for_x(l + w * 0.88),
+                far_right:  band_type_for_x(l + w * 0.98),
+                HP: TYPE_HIGHPASS, LP: TYPE_LOWPASS,
+                LOSH: TYPE_LOSHELF, HISH: TYPE_HISHELF, PK: TYPE_PEAK
+            });
+        """)
+        s = result.state
+        assert s["far_left"] == s["HP"]
+        assert s["near_left"] == s["LOSH"]
+        assert s["middle"] == s["PK"]
+        assert s["near_right"] == s["HISH"]
+        assert s["far_right"] == s["LP"]
+
+    def test_press_on_empty_creates_typed_band_and_drags(self):
+        # A plain (no-modifier) press on empty graph spawns a band of the
+        # position-dependent type and immediately enters a node drag.
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            var l = plot_left(), r = plot_right(), w = r - l;
+            var ymid = (plot_top() + plot_bottom()) * 0.5;
+            handle_press(l + w * 0.02, ymid, 1, 0, 0, 0, 0, null);
+            dump({sel: selected_band, dragging: dragging,
+                  type: selected_band >= 0 ? bands[selected_band].type : -1,
+                  HP: TYPE_HIGHPASS});
+        """)
+        s = result.state
+        assert s["sel"] >= 0, "a band was created"
+        assert s["dragging"] == 1, "create immediately enters a drag"
+        assert s["type"] == s["HP"], "far-left press created a high-pass"
+        assert _named(result.outlets, "add_band"), "add_band was emitted"
+
+    def test_middle_press_creates_a_bell(self):
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            var l = plot_left(), r = plot_right(), w = r - l;
+            var ymid = (plot_top() + plot_bottom()) * 0.5;
+            handle_press(l + w * 0.5, ymid, 1, 0, 0, 0, 0, null);
+            dump({type: selected_band >= 0 ? bands[selected_band].type : -1,
+                  PK: TYPE_PEAK});
+        """)
+        s = result.state
+        assert s["type"] == s["PK"], "a middle press created a bell"
+
+    def test_cmd_drag_changes_q_and_holds_gain(self):
+        # cmd-drag on a bell: vertical drives Q, the gain is HELD at its start
+        # value, and only band_q (never band_gain) is emitted.
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, TYPE_PEAK, 1);
+            selected_band = 0; dragging = 1; drag_mode = 1;
+            drag_start_freq = 1000.0; drag_start_gain = 6.0; drag_start_q = 1.0;
+            var x = freq_to_x(1000.0);
+            // cmd-drag to the very bottom -> an extreme Q, clearly off the start 1.0
+            handle_drag_at(x, plot_bottom() - 5.0, 1, 1, 0);
+            dump({gain: bands[0].gain, q: bands[0].q});
+        """)
+        s = result.state
+        assert abs(s["gain"] - 6.0) < 1e-9, "gain is held during cmd-drag"
+        assert abs(s["q"] - 1.0) > 0.01, "Q changed under cmd-drag"
+        assert _named(result.outlets, "band_q"), "band_q was emitted"
+        assert _named(result.outlets, "band_gain") == [], "no gain edit under cmd"

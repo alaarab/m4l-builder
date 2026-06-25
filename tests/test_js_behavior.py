@@ -153,10 +153,12 @@ class TestEqCurveGestures:
         assert result.state == {"gain": 0.0, "present": 1}
         assert _named(result.outlets, "delete_band") == []
 
-    def test_double_click_empty_plot_still_creates_band(self):
+    def test_press_on_empty_plot_creates_band(self):
+        # Pro-Q create gesture: a single plain press on the empty graph creates a
+        # band (a double-click no longer creates — the single press already does).
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
-            ondblclick(freq_to_x(2000.0), gain_to_y(0.0), 1, 0, 0, 0, 0, 0);
+            onpointerdown({x: freq_to_x(2000.0), y: gain_to_y(0.0), buttons: 1});
             var n = 0;
             for (var i = 0; i < num_bands; i++) if (bands[i].present) n += 1;
             dump({present_count: n});
@@ -177,7 +179,7 @@ class TestEqCurveGestures:
             analyzer_display[pbin] = -6.0;
             analyzer_display[pbin-1] = -14.0; analyzer_display[pbin+1] = -14.0;
             analyzer_display[pbin-2] = -26.0; analyzer_display[pbin+2] = -26.0;
-            ondblclick(freq_to_x(850.0), gain_to_y(0.0), 1, 0, 0, 0, 0, 0);
+            onpointerdown({x: freq_to_x(850.0), y: gain_to_y(0.0), buttons: 1});
             var idx = -1;
             for (var j = 0; j < num_bands; j++) if (bands[j].present) { idx = j; break; }
             dump({created_freq: bands[idx].freq});
@@ -193,7 +195,7 @@ class TestEqCurveGestures:
             ensure_analyzer_arrays();
             var N = analyzer_display.length;
             for (var i = 0; i < N; i++) analyzer_display[i] = ANALYZER_MIN_DB;
-            ondblclick(freq_to_x(2000.0), gain_to_y(0.0), 1, 0, 0, 0, 0, 0);
+            onpointerdown({x: freq_to_x(2000.0), y: gain_to_y(0.0), buttons: 1});
             var idx = -1;
             for (var j = 0; j < num_bands; j++) if (bands[j].present) { idx = j; break; }
             dump({created_freq: bands[idx].freq});
@@ -237,11 +239,11 @@ class TestEqCurveGestures:
         assert result.state["n"] == 0, "a flat stroke adds no bands"
 
     def test_sketch_off_leaves_node_gestures_intact(self):
-        # With sketch_mode off a press behaves normally (here: double-click adds).
+        # With sketch_mode off a press behaves normally (here: a press creates).
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
             set_sketch(0);
-            ondblclick(freq_to_x(2000.0), gain_to_y(0.0), 1, 0, 0, 0, 0, 0);
+            onpointerdown({x: freq_to_x(2000.0), y: gain_to_y(0.0), buttons: 1});
             var n = 0;
             for (var i = 0; i < num_bands; i++) if (bands[i].present) n += 1;
             dump({n: n, sketching: sketching});

@@ -637,9 +637,14 @@ class TestEqCurveEngine:
         assert "delete_band_at(clicked_band);" not in js
         assert "suppress_next_ondblclick_delete = 1;" in js
         assert "if (dynamic_hit >= 0 || hit >= 0)" in js
-        assert "create_band_at(x, y);" in js
-        assert "if (uses_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
-        assert "if (!uses_gain && new_freq === b.freq && new_q === b.q) return;" in js
+        # Pro-Q create gesture (user request): a single press on the empty graph
+        # creates a band whose TYPE depends on the click position; an empty
+        # double-click no longer creates.
+        assert "function band_type_for_x(x)" in js
+        assert "if (create_band_at(x, y)) {" in js
+        # cmd-drag edits Q (not gain) on a gain band -> the commit keys off edits_gain.
+        assert "if (edits_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
+        assert "if (!edits_gain && new_freq === b.freq && new_q === b.q) return;" in js
 
     def test_contains_biquad_coeffs(self):
         js = eq_curve_js()

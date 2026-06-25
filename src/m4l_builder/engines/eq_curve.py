@@ -957,12 +957,39 @@ function delete_band_at(idx) {
     mgraphics.redraw();
 }
 
+// Pro-Q-style: the TYPE of a band created by clicking the empty graph depends on
+// WHERE you click. The far edges make pass filters (high-pass at the low end,
+// low-pass at the high end), just inside makes shelves, and the broad middle makes
+// a bell -- matching FabFilter's create gesture so "click and it makes the right
+// band". Zones are fractions of the plot width: [HP][LoShelf][--- BELL ---][HiShelf][LP].
+var CREATE_HP_FRAC   = 0.07;
+var CREATE_LOSH_FRAC = 0.18;
+var CREATE_HISH_FRAC = 0.82;
+var CREATE_LP_FRAC   = 0.93;
+function band_type_for_x(x) {
+    var l = plot_left();
+    var r = plot_right();
+    if (r <= l) return TYPE_PEAK;
+    var frac = (x - l) / (r - l);
+    if (frac <= CREATE_HP_FRAC) return TYPE_HIGHPASS;
+    if (frac < CREATE_LOSH_FRAC) return TYPE_LOSHELF;
+    if (frac >= CREATE_LP_FRAC) return TYPE_LOWPASS;
+    if (frac > CREATE_HISH_FRAC) return TYPE_HISHELF;
+    return TYPE_PEAK;
+}
+
 function create_band_at(x, y, btype, no_snap, bq) {
     var created_idx;
     var created_freq;
     var created_gain;
-    var t = (btype === undefined) ? TYPE_PEAK : Math.floor(btype);
-    var q0 = (bq === undefined || !(bq > 0)) ? 1.0 : clamp(bq, 0.1, 30.0);
+    var t = (btype === undefined) ? band_type_for_x(x) : Math.floor(btype);
+    var q0;
+    if (bq === undefined || !(bq > 0)) {
+        // Pass filters open at a natural Butterworth-ish Q; bells/shelves at 1.0.
+        q0 = (t === TYPE_LOWPASS || t === TYPE_HIGHPASS) ? 0.707 : 1.0;
+    } else {
+        q0 = clamp(bq, 0.1, 30.0);
+    }
     created_idx = find_free_band();
     if (created_idx < 0) return 0;
 
@@ -2734,14 +2761,15 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     }
 
     if (hit < 0 && dynamic_hit < 0) {
-        // Spectrum Grab: a plain press on a prominent analyzer peak (behind the
-        // curve) spawns a band right at that frequency and immediately drags it
-        // — grab the resonance and pull it down to cut. Plain presses on empty
-        // space just deselect (below).
+        // Pro-Q create gesture: a plain press on the empty graph spawns a band at
+        // the click and immediately drags it — the band TYPE is chosen by WHERE you
+        // clicked (band_type_for_x: far edges -> HP/LP, just inside -> shelves, the
+        // middle -> bell). If a prominent analyzer peak sits under the cursor,
+        // create_band_at snaps onto it (the Spectrum Grab "grab the resonance").
+        // Modifier presses (opt/cmd/ctrl/context) keep their own jobs, below.
         if (!option_click && !context_click && !command_click && !control_click &&
                 x >= plot_left() && x <= plot_right() &&
                 y >= plot_top() && y <= plot_bottom() &&
-                analyzer_db_at_x(x) > SPECTRUM_GRAB_DB &&
                 find_free_band() >= 0) {
             if (create_band_at(x, y)) {
                 dragging = 1;
@@ -2823,8 +2851,8 @@ function handle_double_click(x, y) {
         reset_band_at(dynamic_hit >= 0 ? dynamic_hit : hit);
         return;
     }
-    if (!point_in_plot(x, y)) return;
-    create_band_at(x, y);
+    // Empty double-clicks no longer create a band — a single press already does
+    // (Pro-Q create gesture), so a double-click on empty space is a no-op.
 }
 
 function handle_drag_at(x, y, but, cmd, shift) {
@@ -2843,6 +2871,7 @@ function handle_drag_at(x, y, but, cmd, shift) {
     var new_gain = b.gain;
     var new_q = b.q;
     var uses_gain = cache.uses_gain ? 1 : 0;
+    var q_drag = 0;
     var target_y;
 
     if (menu_band >= 0) {
@@ -2865,12 +2894,20 @@ function handle_drag_at(x, y, but, cmd, shift) {
         return;
     }
 
-    if (uses_gain) {
+    if (uses_gain && cmd) {
+        // Pro-Q cmd-drag: HOLD the gain so vertical now drives the Q instead, so
+        // you can tighten or widen a bell/shelf WITHOUT lifting the mouse button.
+        new_gain = drag_start_gain;
+        new_q = y_to_q(y);
+        if (shift) {
+            new_q = b.q + (new_q - b.q) * 0.15;
+        }
+        new_q = Math.round(new_q * 100.0) / 100.0;
+        new_q = clamp(new_q, MIN_Q, MAX_Q);
+        q_drag = 1;
+    } else if (uses_gain) {
         target_y = y;
         new_gain = y_to_gain(target_y);
-        if (cmd) {
-            new_gain = drag_start_gain;
-        }
         if (shift) {
             new_gain = b.gain + (new_gain - b.gain) * 0.15;
         }
@@ -2899,11 +2936,12 @@ function handle_drag_at(x, y, but, cmd, shift) {
     new_freq = Math.round(new_freq * 10.0) / 10.0;
     new_freq = clamp(new_freq, MIN_FREQ, MAX_FREQ);
 
-    if (uses_gain && new_freq === b.freq && new_gain === b.gain) return;
-    if (!uses_gain && new_freq === b.freq && new_q === b.q) return;
+    var edits_gain = (uses_gain && !q_drag) ? 1 : 0;
+    if (edits_gain && new_freq === b.freq && new_gain === b.gain) return;
+    if (!edits_gain && new_freq === b.freq && new_q === b.q) return;
 
     bands[selected_band].freq = new_freq;
-    if (uses_gain) {
+    if (edits_gain) {
         bands[selected_band].gain = new_gain;
     } else {
         bands[selected_band].q = new_q;
@@ -2911,7 +2949,7 @@ function handle_drag_at(x, y, but, cmd, shift) {
 
     rebuild_band_cache();
     outlet(1, "band_freq", selected_band, new_freq);
-    if (uses_gain) {
+    if (edits_gain) {
         outlet(2, "band_gain", selected_band, new_gain);
     } else {
         outlet(3, "band_q", selected_band, new_q);
