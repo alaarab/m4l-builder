@@ -1112,3 +1112,59 @@ def nslider(id: str, rect: list, *, staffs: int = None,
         box["bgcolor"] = bgcolor
     box.update(kwargs)
     return {"box": box}
+
+
+# --- Compiled signal-display objects (native C++, portable) --------------------
+# These render in native Max code — smoother/cheaper than hand-drawn jsui — and
+# ship WITH Max so devices stay portable. Like scope()/meter() they return a box
+# dict (add via device.add_box). To LAYER one behind a transparent jsui (compiled
+# fill + custom jsui overlay on top), use GraphContainer.add_compiled_ui instead,
+# which also handles the optional signal feed. I/O counts are parameters because
+# they vary by config — set them to match your patch.
+
+def plot(id: str, rect: list, *, numinlets: int = 1, numoutlets: int = 1,
+         outlettype: list = None, patching_rect: list = None, **attrs) -> dict:
+    """Create a ``plot~`` — a COMPILED curve/data plot (native rendering).
+
+    Plots a signal or list as a smooth curve. Pass object attributes as keywords
+    (e.g. ``rgba``, ``bgrgba``, ``range``, ``domain``, ``style``). Good for
+    transfer curves / responses where a hand-drawn jsui curve would cost more.
+    """
+    box = {
+        "id": id,
+        "maxclass": "plot~",
+        "numinlets": numinlets,
+        "numoutlets": numoutlets,
+        "patching_rect": patching_rect or [700, 3400, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if outlettype is not None:
+        box["outlettype"] = outlettype
+    box.update(attrs)
+    return {"box": box}
+
+
+def filtergraph(id: str, rect: list, *, numinlets: int = 1, numoutlets: int = 1,
+                outlettype: list = None, patching_rect: list = None, **attrs) -> dict:
+    """Create a ``filtergraph~`` — a COMPILED interactive filter-response editor.
+
+    Drag the curve to design a filter; it outputs ``biquad~``-ready coefficients,
+    so it doubles as both the UI and the coefficient source for an EQ/filter
+    device. Pass attrs as keywords (e.g. ``domain`` freq range, ``range`` dB,
+    ``numfilters``, ``filtertype``, colors). Set ``numoutlets`` to match your
+    filtergraph~ config (coefficient bundle + display outlets).
+    """
+    box = {
+        "id": id,
+        "maxclass": "filtergraph~",
+        "numinlets": numinlets,
+        "numoutlets": numoutlets,
+        "patching_rect": patching_rect or [700, 3500, rect[2], rect[3]],
+        "presentation": 1,
+        "presentation_rect": rect,
+    }
+    if outlettype is not None:
+        box["outlettype"] = outlettype
+    box.update(attrs)
+    return {"box": box}
