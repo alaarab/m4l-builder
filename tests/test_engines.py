@@ -720,10 +720,10 @@ class TestEqCurveEngine:
 
     def test_pro_q_band_shading_tints_all_active_gain_bands(self):
         # Every enabled gain band tints its contribution (color-coded EQ);
-        # the active band gets a stronger fill (0.22 vs 0.12) + an outline.
+        # the active band gets a stronger fill (0.34 vs 0.20) + an outline.
         js = eq_curve_js()
         assert "is_active = (i === selected_band || i === hover_band);" in js
-        assert "fill_a = is_active ? 0.22 : 0.12;" in js
+        assert "fill_a = is_active ? 0.34 : 0.20;" in js
         assert "if (!band_cache[i].uses_gain) continue;" in js
         assert "if (!is_active) continue;" in js
 
