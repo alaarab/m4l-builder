@@ -187,7 +187,7 @@ var ANALYZER_MIN_DB = -78.0;
 // Headroom above 0 dBFS so even a loud signal sits ~80% up (a backdrop) instead
 // of pegging the top of the plot like a wall (EQ8 maps the analyzer this way).
 var ANALYZER_MAX_DB = 12.0;
-var ANALYZER_BINS   = 256;        // fixed log-spaced display bins for fft_frame
+var ANALYZER_BINS   = 512;        // log-spaced display points (was 256 -> too blocky on a wide graph; 512 ~= 1.5px/segment, FabFilter-smooth)
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
 // Spectrum Grab (Pro-Q): a plain press over an analyzer peak louder than this
 // spawns a band right at that frequency and starts dragging it. The floor sits
@@ -530,10 +530,12 @@ function update_analyzer_from_fft(mags) {
     if (m < 4) return;
     ensure_analyzer_arrays();
     var hz_per_bin = (sample_rate * 0.5) / m;   // mags = FFT_SIZE/2 bins -> Nyquist
-    // Moderate cell so harmonics read as CONNECTED bumps with shallow dips
-    // (EQ8 look), not deep V-notches plunging to the floor (too narrow) and not
-    // a fat filled wall (too wide). Mean-dominant energy below fills the dips.
-    var half = 0.0055;
+    // ~1/9-octave cell: smooth enough that harmonics read as a clean rolling
+    // envelope (the EQ Eight / Pro-Q look) rather than grassy spikes — narrower
+    // than this looked "weird and spiky". The smoothness comes from the cell +
+    // the peak/mean blend + temporal + draw smoothing; the SOLID fill (bold
+    // analyzer_fill alpha) is what makes it read as a filled spectrum, not lines.
+    var half = 0.0050;
     var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db, atk, rel;
     for (i = 0; i < ANALYZER_BINS; i++) {
         norm = i / (ANALYZER_BINS - 1);
@@ -2625,7 +2627,7 @@ function analyzer_db_at_x(x) {
 // the band lands on it), and so the hover affordance can mark the grab target.
 // Conservative on purpose: on a flat/quiet spectrum it returns -1 (no snap), so
 // placement away from peaks stays exactly where you clicked.
-var GRAB_WIN = 10;            // +/- display bins searched (~0.45 octave each way)
+var GRAB_WIN = Math.round(ANALYZER_BINS * 0.04);   // +/- display bins (~0.45 octave each way, density-independent)
 var GRAB_FLOOR_OVER = 18.0;   // peak must sit this far above the analyzer floor
 var GRAB_PROMINENCE = 4.0;    // ...and this far above the local window average
 function analyzer_peak_near_x(x) {
