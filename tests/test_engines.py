@@ -723,6 +723,20 @@ class TestEqCurveEngine:
         assert "analyzer_curve_through(xs, ys, n);" in js
         assert "mgraphics.move_to(xs[0], bottom);" in js   # fill anchored at the floor
 
+    def test_external_spectrum_mode_makes_jsui_transparent_overlay(self):
+        # With external_spectrum=True a COMPILED spectrum (Max spectroscope~)
+        # draws behind, so the jsui skips its opaque plot bg + its own spectrum
+        # and renders only grid+curve+bands transparently on top. Default is off.
+        ext = eq_curve_js(external_spectrum=True)
+        norm = eq_curve_js()
+        assert "var EXTERNAL_SPECTRUM = 1;" in ext
+        assert "var EXTERNAL_SPECTRUM = 0;" in norm
+        # the opaque-bg fill + the jsui spectrum are gated off in external mode
+        assert "if (EXTERNAL_SPECTRUM) {" in ext          # draw_plot_background early-out
+        assert "if (!EXTERNAL_SPECTRUM) {" in ext         # paint() skips draw_analyzer*
+        # the FFT data still feeds snap-to-peak + dynamics (poll not gated)
+        assert "function poll_analyzer_buffer()" in ext
+
     def test_pro_q_band_shading_tints_all_active_gain_bands(self):
         # Every enabled gain band tints its contribution (color-coded EQ);
         # the active band gets a stronger fill (0.34 vs 0.20) + an outline.

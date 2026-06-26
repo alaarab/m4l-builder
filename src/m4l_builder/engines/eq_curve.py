@@ -85,6 +85,12 @@ def eq_curve_js(
     # No boost: combined with the +12 dB headroom above, a loud signal lands
     # ~80% up as a backdrop, not pegged at the top. Was 18 (way too hot).
     analyzer_trim_db=0.0,
+    # When True, an EXTERNAL compiled spectrum (e.g. Max's spectroscope~) is
+    # drawn BEHIND this jsui, so the jsui skips its own opaque plot background
+    # AND its hand-drawn spectrum/snapshot — leaving a transparent overlay that
+    # draws only the grid + curve + bands on top of the external spectrum. The
+    # FFT poll still runs (snap-to-peak grab + dynamic-EQ detection need the data).
+    external_spectrum=False,
 ):
     """Return JavaScript source for an interactive parametric EQ display.
 
@@ -106,6 +112,7 @@ def eq_curve_js(
         text_color=text_color,
         zero_line_color=zero_line_color,
         analyzer_trim_db=analyzer_trim_db,
+        external_spectrum=(1 if external_spectrum else 0),
         band_colors=band_palette_js(),
     )
 
@@ -189,6 +196,7 @@ var ANALYZER_MIN_DB = -78.0;
 var ANALYZER_MAX_DB = 12.0;
 var ANALYZER_BINS   = 512;        // log-spaced display points (was 256 -> too blocky on a wide graph; 512 ~= 1.5px/segment, FabFilter-smooth)
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
+var EXTERNAL_SPECTRUM = $external_spectrum;   // 1 = a compiled spectrum (spectroscope~) draws behind; skip jsui bg + spectrum
 // Spectrum Grab (Pro-Q): a plain press over an analyzer peak louder than this
 // spawns a band right at that frequency and starts dragging it. The floor sits
 // near ANALYZER_MIN_DB so this cleanly distinguishes a real resonance.
@@ -1398,6 +1406,15 @@ var freq_table = [];
 
 // ── Drawing ──────────────────────────────────────────────────────────
 function draw_plot_background() {
+    if (EXTERNAL_SPECTRUM) {
+        // A compiled spectrum (spectroscope~) fills the plot behind this jsui —
+        // keep the jsui transparent so it shows through; draw only the border.
+        mgraphics.set_source_rgba(PLOT_BORDER_CLR);
+        mgraphics.rectangle(plot_left(), plot_top(), plot_w(), plot_h());
+        mgraphics.set_line_width(1.0);
+        mgraphics.stroke();
+        return;
+    }
     mgraphics.set_source_rgba(PANEL_CLR);
     mgraphics.rectangle(0, 0, mgraphics.size[0], mgraphics.size[1]);
     mgraphics.fill();
@@ -1417,8 +1434,10 @@ function paint() {
     draw_plot_background();
 
     draw_grid();
-    draw_analyzer_snapshot();   // it173: A/B reference behind the live analyzer
-    draw_analyzer();
+    if (!EXTERNAL_SPECTRUM) {
+        draw_analyzer_snapshot();   // it173: A/B reference behind the live analyzer
+        draw_analyzer();
+    }
     // Re-sweep each motion band's drawn coeffs so the curve moves with the LFO.
     var _mi;
     for (_mi = 0; _mi < num_bands; _mi++) apply_motion_to_cache(_mi);
