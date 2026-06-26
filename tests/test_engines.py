@@ -715,8 +715,13 @@ class TestEqCurveEngine:
         js = eq_curve_js()
         assert "analyzer_display[i] = analyzer_display[i] * 0.55 + incoming * 0.45;" in js
         assert "mgraphics.set_line_width(1.0);" in js
-        assert "mgraphics.move_to(xs[i], ys[i]);" in js
-        assert "mgraphics.line_to(xs[i], ys[i]);" in js
+        # The analyzer fill + line render as a SMOOTH Catmull-Rom curve (curve_to)
+        # through the log-binned points, not angular straight segments -> the
+        # EQ Eight "smooth roll" look instead of blocky/spiky.
+        assert "function analyzer_curve_through(xs, ys, n)" in js
+        assert "mgraphics.curve_to(" in js
+        assert "analyzer_curve_through(xs, ys, n);" in js
+        assert "mgraphics.move_to(xs[0], bottom);" in js   # fill anchored at the floor
 
     def test_pro_q_band_shading_tints_all_active_gain_bands(self):
         # Every enabled gain band tints its contribution (color-coded EQ);

@@ -1548,6 +1548,23 @@ function draw_analyzer_snapshot() {
     mgraphics.stroke();
 }
 
+// Catmull-Rom smooth path through (xs[i], ys[i]) for i in [0, n). The pen must
+// already be at (xs[0], ys[0]). Each segment becomes a cubic bezier (curve_to)
+// so the spectrum reads as a SMOOTH ROLL (EQ Eight) instead of angular straight
+// segments / plateau steps from the log-binned data — the main "blocky" fix.
+function analyzer_curve_through(xs, ys, n) {
+    var i, x0, y0, x1, y1, x2, y2, x3, y3;
+    for (i = 0; i < n - 1; i++) {
+        x1 = xs[i]; y1 = ys[i];
+        x2 = xs[i + 1]; y2 = ys[i + 1];
+        x0 = i > 0 ? xs[i - 1] : x1; y0 = i > 0 ? ys[i - 1] : y1;
+        x3 = i < n - 2 ? xs[i + 2] : x2; y3 = i < n - 2 ? ys[i + 2] : y2;
+        mgraphics.curve_to(x1 + (x2 - x0) / 6.0, y1 + (y2 - y0) / 6.0,
+                           x2 - (x3 - x1) / 6.0, y2 - (y3 - y1) / 6.0,
+                           x2, y2);
+    }
+}
+
 function draw_analyzer() {
     var i, n, freq;
     var xs = [];
@@ -1585,18 +1602,17 @@ function draw_analyzer() {
         ANALYZER_FILL_CLR[0], ANALYZER_FILL_CLR[1], ANALYZER_FILL_CLR[2], 0.0);
     mgraphics.set_source(grad);
     mgraphics.move_to(xs[0], bottom);
-    for (i = 0; i < n; i++) mgraphics.line_to(xs[i], ys[i]);
+    mgraphics.line_to(xs[0], ys[0]);
+    analyzer_curve_through(xs, ys, n);   // smooth top edge
     mgraphics.line_to(xs[n - 1], bottom);
     mgraphics.close_path();
     mgraphics.fill();
 
-    // Spectrum line on top of the fill.
+    // Spectrum line on top of the fill (same smooth curve).
     mgraphics.set_source_rgba(ANALYZER_LINE_CLR);
     mgraphics.set_line_width(1.4);
-    for (i = 0; i < n; i++) {
-        if (i === 0) mgraphics.move_to(xs[i], ys[i]);
-        else mgraphics.line_to(xs[i], ys[i]);
-    }
+    mgraphics.move_to(xs[0], ys[0]);
+    analyzer_curve_through(xs, ys, n);
     mgraphics.stroke();
 
     // Peak-hold line (slow-decaying), drawn thin above the live spectrum.
