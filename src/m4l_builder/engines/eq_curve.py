@@ -1672,7 +1672,7 @@ function draw_band_curves() {
 
         clr = BAND_COLORS[i % BAND_COLORS.length];
         is_active = (i === selected_band || i === hover_band);
-        fill_a = is_active ? 0.22 : 0.12;
+        fill_a = is_active ? 0.34 : 0.20;
 
         // Filled colored region from the 0 dB line to this band's response
         // (boost fills upward, cut fills downward — both tinted). it178: a
