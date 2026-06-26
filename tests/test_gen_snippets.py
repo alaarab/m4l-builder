@@ -37,6 +37,7 @@ from m4l_builder.gen_snippets import (
     rbj_shelf,
     soft_knee_gain_computer,
     square_adaa,
+    stereo_correlation,
     tanh_adaa,
     tilt_shelf,
     tpdf_dither,
@@ -99,6 +100,30 @@ def test_ms_width_matches_echotide_shipped_form():
         "wetLw = mid + side;\n"
         "wetRw = mid - side;"
     )
+
+
+def test_stereo_correlation_matches_echotide_shipped_form():
+    # The snippet reproduces the exact inline form Echotide ships (out5 from out1/out2).
+    assert stereo_correlation("out1", "out2", "out5") == (
+        "cc_lr = cc_lr + (out1 * out2 - cc_lr) * 0.002;\n"
+        "cc_ll = cc_ll + (out1 * out1 - cc_ll) * 0.002;\n"
+        "cc_rr = cc_rr + (out2 * out2 - cc_rr) * 0.002;\n"
+        "out5 = clamp(cc_lr / (sqrt(cc_ll * cc_rr) + 0.000001), -1., 1.);"
+    )
+
+
+def test_stereo_correlation_mono_plus_one_antiphase_minus_one():
+    # Behavioural: L==R (mono) -> +1; L==-R (anti-phase) -> -1, after the one-pole
+    # averages converge.
+    kernel = (
+        "History cc_lr(0.); History cc_ll(0.); History cc_rr(0.);\n"
+        + stereo_correlation("in1", "in2", "out1")
+    )
+    n = 4000
+    mono = simulate(kernel, {"in1": [0.5] * n, "in2": [0.5] * n}, num_samples=n)
+    assert abs(mono["out1"][-1] - 1.0) < 0.02
+    anti = simulate(kernel, {"in1": [0.5] * n, "in2": [-0.5] * n}, num_samples=n)
+    assert abs(anti["out1"][-1] - (-1.0)) < 0.02
 
 
 def test_ms_width_custom_intermediate_names_avoid_clash():

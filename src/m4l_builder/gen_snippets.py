@@ -171,6 +171,30 @@ def drive_blend(x: str, out: str, k: str, drive: str) -> str:
     return f"{out} = {x} + (tanh({x} * {k}) / tanh({k}) - {x}) * {drive};"
 
 
+def stereo_correlation(
+    left: str,
+    right: str,
+    out: str,
+    *,
+    lr: str = "cc_lr", ll: str = "cc_ll", rr: str = "cc_rr",
+    coef: str = "0.002",
+) -> str:
+    """Smoothed output stereo correlation: +1 (mono) .. 0 (wide) .. -1 (anti-phase).
+
+    One-pole running averages (time constant ``coef``) of the products ``L*R`` /
+    ``L*L`` / ``R*R``, then the normalized correlation
+    ``cc_lr / sqrt(cc_ll*cc_rr)`` clamped to [-1, 1]. The caller declares the three
+    ``History`` states (``lr``/``ll``/``rr``) and reads ``out`` -- a -1..+1 signal,
+    e.g. sampled by ``snapshot~`` into a readout/meter. Drives the stereo-image
+    readouts on the width-shaping flagships (Echotide, Aurora)."""
+    return (
+        f"{lr} = {lr} + ({left} * {right} - {lr}) * {coef};\n"
+        f"{ll} = {ll} + ({left} * {left} - {ll}) * {coef};\n"
+        f"{rr} = {rr} + ({right} * {right} - {rr}) * {coef};\n"
+        f"{out} = clamp({lr} / (sqrt({ll} * {rr}) + 0.000001), -1., 1.);"
+    )
+
+
 def tanh_adaa(
     x: str,
     out: str,
