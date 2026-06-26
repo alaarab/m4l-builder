@@ -91,6 +91,10 @@ def eq_curve_js(
     # draws only the grid + curve + bands on top of the external spectrum. The
     # FFT poll still runs (snap-to-peak grab + dynamic-EQ detection need the data).
     external_spectrum=False,
+    # When True, draw a MINIMAL dB grid: only the 0 dB reference line + the
+    # top/bottom range labels — no interior dB lines. Declutters the graph so the
+    # axis labels read over a busy spectrum behind (freq lines/labels unchanged).
+    minimal_grid=False,
 ):
     """Return JavaScript source for an interactive parametric EQ display.
 
@@ -113,6 +117,7 @@ def eq_curve_js(
         zero_line_color=zero_line_color,
         analyzer_trim_db=analyzer_trim_db,
         external_spectrum=(1 if external_spectrum else 0),
+        minimal_grid=(1 if minimal_grid else 0),
         band_colors=band_palette_js(),
     )
 
@@ -197,6 +202,7 @@ var ANALYZER_MAX_DB = 12.0;
 var ANALYZER_BINS   = 512;        // log-spaced display points (was 256 -> too blocky on a wide graph; 512 ~= 1.5px/segment, FabFilter-smooth)
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
 var EXTERNAL_SPECTRUM = $external_spectrum;   // 1 = a compiled spectrum (spectroscope~) draws behind; skip jsui bg + spectrum
+var MINIMAL_GRID = $minimal_grid;   // 1 = only the 0 dB line + range labels (no interior dB lines)
 // Spectrum Grab (Pro-Q): a plain press over an analyzer peak louder than this
 // spawns a band right at that frequency and starts dragging it. The floor sits
 // near ANALYZER_MIN_DB so this cleanly distinguishes a real resonance.
@@ -1495,24 +1501,32 @@ function draw_grid() {
     }
 
     for (i = 0; i < gain_lines.length; i++) {
+        var is_zero = Math.abs(gain_lines[i]) < 0.0001;
+        var is_extreme = (i === 0 || i === gain_lines.length - 1);
         y = gain_to_y(gain_lines[i]);
-        if (Math.abs(gain_lines[i]) < 0.0001) {
-            mgraphics.set_source_rgba(ZERO_LINE_CLR);
-            mgraphics.set_line_width(1.0);
-        } else {
-            mgraphics.set_source_rgba(GRID_CLR);
-            mgraphics.set_line_width(0.5);
+        // Lines: MINIMAL mode draws ONLY the 0 dB reference; full mode draws all.
+        if (!MINIMAL_GRID || is_zero) {
+            if (is_zero) {
+                mgraphics.set_source_rgba(ZERO_LINE_CLR);
+                mgraphics.set_line_width(1.0);
+            } else {
+                mgraphics.set_source_rgba(GRID_CLR);
+                mgraphics.set_line_width(0.5);
+            }
+            mgraphics.move_to(plot_left(), y);
+            mgraphics.line_to(plot_right(), y);
+            mgraphics.stroke();
         }
-        mgraphics.move_to(plot_left(), y);
-        mgraphics.line_to(plot_right(), y);
-        mgraphics.stroke();
-
-        if (Math.abs(gain_lines[i] % gain_grid_step()) < 0.0001 || Math.abs(gain_lines[i]) < 0.0001) {
+        // Labels: MINIMAL -> 0 dB + the top/bottom range only; full -> every major step.
+        var show_label = MINIMAL_GRID
+            ? (is_zero || is_extreme)
+            : (Math.abs(gain_lines[i] % gain_grid_step()) < 0.0001 || is_zero);
+        if (show_label) {
             mgraphics.set_source_rgba(TEXT_CLR);
             mgraphics.select_font_face("Arial");
             mgraphics.set_font_size(8);
             label = gain_lines[i] > 0 ? "+" + gain_lines[i] : "" + gain_lines[i];
-            if (Math.abs(gain_lines[i]) < 0.0001) label = " 0";
+            if (is_zero) label = " 0";
             mgraphics.move_to(2, y + 3);
             mgraphics.show_text(label);
         }
