@@ -38,6 +38,37 @@ class TestDevice:
         d = self._make(device_type="midi_effect")
         assert d.device_type == "midi_effect"
 
+    def test_add_compiled_ui_spectroscope(self):
+        # The compiled-UI helper: layer a built-in C++ Max UI object (here a
+        # spectroscope~) in presentation, with object attrs merged in and an
+        # optional signal feed wired to inlet 0. Generalised from Parametric EQ
+        # V2's "compiled spectrum behind a transparent jsui" pattern.
+        d = self._make()
+        d.add_newobj("sig_src", "selector~ 2 1", numinlets=3, numoutlets=1,
+                     outlettype=["signal"], patching_rect=[0, 0, 80, 20])
+        d.add_compiled_ui(
+            "spec", "spectroscope~", [10, 20, 300, 100],
+            varname="spec", outlettype=["signal"],
+            attrs={"sono": 0, "logfreq": 1, "domain": [10.0, 22000.0],
+                   "fgcolor": [0.6, 0.6, 0.6, 0.8], "bgcolor": [0.0, 0.0, 0.0, 0.0]},
+            signal_src=("sig_src", 0),
+        )
+        boxes = {b["box"]["id"]: b["box"] for b in d.boxes}
+        assert "spec" in boxes
+        spec = boxes["spec"]
+        assert spec["maxclass"] == "spectroscope~"
+        assert spec["presentation"] == 1
+        assert spec["presentation_rect"] == [10, 20, 300, 100]
+        assert spec["patching_rect"] == [10, 20, 300, 100]   # defaults to presentation rect
+        assert spec["varname"] == "spec"
+        assert spec["logfreq"] == 1 and spec["domain"] == [10.0, 22000.0]  # attrs merged
+        lines = {
+            (ln["patchline"]["source"][0], ln["patchline"]["source"][1],
+             ln["patchline"]["destination"][0], ln["patchline"]["destination"][1])
+            for ln in d.lines
+        }
+        assert ("sig_src", 0, "spec", 0) in lines   # signal feed wired to inlet 0
+
     def test_init_empty_boxes(self):
         d = self._make()
         assert d.boxes == []

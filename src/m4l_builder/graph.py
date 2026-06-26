@@ -224,6 +224,66 @@ class GraphContainer:
             id = self.unique_id(base)
         return self.add_box(newobj(id, text, numinlets=numinlets, numoutlets=numoutlets, **kwargs))
 
+    def add_compiled_ui(
+        self,
+        id: str,
+        maxclass: str,
+        presentation_rect: list,
+        *,
+        attrs: dict = None,
+        varname: str = None,
+        numinlets: int = 1,
+        numoutlets: int = 1,
+        outlettype: list = None,
+        patching_rect: list = None,
+        signal_src: tuple = None,
+    ) -> BoxRef:
+        """Add a BUILT-IN **compiled** Max UI object (e.g. ``spectroscope~``
+        spectrum, ``scope~`` waveform, ``plot~``) shown in presentation.
+
+        Why: these render in native C++ — smoother, higher-fidelity and cheaper
+        than a hand-drawn ``jsui``/``mgraphics`` canvas — and they ship WITH Max,
+        so the device stays portable (no third-party external to install). The
+        power pattern is to LAYER one BEHIND a transparent ``jsui``: call this
+        BEFORE the jsui's ``add_v8ui`` (Max z-orders by box order, so earlier =
+        further back), give the jsui a transparent background, and you get
+        compiled rendering with interactive vector graphics drawn on top.
+        Proven in Parametric EQ V2 — a ``spectroscope~`` spectrum behind the EQ
+        curve (the jsui built with ``eq_curve_js(external_spectrum=True)``).
+        Works on a ``Device`` AND inside a ``Subpatcher`` (e.g. a fly-out window).
+
+        Args:
+            id, maxclass, presentation_rect: the object, its Max class and its
+                on-screen rect ``[x, y, w, h]``.
+            attrs: object-specific saved attributes — e.g. for ``spectroscope~``
+                ``{"sono": 0, "logfreq": 1, "domain": [10., 22000.], "logamp": 1,
+                "range": [0., 6.5], "fgcolor": [...], "bgcolor": [0,0,0,0]}``.
+            signal_src: optional ``(source_box_id, outlet)`` whose SIGNAL is
+                wired into this object's inlet 0 (for ``~`` displays that analyze
+                live audio). Inside a fly-out subpatcher, bridge the signal in
+                with ``send~``/``receive~`` first, then point ``signal_src`` at
+                the ``receive~``.
+        """
+        box: dict = {
+            "id": id,
+            "maxclass": maxclass,
+            "numinlets": numinlets,
+            "numoutlets": numoutlets,
+            "presentation": 1,
+            "presentation_rect": list(presentation_rect),
+            "patching_rect": list(patching_rect) if patching_rect else list(presentation_rect),
+        }
+        if varname:
+            box["varname"] = varname
+        if outlettype is not None:
+            box["outlettype"] = outlettype
+        if attrs:
+            box.update(attrs)
+        ref = self.add_box({"box": box})
+        if signal_src is not None:
+            self.add_line(signal_src[0], signal_src[1], id, 0)
+        return ref
+
     def wire_chain(self, obj_ids: list, outlet: int = 0, inlet: int = 0):
         """Connect objects end-to-end, each output feeding the next input."""
         for i in range(len(obj_ids) - 1):
