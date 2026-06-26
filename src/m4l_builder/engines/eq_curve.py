@@ -583,10 +583,11 @@ function update_analyzer_from_fft(mags) {
             if (mag > peak) peak = mag;
             sum += mag; cnt++;
         }
-        // Peak-dominant so a tone reads as a TIGHT spike like EQ8 (the higher-res
-        // 4096-pt FFT keeps the floor smooth, so we don't need heavy mean-fill);
-        // the mean term only lifts valleys slightly so harmonics stay connected.
-        energy = cnt > 0 ? (0.65 * peak + 0.35 * (sum / cnt)) : 0.0;
+        // More peak-dominant (0.72 vs 0.65) so harmonic peaks stand TALLER +
+        // crisper, matching EQ Eight's dynamic peaks instead of our compressed
+        // blob — safe now that the smooth Catmull-Rom curve + solid fill keep it
+        // reading as clean filled humps, not the grassy spikes of the line-only era.
+        energy = cnt > 0 ? (0.72 * peak + 0.28 * (sum / cnt)) : 0.0;
         db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
         db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
