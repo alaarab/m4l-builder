@@ -11,6 +11,7 @@ from m4l_builder.ui import (
     jsui,
     kslider,
     live_arrows,
+    filtergraph,
     live_drop,
     live_gain,
     live_grid,
@@ -25,6 +26,7 @@ from m4l_builder.ui import (
     nslider,
     number_box,
     panel,
+    plot,
     radiogroup,
     rslider,
     scope,
@@ -2751,3 +2753,23 @@ def test_resolve_parameter_spec_uses_arg_for_bare_name():
 
     resolved = _resolve_parameter_spec("Gain", parameter_type=1)
     assert resolved.parameter_type == 1
+
+
+def test_plot_compiled_object():
+    result = plot("plt-1", [10, 20, 200, 100], rgba=[0.6, 0.6, 0.6, 1.0])
+    box = result["box"]
+    assert box["maxclass"] == "plot~"
+    assert box["id"] == "plt-1"
+    assert box["presentation"] == 1
+    assert box["presentation_rect"] == [10, 20, 200, 100]
+    assert box["rgba"] == [0.6, 0.6, 0.6, 1.0]   # **attrs passthrough
+
+
+def test_filtergraph_compiled_object_io_override():
+    result = filtergraph("fg-1", [0, 0, 300, 120], numoutlets=2,
+                         domain=[20.0, 20000.0])
+    box = result["box"]
+    assert box["maxclass"] == "filtergraph~"
+    assert box["numoutlets"] == 2            # I/O count is a parameter
+    assert box["presentation"] == 1
+    assert box["domain"] == [20.0, 20000.0]  # **attrs passthrough
