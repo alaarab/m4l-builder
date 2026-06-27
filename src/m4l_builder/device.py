@@ -175,6 +175,81 @@ class Device(GraphContainer):
             )
         )
 
+    def add_compiled_display(
+        self,
+        base_id: str,
+        maxclass: str,
+        rect: list,
+        *,
+        overlay_js: str,
+        overlay_filename: str,
+        attrs: dict = None,
+        signal_src=None,
+        gate_src: tuple = None,
+        inset: tuple = (0, 0, 0, 0),
+        scope_outlettype: list = None,
+        scope_patching_rect: list = None,
+        overlay_inlets: int = 1,
+        overlay_outlets: int = 0,
+        overlay_outlettype: list = None,
+        overlay_patching_rect: list = None,
+        varname: str = None,
+        validate_contract: bool = True,
+    ) -> tuple:
+        """Build a compiled-Max display BEHIND a transparent ``v8ui`` overlay.
+
+        The keystone recipe proven by Parametric EQ V2: a native compiled object
+        (``spectroscope~``, ``scope~`` …) renders the dense realtime fill in C++
+        (smoother + cheaper than jsui, and portable — it ships with Max), while a
+        transparent ``v8ui`` drawn ON TOP supplies the grid, labels, curve and
+        pointer interaction. This wires the two together with the correct z-order
+        (compiled box added FIRST → sits behind; overlay added AFTER → in front),
+        an optional CPU ``gate_src``, and an ``inset`` so the compiled rect lands
+        inside the overlay's axis margins (the fill lines up with the plotted
+        curve).
+
+        Args:
+            base_id: the overlay's id; the compiled box is ``f"{base_id}_scope"``.
+            maxclass, rect, attrs, signal_src, gate_src: forwarded to
+                :meth:`add_compiled_ui` (``rect`` minus ``inset`` becomes the
+                compiled box's presentation rect).
+            overlay_js, overlay_filename: the transparent v8ui's code + cached
+                filename (bump the filename on any JS change — Max caches by name).
+            inset: ``(left, top, right, bottom)`` px to shrink the compiled rect
+                inside the overlay so the C++ fill aligns with the overlay's plot.
+
+        Returns ``(compiled_ref, overlay_ref)``.
+        """
+        il, it, ir, ib = inset
+        scope_rect = [rect[0] + il, rect[1] + it, rect[2] - il - ir, rect[3] - it - ib]
+        compiled = self.add_compiled_ui(
+            f"{base_id}_scope",
+            maxclass,
+            scope_rect,
+            attrs=attrs,
+            varname=f"{base_id}_scope",
+            outlettype=scope_outlettype,
+            patching_rect=scope_patching_rect,
+            signal_src=signal_src,
+            gate_src=gate_src,
+        )
+        overlay = self.add_v8ui(
+            base_id,
+            rect,
+            js_code=overlay_js,
+            js_filename=overlay_filename,
+            numinlets=overlay_inlets,
+            numoutlets=overlay_outlets,
+            outlettype=overlay_outlettype if overlay_outlettype is not None else [""] * overlay_outlets,
+            patching_rect=overlay_patching_rect or [rect[0], rect[1], rect[2], rect[3]],
+            background=0,
+            ignoreclick=0,
+            bgcolor=[0.0, 0.0, 0.0, 0.0],
+            varname=varname or base_id,
+            validate_contract=validate_contract,
+        )
+        return compiled, overlay
+
     def add_support_file(self, filename: str, content: str, file_type: str = "TEXT") -> str:
         """Register an auxiliary file to write alongside the .amxd build."""
         self.register_asset(filename, content, asset_type=file_type, category="support")
