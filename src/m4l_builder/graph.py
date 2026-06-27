@@ -224,6 +224,32 @@ class GraphContainer:
             id = self.unique_id(base)
         return self.add_box(newobj(id, text, numinlets=numinlets, numoutlets=numoutlets, **kwargs))
 
+    @staticmethod
+    def _normalize_signal_feeds(signal_src) -> list:
+        """Coerce ``signal_src`` into ``[(src_id, src_outlet, dest_inlet), ...]``.
+
+        Accepts a single ``(src_id, outlet)`` / ``(src_id, outlet, inlet)`` tuple
+        (back-compat: wired to inlet 0 unless an inlet is given), or a LIST of
+        such tuples — bare ``(src_id, outlet)`` entries default to ``dest_inlet =
+        list index`` (so ``[(mid, 0), (side, 0)]`` feeds inlet 0 then inlet 1, the
+        ``scope~`` X-Y goniometer pattern), and ``(src_id, outlet, inlet)`` pins
+        an explicit inlet.
+        """
+        if signal_src is None:
+            return []
+        # A single tuple whose first element is the source id (a string).
+        if isinstance(signal_src, tuple) and signal_src and isinstance(signal_src[0], str):
+            if len(signal_src) == 2:
+                return [(signal_src[0], signal_src[1], 0)]
+            return [(signal_src[0], signal_src[1], signal_src[2])]
+        feeds = []
+        for i, item in enumerate(signal_src):
+            if len(item) == 2:
+                feeds.append((item[0], item[1], i))
+            else:
+                feeds.append((item[0], item[1], item[2]))
+        return feeds
+
     def add_compiled_ui(
         self,
         id: str,
@@ -236,7 +262,8 @@ class GraphContainer:
         numoutlets: int = 1,
         outlettype: list = None,
         patching_rect: list = None,
-        signal_src: tuple = None,
+        signal_src=None,
+        gate_src: tuple = None,
     ) -> BoxRef:
         """Add a BUILT-IN **compiled** Max UI object (e.g. ``spectroscope~``
         spectrum, ``scope~`` waveform, ``plot~``) shown in presentation.
@@ -258,11 +285,22 @@ class GraphContainer:
             attrs: object-specific saved attributes — e.g. for ``spectroscope~``
                 ``{"sono": 0, "logfreq": 1, "domain": [10., 22000.], "logamp": 1,
                 "range": [0., 6.5], "fgcolor": [...], "bgcolor": [0,0,0,0]}``.
-            signal_src: optional ``(source_box_id, outlet)`` whose SIGNAL is
-                wired into this object's inlet 0 (for ``~`` displays that analyze
-                live audio). Inside a fly-out subpatcher, bridge the signal in
-                with ``send~``/``receive~`` first, then point ``signal_src`` at
-                the ``receive~``.
+            signal_src: optional SIGNAL feed(s). A single ``(source_box_id,
+                outlet)`` wires into inlet 0 (for ``~`` displays that analyze live
+                audio). Pass a LIST — ``[(mid_id, 0), (side_id, 0)]`` — to feed
+                successive inlets (inlet 0, 1, …); this is how a ``scope~`` X-Y
+                goniometer gets Mid→inlet 0 and Side→inlet 1 (the old single-tuple
+                form only ever wired inlet 0). Each entry may also be an explicit
+                ``(source_box_id, outlet, dest_inlet)`` triple. Inside a fly-out
+                subpatcher, bridge the signal in with ``send~``/``receive~`` first,
+                then point at the ``receive~``.
+            gate_src: optional ``(toggle_box_id, outlet)`` that emits 1 (on) / 0
+                (off). When given (and there is a signal feed), the PRIMARY feed is
+                routed through a ``selector~ 1 1`` whose control inlet is the
+                toggle: on → live signal passes, off → silence. This is the
+                dedicated-tap CPU-gate — when the display is off the analyzer
+                stops processing live audio. Default ``None`` → no gate (existing
+                devices stay byte-identical).
         """
         box: dict = {
             "id": id,
@@ -280,8 +318,28 @@ class GraphContainer:
         if attrs:
             box.update(attrs)
         ref = self.add_box({"box": box})
-        if signal_src is not None:
-            self.add_line(signal_src[0], signal_src[1], id, 0)
+
+        feeds = self._normalize_signal_feeds(signal_src)
+        gated_first = False
+        if gate_src is not None and feeds:
+            # selector~ 1 1: inlet 0 = control (toggle), inlet 1 = live signal.
+            # Control 1 passes the signal, 0 emits silence — the gate.
+            primary = feeds[0]
+            gate_id = f"{id}_gate"
+            base_rect = list(patching_rect) if patching_rect else list(presentation_rect)
+            self.add_newobj(
+                gate_id, "selector~ 1 1", numinlets=2, numoutlets=1,
+                outlettype=["signal"],
+                patching_rect=[base_rect[0], max(base_rect[1] - 28, 0), 90, 22],
+            )
+            self.add_line(primary[0], primary[1], gate_id, 1)
+            self.add_line(gate_src[0], gate_src[1], gate_id, 0)
+            self.add_line(gate_id, 0, id, primary[2])
+            gated_first = True
+        for i, (src_id, src_outlet, dest_inlet) in enumerate(feeds):
+            if i == 0 and gated_first:
+                continue
+            self.add_line(src_id, src_outlet, id, dest_inlet)
         return ref
 
     def wire_chain(self, obj_ids: list, outlet: int = 0, inlet: int = 0):

@@ -127,6 +127,7 @@ def fft_analyzer_dsp(
     samplerate_handshake: bool = True,
     announce_selector: str = "set_analyzer_buffer",
     loadbang_id: str | None = None,
+    gate_src: tuple | None = None,
     patch_x: int = 80,
     patch_y: int = 560,
 ) -> dict[str, str]:
@@ -139,7 +140,13 @@ def fft_analyzer_dsp(
     second, detector-only analyzer that drives a dynamic detector instead of the
     spectrum display). When ``samplerate_handshake`` is set, also wires
     ``dspstate~ -> prepend set_samplerate`` into the same inlet so the consumer
-    can map bins to Hz. Returns the created object ids.
+    can map bins to Hz.
+
+    When ``gate_src=(toggle_id, outlet)`` is given, the source is routed through a
+    ``selector~ 1 1`` whose control is the toggle (1 = pass, 0 = silence) before
+    ``pfft~``, so the FFT processes silence when the analyzer is off (the CPU
+    gate). Default ``None`` keeps existing devices byte-identical. Returns the
+    created object ids.
     """
     kernel_filename = kernel_filename or f"{id_prefix}_analyzer_core.maxpat"
     stem = kernel_filename[:-len(".maxpat")] if kernel_filename.endswith(".maxpat") else kernel_filename
@@ -194,7 +201,19 @@ def fft_analyzer_dsp(
         numinlets=1, numoutlets=1, outlettype=["signal"],
         patching_rect=[patch_x, patch_y, 220, 22],
     )
-    device.add_line(source_id, source_outlet, pfft_id, 0)
+    if gate_src is not None:
+        gate_id = f"{id_prefix}_gate"
+        device.add_newobj(
+            gate_id, "selector~ 1 1", numinlets=2, numoutlets=1,
+            outlettype=["signal"],
+            patching_rect=[patch_x, patch_y - 70, 90, 22],
+        )
+        device.add_line(source_id, source_outlet, gate_id, 1)
+        device.add_line(gate_src[0], gate_src[1], gate_id, 0)
+        device.add_line(gate_id, 0, pfft_id, 0)
+        ids["gate"] = gate_id
+    else:
+        device.add_line(source_id, source_outlet, pfft_id, 0)
 
     # Tell the consumer where the spectrum lives.
     device.add_box({

@@ -69,6 +69,89 @@ class TestDevice:
         }
         assert ("sig_src", 0, "spec", 0) in lines   # signal feed wired to inlet 0
 
+    def _compiled_lines(self, d):
+        return {
+            (ln["patchline"]["source"][0], ln["patchline"]["source"][1],
+             ln["patchline"]["destination"][0], ln["patchline"]["destination"][1])
+            for ln in d.lines
+        }
+
+    def test_add_compiled_ui_multi_signal_feeds(self):
+        # A LIST of feeds wires successive inlets — the scope~ X-Y goniometer
+        # pattern (Mid -> inlet 0, Side -> inlet 1). The old single-tuple form
+        # only ever reached inlet 0, silently dropping inlet 1.
+        d = self._make()
+        d.add_newobj("mid", "+~ 0.", numinlets=2, numoutlets=1, outlettype=["signal"])
+        d.add_newobj("side", "-~ 0.", numinlets=2, numoutlets=1, outlettype=["signal"])
+        d.add_compiled_ui(
+            "gonio", "scope~", [10, 20, 200, 200], numinlets=2,
+            signal_src=[("mid", 0), ("side", 0)],
+        )
+        lines = self._compiled_lines(d)
+        assert ("mid", 0, "gonio", 0) in lines
+        assert ("side", 0, "gonio", 1) in lines
+
+    def test_add_compiled_ui_explicit_inlet_triples(self):
+        d = self._make()
+        d.add_newobj("a", "sig~ 0", numinlets=1, numoutlets=1, outlettype=["signal"])
+        d.add_compiled_ui(
+            "obj", "scope~", [0, 0, 100, 100], numinlets=3,
+            signal_src=[("a", 0, 2)],
+        )
+        assert ("a", 0, "obj", 2) in self._compiled_lines(d)
+
+    def test_add_compiled_ui_gate_inserts_selector(self):
+        # gate_src routes the primary feed through a selector~ 1 1: live signal on
+        # inlet 1, the toggle on the control inlet, gated output to the object.
+        d = self._make()
+        d.add_newobj("src", "selector~ 2 1", numinlets=3, numoutlets=1,
+                     outlettype=["signal"])
+        d.add_live_text("an_tog", "Tog", [0, 0, 40, 16], mode=1)
+        d.add_compiled_ui(
+            "spec", "spectroscope~", [10, 20, 300, 100],
+            signal_src=("src", 0), gate_src=("an_tog", 0),
+        )
+        boxes = {b["box"]["id"]: b["box"] for b in d.boxes}
+        assert boxes["spec_gate"]["text"] == "selector~ 1 1"
+        lines = self._compiled_lines(d)
+        assert ("src", 0, "spec_gate", 1) in lines      # live signal -> selector inlet 1
+        assert ("an_tog", 0, "spec_gate", 0) in lines   # toggle -> control inlet
+        assert ("spec_gate", 0, "spec", 0) in lines     # gated signal -> object
+        assert ("src", 0, "spec", 0) not in lines       # NOT wired directly
+
+    def test_add_compiled_ui_no_gate_byte_identical(self):
+        # Default (no gate_src) keeps the direct inlet-0 wire — existing devices
+        # must stay byte-identical.
+        d = self._make()
+        d.add_newobj("src", "sig~ 0", numinlets=1, numoutlets=1, outlettype=["signal"])
+        d.add_compiled_ui("spec", "spectroscope~", [0, 0, 100, 50], signal_src=("src", 0))
+        ids = {b["box"]["id"] for b in d.boxes}
+        assert "spec_gate" not in ids
+        assert ("src", 0, "spec", 0) in self._compiled_lines(d)
+
+    def test_add_compiled_display_layers_overlay_in_front(self):
+        # The keystone recipe: compiled box added BEFORE the transparent overlay
+        # (so it sits behind), overlay rect = full, compiled rect = inset.
+        d = self._make()
+        d.add_newobj("src", "sig~ 0", numinlets=1, numoutlets=1, outlettype=["signal"])
+        overlay_js = (
+            "function paint(){} function init(){} function redraw(){}\n"
+            "var mgraphics = {}; sketch;"
+        )
+        compiled, overlay = d.add_compiled_display(
+            "disp", "spectroscope~", [0, 0, 300, 120],
+            overlay_js=overlay_js, overlay_filename="disp_ov_v1.js",
+            attrs={"sono": 0}, signal_src=("src", 0),
+            inset=(20, 6, 8, 12), validate_contract=False,
+        )
+        ids = [b["box"]["id"] for b in d.boxes]
+        assert ids.index("disp_scope") < ids.index("disp")   # compiled is behind
+        boxes = {b["box"]["id"]: b["box"] for b in d.boxes}
+        assert boxes["disp_scope"]["presentation_rect"] == [20, 6, 300 - 28, 120 - 18]
+        assert boxes["disp"]["presentation_rect"] == [0, 0, 300, 120]
+        assert boxes["disp"]["bgcolor"] == [0.0, 0.0, 0.0, 0.0]   # transparent overlay
+        assert ("src", 0, "disp_scope", 0) in self._compiled_lines(d)
+
     def test_init_empty_boxes(self):
         d = self._make()
         assert d.boxes == []
