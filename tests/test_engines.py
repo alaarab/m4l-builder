@@ -2842,3 +2842,29 @@ def test_goniometer_graticule_is_valid_v8ui():
         assert lab in js
     js2 = goniometer_graticule_js(accent="1.0, 0.0, 0.0, 1.0")
     assert "var ACCENT_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+
+
+def test_value_readout_is_valid_v8ui_and_substitutes():
+    # A reusable labeled-numeric readout v8ui (label on top, value+unit below),
+    # transparent for overlay use; driven by msg_float or set_value.
+    from m4l_builder.engines.value_readout import (
+        VALUE_READOUT_INLETS,
+        VALUE_READOUT_OUTLETS,
+        value_readout_js,
+    )
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues
+
+    js = value_readout_js(label_name="FREQ", unit="Hz", decimal_places=1)
+    assert find_v8ui_contract_issues(js) == []
+    assert VALUE_READOUT_INLETS == 1 and VALUE_READOUT_OUTLETS == 0
+    assert 'var label_text = "FREQ";' in js
+    assert 'var unit_text = "Hz";' in js
+    assert "var DECIMALS = 1;" in js
+    assert "function msg_float(v)" in js
+    assert "function set_value(label, val, u)" in js
+    assert "value.toFixed(DECIMALS)" in js
+    # colors substitute
+    js2 = value_readout_js(value_color="1.0, 0.0, 0.0, 1.0")
+    assert "var VALUE_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+    # default transparent bg (overlay)
+    assert "var BG_CLR = [0.0, 0.0, 0.0, 0.0];" in js
