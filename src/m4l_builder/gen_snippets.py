@@ -50,6 +50,12 @@ __all__ = [
     "one_pole_hp",
     "exciter_harmonics",
     "tpdf_dither",
+    "param_slew",
+    "rms_detector",
+    "crest_factor",
+    "transient_split",
+    "allpass_first_order",
+    "wavefold",
 ]
 
 
@@ -1208,3 +1214,110 @@ def lfo(
         f"{out} = {shape} == 1 ? {tri} : "
         f"({shape} == 2 ? {saw} : ({shape} == 3 ? {sq} : {sn}));"
     )
+
+
+def param_slew(target: str, out: str, coeff: str = "0.001") -> str:
+    """One-pole parameter slew / glide toward ``target`` (de-click control jumps).
+
+    Emits ``{out} = {out} + ({target} - {out}) * {coeff};`` where ``out`` is BOTH
+    the running state and the output, so the caller declares ``History {out}(init);``.
+    SMALLER ``coeff`` = slower glide (per-sample one-pole pole). The cheap smoothing
+    every parameter-fed gen~ kernel should sit behind to avoid zipper noise.
+    """
+    return f"{out} = {out} + ({target} - {out}) * {coeff};"
+
+
+def rms_detector(x: str, out: str, coeff: str = "0.001", *, ms: str = "rms_ms") -> str:
+    """One-pole RMS level of ``x``. Emits::
+
+        {ms} = {ms} + ({x} * {x} - {ms}) * {coeff};
+        {out} = sqrt({ms});
+
+    Tracks the mean-square with a one-pole then square-roots it — the loudness/
+    level core for meters and RMS-sensing dynamics. Caller declares
+    ``History {ms}(0.);``. For a constant level the output converges to ``|x|``.
+    """
+    return (
+        f"{ms} = {ms} + ({x} * {x} - {ms}) * {coeff};\n"
+        f"{out} = sqrt({ms});"
+    )
+
+
+def crest_factor(peak: str, rms: str, out: str) -> str:
+    """Crest factor = ``peak / rms`` (peakiness: ~1.41 for a sine, higher = transient).
+
+    Stateless ratio with a tiny denominator guard; feed it a ``peak_follower`` peak
+    and an ``rms_detector`` rms. Drives transient/loudness displays and adaptive
+    dynamics (auto-release, program-dependent ratios).
+    """
+    return f"{out} = {peak} / ({rms} + 0.000001);"
+
+
+def transient_split(
+    x: str,
+    out: str,
+    *,
+    fast_coeff: str = "0.3",
+    slow_coeff: str = "0.005",
+    env_f: str = "tr_ef",
+    env_s: str = "tr_es",
+) -> str:
+    """Differential-envelope transient amount: a FAST envelope minus a SLOW one.
+
+    Emits two one-pole followers of ``x`` (typically ``abs`` of the input) and
+    their positive difference::
+
+        {env_f} = {env_f} + ({x} - {env_f}) * {fast_coeff};
+        {env_s} = {env_s} + ({x} - {env_s}) * {slow_coeff};
+        {out} = max({env_f} - {env_s}, 0.);
+
+    ``out`` spikes on attacks (fast outruns slow) and returns to ~0 in steady
+    state — the detector core for transient designers / Snap. Caller declares
+    ``History {env_f}(0.); History {env_s}(0.);``. Larger coeff = faster envelope.
+    """
+    return (
+        f"{env_f} = {env_f} + ({x} - {env_f}) * {fast_coeff};\n"
+        f"{env_s} = {env_s} + ({x} - {env_s}) * {slow_coeff};\n"
+        f"{out} = max({env_f} - {env_s}, 0.);"
+    )
+
+
+def allpass_first_order(
+    x: str,
+    out: str,
+    coeff: str = "0.5",
+    *,
+    xprev: str = "ap_xprev",
+    yprev: str = "ap_yprev",
+) -> str:
+    """First-order all-pass: magnitude-flat, phase-rotating diffusion / phaser stage.
+
+    Transfer function ``H(z) = (c + z^-1) / (1 + c z^-1)`` realized with one input
+    and one output history cell::
+
+        {out} = {coeff} * {x} + {xprev} - {coeff} * {yprev};
+        {xprev} = {x};
+        {yprev} = {out};
+
+    Chain several (override ``xprev``/``yprev`` per stage) for an all-pass
+    diffusion network (reverb tails, phasers). DC gain is 1 (transparent to DC).
+    Caller declares ``History {xprev}(0.); History {yprev}(0.);``. Stable for
+    ``|coeff| < 1``. (For long FIXED delays use tapin~/tapout~; this is the dense
+    embeddable gen~ stage.)
+    """
+    return (
+        f"{out} = {coeff} * {x} + {xprev} - {coeff} * {yprev};\n"
+        f"{xprev} = {x};\n"
+        f"{yprev} = {out};"
+    )
+
+
+def wavefold(x: str, out: str, gain: str = "1.", bias: str = "0.") -> str:
+    """Sine wavefolder: ``{out} = sin({gain} * {x} + {bias});``.
+
+    Driving ``gain`` above 1 folds peaks back into ``[-1, 1]`` (West-coast timbre),
+    adding harmonics that grow with drive; ``bias`` adds even harmonics by breaking
+    symmetry. Stateless and bounded. Pair with an oversampling wrapper for clean
+    high-gain folding.
+    """
+    return f"{out} = sin({gain} * {x} + {bias});"
