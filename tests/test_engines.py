@@ -2821,3 +2821,24 @@ def test_sonogram_overlay_is_valid_v8ui_labels_only():
     # colors are substitutable
     js2 = sonogram_overlay_js(text_color="1.0, 0.0, 0.0, 1.0")
     assert "var TEXT_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+
+
+def test_goniometer_graticule_is_valid_v8ui():
+    # The goniometer overlay is a transparent v8ui graticule: bounding circle,
+    # centre cross, 45-degree diagonals, and L/R/M/S labels over a compiled
+    # scope~ X-Y dot cloud. No fill.
+    from m4l_builder.engines.goniometer_graticule import (
+        GONIOMETER_GRATICULE_INLETS,
+        GONIOMETER_GRATICULE_OUTLETS,
+        goniometer_graticule_js,
+    )
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues
+
+    js = goniometer_graticule_js()
+    assert find_v8ui_contract_issues(js) == []
+    assert GONIOMETER_GRATICULE_INLETS == 1 and GONIOMETER_GRATICULE_OUTLETS == 0
+    assert "mgraphics.arc(" in js          # bounding + inner circle
+    for lab in ("'M'", "'L'", "'R'", "'+S'", "'-S'"):
+        assert lab in js
+    js2 = goniometer_graticule_js(accent="1.0, 0.0, 0.0, 1.0")
+    assert "var ACCENT_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
