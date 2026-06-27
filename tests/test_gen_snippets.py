@@ -1553,3 +1553,24 @@ def test_smooth_coeffs_text_and_glide():
               + "\nout1 = sm_b0;")
     r = simulate(kernel, {"tgt_b0": [1.0] * n}, num_samples=n)
     assert abs(r["out1"][-1] - 1.0) < 0.02           # glides to the target coeff
+
+
+def test_kweight_lufs_tracks_level_in_db():
+    import math
+
+    from m4l_builder.gen_snippets import kweight_lufs
+    sr = 48000.0
+    n = 14000   # >> the one-pole mean-square time constant at coeff 0.004
+
+    def sine(amp):
+        return [amp * math.sin(2.0 * math.pi * 1000.0 * i / sr) for i in range(n)]
+
+    kernel = kweight_lufs("in1", "in2", "out1", coeff="0.004")
+    loud = simulate(kernel, {"in1": sine(1.0), "in2": sine(1.0)}, samplerate=sr, num_samples=n)
+    quiet = simulate(kernel, {"in1": sine(0.1), "in2": sine(0.1)}, samplerate=sr, num_samples=n)
+    lufs_loud = loud["out1"][-1]
+    lufs_quiet = quiet["out1"][-1]
+    # a 0.1x amplitude (-20 dB) drop reads ~20 LU lower (calibrated in dB).
+    assert 15.0 < (lufs_loud - lufs_quiet) < 25.0
+    # a near-full-scale 1 kHz sine sits in a sane LUFS range.
+    assert -6.0 < lufs_loud < 6.0

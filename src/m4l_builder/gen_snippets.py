@@ -58,6 +58,7 @@ __all__ = [
     "wavefold",
     "moog_ladder",
     "smooth_coeffs",
+    "kweight_lufs",
 ]
 
 
@@ -1383,3 +1384,51 @@ def smooth_coeffs(
     return "\n".join(
         param_slew(f"{target_prefix}_{n}", f"{smooth_prefix}_{n}", coeff) for n in names
     )
+
+
+def kweight_lufs(
+    left: str,
+    right: str,
+    out: str,
+    *,
+    coeff: str = "0.0001",
+    prefix: str = "kw",
+) -> str:
+    """Momentary BS.1770 K-weighted loudness (LUFS) of a stereo pair (self-contained).
+
+    Composes the shipped pieces: :func:`kweight_coeffs_bs1770` (the two K-weight
+    biquad stages, computed at the live ``samplerate``) applied Direct-Form-I to L
+    and R, a one-pole mean-square over the momentary window (``coeff`` — smaller =
+    longer window; ~400 ms is ``1/(0.4*sr)``), then::
+
+        {out} = -0.691 + 10 * log10(mean_square + 1e-10);
+
+    Emits ALL its own ``History`` state (16 biquad cells + 1 mean-square cell),
+    so the caller just splices it in. This is the MOMENTARY loudness — gen~ cannot
+    do BS.1770 gated INTEGRATION (that needs a host-side ring buffer of block
+    loudnesses), so a full integrated-LUFS meter pairs this with a Max-side buffer.
+    The gen~ fallback for a portable loudness meter when ``loudness~`` (Live-12) is
+    unavailable.
+    """
+    p = prefix
+    decls = (
+        f"History {p}_lx1(0.); History {p}_lx2(0.); History {p}_ly1(0.); History {p}_ly2(0.);\n"
+        f"History {p}_lhx1(0.); History {p}_lhx2(0.); History {p}_lhy1(0.); History {p}_lhy2(0.);\n"
+        f"History {p}_rx1(0.); History {p}_rx2(0.); History {p}_ry1(0.); History {p}_ry2(0.);\n"
+        f"History {p}_rhx1(0.); History {p}_rhx2(0.); History {p}_rhy1(0.); History {p}_rhy2(0.);\n"
+        f"History {p}_ms(0.);"
+    )
+    coeffs = kweight_coeffs_bs1770()
+    l_s1 = biquad_df1(left, "sb0", "sb1", "sb2", "sa1", "sa2",
+                      f"{p}_lx1", f"{p}_lx2", f"{p}_ly1", f"{p}_ly2", f"{p}_l1")
+    l_s2 = biquad_df1(f"{p}_l1", "hb0", "hb1", "hb2", "ha1", "ha2",
+                      f"{p}_lhx1", f"{p}_lhx2", f"{p}_lhy1", f"{p}_lhy2", f"{p}_lk")
+    r_s1 = biquad_df1(right, "sb0", "sb1", "sb2", "sa1", "sa2",
+                      f"{p}_rx1", f"{p}_rx2", f"{p}_ry1", f"{p}_ry2", f"{p}_r1")
+    r_s2 = biquad_df1(f"{p}_r1", "hb0", "hb1", "hb2", "ha1", "ha2",
+                      f"{p}_rhx1", f"{p}_rhx2", f"{p}_rhy1", f"{p}_rhy2", f"{p}_rk")
+    ms = (
+        f"{p}_ms = {p}_ms + (({p}_lk * {p}_lk + {p}_rk * {p}_rk) - {p}_ms) * {coeff};\n"
+        f"{out} = -0.691 + 10. * log10({p}_ms + 0.0000000001);"
+    )
+    return "\n".join([decls, coeffs, l_s1, l_s2, r_s1, r_s2, ms])
