@@ -200,3 +200,52 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
             )
 
     return issues
+
+
+_FORBIDDEN_OBJECTS = {"print", "dac~", "adc~"}
+_SEND_RECEIVE_OBJECTS = {"send", "receive", "send~", "receive~", "s", "r"}
+
+
+def final_checklist_issues(boxes: list) -> list[ValidationIssue]:
+    """Official M4L *Final Checklist* checks beyond :func:`lint_graph` (additive).
+
+    Mirrors items from Ableton's device-submission checklist not already covered:
+      * no debug / hardware-IO objects (``print`` / ``dac~`` / ``adc~``) — error;
+      * ``send``/``receive`` names should be LOCAL (``---``-prefixed) so device
+        instances don't cross-talk — warning;
+      * presentation rects should be whole-integer pixels — warning.
+
+    Opt-in (call it from a device's own ``validate``); it does not run during a
+    normal build, so existing devices are unaffected. Returns ``ValidationIssue``s.
+    """
+    issues: list[ValidationIssue] = []
+    for box in boxes:
+        payload = box.get("box", {})
+        bid = payload.get("id")
+        maxclass = payload.get("maxclass")
+        text = (payload.get("text") or "").strip()
+        parts = text.split()
+        first = parts[0] if parts else maxclass
+
+        if first in _FORBIDDEN_OBJECTS:
+            issues.append(ValidationIssue(
+                code="checklist/forbidden-object",
+                message=f"'{first}' is not allowed in a shipped M4L device",
+                severity="error", box_id=bid))
+
+        if maxclass == "newobj" and first in _SEND_RECEIVE_OBJECTS and len(parts) >= 2:
+            if not parts[1].startswith("---"):
+                issues.append(ValidationIssue(
+                    code="checklist/nonlocal-send",
+                    message=f"send/receive name '{parts[1]}' should be local ('---'-prefixed)",
+                    severity="warning", box_id=bid))
+
+        if payload.get("presentation"):
+            rect = payload.get("presentation_rect")
+            if rect and any(float(v) != int(float(v)) for v in rect):
+                issues.append(ValidationIssue(
+                    code="checklist/fractional-rect",
+                    message=f"presentation_rect {rect} should use whole-integer pixels",
+                    severity="warning", box_id=bid))
+
+    return issues

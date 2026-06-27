@@ -2868,3 +2868,22 @@ def test_value_readout_is_valid_v8ui_and_substitutes():
     assert "var VALUE_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
     # default transparent bg (overlay)
     assert "var BG_CLR = [0.0, 0.0, 0.0, 0.0];" in js
+
+
+def test_final_checklist_issues_flags_forbidden_nonlocal_and_fractional():
+    from m4l_builder.validation import final_checklist_issues
+    boxes = [
+        {"box": {"id": "p", "maxclass": "newobj", "text": "print debug"}},
+        {"box": {"id": "s1", "maxclass": "newobj", "text": "send myglobal"}},
+        {"box": {"id": "s2", "maxclass": "newobj", "text": "send ---local"}},
+        {"box": {"id": "ui", "maxclass": "live.dial", "presentation": 1,
+                 "presentation_rect": [10.5, 20.0, 40, 40]}},
+        {"box": {"id": "ok", "maxclass": "live.dial", "presentation": 1,
+                 "presentation_rect": [10, 20, 40, 40]}},
+    ]
+    codes = {(i.code, i.box_id) for i in final_checklist_issues(boxes)}
+    assert ("checklist/forbidden-object", "p") in codes
+    assert ("checklist/nonlocal-send", "s1") in codes
+    assert ("checklist/nonlocal-send", "s2") not in codes      # ---local is fine
+    assert ("checklist/fractional-rect", "ui") in codes
+    assert ("checklist/fractional-rect", "ok") not in codes
