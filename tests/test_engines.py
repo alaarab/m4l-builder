@@ -2798,3 +2798,26 @@ class TestLevelHistory:
             if stripped.startswith('//'):
                 continue
             assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+def test_sonogram_overlay_is_valid_v8ui_labels_only():
+    # The spectrogram's overlay is a transparent v8ui that draws ONLY the
+    # log-frequency axis (ticks + labels) + a frame over the compiled
+    # spectroscope~ raster — no plot fill (the raster is the content).
+    from m4l_builder.engines.sonogram_overlay import (
+        SONOGRAM_OVERLAY_INLETS,
+        SONOGRAM_OVERLAY_OUTLETS,
+        sonogram_overlay_js,
+    )
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues
+
+    js = sonogram_overlay_js(freq_min=20.0, freq_max=20000.0,
+                             labels=(100, 1000, 10000))
+    assert find_v8ui_contract_issues(js) == []
+    assert SONOGRAM_OVERLAY_INLETS == 1 and SONOGRAM_OVERLAY_OUTLETS == 0
+    assert "var FREQ_LABELS = [100.0, 1000.0, 10000.0];" in js
+    assert "show_text" in js
+    assert "function log_norm(f)" in js
+    # colors are substitutable
+    js2 = sonogram_overlay_js(text_color="1.0, 0.0, 0.0, 1.0")
+    assert "var TEXT_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
