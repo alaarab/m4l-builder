@@ -1511,3 +1511,45 @@ def test_wavefold_text_and_folds():
     r = simulate(wavefold("in1", "out1", "6.0"), {"in1": xs}, num_samples=len(xs))
     assert max(r["out1"]) <= 1.0 and min(r["out1"]) >= -1.0
     assert max(r["out1"]) > 0.9                   # the fold reaches the rails
+
+
+def test_moog_ladder_dc_gain_unity_at_zero_resonance():
+    from m4l_builder.gen_snippets import moog_ladder
+    n = 5000
+    kernel = ("History ml_s1(0.); History ml_s2(0.); History ml_s3(0.); History ml_s4(0.);\n"
+              + moog_ladder("in1", "out1", "0.2", "0.0", nonlinear=False))
+    r = simulate(kernel, {"in1": [0.4] * n}, num_samples=n)
+    assert abs(r["out1"][-1] - 0.4) < 0.01           # res=0 linear -> DC gain 1
+
+
+def test_moog_ladder_attenuates_nyquist():
+    from m4l_builder.gen_snippets import moog_ladder
+    n = 2000
+    kernel = ("History ml_s1(0.); History ml_s2(0.); History ml_s3(0.); History ml_s4(0.);\n"
+              + moog_ladder("in1", "out1", "0.1", "0.0", nonlinear=False))
+    alt = [1.0 if i % 2 == 0 else -1.0 for i in range(n)]
+    r = simulate(kernel, {"in1": alt}, num_samples=n)
+    assert max(abs(v) for v in r["out1"][-200:]) < 0.1   # 4-pole LP kills Nyquist
+
+
+def test_moog_ladder_nonlinear_self_limits_at_high_resonance():
+    from m4l_builder.gen_snippets import moog_ladder
+    n = 3000
+    kernel = ("History ml_s1(0.); History ml_s2(0.); History ml_s3(0.); History ml_s4(0.);\n"
+              + moog_ladder("in1", "out1", "0.3", "3.5", nonlinear=True))
+    drive = [0.8 if i % 2 == 0 else -0.8 for i in range(n)]
+    r = simulate(kernel, {"in1": drive}, num_samples=n)
+    assert max(abs(v) for v in r["out1"]) < 2.0      # tanh keeps it bounded
+
+
+def test_smooth_coeffs_text_and_glide():
+    from m4l_builder.gen_snippets import smooth_coeffs
+    code = smooth_coeffs("tgt", "sm", "0.1")
+    for nm in ("b0", "b1", "b2", "a1", "a2"):
+        assert f"sm_{nm} = sm_{nm} + (tgt_{nm} - sm_{nm}) * 0.1;" in code
+    n = 4000
+    kernel = ("History sm_b0(0.);\n"
+              + smooth_coeffs("tgt", "sm", "0.01", names=("b0",))
+              + "\nout1 = sm_b0;")
+    r = simulate(kernel, {"tgt_b0": [1.0] * n}, num_samples=n)
+    assert abs(r["out1"][-1] - 1.0) < 0.02           # glides to the target coeff
