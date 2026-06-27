@@ -250,6 +250,19 @@ class GraphContainer:
                 feeds.append((item[0], item[1], item[2]))
         return feeds
 
+    @staticmethod
+    def _compiled_theme_attrs(theme, maxclass: str) -> dict:
+        """Maxclass-appropriate color attrs from a ``Theme`` (or ``{}``)."""
+        if theme is None:
+            return {}
+        method = {
+            "spectroscope~": "spectrum_kwargs",
+            "scope~": "scope_kwargs",
+            "filtergraph~": "filtergraph_kwargs",
+        }.get(maxclass)
+        fn = getattr(theme, method, None) if method else None
+        return fn() if callable(fn) else {}
+
     def add_compiled_ui(
         self,
         id: str,
@@ -264,6 +277,7 @@ class GraphContainer:
         patching_rect: list = None,
         signal_src=None,
         gate_src: tuple = None,
+        theme=None,
     ) -> BoxRef:
         """Add a BUILT-IN **compiled** Max UI object (e.g. ``spectroscope~``
         spectrum, ``scope~`` waveform, ``plot~``) shown in presentation.
@@ -301,7 +315,17 @@ class GraphContainer:
                 dedicated-tap CPU-gate — when the display is off the analyzer
                 stops processing live audio. Default ``None`` → no gate (existing
                 devices stay byte-identical).
+            theme: optional ``Theme`` whose maxclass-appropriate color attrs
+                (``spectroscope~`` → ``spectrum_kwargs()``, ``scope~`` →
+                ``scope_kwargs()``, ``filtergraph~`` → ``filtergraph_kwargs()``)
+                are applied as DEFAULTS; explicit ``attrs`` always win. Lets a
+                themed device style its compiled displays without hand-coding
+                greys. Default ``None`` → unchanged.
         """
+        theme_attrs = self._compiled_theme_attrs(theme, maxclass)
+        if theme_attrs:
+            attrs = {**theme_attrs, **(attrs or {})}
+
         box: dict = {
             "id": id,
             "maxclass": maxclass,

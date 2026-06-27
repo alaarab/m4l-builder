@@ -63,6 +63,10 @@ class Theme:
     scope_color: Optional[list[float]] = None    # Waveform/trace color
     scope_bgcolor: Optional[list[float]] = None  # Scope background
 
+    # Compiled graph-display colors (spectroscope~ / filtergraph~)
+    spectrum_color: Optional[list[float]] = None  # Spectrum fill/line (neutral grey)
+    grid_color: Optional[list[float]] = None      # Graph grid lines
+
     def __post_init__(self):
         if self.dial_color is None:
             self.dial_color = list(self.accent)
@@ -88,6 +92,11 @@ class Theme:
             self.scope_color = list(self.accent)
         if self.scope_bgcolor is None:
             self.scope_bgcolor = list(self.bg)
+        if self.spectrum_color is None:
+            # Spectra read best NEUTRAL grey (not the accent) — the EQ8/Pro-Q look.
+            self.spectrum_color = [0.66, 0.70, 0.74, 0.85]
+        if self.grid_color is None:
+            self.grid_color = alpha(self.text_dim, 0.45)
 
     def meter_kwargs(self) -> dict:
         """Return meter color kwargs for this theme."""
@@ -96,6 +105,37 @@ class Theme:
             'warmcolor': self.meter_warm,
             'hotcolor': self.meter_hot,
             'overloadcolor': self.meter_over,
+        }
+
+    def scope_kwargs(self) -> dict:
+        """Attrs for a raw compiled ``scope~`` (waveform / X-Y goniometer).
+
+        scope~ needs an OPAQUE bg to composite its trace, so ``scope_bgcolor`` is
+        forced opaque here.
+        """
+        bg = list(self.scope_bgcolor or self.bg)
+        if len(bg) == 4:
+            bg[3] = 1.0
+        return {'bgcolor': bg, 'fgcolor': list(self.scope_color or self.accent)}
+
+    def spectrum_kwargs(self, *, transparent_bg: bool = False) -> dict:
+        """Attrs for a compiled ``spectroscope~`` spectrum/sonogram display.
+
+        Pass ``transparent_bg=True`` when layering it behind a jsui overlay (the
+        EQ pattern); otherwise it carries the theme's opaque scope background.
+        """
+        return {
+            'bgcolor': [0.0, 0.0, 0.0, 0.0] if transparent_bg else list(self.scope_bgcolor or self.bg),
+            'fgcolor': list(self.spectrum_color or self.accent),
+            'logfreq': 1,
+            'logamp': 1,
+        }
+
+    def filtergraph_kwargs(self) -> dict:
+        """Attrs for a compiled ``filtergraph~`` filter-response editor."""
+        return {
+            'bgcolor': list(self.scope_bgcolor or self.bg),
+            'gridcolor': list(self.grid_color or self.text_dim),
         }
 
     @classmethod

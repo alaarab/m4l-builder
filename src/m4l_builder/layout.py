@@ -101,6 +101,8 @@ class _LayoutContainer:
 _SIMPLE_PROXY_WIDGETS = (
     "panel",
     "scope",
+    "plot",
+    "filtergraph",
     "meter",
     "fpic",
     "multislider",

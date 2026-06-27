@@ -11,6 +11,7 @@ from .ui import (
     button,
     comment,
     dial,
+    filtergraph,
     fpic,
     kslider,
     live_arrows,
@@ -28,6 +29,7 @@ from .ui import (
     nslider,
     number_box,
     panel,
+    plot,
     radiogroup,
     rslider,
     scope,
@@ -113,6 +115,14 @@ DEVICE_WIDGET_SPECS = {
     "scope": DeviceWidgetSpec(
         scope,
         theme_mapping={"bgcolor": "scope_bgcolor", "activelinecolor": "scope_color"},
+    ),
+    "plot": DeviceWidgetSpec(
+        plot,
+        theme_mapping={"bgcolor": "scope_bgcolor"},
+    ),
+    "filtergraph": DeviceWidgetSpec(
+        filtergraph,
+        theme_mapping={"bgcolor": "scope_bgcolor", "gridcolor": "grid_color"},
     ),
     "meter": DeviceWidgetSpec(
         meter,
