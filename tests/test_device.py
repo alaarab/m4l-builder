@@ -152,6 +152,39 @@ class TestDevice:
         assert boxes["disp"]["bgcolor"] == [0.0, 0.0, 0.0, 0.0]   # transparent overlay
         assert ("src", 0, "disp_scope", 0) in self._compiled_lines(d)
 
+    def test_theme_compiled_display_kwargs(self):
+        sk = MIDNIGHT.scope_kwargs()
+        assert sk["bgcolor"][3] == 1.0          # scope~ needs an opaque bg
+        assert sk["fgcolor"] == list(MIDNIGHT.scope_color)
+        spk = MIDNIGHT.spectrum_kwargs()
+        assert spk["logfreq"] == 1 and spk["logamp"] == 1
+        assert MIDNIGHT.spectrum_kwargs(transparent_bg=True)["bgcolor"] == [0.0, 0.0, 0.0, 0.0]
+        fk = MIDNIGHT.filtergraph_kwargs()
+        assert "bgcolor" in fk and "gridcolor" in fk
+
+    def test_add_compiled_ui_theme_under_explicit_attrs(self):
+        # theme supplies maxclass-appropriate color DEFAULTS; explicit attrs win.
+        d = self._make(theme=MIDNIGHT)
+        d.add_newobj("src", "sig~ 0", numinlets=1, numoutlets=1, outlettype=["signal"])
+        d.add_compiled_ui(
+            "spec", "spectroscope~", [0, 0, 100, 50],
+            attrs={"sono": 1, "fgcolor": [1.0, 0.0, 0.0, 1.0]},
+            theme=MIDNIGHT, signal_src=("src", 0),
+        )
+        spec = {b["box"]["id"]: b["box"] for b in d.boxes}["spec"]
+        assert spec["logfreq"] == 1 and spec["logamp"] == 1   # from theme
+        assert spec["fgcolor"] == [1.0, 0.0, 0.0, 1.0]        # explicit wins
+        assert spec["sono"] == 1
+
+    def test_add_filtergraph_and_plot_device_widgets(self):
+        d = self._make(theme=MIDNIGHT)
+        d.add_filtergraph("fg", [0, 0, 100, 60])
+        d.add_plot("pl", [0, 60, 100, 60])
+        boxes = {b["box"]["id"]: b["box"] for b in d.boxes}
+        assert boxes["fg"]["maxclass"] == "filtergraph~"
+        assert boxes["pl"]["maxclass"] == "plot~"
+        assert boxes["fg"]["bgcolor"] == list(MIDNIGHT.scope_bgcolor)   # theme injected
+
     def test_init_empty_boxes(self):
         d = self._make()
         assert d.boxes == []
