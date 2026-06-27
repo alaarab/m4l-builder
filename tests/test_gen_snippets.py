@@ -1451,3 +1451,63 @@ def test_ms_mode_side_eqs_only_the_side():
     _, post = _ms_through(Ls, Rs, mode=2, g=3.0)
     assert _close(post["out1"], [v * 3.0 for v in Ls])
     assert _close(post["out2"], [v * 3.0 for v in Rs])
+
+
+def test_param_slew_glides_to_target():
+    from m4l_builder.gen_snippets import param_slew
+    n = 5000
+    kernel = "History out1(0.);\n" + param_slew("in1", "out1", "0.002")
+    r = simulate(kernel, {"in1": [1.0] * n}, num_samples=n)
+    assert abs(r["out1"][-1] - 1.0) < 0.02     # converges to the target
+    assert r["out1"][0] < 0.01                 # but not instantly (glide)
+
+
+def test_rms_detector_of_constant_is_abs():
+    from m4l_builder.gen_snippets import rms_detector
+    n = 6000
+    kernel = "History rms_ms(0.);\n" + rms_detector("in1", "out1", "0.002")
+    r = simulate(kernel, {"in1": [0.5] * n}, num_samples=n)
+    assert abs(r["out1"][-1] - 0.5) < 0.02     # RMS of constant 0.5 -> 0.5
+
+
+def test_crest_factor_text_and_value():
+    from m4l_builder.gen_snippets import crest_factor
+    assert crest_factor("p", "r", "c") == "c = p / (r + 0.000001);"
+    r = simulate(crest_factor("in1", "in2", "out1"),
+                 {"in1": [1.0], "in2": [0.5]}, num_samples=1)
+    assert abs(r["out1"][0] - 2.0) < 1e-4
+
+
+def test_transient_split_spikes_on_attack_then_settles():
+    from m4l_builder.gen_snippets import transient_split
+    n = 4000
+    kernel = ("History tr_ef(0.); History tr_es(0.);\n"
+              + transient_split("in1", "out1"))
+    # step input: fast env outruns slow -> positive transient, then settles to ~0
+    r = simulate(kernel, {"in1": [1.0] * n}, num_samples=n)
+    early = max(r["out1"][:50])
+    assert early > 0.05                        # spikes on the attack
+    assert r["out1"][-1] < 0.01                # decays to ~0 in steady state
+    assert min(r["out1"]) >= 0.0               # never negative (max(...,0))
+
+
+def test_allpass_first_order_is_dc_transparent_and_bounded():
+    from m4l_builder.gen_snippets import allpass_first_order
+    n = 2000
+    kernel = ("History ap_xprev(0.); History ap_yprev(0.);\n"
+              + allpass_first_order("in1", "out1", "0.5"))
+    dc = simulate(kernel, {"in1": [0.7] * n}, num_samples=n)
+    assert abs(dc["out1"][-1] - 0.7) < 0.01    # DC gain == 1 (allpass)
+    # impulse stays bounded (stable)
+    imp = simulate(kernel, {"in1": [1.0] + [0.0] * (n - 1)}, num_samples=n)
+    assert max(abs(v) for v in imp["out1"]) <= 1.0 + 1e-6
+
+
+def test_wavefold_text_and_folds():
+    from m4l_builder.gen_snippets import wavefold
+    assert wavefold("x", "y", "g", "b") == "y = sin(g * x + b);"
+    # high gain folds a ramp back within [-1, 1]
+    xs = [i / 100.0 for i in range(-100, 101)]   # -1..1
+    r = simulate(wavefold("in1", "out1", "6.0"), {"in1": xs}, num_samples=len(xs))
+    assert max(r["out1"]) <= 1.0 and min(r["out1"]) >= -1.0
+    assert max(r["out1"]) > 0.9                   # the fold reaches the rails
