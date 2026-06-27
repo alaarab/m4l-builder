@@ -56,6 +56,8 @@ __all__ = [
     "transient_split",
     "allpass_first_order",
     "wavefold",
+    "moog_ladder",
+    "smooth_coeffs",
 ]
 
 
@@ -1321,3 +1323,63 @@ def wavefold(x: str, out: str, gain: str = "1.", bias: str = "0.") -> str:
     high-gain folding.
     """
     return f"{out} = sin({gain} * {x} + {bias});"
+
+
+def moog_ladder(
+    x: str,
+    out: str,
+    g: str,
+    res: str,
+    *,
+    nonlinear: bool = True,
+    s1: str = "ml_s1",
+    s2: str = "ml_s2",
+    s3: str = "ml_s3",
+    s4: str = "ml_s4",
+    fb: str = "ml_fb",
+) -> str:
+    """4-pole Moog-style ladder lowpass with resonance feedback.
+
+    Four cascaded one-poles inside a resonance feedback loop::
+
+        {fb} = [tanh]({x} - {res} * {s4});      // s4 = last sample (feedback)
+        {s1} = {s1} + {g} * ({fb} - {s1});      // ... and three more stages
+        {out} = {s4};
+
+    ``g`` is the one-pole coefficient (0..1, from cutoff: ``1 - exp(-2*pi*fc/sr)``);
+    ``res`` is the resonance feedback amount (0..~4, self-oscillating near 4).
+    ``nonlinear=True`` wraps the feedback summing node in ``tanh`` — the Moog
+    character + graceful self-limiting at high resonance; ``False`` is the clean
+    linear ladder (DC gain ``1/(1+res)``, unity at ``res == 0``). Caller declares
+    ``History {s1}(0.); … {s4}(0.);``. Override the state names to stack ladders.
+    """
+    drive = f"tanh({x} - {res} * {s4})" if nonlinear else f"({x} - {res} * {s4})"
+    return (
+        f"{fb} = {drive};\n"
+        f"{s1} = {s1} + {g} * ({fb} - {s1});\n"
+        f"{s2} = {s2} + {g} * ({s1} - {s2});\n"
+        f"{s3} = {s3} + {g} * ({s2} - {s3});\n"
+        f"{s4} = {s4} + {g} * ({s3} - {s4});\n"
+        f"{out} = {s4};"
+    )
+
+
+def smooth_coeffs(
+    target_prefix: str,
+    smooth_prefix: str,
+    coeff: str = "0.05",
+    *,
+    names: tuple = ("b0", "b1", "b2", "a1", "a2"),
+) -> str:
+    """Per-sample slew of biquad coefficients (de-zipper a moving filter).
+
+    Emits one :func:`param_slew` per coefficient, gliding ``{target_prefix}_{n}``
+    (the freshly-computed RBJ target) into ``{smooth_prefix}_{n}``; apply
+    :func:`biquad_df1` with the SMOOTHED coeffs so a swept cutoff/gain/Q doesn't
+    zipper. Caller declares ``History {smooth_prefix}_{n}(init);`` for each name.
+    SMALLER ``coeff`` = slower coefficient glide. gen_sim-testable (it is just a
+    stack of param_slews).
+    """
+    return "\n".join(
+        param_slew(f"{target_prefix}_{n}", f"{smooth_prefix}_{n}", coeff) for n in names
+    )
