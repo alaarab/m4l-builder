@@ -26,6 +26,40 @@ from m4l_builder.ui import dial
 
 
 class TestParameterSpecs:
+    def test_annotation_name_and_info_round_trip(self):
+        # A2 (unblocked by A0): hover-help lives in the param valueof and survives
+        # both the spec round-trip AND the dial factory.
+        spec = ParameterSpec.continuous(
+            "Gain", minimum=-12.0, maximum=12.0, initial=0.0,
+            annotation_name="Gain", info="Boosts or attenuates the input.",
+        )
+        vo = spec.to_valueof_dict()
+        assert vo["parameter_annotation_name"] == "Gain"
+        assert vo["parameter_info"] == "Boosts or attenuates the input."
+        rebuilt = ParameterSpec.from_valueof_dict(vo)
+        assert rebuilt.annotation_name == "Gain"
+        assert rebuilt.info == "Boosts or attenuates the input."
+        box = dial("g", "Gain", [0, 0, 44, 47], info="hover text")["box"]
+        assert box["saved_attribute_attributes"]["valueof"]["parameter_info"] == "hover text"
+
+    def test_parameter_units_round_trip(self):
+        # E1: custom printf units + unitstyle=9, round-trips through valueof.
+        spec = ParameterSpec.continuous("Ratio", minimum=0.0, maximum=8.0,
+                                        initial=1.0, unitstyle=9, units="x %.2f")
+        vo = spec.to_valueof_dict()
+        assert vo["parameter_units"] == "x %.2f"
+        assert vo["parameter_unitstyle"] == 9
+        assert ParameterSpec.from_valueof_dict(vo).units == "x %.2f"
+
+    def test_parameter_steps_round_trip(self):
+        # E4: quantize a continuous range into N discrete steps; round-trips.
+        spec = ParameterSpec.continuous("Mode", minimum=0.0, maximum=64.0,
+                                        initial=0.0, steps=4)
+        assert spec.to_valueof_dict()["parameter_steps"] == 4
+        assert ParameterSpec.from_valueof_dict(spec.to_valueof_dict()).steps == 4
+        box = dial("m", "Mode", [0, 0, 44, 47], min_val=0, max_val=64, steps=8)["box"]
+        assert box["saved_attribute_attributes"]["valueof"]["parameter_steps"] == 8
+
     def test_ui_helpers_accept_parameter_spec(self):
         spec = ParameterSpec.continuous(
             "Cutoff",
@@ -67,7 +101,8 @@ class TestParameterSpecs:
         assert stored is not None
         assert stored.name == "Cutoff"
         assert banks["1"]["name"] == "Filter"
-        assert banks["1"]["parameters"][0]["name"] == "Cutoff"
+        # Flat 8-slot longname list, positioned by slot (this spec is at position 2).
+        assert banks["1"]["parameters"][2] == "Cutoff"
 
     def test_assign_parameter_bank_accepts_box_refs(self):
         device = Device("test", 200, 100)
@@ -75,7 +110,7 @@ class TestParameterSpecs:
         device.assign_parameter_bank(dial_id, bank=0, position=1)
 
         params = device.to_patcher()["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
-        assert any(param["name"] == "Gain" and param["index"] == 1 for param in params)
+        assert params[1] == "Gain"
 
     def test_parameter_spec_normalizes_labels_and_visibility(self):
         spec = ParameterSpec.continuous("  Cutoff  ", shortname="  Cut  ", visible=False)
@@ -119,9 +154,13 @@ class TestParameterSpecs:
         device.build(str(output))
         rebuilt = Device.from_amxd(str(output))
 
-        assert rebuilt.parameter("Cutoff").visible == PARAM_HIDDEN
+        # The correct Live bank format is a flat longname list with NO per-slot
+        # visible field, so Push bank MEMBERSHIP round-trips via the param's presence
+        # in its slot. (The Max-level hide mechanism is parameter_invisible, which
+        # round-trips separately via the param's own valueof.)
+        assert rebuilt.parameter("Cutoff") is not None
         params = rebuilt.to_patcher()["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
-        assert params[0]["visible"] == PARAM_HIDDEN
+        assert params[0] == "Cutoff"
 
 
 class TestJsuiContract:

@@ -7,11 +7,12 @@ from m4l_builder.ui import (
     button,
     comment,
     dial,
+    filtergraph,
     fpic,
+    function,
     jsui,
     kslider,
     live_arrows,
-    filtergraph,
     live_drop,
     live_gain,
     live_grid,
@@ -26,11 +27,13 @@ from m4l_builder.ui import (
     nslider,
     number_box,
     panel,
+    pictctrl,
     plot,
     radiogroup,
     rslider,
     scope,
     slider,
+    spectrumdraw,
     swatch,
     tab,
     textbutton,
@@ -39,6 +42,7 @@ from m4l_builder.ui import (
     ubutton,
     umenu,
     v8ui,
+    waveform,
 )
 
 
@@ -143,6 +147,16 @@ class TestDial:
         result = dial("d-1", "cutoff", [10, 10, 45, 45])
         assert result["box"]["maxclass"] == "live.dial"
 
+    def test_valuepopup_off_by_default(self):
+        result = dial("d-1", "cutoff", [10, 10, 45, 45])
+        assert "valuepopup" not in result["box"]
+
+    def test_valuepopup_set_when_passed(self):
+        result = dial("d-1", "cutoff", [10, 10, 45, 45],
+                      valuepopup=1, valuepopuplabel=2)
+        assert result["box"]["valuepopup"] == 1
+        assert result["box"]["valuepopuplabel"] == 2
+
     def test_varname_is_set(self):
         result = dial("d-1", "cutoff", [10, 10, 45, 45])
         assert result["box"]["varname"] == "cutoff"
@@ -164,6 +178,15 @@ class TestDial:
         rect = [10, 20, 45, 45]
         result = dial("d-1", "cutoff", rect)
         assert result["box"]["presentation_rect"] == rect
+
+    def test_triangle_defaults_to_zero(self):
+        # Max default + premium norm (83/85 corpus dials): no reset-arrow marker.
+        result = dial("d-1", "cutoff", [10, 10, 45, 45])
+        assert result["box"]["triangle"] == 0
+
+    def test_triangle_explicit_override_wins(self):
+        result = dial("d-1", "cutoff", [10, 10, 45, 45], triangle=1)
+        assert result["box"]["triangle"] == 1
 
     def test_saved_attribute_attributes_exists(self):
         result = dial("d-1", "cutoff", [10, 10, 45, 45])
@@ -291,10 +314,6 @@ class TestDial:
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_invisible"] == 2
 
-    def test_triangle_default_is_1(self):
-        result = dial("d-1", "cutoff", [10, 10, 45, 45])
-        assert result["box"]["triangle"] == 1
-
     def test_focusbordercolor_set(self):
         color = [0.5, 0.8, 0.5, 1.0]
         result = dial("d-1", "cutoff", [10, 10, 45, 45], focusbordercolor=color)
@@ -361,25 +380,35 @@ class TestTab:
         assert "textcolor" not in box
         assert "textoncolor" not in box
 
-    def test_bgcolor_set_when_provided(self):
+    def test_bgcolor_mirrors_to_active_twin(self):
+        # BG attrs have active* twins (corpus norm) so the fill themes in both states.
         color = [0.1, 0.1, 0.1, 1.0]
         result = tab("t-1", "mode", [0, 0, 200, 30], options=["A", "B"], bgcolor=color)
         assert result["box"]["bgcolor"] == color
+        assert result["box"]["activebgcolor"] == color
 
-    def test_bgoncolor_set_when_provided(self):
+    def test_bgoncolor_mirrors_to_active_twin(self):
         color = [0.5, 0.5, 0.9, 1.0]
         result = tab("t-1", "mode", [0, 0, 200, 30], options=["A", "B"], bgoncolor=color)
         assert result["box"]["bgoncolor"] == color
+        assert result["box"]["activebgoncolor"] == color
 
-    def test_textcolor_set_when_provided(self):
+    def test_textcolor_mirrors_to_inactive_twin(self):
+        # TEXT attrs pair with inactive* twins, NOT active* (live.tab has no activetextcolor).
         color = [0.8, 0.8, 0.8, 1.0]
         result = tab("t-1", "mode", [0, 0, 200, 30], options=["A", "B"], textcolor=color)
         assert result["box"]["textcolor"] == color
+        assert result["box"]["inactivetextoffcolor"] == color
+        assert "activetextcolor" not in result["box"]
 
-    def test_textoncolor_set_when_provided(self):
+    def test_textoncolor_mirrors_to_inactive_twin(self):
+        # Selected-tab text holds when bypassed via inactivetextoncolor (corpus 20/28);
+        # activetextoncolor is NOT premium vocabulary (corpus 0/28) and must not be set.
         color = [1.0, 1.0, 1.0, 1.0]
         result = tab("t-1", "mode", [0, 0, 200, 30], options=["A", "B"], textoncolor=color)
         assert result["box"]["textoncolor"] == color
+        assert result["box"]["inactivetextoncolor"] == color
+        assert "activetextoncolor" not in result["box"]
 
     def test_patching_rect_defaults_offscreen(self):
         result = tab("t-1", "mode", [0, 0, 200, 30], options=["A", "B"])
@@ -497,6 +526,20 @@ class TestComment:
     def test_returns_box_dict(self):
         result = comment("c-1", [0, 0, 100, 20], "Hello")
         assert "box" in result
+
+    def test_single_line_by_default(self):
+        # no linecount/fontface emitted for a plain label (single-line, regular weight)
+        result = comment("c-1", [0, 0, 100, 20], "Hello")
+        assert "linecount" not in result["box"]
+        assert "fontface" not in result["box"]
+
+    def test_linecount_for_multiline_block(self):
+        result = comment("c-1", [0, 0, 100, 60], "long info text", linecount=3)
+        assert result["box"]["linecount"] == 3
+
+    def test_fontface_weight(self):
+        result = comment("c-1", [0, 0, 100, 20], "Bold", fontface=1)
+        assert result["box"]["fontface"] == 1
 
     def test_maxclass_is_live_comment(self):
         """maxclass must be 'live.comment' for proper Live theme styling."""
@@ -697,6 +740,22 @@ class TestMeter:
         result = meter("m-1", [0, 0, 20, 100])
         assert "box" in result
 
+    def test_theme_mapping_includes_unlit_segments(self):
+        # live.gain~/meter~ have inactive twins ONLY for cold & warm (no inactivehot);
+        # the registry now themes the unlit rail (was Live-default grey).
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["meter"].theme_mapping
+        assert tm["coldcolor"] == "meter_cold"
+        assert tm["inactivecoldcolor"] == "text_dim"
+        assert tm["inactivewarmcolor"] == "text_dim"
+        assert tm["slidercolor"] == "surface"   # recessed background rail (gain~ maxref)
+        assert "inactivehotcolor" not in tm   # not a real live.gain~ attr
+
+    def test_inactive_color_kwarg_reaches_box(self):
+        # theme injection feeds inactivecoldcolor via kwargs — it must land on the box
+        result = meter("m-1", [0, 0, 20, 100], inactivecoldcolor=[0.5, 0.5, 0.5, 1.0])
+        assert result["box"]["inactivecoldcolor"] == [0.5, 0.5, 0.5, 1.0]
+
     def test_maxclass_is_live_meter(self):
         result = meter("m-1", [0, 0, 20, 100])
         assert result["box"]["maxclass"] == "live.meter~"
@@ -813,6 +872,34 @@ class TestMenu:
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_shortname"] == "Wave"
 
+    def test_bgcolor_mirrors_to_active_twin(self):
+        color = [0.12, 0.12, 0.14, 1.0]
+        result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B"], bgcolor=color)
+        assert result["box"]["bgcolor"] == color
+        assert result["box"]["activebgcolor"] == color
+
+    def test_textcolor_is_bare_no_active_twin(self):
+        # live.menu shows the BARE textcolor (corpus); no activetextcolor twin.
+        color = [0.7, 0.7, 0.72, 1.0]
+        result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B"], textcolor=color)
+        assert result["box"]["textcolor"] == color
+        assert "activetextcolor" not in result["box"]
+
+    def test_bgoncolor_routes_to_hltcolor(self):
+        # live.menu highlight = hltcolor (NOT bgoncolor, which it does not have).
+        color = [0.9, 0.5, 0.1, 1.0]
+        result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B"], bgoncolor=color)
+        assert result["box"]["hltcolor"] == color
+        assert "bgoncolor" not in result["box"]
+        assert "activebgoncolor" not in result["box"]
+
+    def test_textoncolor_routes_to_hlttextcolor(self):
+        color = [1.0, 0.95, 0.9, 1.0]
+        result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B"], textoncolor=color)
+        assert result["box"]["hlttextcolor"] == color
+        assert "textoncolor" not in result["box"]
+        assert "activetextoncolor" not in result["box"]
+
     def test_presentation_is_1(self):
         result = menu("mn-1", "waveform", [0, 0, 100, 20], options=["A", "B"])
         assert result["box"]["presentation"] == 1
@@ -834,6 +921,16 @@ class TestNumberBox:
     def test_returns_box_dict(self):
         result = number_box("nb-1", "velocity", [0, 0, 50, 20])
         assert "box" in result
+
+    def test_theme_mapping_themes_body_and_text(self):
+        # live.numbox body = activebgcolor (corpus 30; bare bgcolor 0), text = bare
+        # textcolor (no active twin). Each colour is mode-specific so all map safely.
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["number_box"].theme_mapping
+        assert tm["activebgcolor"] == "surface"   # non-LCD body bg
+        assert tm["textcolor"] == "text"          # bare textcolor, no active twin
+        assert tm["lcdbgcolor"] == "lcd_bg"       # LCD-mode field
+        assert "bgcolor" not in tm                 # numboxes never theme bare bgcolor
 
     def test_maxclass_is_live_numbox(self):
         result = number_box("nb-1", "velocity", [0, 0, 50, 20])
@@ -873,6 +970,16 @@ class TestNumberBox:
         valueof = result["box"]["saved_attribute_attributes"]["valueof"]
         assert valueof["parameter_unitstyle"] == 1
 
+    def test_appearance_defaults_to_lcd(self):
+        # kit default = appearance 4 (LCD) — the dominant premium numbox look AND the
+        # mode the themed lcd* colours render in (unset default left them DEAD).
+        result = number_box("nb-1", "velocity", [0, 0, 44, 15])
+        assert result["box"]["appearance"] == 4
+
+    def test_appearance_override_to_plain(self):
+        result = number_box("nb-1", "velocity", [0, 0, 44, 15], appearance=0)
+        assert result["box"]["appearance"] == 0
+
     def test_presentation_is_1(self):
         result = number_box("nb-1", "velocity", [0, 0, 50, 20])
         assert result["box"]["presentation"] == 1
@@ -894,6 +1001,14 @@ class TestSlider:
     def test_returns_box_dict(self):
         result = slider("sl-1", "mix", [10, 10, 20, 100])
         assert "box" in result
+
+    def test_theme_mapping_fill_and_text(self):
+        # live.slider fill = BARE slidercolor (no active twin); value text = textcolor.
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["slider"].theme_mapping
+        assert tm["slidercolor"] == "dial_color"
+        assert tm["textcolor"] == "text"          # value readout (was unmapped)
+        assert "activeslidercolor" not in tm       # live.slider has no active twin
 
     def test_maxclass_is_live_slider(self):
         result = slider("sl-1", "mix", [10, 10, 20, 100])
@@ -1113,13 +1228,16 @@ class TestLiveText:
         assert result["box"]["numinlets"] == 1
         assert result["box"]["numoutlets"] == 2
 
-    def test_mode_default_is_0(self):
+    def test_mode_default_is_1_toggle(self):
+        # live.text DEFAULTS to mode 1 (Toggle/latching) — matches the maxref default
+        # and the dominant use (bypass/freeze/on-off). mode 0 forced momentary toggles
+        # that un-latched + rejected Live-API set (the old bug); the default must latch.
         result = live_text("lt-1", "bypass", [0, 0, 60, 20])
-        assert result["box"]["mode"] == 0
-
-    def test_mode_button(self):
-        result = live_text("lt-1", "bypass", [0, 0, 60, 20], mode=1)
         assert result["box"]["mode"] == 1
+
+    def test_mode_explicit_button_momentary(self):
+        result = live_text("lt-1", "trigger", [0, 0, 60, 20], mode=0)
+        assert result["box"]["mode"] == 0
 
     def test_default_fontname(self):
         result = live_text("lt-1", "bypass", [0, 0, 60, 20])
@@ -1134,6 +1252,21 @@ class TestLiveText:
         color = [0.8, 0.4, 0.1, 1.0]
         result = live_text("lt-1", "bypass", [0, 0, 60, 20], bgoncolor=color)
         assert result["box"]["bgoncolor"] == color
+        assert result["box"]["activebgoncolor"] == color   # mirrors to active twin
+
+    def test_textcolor_mirrors_to_active_twin(self):
+        color = [0.7, 0.7, 0.7, 1.0]
+        result = live_text("lt-1", "bypass", [0, 0, 60, 20], textcolor=color)
+        assert result["box"]["textcolor"] == color
+        assert result["box"]["activetextcolor"] == color
+
+    def test_textoncolor_sets_only_active_twin(self):
+        # live.text has NO bare `textoncolor` (synced doc): on-text colour is
+        # activetextoncolor only; the bare attr must NOT be written.
+        color = [1.0, 0.9, 0.2, 1.0]
+        result = live_text("lt-1", "bypass", [0, 0, 60, 20], textoncolor=color)
+        assert result["box"]["activetextoncolor"] == color
+        assert "textoncolor" not in result["box"]
 
     def test_rounded_set(self):
         result = live_text("lt-1", "bypass", [0, 0, 60, 20], rounded=4.0)
@@ -1152,6 +1285,185 @@ class TestLiveText:
     def test_kwargs_passthrough(self):
         result = live_text("lt-1", "bypass", [0, 0, 60, 20], custom=42)
         assert result["box"]["custom"] == 42
+
+
+class TestSpectrumdraw:
+    """Tests for spectrumdraw() — multi-trace spectrum display (corpus-measured, 4)."""
+
+    def test_maxclass_and_io(self):
+        box = spectrumdraw("sd", [0, 0, 262, 96])["box"]
+        assert box["maxclass"] == "spectrumdraw~"
+        assert box["numinlets"] == 4      # up to 4 overlaid spectra
+        assert box["numoutlets"] == 1
+        assert box["outlettype"] == [""]
+
+    def test_amprange_and_grids(self):
+        box = spectrumdraw("sd", [0, 0, 262, 96], amprange=[-80.0, 10.0],
+                           ampgrid=0, freqgrid=0, freqlabels=0)["box"]
+        assert box["amprange"] == [-80.0, 10.0]
+        assert box["ampgrid"] == 0 and box["freqgrid"] == 0
+
+    def test_per_trace_colors_and_thickness(self):
+        box = spectrumdraw("sd", [0, 0, 262, 96], color=[1, 1, 1, 0.4],
+                           color2=[0.5, 0.5, 0.5, 0.6], thickness=2.0,
+                           octavesmooth=0.16666, timesmooth=[10.0, 200.0])["box"]
+        assert box["color"] == [1, 1, 1, 0.4]
+        assert box["color2"] == [0.5, 0.5, 0.5, 0.6]
+        assert box["thickness"] == 2.0
+        assert box["octavesmooth"] == 0.16666
+        assert box["timesmooth"] == [10.0, 200.0]
+
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["spectrumdraw"].theme_mapping
+        assert tm["color"] == "accent"
+        assert tm["color2"] == "accent2"
+        assert tm["bgcolor"] == "scope_bgcolor"
+
+    def test_presentation_and_passthrough(self):
+        box = spectrumdraw("sd", [1, 2, 262, 96], foo=9)["box"]
+        assert box["presentation"] == 1
+        assert box["presentation_rect"] == [1, 2, 262, 96]
+        assert box["foo"] == 9
+
+
+class TestPictctrl:
+    """Tests for pictctrl() — image-filmstrip control (corpus-measured, 17)."""
+
+    def test_maxclass_and_io(self):
+        box = pictctrl("pc", [0, 0, 19, 67])["box"]
+        assert box["maxclass"] == "pictctrl"
+        assert box["numinlets"] == 1
+        assert box["numoutlets"] == 1
+        assert box["outlettype"] == ["int"]
+
+    def test_sprite_attrs(self):
+        box = pictctrl("pc", [0, 0, 19, 67], name="ArpSpriteDotted.png", frames=68,
+                       mode=2, trackvertical=1, clickedimage=1, inactiveimage=1)["box"]
+        assert box["name"] == "ArpSpriteDotted.png"
+        assert box["frames"] == 68
+        assert box["mode"] == 2
+        assert box["trackvertical"] == 1
+        assert box["clickedimage"] == 1 and box["inactiveimage"] == 1
+
+    def test_active_and_param_enable_honour_zero(self):
+        box = pictctrl("pc", [0, 0, 19, 67], active=0, parameter_enable=0)["box"]
+        assert box["active"] == 0 and box["parameter_enable"] == 0
+
+    def test_attrs_not_set_by_default(self):
+        box = pictctrl("pc", [0, 0, 19, 67])["box"]
+        for attr in ("name", "frames", "mode", "trackvertical", "active"):
+            assert attr not in box
+
+    def test_presentation(self):
+        box = pictctrl("pc", [5, 6, 13, 13])["box"]
+        assert box["presentation"] == 1
+        assert box["presentation_rect"] == [5, 6, 13, 13]
+
+    def test_registered_as_device_method(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        assert "pictctrl" in DEVICE_WIDGET_SPECS
+
+    def test_kwargs_passthrough(self):
+        assert pictctrl("pc", [0, 0, 9, 9], foo="bar")["box"]["foo"] == "bar"
+
+
+class TestWaveform:
+    """Tests for waveform() — buffer~ display + drag-select (corpus-measured, 7)."""
+
+    def test_maxclass_and_io(self):
+        box = waveform("wf", [0, 0, 200, 80])["box"]
+        assert box["maxclass"] == "waveform~"
+        assert box["numinlets"] == 5
+        assert box["numoutlets"] == 6
+
+    def test_outlettype(self):
+        box = waveform("wf", [0, 0, 200, 80])["box"]
+        assert box["outlettype"] == ["float", "float", "float", "float", "list", ""]
+
+    def test_buffername_and_display_attrs(self):
+        box = waveform("wf", [0, 0, 200, 80], buffername="mybuf", labels=0, ruler=0,
+                       vticks=0, ignoreclick=1)["box"]
+        assert box["buffername"] == "mybuf"
+        assert box["ruler"] == 0 and box["vticks"] == 0
+        assert box["ignoreclick"] == 1
+
+    def test_colors_set_when_provided(self):
+        box = waveform("wf", [0, 0, 200, 80], waveformcolor=[0, 1, 0, 0.5],
+                       selectioncolor=[0.9, 0.95, 0.05, 1.0])["box"]
+        assert box["waveformcolor"] == [0, 1, 0, 0.5]
+        assert box["selectioncolor"] == [0.9, 0.95, 0.05, 1.0]
+
+    def test_presentation(self):
+        box = waveform("wf", [3, 4, 200, 80])["box"]
+        assert box["presentation"] == 1
+        assert box["presentation_rect"] == [3, 4, 200, 80]
+
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["waveform"].theme_mapping
+        assert tm["waveformcolor"] == "accent"
+        assert tm["selectioncolor"] == "accent2"
+
+    def test_kwargs_passthrough(self):
+        assert waveform("wf", [0, 0, 9, 9], foo=1)["box"]["foo"] == 1
+
+
+class TestFunction:
+    """Tests for function() — breakpoint / curve editor (corpus-measured, 20)."""
+
+    def test_returns_box_dict(self):
+        assert "box" in function("fn-1", [0, 0, 100, 50])
+
+    def test_maxclass_is_function(self):
+        assert function("fn-1", [0, 0, 100, 50])["box"]["maxclass"] == "function"
+
+    def test_io_counts(self):
+        box = function("fn-1", [0, 0, 100, 50])["box"]
+        assert box["numinlets"] == 1
+        assert box["numoutlets"] == 4
+
+    def test_outlettype_is_float_bang(self):
+        # CORPUS (all 20): float on outlet 0, bang on outlet 3
+        assert function("fn-1", [0, 0, 100, 50])["box"]["outlettype"] == [
+            "float", "", "", "bang"]
+
+    def test_mode_default_is_1(self):
+        assert function("fn-1", [0, 0, 100, 50])["box"]["mode"] == 1
+
+    def test_curve_attrs_set_when_provided(self):
+        pts = [0.0, 0.0, 0, 0.0, 1.0, 1.0, 0, 0.6]
+        box = function("fn-1", [0, 0, 100, 50], points=pts, domain=100.0,
+                       value_range=[0.0, 8.0], classic_curve=1)["box"]
+        assert box["addpoints_with_curve"] == pts
+        assert box["domain"] == 100.0
+        assert box["range"] == [0.0, 8.0]   # value_range -> the 'range' attr
+        assert box["classic_curve"] == 1
+
+    def test_presentation_by_default(self):
+        # defaults to a visible editor so it places in a layout
+        box = function("fn-1", [5, 6, 100, 50])["box"]
+        assert box["presentation"] == 1
+        assert box["presentation_rect"] == [5, 6, 100, 50]
+        assert "parameter_enable" not in box   # opt-in
+
+    def test_data_store_mode_no_presentation(self):
+        # presentation=0 = the corpus-style patching-layer curve-DATA store
+        box = function("fn-1", [0, 0, 100, 50], presentation=0)["box"]
+        assert "presentation" not in box
+        assert "presentation_rect" not in box
+
+    def test_parameter_enable_opt_in(self):
+        box = function("fn", [0, 0, 9, 9], parameter_enable=1)["box"]
+        assert box["parameter_enable"] == 1
+
+    def test_registered_as_device_method(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        assert "function" in DEVICE_WIDGET_SPECS
+
+    def test_kwargs_passthrough(self):
+        box = function("fn-1", [0, 0, 100, 50], bgcolor=[0, 0, 0, 1])["box"]
+        assert box["bgcolor"] == [0, 0, 0, 1]
 
 
 class TestFpic:
@@ -1194,6 +1506,25 @@ class TestFpic:
     def test_kwargs_passthrough(self):
         result = fpic("fp-1", [0, 0, 100, 100], border=2)
         assert result["box"]["border"] == 2
+
+    def test_outlettype_is_jit_matrix(self):
+        result = fpic("fp-1", [0, 0, 100, 100])
+        assert result["box"]["outlettype"] == ["jit_matrix"]
+
+    def test_corpus_attrs_set_when_provided(self):
+        # MEASURED corpus attrs the prior stub omitted (forceaspect 33/35,
+        # embed 17/35, hidden 23/35, background 1/35)
+        box = fpic("fp-1", [0, 0, 100, 100], pic="algo1.svg", forceaspect=1,
+                   embed=1, hidden=1, background=1)["box"]
+        assert box["forceaspect"] == 1
+        assert box["embed"] == 1        # bundle image data -> self-contained device
+        assert box["hidden"] == 1       # stacked SVG state-graphic, revealed by patch
+        assert box["background"] == 1
+
+    def test_corpus_attrs_not_set_by_default(self):
+        box = fpic("fp-1", [0, 0, 100, 100])["box"]
+        for attr in ("forceaspect", "embed", "hidden", "background"):
+            assert attr not in box
 
 
 class TestLiveGain:
@@ -1313,6 +1644,24 @@ class TestMultislider:
         result = multislider("ms-1", [0, 0, 100, 50], custom_ms=True)
         assert result["box"]["custom_ms"] is True
 
+    def test_display_preset_is_the_verified_meter(self):
+        # 4/5 corpus multisliders are ghostbar + ignoreclick displays
+        box = multislider("ms-1", [0, 0, 100, 50], display=True)["box"]
+        assert box["ghostbar"] == 1
+        assert box["ignoreclick"] == 1
+
+    def test_verified_meter_attrs(self):
+        box = multislider("gr", [0, 0, 100, 50], size=8, signed=1, thickness=2.0,
+                          setminmax=[-24.0, 24.0],
+                          slidercolor=[0.9, 0.7, 0.2, 1.0])["box"]
+        assert box["signed"] == 1 and box["thickness"] == 2.0
+        assert box["setminmax"] == [-24.0, 24.0]   # bipolar GR display range
+        assert box["slidercolor"] == [0.9, 0.7, 0.2, 1.0]
+
+    def test_bare_multislider_has_no_display_attrs(self):
+        box = multislider("ms-1", [0, 0, 100, 50])["box"]
+        assert "ghostbar" not in box and "ignoreclick" not in box
+
 
 class TestJsui:
     """Tests for jsui() UI function."""
@@ -1329,6 +1678,16 @@ class TestJsui:
         result = jsui("test", [10, 20, 200, 80], js_filename="test.js")
         assert result["box"]["presentation"] == 1
         assert result["box"]["presentation_rect"] == [10, 20, 200, 80]
+
+    def test_border_defaults_to_zero(self):
+        # A bare jsui draws a 1px box outline (border=1) on top of the JS paint;
+        # we default it OFF so transparent overlays don't show a stray box.
+        result = jsui("test", [0, 0, 200, 80], js_filename="test.js")
+        assert result["box"]["border"] == 0
+
+    def test_border_explicit_override_wins(self):
+        result = jsui("test", [0, 0, 200, 80], js_filename="test.js", border=1)
+        assert result["box"]["border"] == 1
 
     def test_default_inlets_outlets(self):
         result = jsui("test", [0, 0, 200, 80], js_filename="test.js")
@@ -1424,17 +1783,18 @@ class TestAdsrui:
         result = adsrui("adsr-1", rect)
         assert result["box"]["presentation_rect"] == rect
 
-    def test_numinlets_is_1(self):
+    def test_numinlets_is_10(self):
+        # CORPUS (2/2): live.adsrui is 10-in / 10-out (was wrongly 1/4)
         result = adsrui("adsr-1", [0, 0, 200, 80])
-        assert result["box"]["numinlets"] == 1
+        assert result["box"]["numinlets"] == 10
 
-    def test_numoutlets_is_4(self):
+    def test_numoutlets_is_10(self):
         result = adsrui("adsr-1", [0, 0, 200, 80])
-        assert result["box"]["numoutlets"] == 4
+        assert result["box"]["numoutlets"] == 10
 
-    def test_outlettype_has_4_floats(self):
+    def test_outlettype_is_ten_untyped(self):
         result = adsrui("adsr-1", [0, 0, 200, 80])
-        assert result["box"]["outlettype"] == ["float", "float", "float", "float"]
+        assert result["box"]["outlettype"] == [""] * 10
 
     def test_patching_rect_defaults_offscreen(self):
         result = adsrui("adsr-1", [10, 20, 200, 80])
@@ -1447,32 +1807,34 @@ class TestAdsrui:
         result = adsrui("adsr-1", [0, 0, 200, 80], patching_rect=[50, 50, 200, 80])
         assert result["box"]["patching_rect"] == [50, 50, 200, 80]
 
-    def test_bgcolor_not_set_by_default(self):
-        result = adsrui("adsr-1", [0, 0, 200, 80])
-        assert "bgcolor" not in result["box"]
+    def test_stage_domains_and_times(self):
+        box = adsrui("adsr-1", [0, 0, 200, 80], attack_domain=[0.0, 60000.0],
+                     decay_domain=[10.0, 60000.0], release_domain=[10.0, 30000.0],
+                     attack_time=10.1, decay_time=999.9, release_time=600.0)["box"]
+        assert box["attack_domain"] == [0.0, 60000.0]
+        assert box["release_domain"] == [10.0, 30000.0]
+        assert box["attack_time"] == 10.1
+        assert box["release_time"] == 600.0
 
-    def test_bgcolor_set_when_provided(self):
-        color = [0.1, 0.1, 0.1, 1.0]
-        result = adsrui("adsr-1", [0, 0, 200, 80], bgcolor=color)
-        assert result["box"]["bgcolor"] == color
+    def test_enable_handles_and_active_colors(self):
+        box = adsrui("adsr-1", [0, 0, 200, 80], enable_initial=0, enable_peak=1,
+                     enable_final=0, activelinecolor=[0.0, 0.93, 1.0, 1.0],
+                     activehandlecolor=[0.0, 0.93, 1.0, 1.0])["box"]
+        assert box["enable_initial"] == 0 and box["enable_peak"] == 1
+        assert box["activelinecolor"] == [0.0, 0.93, 1.0, 1.0]
+        assert box["activehandlecolor"] == [0.0, 0.93, 1.0, 1.0]
 
-    def test_bordercolor_not_set_by_default(self):
-        result = adsrui("adsr-1", [0, 0, 200, 80])
-        assert "bordercolor" not in result["box"]
+    def test_old_guessed_attrs_not_default(self):
+        # the prior stub's bgcolor/bordercolor/focusbordercolor are not live.adsrui attrs
+        box = adsrui("adsr-1", [0, 0, 200, 80])["box"]
+        for attr in ("bgcolor", "bordercolor", "focusbordercolor", "attack_domain"):
+            assert attr not in box
 
-    def test_bordercolor_set_when_provided(self):
-        color = [0.5, 0.5, 0.5, 1.0]
-        result = adsrui("adsr-1", [0, 0, 200, 80], bordercolor=color)
-        assert result["box"]["bordercolor"] == color
-
-    def test_focusbordercolor_not_set_by_default(self):
-        result = adsrui("adsr-1", [0, 0, 200, 80])
-        assert "focusbordercolor" not in result["box"]
-
-    def test_focusbordercolor_set_when_provided(self):
-        color = [0.8, 0.2, 0.8, 1.0]
-        result = adsrui("adsr-1", [0, 0, 200, 80], focusbordercolor=color)
-        assert result["box"]["focusbordercolor"] == color
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["adsrui"].theme_mapping
+        assert tm["activelinecolor"] == "accent"
+        assert tm["activebgcolor"] == "scope_bgcolor"
 
     def test_kwargs_passthrough(self):
         result = adsrui("adsr-1", [0, 0, 200, 80], custom_attr="test")
@@ -1508,12 +1870,27 @@ class TestLiveDrop:
         assert result["box"]["numinlets"] == 1
 
     def test_numoutlets_is_1(self):
+        # DOC: only the left outlet is documented — it emits the absolute filepath
+        # as one quoted symbol. (The prior 2-outlet 'file-type code' was fabricated.)
         result = live_drop("drop-1", [0, 0, 100, 30])
         assert result["box"]["numoutlets"] == 1
 
-    def test_outlettype_is_single_string(self):
+    def test_outlettype_is_one_string(self):
         result = live_drop("drop-1", [0, 0, 100, 30])
         assert result["box"]["outlettype"] == [""]
+
+    def test_decodemode_set_when_provided(self):
+        # disable decode to pass the ORIGINAL file path (e.g. movie for jit.movie)
+        result = live_drop("drop-1", [0, 0, 100, 30], decodemode=0)
+        assert result["box"]["decodemode"] == 0
+
+    def test_decodemode_not_set_by_default(self):
+        result = live_drop("drop-1", [0, 0, 100, 30])
+        assert "decodemode" not in result["box"]
+
+    def test_legend_set_when_provided(self):
+        result = live_drop("drop-1", [0, 0, 100, 30], legend="Drop a sample")
+        assert result["box"]["legend"] == "Drop a sample"
 
     def test_patching_rect_defaults_offscreen(self):
         result = live_drop("drop-1", [10, 20, 100, 30])
@@ -1526,36 +1903,37 @@ class TestLiveDrop:
         result = live_drop("drop-1", [0, 0, 100, 30], patching_rect=[50, 50, 100, 30])
         assert result["box"]["patching_rect"] == [50, 50, 100, 30]
 
-    def test_textcolor_not_set_by_default(self):
-        result = live_drop("drop-1", [0, 0, 100, 30])
-        assert "textcolor" not in result["box"]
-
     def test_textcolor_set_when_provided(self):
         color = [1.0, 1.0, 1.0, 1.0]
         result = live_drop("drop-1", [0, 0, 100, 30], textcolor=color)
         assert result["box"]["textcolor"] == color
 
-    def test_bgcolor_not_set_by_default(self):
-        result = live_drop("drop-1", [0, 0, 100, 30])
-        assert "bgcolor" not in result["box"]
-
-    def test_bgcolor_set_when_provided(self):
-        color = [0.2, 0.2, 0.2, 1.0]
-        result = live_drop("drop-1", [0, 0, 100, 30], bgcolor=color)
-        assert result["box"]["bgcolor"] == color
-
-    def test_bordercolor_not_set_by_default(self):
-        result = live_drop("drop-1", [0, 0, 100, 30])
-        assert "bordercolor" not in result["box"]
+    def test_color_is_outline_not_bgcolor(self):
+        # live.drop's themeable fill is `color` (box outline); it has NO bgcolor.
+        color = [0.4, 0.8, 1.0, 1.0]
+        box = live_drop("drop-1", [0, 0, 100, 30], color=color)["box"]
+        assert box["color"] == color
+        assert "bgcolor" not in box  # default emits no bogus bgcolor attr
 
     def test_bordercolor_set_when_provided(self):
         color = [0.4, 0.4, 0.4, 1.0]
         result = live_drop("drop-1", [0, 0, 100, 30], bordercolor=color)
         assert result["box"]["bordercolor"] == color
 
+    def test_textjustification_set_when_provided(self):
+        result = live_drop("drop-1", [0, 0, 100, 30], textjustification=1)
+        assert result["box"]["textjustification"] == 1
+
     def test_kwargs_passthrough(self):
         result = live_drop("drop-1", [0, 0, 100, 30], custom_attr="val")
         assert result["box"]["custom_attr"] == "val"
+
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["live_drop"].theme_mapping
+        assert tm["textcolor"] == "text"
+        assert tm["focusbordercolor"] == "accent"
+        assert "bgcolor" not in tm  # no fabricated fill attr
 
 
 class TestBpatcher:
@@ -1651,17 +2029,23 @@ class TestSwatch:
         result = swatch("sw-1", rect)
         assert result["box"]["presentation_rect"] == rect
 
-    def test_numinlets_is_1(self):
+    def test_numinlets_is_3(self):
+        # CORPUS: swatch is 3-in / 2-out (the stub's 1/4 was guessed)
         result = swatch("sw-1", [0, 0, 40, 20])
-        assert result["box"]["numinlets"] == 1
+        assert result["box"]["numinlets"] == 3
 
-    def test_numoutlets_is_4(self):
+    def test_numoutlets_is_2(self):
         result = swatch("sw-1", [0, 0, 40, 20])
-        assert result["box"]["numoutlets"] == 4
+        assert result["box"]["numoutlets"] == 2
 
-    def test_outlettype_has_4_entries(self):
+    def test_outlettype_is_list_then_float(self):
         result = swatch("sw-1", [0, 0, 40, 20])
-        assert result["box"]["outlettype"] == ["", "", "", ""]
+        assert result["box"]["outlettype"] == ["", "float"]
+
+    def test_compatibility_and_param_enable_honour_zero(self):
+        box = swatch("sw-1", [0, 0, 40, 20], compatibility=1, parameter_enable=0)["box"]
+        assert box["compatibility"] == 1
+        assert box["parameter_enable"] == 0
 
     def test_patching_rect_defaults_offscreen(self):
         result = swatch("sw-1", [10, 20, 40, 20])
@@ -1712,8 +2096,9 @@ class TestTextedit:
         assert result["box"]["numoutlets"] == 4
 
     def test_outlettype_correct(self):
+        # CORPUS (all 4 instances): the int outlet is outlet 1, not outlet 3.
         result = textedit("te-1", [0, 0, 150, 25])
-        assert result["box"]["outlettype"] == ["", "", "", "int"]
+        assert result["box"]["outlettype"] == ["", "int", "", ""]
 
     def test_fontname_default(self):
         result = textedit("te-1", [0, 0, 150, 25])
@@ -1764,9 +2149,38 @@ class TestTextedit:
         result = textedit("te-1", [0, 0, 150, 25], custom_attr="hello")
         assert result["box"]["custom_attr"] == "hello"
 
+    def test_corpus_attrs_set_when_provided(self):
+        # MEASURED Roulette attrs the prior stub omitted
+        box = textedit("te-1", [0, 0, 150, 25], text="0", keymode=1, tabmode=0,
+                       border=0.0, rounded=0.0, textjustification=1)["box"]
+        assert box["text"] == "0"
+        assert box["keymode"] == 1
+        assert box["tabmode"] == 0
+        assert box["border"] == 0.0
+        assert box["rounded"] == 0.0
+        assert box["textjustification"] == 1
+
+    def test_parameter_enable_opt_in(self):
+        # textedit can be a Blob param that saves its text; opt-in only
+        assert "parameter_enable" not in textedit("te", [0, 0, 9, 9])["box"]
+        assert textedit("te", [0, 0, 9, 9], parameter_enable=1)["box"][
+            "parameter_enable"] == 1
+
+    def test_corpus_attrs_not_set_by_default(self):
+        box = textedit("te-1", [0, 0, 150, 25])["box"]
+        for attr in ("text", "keymode", "tabmode", "border", "rounded",
+                     "textjustification", "parameter_enable"):
+            assert attr not in box
+
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["textedit"].theme_mapping
+        assert tm["textcolor"] == "text"
+        assert tm["bgcolor"] == "section"
+
 
 class TestLiveStep:
-    """Tests for live_step() step sequencer UI."""
+    """Tests for live_step() — corpus-measured (SliceShuffler, 4 lanes)."""
 
     def test_returns_box_dict(self):
         result = live_step("ls-1", [0, 0, 300, 100])
@@ -1794,6 +2208,7 @@ class TestLiveStep:
         assert result["box"]["numinlets"] == 1
 
     def test_numoutlets_is_5(self):
+        # corpus: 5 lane-data outlets (pitch/velocity/duration/extra1/extra2)
         result = live_step("ls-1", [0, 0, 300, 100])
         assert result["box"]["numoutlets"] == 5
 
@@ -1801,45 +2216,52 @@ class TestLiveStep:
         result = live_step("ls-1", [0, 0, 300, 100])
         assert result["box"]["outlettype"] == ["", "", "", "", ""]
 
-    def test_nstep_default(self):
-        result = live_step("ls-1", [0, 0, 300, 100])
-        assert result["box"]["nstep"] == 16
-
-    def test_nstep_custom(self):
-        result = live_step("ls-1", [0, 0, 300, 100], nstep=32)
-        assert result["box"]["nstep"] == 32
-
-    def test_nseq_default(self):
-        result = live_step("ls-1", [0, 0, 300, 100])
-        assert result["box"]["nseq"] == 1
-
-    def test_nseq_custom(self):
-        result = live_step("ls-1", [0, 0, 300, 100], nseq=4)
-        assert result["box"]["nseq"] == 4
-
-    def test_loop_start_not_set_by_default(self):
-        result = live_step("ls-1", [0, 0, 300, 100])
-        assert "loop_start" not in result["box"]
-
-    def test_loop_start_set_when_provided(self):
-        result = live_step("ls-1", [0, 0, 300, 100], loop_start=4)
-        assert result["box"]["loop_start"] == 4
-
-    def test_loop_end_not_set_by_default(self):
-        result = live_step("ls-1", [0, 0, 300, 100])
-        assert "loop_end" not in result["box"]
-
-    def test_loop_end_set_when_provided(self):
-        result = live_step("ls-1", [0, 0, 300, 100], loop_end=12)
-        assert result["box"]["loop_end"] == 12
+    def test_no_hallucinated_attrs(self):
+        # REGRESSION: nstep/nseq/loop_start/loop_end were guessed; no real corpus
+        # live.step has them (step count lives in the parameter_type=3 Blob).
+        box = live_step("ls-1", [0, 0, 300, 100])["box"]
+        for attr in ("nstep", "nseq", "loop_start", "loop_end"):
+            assert attr not in box
 
     def test_mode_not_set_by_default(self):
         result = live_step("ls-1", [0, 0, 300, 100])
         assert "mode" not in result["box"]
 
     def test_mode_set_when_provided(self):
-        result = live_step("ls-1", [0, 0, 300, 100], mode=1)
-        assert result["box"]["mode"] == 1
+        result = live_step("ls-1", [0, 0, 300, 100], mode=4)
+        assert result["box"]["mode"] == 4
+
+    def test_lane_active_flags(self):
+        box = live_step("ls-1", [0, 0, 300, 100], pitch_active=0,
+                        velocity_active=0, duration_active=0, extra2_active=0)["box"]
+        assert box["pitch_active"] == 0
+        assert box["velocity_active"] == 0
+        assert box["duration_active"] == 0
+        assert box["extra2_active"] == 0
+
+    def test_colors_and_rulers_set(self):
+        box = live_step("ls-1", [0, 0, 300, 100],
+                        stepcolor=[0.3, 0.2, 0.4, 1.0],
+                        stepcolor2=[0.4, 0.3, 0.5, 1.0],
+                        bgcolor=[0, 0, 0, 0.05], blackkeycolor=[0.2, 0.2, 0.3, 1.0],
+                        loopruler=0, unitruler=0)["box"]
+        assert box["stepcolor"] == [0.3, 0.2, 0.4, 1.0]
+        assert box["stepcolor2"] == [0.4, 0.3, 0.5, 1.0]
+        assert box["bgcolor"] == [0, 0, 0, 0.05]
+        assert box["blackkeycolor"] == [0.2, 0.2, 0.3, 1.0]
+        assert box["loopruler"] == 0 and box["unitruler"] == 0
+
+    def test_parameter_enable_opt_in(self):
+        # off by default (display mode); the Blob param is opt-in
+        assert "parameter_enable" not in live_step("ls", [0, 0, 9, 9])["box"]
+        assert live_step("ls", [0, 0, 9, 9], parameter_enable=1)["box"][
+            "parameter_enable"] == 1
+
+    def test_extra1_range_passthrough(self):
+        box = live_step("ls", [0, 0, 9, 9], extra1_min=-50, extra1_max=50,
+                        extra1_signed=1)["box"]
+        assert box["extra1_min"] == -50 and box["extra1_max"] == 50
+        assert box["extra1_signed"] == 1
 
     def test_patching_rect_defaults_offscreen(self):
         result = live_step("ls-1", [10, 20, 300, 100])
@@ -1856,9 +2278,19 @@ class TestLiveStep:
         result = live_step("ls-1", [0, 0, 300, 100], custom_attr="val")
         assert result["box"]["custom_attr"] == "val"
 
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["live_step"].theme_mapping
+        assert tm["stepcolor"] == "accent"
+        assert tm["stepcolor2"] == "accent2"   # second step colour (solid, corpus 4/4)
+        assert tm["bgcolor"] == "bg"
+        assert tm["bordercolor"] == "panel_border"
+        # alpha-wash attrs are NOT token-mapped (a solid colour would mis-render them)
+        assert "hbgcolor" not in tm and "amountcolor" not in tm
+
 
 class TestLiveGrid:
-    """Tests for live_grid() toggleable cell grid."""
+    """Tests for live_grid() — corpus-measured (Roulette 12×12, SliceShuffler 32×32)."""
 
     def test_returns_box_dict(self):
         result = live_grid("lg-1", [0, 0, 200, 100])
@@ -1881,41 +2313,59 @@ class TestLiveGrid:
         result = live_grid("lg-1", rect)
         assert result["box"]["presentation_rect"] == rect
 
-    def test_numinlets_is_1(self):
+    def test_numinlets_is_2(self):
+        # corpus FIX: live.grid has 2 inlets (the stub said 1)
         result = live_grid("lg-1", [0, 0, 200, 100])
-        assert result["box"]["numinlets"] == 1
+        assert result["box"]["numinlets"] == 2
 
-    def test_numoutlets_is_4(self):
+    def test_numoutlets_is_6(self):
+        # corpus FIX: live.grid has 6 outlets (the stub said 4)
         result = live_grid("lg-1", [0, 0, 200, 100])
-        assert result["box"]["numoutlets"] == 4
+        assert result["box"]["numoutlets"] == 6
 
-    def test_outlettype_has_4_entries(self):
+    def test_outlettype_has_6_entries(self):
         result = live_grid("lg-1", [0, 0, 200, 100])
-        assert result["box"]["outlettype"] == ["", "", "", ""]
+        assert result["box"]["outlettype"] == ["", "", "", "", "", ""]
 
     def test_columns_default(self):
         result = live_grid("lg-1", [0, 0, 200, 100])
         assert result["box"]["columns"] == 16
 
     def test_columns_custom(self):
-        result = live_grid("lg-1", [0, 0, 200, 100], columns=8)
-        assert result["box"]["columns"] == 8
+        result = live_grid("lg-1", [0, 0, 200, 100], columns=12)
+        assert result["box"]["columns"] == 12
 
     def test_rows_default(self):
         result = live_grid("lg-1", [0, 0, 200, 100])
         assert result["box"]["rows"] == 8
 
     def test_rows_custom(self):
-        result = live_grid("lg-1", [0, 0, 200, 100], rows=4)
-        assert result["box"]["rows"] == 4
+        result = live_grid("lg-1", [0, 0, 200, 100], rows=12)
+        assert result["box"]["rows"] == 12
+
+    def test_max_dims_and_direction(self):
+        box = live_grid("lg-1", [0, 0, 200, 100], maxcolumns=32, maxrows=32,
+                        direction=0)["box"]
+        assert box["maxcolumns"] == 32 and box["maxrows"] == 32
+        assert box["direction"] == 0
 
     def test_direction_not_set_by_default(self):
         result = live_grid("lg-1", [0, 0, 200, 100])
         assert "direction" not in result["box"]
 
-    def test_direction_set_when_provided(self):
-        result = live_grid("lg-1", [0, 0, 200, 100], direction=0)
-        assert result["box"]["direction"] == 0
+    def test_colors_set(self):
+        box = live_grid("lg-1", [0, 0, 200, 100], stepcolor=[1.0, 0.6, 0.0, 1.0],
+                        bgstepcolor=[1, 1, 1, 0.05], hbgcolor=[0.4, 0.2, 0.36, 0.35],
+                        directioncolor=[0.3, 0.2, 0.44, 1.0])["box"]
+        assert box["stepcolor"] == [1.0, 0.6, 0.0, 1.0]
+        assert box["bgstepcolor"] == [1, 1, 1, 0.05]
+        assert box["hbgcolor"] == [0.4, 0.2, 0.36, 0.35]
+        assert box["directioncolor"] == [0.3, 0.2, 0.44, 1.0]
+
+    def test_parameter_enable_opt_in(self):
+        assert "parameter_enable" not in live_grid("lg", [0, 0, 9, 9])["box"]
+        assert live_grid("lg", [0, 0, 9, 9], parameter_enable=1)["box"][
+            "parameter_enable"] == 1
 
     def test_patching_rect_defaults_offscreen(self):
         result = live_grid("lg-1", [10, 20, 200, 100])
@@ -1931,6 +2381,16 @@ class TestLiveGrid:
     def test_kwargs_passthrough(self):
         result = live_grid("lg-1", [0, 0, 200, 100], custom_attr=42)
         assert result["box"]["custom_attr"] == 42
+
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["live_grid"].theme_mapping
+        assert tm["stepcolor"] == "accent"
+        assert tm["bgstepcolor"] == "section"
+        assert tm["bordercolor2"] == "panel_border"   # second border (solid, corpus 2/2)
+        assert tm["directioncolor"] == "accent2"
+        # alpha-wash attrs (hover/amount washes) are deliberately NOT token-mapped
+        assert "hbgcolor" not in tm and "amountcolor" not in tm
 
 
 class TestLiveLine:
@@ -2047,14 +2507,32 @@ class TestLiveArrows:
         result = live_arrows("la-1", [0, 0, 40, 20], arrowcolor=color)
         assert result["box"]["arrowcolor"] == color
 
-    def test_arrowbgcolor_not_set_by_default(self):
-        result = live_arrows("la-1", [0, 0, 40, 20])
-        assert "arrowbgcolor" not in result["box"]
+    def test_arrowbgcolor_is_not_a_real_attr(self):
+        # arrowbgcolor does NOT exist on live.arrows (maxref); never emitted by default
+        assert "arrowbgcolor" not in live_arrows("la-1", [0, 0, 40, 20])["box"]
 
-    def test_arrowbgcolor_set_when_provided(self):
-        color = [0.2, 0.2, 0.2, 1.0]
-        result = live_arrows("la-1", [0, 0, 40, 20], arrowbgcolor=color)
-        assert result["box"]["arrowbgcolor"] == color
+    def test_arrow_display_toggles_honour_zero(self):
+        # doc: uparrow/downarrow/leftarrow/rightarrow choose which arrows show; a 0
+        # must be emitted (loop uses 'is not None', not truthiness)
+        box = live_arrows("la-1", [0, 0, 40, 20], uparrow=1, downarrow=1,
+                          leftarrow=0, rightarrow=0)["box"]
+        assert box["uparrow"] == 1 and box["downarrow"] == 1
+        assert box["leftarrow"] == 0 and box["rightarrow"] == 0
+
+    def test_doc_attrs_set_when_provided(self):
+        box = live_arrows("la-1", [0, 0, 40, 20], blinkcolor=[0.5, 0.3, 0.5, 1.0],
+                          blinktime=150, color=[1, 1, 1, 1], textjustification=1,
+                          ignoreclick=1)["box"]
+        assert box["blinkcolor"] == [0.5, 0.3, 0.5, 1.0]
+        assert box["blinktime"] == 150
+        assert box["textjustification"] == 1
+        assert box["ignoreclick"] == 1
+
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["live_arrows"].theme_mapping
+        assert tm["arrowcolor"] == "accent"
+        assert tm["blinkcolor"] == "accent2"
 
     def test_patching_rect_defaults_offscreen(self):
         result = live_arrows("la-1", [10, 20, 40, 20])
@@ -2230,6 +2708,25 @@ class TestTextbutton:
         result = textbutton("tb-1", [0, 0, 80, 24])
         assert "box" in result
 
+    def test_toggle_with_bgoncolor_enables_usebgoncolor(self):
+        # In Toggle mode the on-bg only persists when usebgoncolor=1 (auto-set).
+        result = textbutton("tb-1", [0, 0, 80, 24], mode=1, bgoncolor=[1.0, 0.5, 0.0, 1.0])
+        assert result["box"]["usebgoncolor"] == 1
+
+    def test_button_mode_does_not_force_usebgoncolor(self):
+        # Button (momentary) mode flashes bgoncolor; no usebgoncolor flag needed.
+        result = textbutton("tb-1", [0, 0, 80, 24], mode=0, bgoncolor=[1.0, 0.5, 0.0, 1.0])
+        assert "usebgoncolor" not in result["box"]
+
+    def test_toggle_without_bgoncolor_no_usebgoncolor(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], mode=1)
+        assert "usebgoncolor" not in result["box"]
+
+    def test_explicit_usebgoncolor_override_wins(self):
+        result = textbutton("tb-1", [0, 0, 80, 24], mode=1,
+                            bgoncolor=[1.0, 0.5, 0.0, 1.0], usebgoncolor=0)
+        assert result["box"]["usebgoncolor"] == 0
+
     def test_maxclass_is_textbutton(self):
         result = textbutton("tb-1", [0, 0, 80, 24])
         assert result["box"]["maxclass"] == "textbutton"
@@ -2398,6 +2895,49 @@ class TestUmenu:
         result = umenu("um-1", [0, 0, 120, 22], custom_attr="val")
         assert result["box"]["custom_attr"] == "val"
 
+    def test_display_preset_is_the_verified_readout(self):
+        # the measured corpus pattern: ignoreclick=1, arrow=0, allowdrag=0
+        box = umenu("um-1", [0, 0, 120, 22], display=True)["box"]
+        assert box["ignoreclick"] == 1
+        assert box["arrow"] == 0
+        assert box["allowdrag"] == 0
+
+    def test_verified_named_attrs(self):
+        box = umenu("um-1", [0, 0, 120, 22], arrow=1, bgcolor=[0.2, 0.2, 0.2, 1.0],
+                    textcolor=[0.9, 0.9, 0.9, 1.0], fontsize=11.0)["box"]
+        assert box["arrow"] == 1
+        assert box["bgcolor"] == [0.2, 0.2, 0.2, 1.0]
+        assert box["textcolor"] == [0.9, 0.9, 0.9, 1.0]
+        assert box["fontsize"] == 11.0
+
+    def test_explicit_attr_overrides_display_preset(self):
+        # display=True sets arrow=0, but an explicit arrow= wins
+        box = umenu("um-1", [0, 0, 120, 22], display=True, arrow=1)["box"]
+        assert box["arrow"] == 1
+
+    def test_bare_umenu_has_no_display_attrs(self):
+        # backward-compat: default umenu is unchanged (no ignoreclick/arrow keys)
+        box = umenu("um-1", [0, 0, 120, 22])["box"]
+        assert "ignoreclick" not in box and "arrow" not in box
+
+    def test_bgcolor_mirrors_into_flat_bgfillcolor(self):
+        # a umenu's RENDERED fill is bgfillcolor (type "color"), not bare bgcolor —
+        # corpus-measured 25/25 keep bgfillcolor_color == bgcolor. So a themed bg must
+        # be mirrored or the readout draws Max's default fill and ignores the theme.
+        fill = [0.12, 0.13, 0.15, 1.0]
+        box = umenu("um-1", [0, 0, 120, 22], bgcolor=fill)["box"]
+        assert box["bgfillcolor_type"] == "color"
+        assert box["bgfillcolor_color"] == fill == box["bgcolor"]
+
+    def test_no_bgfillcolor_when_bgcolor_unset(self):
+        box = umenu("um-1", [0, 0, 120, 22])["box"]
+        assert "bgfillcolor_color" not in box and "bgfillcolor_type" not in box
+
+    def test_explicit_bgfillcolor_kwarg_overrides_mirror(self):
+        box = umenu("um-1", [0, 0, 120, 22], bgcolor=[0.1, 0.1, 0.1, 1.0],
+                    bgfillcolor_type="gradient")["box"]
+        assert box["bgfillcolor_type"] == "gradient"   # caller's explicit value wins
+
 
 class TestRadiogroup:
     """Tests for radiogroup() vertical radio buttons."""
@@ -2432,8 +2972,13 @@ class TestRadiogroup:
         assert result["box"]["numoutlets"] == 1
 
     def test_outlettype(self):
+        # radiogroup emits the selected button INDEX as an int.
         result = radiogroup("rg-1", [0, 0, 80, 80])
-        assert result["box"]["outlettype"] == [""]
+        assert result["box"]["outlettype"] == ["int"]
+
+    def test_mode_passthrough(self):
+        result = radiogroup("rg-1", [0, 0, 80, 80], mode=1)
+        assert result["box"]["mode"] == 1
 
     def test_itemcount_default(self):
         result = radiogroup("rg-1", [0, 0, 80, 80])
@@ -2614,6 +3159,29 @@ class TestMatrixctrl:
         result = matrixctrl("mc-1", [0, 0, 120, 120], custom_attr="val")
         assert result["box"]["custom_attr"] == "val"
 
+    def test_autosize_defaults_to_corpus_norm(self):
+        # 6/7 corpus matrixctrls + the Max default = autosize 1 (cells fit the rect)
+        result = matrixctrl("mc-1", [0, 0, 120, 120])
+        assert result["box"]["autosize"] == 1
+
+    def test_autosize_override(self):
+        result = matrixctrl("mc-1", [0, 0, 120, 120], autosize=0)
+        assert result["box"]["autosize"] == 0
+
+    def test_verified_cell_colors_and_ignoreclick(self):
+        box = matrixctrl("mc-1", [0, 0, 60, 16], ignoreclick=1,
+                         color=[0.8, 0.9, 0.9, 1.0], elementcolor=[0.35, 0.35, 0.35, 1.0],
+                         bgcolor=[0.2, 0.2, 0.2, 1.0])["box"]
+        assert box["ignoreclick"] == 1
+        assert box["color"] == [0.8, 0.9, 0.9, 1.0]
+        assert box["elementcolor"] == [0.35, 0.35, 0.35, 1.0]
+        assert box["bgcolor"] == [0.2, 0.2, 0.2, 1.0]
+
+    def test_colors_omitted_by_default(self):
+        # backward-compat: a bare matrixctrl carries no color keys (theme injects them)
+        box = matrixctrl("mc-1", [0, 0, 120, 120])["box"]
+        assert "color" not in box and "ignoreclick" not in box
+
 
 class TestUbutton:
     """Tests for ubutton() invisible click zone."""
@@ -2648,8 +3216,23 @@ class TestUbutton:
         assert result["box"]["numoutlets"] == 4
 
     def test_outlettype(self):
+        # OFFICIAL CORPUS (43/43): outlet 1 is a down-bang (was wrongly "")
         result = ubutton("ub-1", [0, 0, 60, 60])
-        assert result["box"]["outlettype"] == ["bang", "", "", "int"]
+        assert result["box"]["outlettype"] == ["bang", "bang", "", "int"]
+
+    def test_hltcolor_and_handoff_set_when_provided(self):
+        box = ubutton("ub-1", [0, 0, 60, 60], hltcolor=[0.4, 0.8, 1.0, 1.0],
+                      handoff="partner")["box"]
+        assert box["hltcolor"] == [0.4, 0.8, 1.0, 1.0]
+        assert box["handoff"] == "partner"
+
+    def test_color_attrs_not_set_by_default(self):
+        box = ubutton("ub-1", [0, 0, 60, 60])["box"]
+        assert "hltcolor" not in box and "handoff" not in box
+
+    def test_theme_mapping_registered(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        assert DEVICE_WIDGET_SPECS["ubutton"].theme_mapping["hltcolor"] == "accent"
 
     def test_patching_rect_defaults_offscreen(self):
         result = ubutton("ub-1", [10, 20, 60, 60])
@@ -2773,3 +3356,71 @@ def test_filtergraph_compiled_object_io_override():
     assert box["numoutlets"] == 2            # I/O count is a parameter
     assert box["presentation"] == 1
     assert box["domain"] == [20.0, 20000.0]  # **attrs passthrough
+
+
+class TestFiltergraphGrounded:
+    """filtergraph~ corrected to the official-corpus structure (11 instances)."""
+
+    def test_default_io_is_8_in_7_out(self):
+        box = filtergraph("fg", [0, 0, 300, 120])["box"]
+        assert box["numinlets"] == 8     # was wrongly 1
+        assert box["numoutlets"] == 7    # was wrongly 1
+
+    def test_default_outlettype_is_coefficient_bundle(self):
+        box = filtergraph("fg", [0, 0, 300, 120])["box"]
+        assert box["outlettype"] == ["list", "float", "float", "float", "float",
+                                     "list", "int"]
+
+    def test_corpus_attrs_set_when_provided(self):
+        box = filtergraph("fg", [0, 0, 300, 120], domain=[20.0, 22050.0],
+                          value_range=[0.0725, 4.0], nfilters=1,
+                          setfilter=[0, 6, 0], logmarkers=[50.0, 500.0, 5000.0],
+                          markercolor=[0.5, 0.5, 0.5, 1.0])["box"]
+        assert box["domain"] == [20.0, 22050.0]
+        assert box["range"] == [0.0725, 4.0]   # value_range -> 'range'
+        assert box["nfilters"] == 1
+        assert box["setfilter"] == [0, 6, 0]
+        assert box["logmarkers"] == [50.0, 500.0, 5000.0]
+        assert box["markercolor"] == [0.5, 0.5, 0.5, 1.0]
+
+    def test_theme_mapping_uses_markercolor_not_gridcolor(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        tm = DEVICE_WIDGET_SPECS["filtergraph"].theme_mapping
+        assert tm["markercolor"] == "grid_color"
+        assert "gridcolor" not in tm          # the dead attr is gone
+        assert tm["curvecolor"] == "accent"
+        assert tm["hcurvecolor"] == "accent2"
+
+
+class TestTwoAccentInvariant:
+    """The accent2 (secondary hue) invariant across the registry — codifies the
+    'Two-accent theming' reference rule so a regression can't silently break it."""
+
+    def test_secondary_cue_maps_to_accent2(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        # widget -> the attr carrying its ONE-OF-N selection or SECONDARY-data cue
+        secondary = {
+            "live_grid": "directioncolor",
+            "live_step": "stepcolor2",
+            "live_arrows": "blinkcolor",
+            "filtergraph": "hcurvecolor",
+            "waveform": "selectioncolor",
+            "spectrumdraw": "color2",
+        }
+        for widget, attr in secondary.items():
+            tm = DEVICE_WIDGET_SPECS[widget].theme_mapping
+            assert tm.get(attr) == "accent2", f"{widget}.{attr} must map to accent2"
+
+    def test_primary_fill_maps_to_accent_not_accent2(self):
+        from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
+        primary = {
+            "live_grid": "stepcolor",
+            "live_step": "stepcolor",
+            "live_arrows": "arrowcolor",
+            "filtergraph": "curvecolor",
+            "waveform": "waveformcolor",
+            "spectrumdraw": "color",
+        }
+        for widget, attr in primary.items():
+            tm = DEVICE_WIDGET_SPECS[widget].theme_mapping
+            assert tm.get(attr) == "accent", f"{widget}.{attr} must map to accent"

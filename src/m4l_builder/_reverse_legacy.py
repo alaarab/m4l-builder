@@ -394,6 +394,13 @@ def _bridge_dependencies_from_support_files(support_files: list[dict]) -> list[d
     return deps
 
 
+def _box_annotation_name(box: dict):
+    """Read a param's annotation name from the valueof (the correct location, A2)
+    with a fallback to a legacy box-level `annotation_name` attr."""
+    vo = box.get("saved_attribute_attributes", {}).get("valueof", {})
+    return vo.get("parameter_annotation_name") or box.get("annotation_name")
+
+
 def _parameter_spec_from_box(box: dict) -> dict | None:
     valueof = box.get("saved_attribute_attributes", {}).get("valueof")
     if not isinstance(valueof, dict):
@@ -1584,8 +1591,11 @@ def _box_parameter_matches(
         return False
     if spec.get("initial") != initial or spec.get("unitstyle") != unitstyle:
         return False
-    if annotation_name is not None and box.get("annotation_name") != annotation_name:
-        return False
+    if annotation_name is not None:
+        # annotation_name now lives in the param valueof (A2), not as a box attr.
+        vo = box.get("saved_attribute_attributes", {}).get("valueof", {})
+        if vo.get("parameter_annotation_name") != annotation_name:
+            return False
     return True
 
 
@@ -5978,7 +5988,7 @@ def extract_mapping_behavior_traces(snapshot: dict) -> list[dict]:
         box = boxes_by_id.get(box_id)
         if not box or box.get("maxclass") != "live.dial":
             continue
-        annotation = str(box.get("annotation_name") or "").strip()
+        annotation = str(_box_annotation_name(box) or "").strip()
         shortname = str(spec.get("shortname") or "").strip()
         label = annotation or shortname or str(box.get("varname") or box_id)
         label_lower = label.lower()
@@ -6359,7 +6369,7 @@ def extract_mapping_semantic_candidates(snapshot: dict) -> list[dict]:
     for spec in extract_parameter_specs(snapshot):
         box = boxes_by_id.get(spec.get("box_id"), {})
         for label in (
-            box.get("annotation_name"),
+            _box_annotation_name(box),
             spec.get("shortname"),
             spec.get("varname"),
             box.get("varname"),
@@ -6727,7 +6737,7 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
                 "box_id": box_id,
                 "varname": box.get("varname"),
                 "maxclass": box.get("maxclass"),
-                "annotation_name": box.get("annotation_name"),
+                "annotation_name": _box_annotation_name(box),
                 "shortname": spec.get("shortname"),
                 "parameter_type": spec.get("parameter_type"),
                 "min": spec.get("min"),
@@ -7233,6 +7243,18 @@ def _comment_kwargs(box: dict) -> dict[str, Any]:
     return kwargs
 
 
+# (valueof key, factory kwarg) for the extended param-metadata fields the
+# parameter factories (will) accept. Each guarded by `if key in valueof`, so an
+# entry is inert until both the device emits the valueof field AND the factory
+# accepts the kwarg — pre-wiring the A2/E1/E4 round-trip without rippling today.
+_EXTENDED_PARAM_VALUEOF_KWARGS = (
+    ("parameter_annotation_name", "annotation_name"),
+    ("parameter_info", "info"),
+    ("parameter_units", "units"),
+    ("parameter_steps", "steps"),
+)
+
+
 def _parameter_box_common_kwargs(box: dict, *, include_shortname: bool = True) -> dict[str, Any]:
     valueof = _saved_valueof(box)
     kwargs = _base_box_kwargs(
@@ -7263,6 +7285,14 @@ def _parameter_box_common_kwargs(box: dict, *, include_shortname: bool = True) -
         kwargs["max_val"] = valueof["parameter_mmax"]
     if "parameter_unitstyle" in valueof:
         kwargs["unitstyle"] = valueof["parameter_unitstyle"]
+    # Extended param metadata (A0): pre-wired GUARDED mappings so the reverse
+    # snapshot->python->rebuild round-trip preserves these valueof fields the
+    # moment a factory starts emitting them (A2 annotation/info, E1 units, E4
+    # steps). No-op until the field is present in a real valueof, so adding the
+    # field later does NOT ripple through the reverse-codegen self-consistency.
+    for _vkey, _kwarg in _EXTENDED_PARAM_VALUEOF_KWARGS:
+        if _vkey in valueof:
+            kwargs[_kwarg] = valueof[_vkey]
     return kwargs
 
 

@@ -3,10 +3,32 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any
 
 _UNSET = object()
+
+# When reconstructing a ParameterSpec from a REAL device's valueof (cloning a
+# shipping .amxd), Live's data legitimately violates our stricter AUTHORING rules
+# (e.g. an enum initial index beyond the option count, an empty enum option). This
+# flag relaxes those opinionated raises so a faithful clone preserves the original
+# values verbatim. Authoring (the default) stays strict. NOT a dataclass field — a
+# field would ripple through the reverse-codegen subsystem (the A0 blocker).
+_STRICT_VALIDATION = True
+
+
+@contextmanager
+def tolerant_reconstruction():
+    """Within this context, ParameterSpec skips opinionated authoring validation
+    (for faithfully cloning real devices). Restores the prior setting on exit."""
+    global _STRICT_VALIDATION
+    prev = _STRICT_VALIDATION
+    _STRICT_VALIDATION = False
+    try:
+        yield
+    finally:
+        _STRICT_VALIDATION = prev
 PARAM_HIDDEN = 0
 PARAM_VISIBLE = 1
 LIVE_NATIVE_INT_MIN = 0
@@ -66,6 +88,10 @@ class ParameterSpec:
     bank_name: str | None = None
     integer_like: bool = False
     allow_wide_range: bool = False
+    annotation_name: str | None = None  # parameter_annotation_name (hover-help title)
+    info: str | None = None             # parameter_info (hover-help body)
+    units: str | None = None            # parameter_units printf fmt (with unitstyle=9 Custom)
+    steps: int | None = None            # parameter_steps: quantize the range into N discrete steps
 
     def __post_init__(self) -> None:
         self.name = _normalize_label(self.name, field_name="name")
@@ -95,16 +121,20 @@ class ParameterSpec:
             bank_name = str(self.bank_name).strip()
             self.bank_name = bank_name or None
         if self.enum is not None:
-            normalized = [_normalize_label(option, field_name="enum option") for option in self.enum]
-            if not normalized:
-                raise ValueError("enumerated parameters require at least one option")
-            # Duplicate options in a real MENU (3+ choices) are a typo bug; a
-            # 2-option enum with identical labels is the legitimate toggle pattern
-            # (a button that keeps one label and only changes its highlight).
-            if len(normalized) > 2 and len(set(normalized)) != len(normalized):
-                raise ValueError(f"enumerated parameter {self.name!r} has duplicate options: {normalized}")
-            self.enum = normalized
-        elif self.parameter_type == 2:
+            if _STRICT_VALIDATION:
+                normalized = [_normalize_label(option, field_name="enum option") for option in self.enum]
+                if not normalized:
+                    raise ValueError("enumerated parameters require at least one option")
+                # Duplicate options in a real MENU (3+ choices) are a typo bug; a
+                # 2-option enum with identical labels is the legitimate toggle pattern
+                # (a button that keeps one label and only changes its highlight).
+                if len(normalized) > 2 and len(set(normalized)) != len(normalized):
+                    raise ValueError(f"enumerated parameter {self.name!r} has duplicate options: {normalized}")
+                self.enum = normalized
+            else:
+                # Tolerant clone: keep options verbatim (Live allows empty/dupes).
+                self.enum = [str(option) for option in self.enum]
+        elif self.parameter_type == 2 and _STRICT_VALIDATION:
             raise ValueError("enumerated parameters require options")
         # Exponent drives Max's log/exp fader scaling; <= 0 silently breaks it.
         if self.exponent is not None and self.exponent <= 0:
@@ -112,7 +142,8 @@ class ParameterSpec:
         # An out-of-range initial is silently clamped (continuous) or mis-indexed
         # (enumerated) at load — turn it into a build error. allow_wide_range opts
         # out, matching the existing integer-range escape hatch.
-        if self.initial is not _UNSET and self.initial is not None and not self.allow_wide_range:
+        if (self.initial is not _UNSET and self.initial is not None
+                and not self.allow_wide_range and _STRICT_VALIDATION):
             inits = self.initial if isinstance(self.initial, (list, tuple)) else [self.initial]
             for v in inits:
                 if not isinstance(v, (int, float)) or isinstance(v, bool):
@@ -171,6 +202,14 @@ class ParameterSpec:
             valueof["parameter_enum"] = list(self.enum)
         if self.invisible is not None:
             valueof["parameter_invisible"] = self.invisible
+        if self.annotation_name:
+            valueof["parameter_annotation_name"] = self.annotation_name
+        if self.info:
+            valueof["parameter_info"] = self.info
+        if self.units:
+            valueof["parameter_units"] = self.units
+        if self.steps is not None:
+            valueof["parameter_steps"] = self.steps
         return valueof
 
     def to_saved_attributes(self) -> dict:
@@ -193,6 +232,10 @@ class ParameterSpec:
         position: int = None,
         bank_name: str = None,
         visible: int = 1,
+        annotation_name: str = None,
+        info: str = None,
+        units: str = None,
+        steps: int = None,
     ) -> ParameterSpec:
         """Build a continuous parameter spec."""
         return cls(
@@ -211,6 +254,10 @@ class ParameterSpec:
             visible=visible,
             integer_like=False,
             allow_wide_range=False,
+            annotation_name=annotation_name,
+            info=info,
+            units=units,
+            steps=steps,
         )
 
     @classmethod
@@ -319,6 +366,10 @@ class ParameterSpec:
             bank_name=bank_name,
             integer_like=False,
             allow_wide_range=False,
+            annotation_name=valueof.get("parameter_annotation_name"),
+            info=valueof.get("parameter_info"),
+            units=valueof.get("parameter_units"),
+            steps=valueof.get("parameter_steps"),
         )
 
 

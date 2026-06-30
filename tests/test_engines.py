@@ -714,14 +714,29 @@ class TestEqCurveEngine:
     def test_draws_continuous_analyzer_fill(self):
         js = eq_curve_js()
         assert "analyzer_display[i] = analyzer_display[i] * 0.55 + incoming * 0.45;" in js
-        assert "mgraphics.set_line_width(1.0);" in js
-        # The analyzer fill + line render as a SMOOTH Catmull-Rom curve (curve_to)
-        # through the log-binned points, not angular straight segments -> the
-        # EQ Eight "smooth roll" look instead of blocky/spiky.
-        assert "function analyzer_curve_through(xs, ys, n)" in js
-        assert "mgraphics.curve_to(" in js
-        assert "analyzer_curve_through(xs, ys, n);" in js
-        assert "mgraphics.move_to(xs[0], bottom);" in js   # fill anchored at the floor
+        # Rainbow-style spectrum (display.js StereoSpectrum.displayNormal): the
+        # max-per-column polyline ROUNDED with path_roundcorners (spectRCorners=4),
+        # not Catmull-Rom grass; a light fill anchored just below the floor; a thin
+        # 1.1px crisp envelope.
+        assert "var ANALYZER_RCORNERS = 4.0;" in js
+        assert "mgraphics.path_roundcorners(ANALYZER_RCORNERS);" in js
+        assert "mgraphics.move_to(xs[0], bottom + 2);" in js   # fill anchored just below the floor
+        assert "mgraphics.set_line_width(1.1);" in js          # thin crisp envelope
+
+    def test_analyzer_style_toggle_rainbow_vs_eq8(self):
+        js = eq_curve_js()
+        # Runtime spectrum render style: 0 = Rainbow (thin line + light wash),
+        # 1 = EQ8 (heavy grey solid fill + ±3-tap smoothing). Same FFT/data.
+        assert "function set_analyzer_style(v)" in js
+        assert "var ANALYZER_STYLE = 0;" in js
+        assert "var ANALYZER_EQ8_CLR  = [" in js
+        # 3-way: 0 Rainbow, 1 EQ8, 2 Both (grey backdrop + cyan line).
+        assert "var eq8 = (style === 1);" in js
+        assert "var both = (style === 2);" in js
+        # EQ8 path smooths + uses the grey fill; Rainbow keeps the configured wash.
+        assert "ys = sm;" in js
+        # the EQ8 colour is overridable per device
+        assert eq_curve_js(analyzer_eq8_color="0.1, 0.2, 0.3, 1.0") != js
 
     def test_external_spectrum_mode_makes_jsui_transparent_overlay(self):
         # With external_spectrum=True a COMPILED spectrum (Max spectroscope~)

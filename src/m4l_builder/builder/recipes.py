@@ -3,13 +3,16 @@
 from ..modules import ModuleSpec, module_from_block, mount_module
 from ..recipes import (
     arpeggio_quantized_stage,
+    bypass_wrapper,
     convolver_controlled_stage,
+    dial_label_cell,
     dry_wet_stage,
     euclidean_sequencer_stage,
     gain_controlled_stage,
     generative_midi_stage,
     grain_playback_controlled,
     lfo_matrix_distribute,
+    mc_poly_spine,
     midi_learn_macro_assignment,
     midi_note_gate,
     parametric_eq_band_backend,
@@ -17,9 +20,12 @@ from ..recipes import (
     sample_drop_target,
     sidechain_compressor_recipe,
     spectral_gate_stage,
+    stacked_panels,
     stereo_width_stage,
+    switchable_bank,
     tempo_synced_delay,
     transport_sync_lfo_recipe,
+    two_panel_strip,
 )
 from ..stages import Stage, StageResult, stage_result
 
@@ -43,6 +49,12 @@ __all__ = [
     "arpeggio_quantized_stage",
     "grain_playback_controlled",
     "poly_midi_gate",
+    "mc_poly_spine",
+    "two_panel_strip",
+    "dial_label_cell",
+    "stacked_panels",
+    "bypass_wrapper",
+    "switchable_bank",
     "transport_sync_lfo_recipe",
     "midi_learn_macro_assignment",
     "generative_midi_stage",

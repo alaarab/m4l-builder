@@ -3,7 +3,13 @@
 import json
 import os
 
-from m4l_builder.device import AudioEffect, Device, Instrument, MidiEffect
+from m4l_builder.device import (
+    AudioEffect,
+    Device,
+    Instrument,
+    MidiEffect,
+    MidiTransformation,
+)
 from m4l_builder.theme import MIDNIGHT, WARM
 
 
@@ -17,7 +23,7 @@ class TestDevice:
     """Tests for the Device base class."""
 
     def _make(self, **kwargs):
-        defaults = dict(name="TestDevice", width=400, height=170,
+        defaults = dict(name="TestDevice", width=400, height=168,
                         device_type="audio_effect")
         defaults.update(kwargs)
         return Device(**defaults)
@@ -232,6 +238,130 @@ class TestDevice:
         assert d._support_files["kernel.maxpat"]["content"] == '{"patcher": {}}'
         assert d._support_files["kernel.maxpat"]["type"] == "JSON"
 
+    def _height_codes(self, d):
+        return [i.code for i in d.lint() if i.code == "device-height-over-ceiling"]
+
+    def test_tall_chain_device_lints_height_ceiling_warning(self):
+        # an audio_effect taller than Live's ~168px view clips its bottom rows
+        d = self._make(height=190)
+        codes = self._height_codes(d)
+        assert codes == ["device-height-over-ceiling"]
+        issue = next(i for i in d.lint() if i.code == "device-height-over-ceiling")
+        assert issue.severity == "warning"          # NOT an error (a default build stays quiet)
+
+    def test_at_or_below_ceiling_no_height_warning(self):
+        assert self._height_codes(self._make(height=168)) == []
+        assert self._height_codes(self._make(height=120)) == []
+
+    def test_allow_tall_opts_out_of_height_warning(self):
+        # a faithful clone of a taller original (SEAR=190) suppresses the rule
+        d = AudioEffect("Clone", width=280, height=190, allow_tall=True)
+        assert self._height_codes(d) == []
+
+    def test_midi_tool_exempt_from_height_ceiling(self):
+        # MIDI Tools render in a different UI, not the 168px device chain row
+        d = MidiTransformation("Tool", width=300, height=300)
+        assert self._height_codes(d) == []
+
+    def test_default_build_does_not_raise_on_tall_device(self):
+        # height is a WARNING, not a wiring error -> validate=None build is silent
+        d = self._make(height=190)
+        d.to_bytes()                                # must not raise
+
+    def test_validate_warn_surfaces_height_ceiling(self):
+        import warnings as _w
+        d = self._make(height=190)
+        with _w.catch_warnings(record=True) as caught:
+            _w.simplefilter("always")
+            d.to_bytes(validate="warn")
+        assert any("device-height-over-ceiling" in str(w.message) for w in caught)
+
+    def _clip_ids(self, d):
+        return {i.box_id for i in d.lint() if i.code == "control-clipped"}
+
+    def test_control_straddling_bottom_edge_is_flagged(self):
+        # a 168-tall device with a dial at y=150,h=30 → bottom 180, half-cut
+        d = self._make(height=168)
+        d.add_dial("k", "Knob", [10, 150, 40, 30])
+        assert "k" in self._clip_ids(d)
+
+    def test_control_past_right_edge_is_flagged(self):
+        d = self._make(width=300, height=168)
+        d.add_dial("k", "Knob", [280, 60, 40, 30])   # right = 320 > 300
+        assert "k" in self._clip_ids(d)
+
+    def test_control_fully_inside_not_flagged(self):
+        d = self._make(width=300, height=168)
+        d.add_dial("k", "Knob", [10, 60, 40, 30])
+        assert self._clip_ids(d) == set()
+
+    def test_parked_offcanvas_control_not_flagged(self):
+        # the corpus idiom: a functional dial parked far off-canvas to hide it
+        d = self._make(width=300, height=168)
+        d.add_dial("probe", "Probe", [900, 900, 40, 30])
+        assert self._clip_ids(d) == set()
+
+    def test_full_bleed_background_panel_not_flagged(self):
+        # a background panel routinely bleeds past the bottom edge by design
+        d = self._make(width=300, height=168)
+        d.add_panel("bg", [0, 0, 300, 188], bgcolor=[0, 0, 0, 1])   # bottom 188 > 168
+        assert self._clip_ids(d) == set()
+
+    def test_add_v8ui_content_address_hashes_js_into_filename(self):
+        js = "function paint(){ mgraphics.init(); }\nfunction onpointermove(){}\n"
+        d = self._make()
+        d.add_v8ui("k", [0, 0, 40, 40], js_code=js, js_filename="k_knob.js",
+                   content_address=True, validate_contract=False)
+        names = [n for n in d._js_files if n.startswith("k_knob_")]
+        assert len(names) == 1 and names[0].endswith(".js")
+        # the v8ui box references the SAME hashed sidecar (no desync)
+        box = {b["box"]["id"]: b["box"] for b in d.boxes}["k"]
+        assert box["filename"] == names[0]
+        # editing the JS changes the hashed filename (auto cache-bust)
+        d2 = self._make()
+        d2.add_v8ui("k", [0, 0, 40, 40], js_code=js + "// edit\n", js_filename="k_knob.js",
+                    content_address=True, validate_contract=False)
+        n2 = next(n for n in d2._js_files if n.startswith("k_knob_"))
+        assert n2 != names[0]
+
+    def test_add_v8ui_without_content_address_keeps_filename(self):
+        d = self._make()
+        d.add_v8ui("k", [0, 0, 40, 40], js_code="function paint(){ mgraphics.init(); }",
+                   js_filename="stable.js", validate_contract=False)
+        assert "stable.js" in d._js_files          # exact name preserved (default off)
+
+    def test_add_gendsp_registers_content_addressed_file_and_wires_gen(self):
+        d = self._make()
+        code = "out1 = in1; out2 = in2;"
+        ref = d.add_gendsp("core", "heat_core", code, 2, 2, [80, 240, 200, 22])
+        # exactly one support file, registered under a <stem>_<hash>.gendsp name
+        names = [n for n in d._support_files if n.startswith("heat_core_")]
+        assert len(names) == 1
+        fname = names[0]
+        assert fname.endswith(".gendsp")
+        # the gen~ object references the SAME stem (no desync possible)
+        box = {b["box"]["id"]: b["box"] for b in d.boxes}[ref.id]
+        assert box["text"] == f"gen~ {fname[:-len('.gendsp')]}"
+        assert box["numinlets"] == 2 and box["numoutlets"] == 2
+        assert box["outlettype"] == ["signal", "signal"]
+        assert box["patching_rect"] == [80, 240, 200, 22]
+        # the file body is the full serialized gen patcher
+        assert json.loads(d._support_files[fname]["content"])["patcher"]["classnamespace"] == "dsp.gen"
+
+    def test_add_gendsp_recompiles_on_code_change_without_manual_bump(self):
+        # editing the DSP renames the support file AND the gen~ ref together — the
+        # whole point: Max sees a new filename and recompiles fresh (no _vNN bump).
+        d1 = self._make()
+        r1 = d1.add_gendsp("core", "k", "out1 = in1 * 0.5; out2 = in2;", 2, 2, [0, 0, 200, 22])
+        d2 = self._make()
+        r2 = d2.add_gendsp("core", "k", "out1 = in1 * 0.6; out2 = in2;", 2, 2, [0, 0, 200, 22])
+        f1 = next(n for n in d1._support_files if n.startswith("k_"))
+        f2 = next(n for n in d2._support_files if n.startswith("k_"))
+        assert f1 != f2                                       # new code -> new filename
+        t1 = {b["box"]["id"]: b["box"] for b in d1.boxes}[r1.id]["text"]
+        t2 = {b["box"]["id"]: b["box"] for b in d2.boxes}[r2.id]["text"]
+        assert t1 != t2                                       # gen~ ref tracks it
+
     def test_add_panel_returns_id(self):
         d = self._make()
         returned_id = d.add_panel("panel-bg", [0, 0, 400, 170],
@@ -340,6 +470,9 @@ class TestDevice:
         assert box["warmcolor"] == MIDNIGHT.meter_warm
         assert box["hotcolor"] == MIDNIGHT.meter_hot
         assert box["overloadcolor"] == MIDNIGHT.meter_over
+        # slidercolor = the recessed background rail (live.gain~ maxref); corpus sets it
+        # dark (~surface), so the channel matches the panel, not Live-default grey.
+        assert box["slidercolor"] == MIDNIGHT.surface
 
     def test_add_meter_without_theme_no_color_injection(self):
         d = self._make()
@@ -357,6 +490,184 @@ class TestDevice:
         box = d.boxes[0]["box"]
         assert box["coldcolor"] == custom
         assert box["warmcolor"] == WARM.meter_warm
+
+    def test_add_live_line_themes_linecolor(self):
+        # live.line divider: only linecolor; theme it to the subtle panel border.
+        d = Device("Test", 200, 120, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_live_line("ln1", [0, 0, 174, 6])
+        box = d.boxes[0]["box"]
+        assert box["linecolor"] == MIDNIGHT.panel_border
+
+    def test_add_live_text_themes_and_mirrors_active_twins(self):
+        # live.text colors must mirror to active* (active=1 is the visible state).
+        d = Device("Test", 200, 120, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_live_text("t1", "Bypass", [0, 0, 40, 15])
+        box = d.boxes[0]["box"]
+        assert box["bgcolor"] == MIDNIGHT.surface
+        assert box["activebgcolor"] == MIDNIGHT.surface       # mirrored
+        assert box["bgoncolor"] == MIDNIGHT.accent
+        assert box["activebgoncolor"] == MIDNIGHT.accent      # mirrored
+        assert box["activetextcolor"] == MIDNIGHT.text        # mirrored
+
+    def test_add_slider_themes_bare_slidercolor_not_active(self):
+        # live.slider has NO activeslidercolor — its fill is the bare slidercolor.
+        d = Device("Test", 200, 120, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_slider("s1", "Level", [0, 0, 18, 80])
+        box = d.boxes[0]["box"]
+        assert box["slidercolor"] == MIDNIGHT.dial_color
+        assert "activeslidercolor" not in box
+
+    def test_add_number_box_themes_active_slidercolor(self):
+        # live.numbox DOES have activeslidercolor (follows the active* rule).
+        d = Device("Test", 200, 120, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_number_box("n1", "Num", [0, 0, 44, 15])
+        box = d.boxes[0]["box"]
+        assert box["activeslidercolor"] == MIDNIGHT.dial_color
+
+    def test_add_lcd_numbox_themes_lcd_colors(self):
+        # appearance=4 LCD numbox auto-themes its lcd colors from the theme.
+        d = Device("Test", 200, 120, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_number_box("n1", "Freq", [0, 0, 44, 15], appearance=4)
+        box = d.boxes[0]["box"]
+        assert box["appearance"] == 4
+        assert box["lcdcolor"] == MIDNIGHT.lcd_on
+        assert box["lcdbgcolor"] == MIDNIGHT.lcd_bg
+        assert box["inactivelcdcolor"] == MIDNIGHT.lcd_off
+
+    def test_add_dial_with_theme_themes_ring_needle_and_triangle(self):
+        # The reset-triangle marker (tricolor) is now themed to the needle color
+        # so it isn't an off-theme Live-default dot on every knob.
+        d = Device("Test", 200, 120, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_dial("k1", "Amount", [0, 0, 44, 47])
+        box = d.boxes[0]["box"]
+        assert box["activedialcolor"] == MIDNIGHT.dial_color
+        assert box["activeneedlecolor"] == MIDNIGHT.needle_color
+        assert box["tricolor"] == MIDNIGHT.needle_color
+
+    def test_add_live_gain_with_theme_injects_meter_and_handle_colors(self):
+        # Meter segments use the BARE attrs (inverted rule); the drag-triangle
+        # handle (tricolor/trioncolor) themes to the accent so it isn't Live-grey.
+        d = Device("Test", 200, 120, device_type="audio_effect", theme=MIDNIGHT)
+        d.add_live_gain("lg1", "Output", [0, 0, 30, 100])
+        box = d.boxes[0]["box"]
+        assert box["coldcolor"] == MIDNIGHT.meter_cold
+        assert box["overloadcolor"] == MIDNIGHT.meter_over
+        assert box["tricolor"] == MIDNIGHT.dial_color
+        assert box["trioncolor"] == MIDNIGHT.dial_color
+
+    def test_add_bpatcher_module_embeds_presentation_subpatch(self):
+        from m4l_builder.subpatcher import Subpatcher
+        sub = Subpatcher("dsp_mod")
+        sub.add_newobj("in0", "inlet", numinlets=0, numoutlets=1)
+        sub.add_newobj("gain", "*~ 0.5", numinlets=2, numoutlets=1)
+        d = self._make()
+        d.add_bpatcher_module(sub, "bp1", [0, 0, 174, 167], name="dsp.maxpat",
+                              numinlets=2, numoutlets=2, outlettype=["signal", "signal"])
+        box = d.boxes[-1]["box"]
+        assert box["maxclass"] == "bpatcher"
+        assert box["embed"] == 1
+        assert box["presentation"] == 1
+        assert box["presentation_rect"] == [0, 0, 174, 167]
+        assert box["viewvisibility"] == 1
+        assert box["name"] == "dsp.maxpat"
+        assert box["outlettype"] == ["signal", "signal"]
+        # the embedded sub-patch is in presentation mode and carries its boxes
+        assert box["patcher"]["openinpresentation"] == 1
+        assert len(box["patcher"]["boxes"]) == 2
+
+    def test_add_theme_bus_distributor_and_receivers(self):
+        d = self._make()
+        d.add_newobj("mydial", "live.dial", numinlets=1, numoutlets=1)
+        res = d.add_theme_bus(
+            [("lcd_control_fg", "activedialcolor", "dialcol"),
+             ("lcd_bg", "bgcolor", "bgcol")],
+            targets={"dialcol": ["mydial"]},
+        )
+        texts = {b["box"].get("text") for b in d.boxes if b["box"].get("text")}
+        # ONE shared live.thisdevice + live.colors distributor
+        assert "live.thisdevice" in texts and "live.colors" in texts
+        # per-spec broadcast (route + prepend + send), and the control's receiver
+        assert "s ---dialcol" in texts and "s ---bgcol" in texts
+        assert "prepend activedialcolor" in texts
+        assert "r ---dialcol" in texts
+        # the receiver is wired into the control
+        pairs = {
+            (ln["patchline"]["source"][0], ln["patchline"]["destination"][0])
+            for ln in d.lines
+        }
+        assert any(s.startswith("ltheme_rxdialcol") and dst == "mydial"
+                   for s, dst in pairs)
+        # the follow-live flag + the returned bus names
+        assert d.theme_follow_live is True
+        assert res["buses"] == ["dialcol", "bgcol"]
+
+    def test_add_theme_bus_no_targets_is_just_the_distributor(self):
+        d = self._make()
+        res = d.add_theme_bus([("surface_bg", "bgcolor", "bg")], follow_live=False)
+        texts = {b["box"].get("text") for b in d.boxes if b["box"].get("text")}
+        assert "live.colors" in texts and "s ---bg" in texts
+        assert "r ---bg" not in texts          # no receivers without targets
+        assert d.theme_follow_live is False
+        assert res["colors"] == "ltheme_colors"
+
+    def test_paint_control_sets_jspainterfile_and_bundles_asset(self):
+        from m4l_builder.engines.painters import lcd_panel_painter_js
+        d = self._make()
+        d.add_dial("vol", "Volume", [10, 10, 40, 40])
+        js = lcd_panel_painter_js(40, 40, bg=[0.1, 0.12, 0.1, 1.0],
+                                  border=[0.3, 0.8, 0.84, 1.0])
+        ret = d.paint_control("vol", "lcd_vol.js", painter_js=js)
+        assert ret == "lcd_vol.js"
+        # the native control keeps parameter storage; the .js only paints it
+        box = next(b["box"] for b in d.boxes if b["box"]["id"] == "vol")
+        assert box["jspainterfile"] == "lcd_vol.js"
+        assert box["parameter_enable"] == 1
+        # the painter is bundled as a TEXT sidecar asset
+        asset = d.asset("lcd_vol.js")
+        assert asset is not None and asset.asset_type == "TEXT"
+        assert "function paint()" in asset.content
+
+    def test_paint_control_unknown_box_raises(self):
+        import pytest
+        d = self._make()
+        with pytest.raises(KeyError):
+            d.paint_control("nope", "x.js")
+
+    def test_paint_control_without_js_only_sets_attr(self):
+        d = self._make()
+        d.add_dial("cut", "Cutoff", [0, 0, 40, 40])
+        d.paint_control("cut", "shared_painter.js")   # asset bundled elsewhere
+        box = next(b["box"] for b in d.boxes if b["box"]["id"] == "cut")
+        assert box["jspainterfile"] == "shared_painter.js"
+        assert d.asset("shared_painter.js") is None
+
+    def test_add_init_ring_deferred_staged_broadcast(self):
+        d = self._make()
+        res = d.add_init_ring(stages=("dspInit", "uiInit", "startBang"))
+        texts = {b["box"].get("text") for b in d.boxes if b["box"].get("text")}
+        # live.thisdevice -> deferlow -> t b b b -> one ---<stage> send each
+        assert "live.thisdevice" in texts
+        assert "deferlow" in texts
+        assert "t b b b" in texts
+        assert "s ---dspInit" in texts and "s ---startBang" in texts
+        pairs = {
+            (ln["patchline"]["source"][0], ln["patchline"]["source"][1],
+             ln["patchline"]["destination"][0])
+            for ln in d.lines
+        }
+        assert ("initring_thisdev", 0, "initring_defer") in pairs
+        # stages[0] (dspInit, s0) hangs off the RIGHTMOST t outlet (fires first)
+        assert ("initring_seq", 2, "initring_s0") in pairs
+        assert ("initring_seq", 0, "initring_s2") in pairs
+        assert res["stages"] == ["dspInit", "uiInit", "startBang"]
+
+    def test_add_init_ring_without_defer_skips_deferlow(self):
+        d = self._make()
+        res = d.add_init_ring(stages=("go",), defer=False)
+        texts = {b["box"].get("text") for b in d.boxes if b["box"].get("text")}
+        assert "deferlow" not in texts
+        assert "s ---go" in texts
+        assert res["deferlow"] is None
 
     def test_add_newobj_returns_id(self):
         d = self._make()
@@ -789,7 +1100,7 @@ class TestValidate:
     """Tests for Device.validate()."""
 
     def test_clean_device_returns_empty(self):
-        fx = AudioEffect("FX", 400, 170)
+        fx = AudioEffect("FX", 400, 168)
         # Wire plugin to plugout so nothing is orphaned
         fx.add_line("obj-plugin", 0, "obj-plugout", 0)
         fx.add_line("obj-plugin", 1, "obj-plugout", 1)
@@ -829,6 +1140,20 @@ class TestValidate:
         warnings = d.validate()
         assert any("Orphan" in w and "obj-lonely" in w for w in warnings)
 
+    def test_decoration_boxes_not_flagged_as_orphans(self):
+        # panels/comments/dividers/images are pure decoration — never patched — so
+        # they must NOT be reported as orphans (that noise buries a real unwired box)
+        d = Device("Test", 400, 168)
+        d.add_panel("bg", [0, 0, 400, 168], bgcolor=[0, 0, 0, 1])
+        d.add_comment("title", "Hello", [10, 6, 80, 12])
+        d.boxes.append({"box": {"id": "rule", "maxclass": "live.line"}})
+        d.boxes.append({"box": {"id": "logo", "maxclass": "fpic"}})
+        orphan_ids = {i.box_id for i in d.lint() if i.code == "orphan-box"}
+        assert orphan_ids.isdisjoint({"bg", "title", "rule", "logo"})
+        # but a genuinely unwired FUNCTIONAL object IS still caught
+        d.boxes.append({"box": {"id": "dead", "maxclass": "newobj", "text": "+ 1"}})
+        assert "dead" in {i.box_id for i in d.lint() if i.code == "orphan-box"}
+
     def test_instrument_no_plugin_warning(self):
         inst = Instrument("Synth", 400, 170)
         warnings = inst.validate()
@@ -846,7 +1171,8 @@ class TestParameterBanks:
         banks = patcher["patcher"]["parameters"]["parameterbanks"]
         assert "0" in banks
         params = banks["0"]["parameters"]
-        assert any(p["name"] == "Gain" for p in params)
+        # Live shape: flat 8-slot longname list, "-" for empty slots.
+        assert params == ["Gain", "-", "-", "-", "-", "-", "-", "-"]
 
     def test_multiple_params_same_bank(self):
         d = Device("Test", 400, 170)
@@ -854,9 +1180,9 @@ class TestParameterBanks:
         d.assign_parameter_bank("Pan", bank=0, position=1)
         patcher = d.to_patcher()
         params = patcher["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
-        names = [p["name"] for p in params]
-        assert "Gain" in names
-        assert "Pan" in names
+        assert len(params) == 8
+        assert params[0] == "Gain"
+        assert params[1] == "Pan"
 
     def test_different_banks(self):
         d = Device("Test", 400, 170)
@@ -880,7 +1206,7 @@ class TestParameterBanks:
         d.assign_parameter_bank("Mix", bank=0, position=0)
         output = json.loads(d.to_json())
         params = output["patcher"]["parameters"]["parameterbanks"]["0"]["parameters"]
-        assert any(p["name"] == "Mix" for p in params)
+        assert "Mix" in params
 
     def test_bank_name_can_be_assigned_inline(self):
         d = Device("Test", 400, 170)
@@ -944,3 +1270,64 @@ class TestFromAmxd:
 
         loaded = Device.from_amxd(path)
         assert loaded.device_type == "instrument"
+
+
+class TestLcdPanelPainter:
+    """C1 render-only jspainterfile painter (engines.painters.lcd_panel_painter_js)."""
+
+    def test_is_balanced_es5_render_only(self):
+        from m4l_builder.engines.painters import lcd_panel_painter_js
+        js = lcd_panel_painter_js(60, 24, bg=[0.1, 0.1, 0.12, 1.0])
+        assert js.count("{") == js.count("}")
+        assert "mgraphics.init();" in js and "function paint()" in js
+        assert "const " not in js and "let " not in js and "=>" not in js
+        # dimensions baked in (no runtime size query)
+        assert "rectangle_rounded(0, 0, 60, 24" in js
+
+    def test_border_is_optional(self):
+        from m4l_builder.engines.painters import lcd_panel_painter_js
+        assert "stroke();" not in lcd_panel_painter_js(40, 40, bg=[0, 0, 0, 1])
+        assert "stroke();" in lcd_panel_painter_js(40, 40, bg=[0, 0, 0, 1],
+                                                   border=[1, 1, 1, 1])
+
+
+class TestLcdDialPainter:
+    """Original jspainterfile dial painter (engines.painters.lcd_dial_painter_js)."""
+
+    def test_is_balanced_es5_value_reader(self):
+        from m4l_builder.engines.painters import lcd_dial_painter_js
+        js = lcd_dial_painter_js()
+        assert js.count("{") == js.count("}")
+        assert js.count("(") == js.count(")")
+        assert "function paint()" in js and "mgraphics.init();" in js
+        # ES5-safe (jsui runs ES5)
+        assert "const " not in js and "let " not in js and "=>" not in js
+        # reads the host control's live value + range (the reusable technique)
+        assert "box.getvalueof()" in js
+        assert 'box.getattr("_parameter_range")' in js
+        assert "mgraphics.arc(" in js   # the swept value arc
+
+    def test_themes_from_active_dial_color(self):
+        from m4l_builder.engines.painters import lcd_dial_painter_js
+        js = lcd_dial_painter_js()
+        assert 'box.getattr("activedialcolor")' in js
+
+
+class TestLcdSliderPainter:
+    """Original jspainterfile slider painter (engines.painters.lcd_slider_painter_js)."""
+
+    def test_is_balanced_es5_value_reader(self):
+        from m4l_builder.engines.painters import lcd_slider_painter_js
+        js = lcd_slider_painter_js()
+        assert js.count("{") == js.count("}")
+        assert js.count("(") == js.count(")")
+        assert "function paint()" in js and "box.getvalueof()" in js
+        assert "const " not in js and "let " not in js and "=>" not in js
+        # auto-orients vertical/horizontal + draws a groove + fill + handle
+        assert "var vert = h >= w" in js
+        assert "rectangle_rounded" in js
+
+    def test_accent_bakes_in(self):
+        from m4l_builder.engines.painters import lcd_slider_painter_js
+        js = lcd_slider_painter_js(accent="0.9, 0.7, 0.2")
+        assert "0.9, 0.7, 0.2" in js

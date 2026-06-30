@@ -132,7 +132,8 @@ class TestEqCurveGestures:
             var snap1 = analyzer_snapshot.length, en_empty = bands[0].enabled;
             onpointerdown({x: ex, y: ey, buttons: 1, altKey: 1});   // clears
             var snap2 = analyzer_snapshot.length;
-            onpointerdown({x: freq_to_x(1000.0), y: gain_to_y(6.0), buttons: 1, altKey: 1});  // the node
+            onpointerdown({x: freq_to_x(1000.0), y: gain_to_y(6.0), buttons: 1, altKey: 1});  // the node (arms)
+            onpointerup({x: freq_to_x(1000.0), y: gain_to_y(6.0), buttons: 0});               // tap -> toggles bypass
             dump({snap1: snap1, en_empty: en_empty, snap2: snap2,
                   snap3: analyzer_snapshot.length, en_node: bands[0].enabled});
         """)
@@ -302,10 +303,11 @@ class TestEqCurveGestures:
             set_band(1, 800.0, 3.0, 1.0, 0, 1);
             var nx = freq_to_x(800.0);
             var ny = gain_to_y(3.0);
-            onpointerdown({x: nx, y: ny, buttons: 1, altKey: 1});
+            onpointerdown({x: nx, y: ny, buttons: 1, altKey: 1});  // arm
+            onpointerup({x: nx, y: ny, buttons: 0});               // tap -> disables (Pro-Q Alt+click)
             var first = bands[1].enabled;
-            onpointerup({x: nx, y: ny, buttons: 0});
-            onpointerdown({x: nx, y: ny, buttons: 1, altKey: 1});
+            onpointerdown({x: nx, y: ny, buttons: 1, altKey: 1});  // arm
+            onpointerup({x: nx, y: ny, buttons: 0});               // tap -> re-enables
             dump({first: first, second: bands[1].enabled,
                   present: bands[1].present});
         """)
@@ -314,6 +316,40 @@ class TestEqCurveGestures:
         assert result.state["second"] == 1, "second opt-click re-enables"
         enables = _named(result.outlets, "band_enable")
         assert [e[2:] for e in enables] == [[1, 0], [1, 1]]
+
+    def test_alt_drag_constrains_to_dominant_axis(self):
+        # Pro-Q: Alt+DRAG locks to ONE axis by the dominant initial travel. A
+        # horizontal-dominant alt-drag moves only frequency (gain held even though
+        # the cursor also moved vertically); a vertical-dominant one moves only gain
+        # (freq held). Neither toggles bypass (that's the Alt+CLICK tap).
+        result = run_jsui(eq_curve_js(), """
+            set_num_bands(8);
+            set_band(0, 1000.0, 6.0, 1.0, 0, 1);
+            // horizontal-dominant: big x travel, small y travel -> freq-only
+            onpointerdown({x: freq_to_x(1000.0), y: gain_to_y(6.0), buttons: 1, altKey: 1});
+            onpointermove({x: freq_to_x(4000.0), y: gain_to_y(7.0), buttons: 1, altKey: 1});
+            onpointermove({x: freq_to_x(8000.0), y: gain_to_y(9.0), buttons: 1, altKey: 1});
+            onpointerup({x: freq_to_x(8000.0), y: gain_to_y(9.0), buttons: 0});
+            var hfreq = bands[0].freq, hgain = bands[0].gain, henab = bands[0].enabled;
+
+            set_band(1, 1000.0, 0.0, 1.0, 0, 1);
+            // vertical-dominant: small x travel, big y travel -> gain-only
+            onpointerdown({x: freq_to_x(1000.0), y: gain_to_y(0.0), buttons: 1, altKey: 1});
+            onpointermove({x: freq_to_x(1030.0), y: gain_to_y(6.0), buttons: 1, altKey: 1});
+            onpointermove({x: freq_to_x(1080.0), y: gain_to_y(10.0), buttons: 1, altKey: 1});
+            onpointerup({x: freq_to_x(1080.0), y: gain_to_y(10.0), buttons: 0});
+            var vfreq = bands[1].freq, vgain = bands[1].gain, venab = bands[1].enabled;
+            dump({hfreq: hfreq, hgain: hgain, henab: henab,
+                  vfreq: vfreq, vgain: vgain, venab: venab});
+        """)
+        # horizontal lock: freq swept up, gain HELD at ~6 dB despite vertical travel
+        assert result.state["hfreq"] > 2000.0, "alt-drag horizontal moves frequency"
+        assert abs(result.state["hgain"] - 6.0) < 0.5, "gain held during a horizontal alt-drag"
+        assert result.state["henab"] == 1, "alt-DRAG must NOT toggle bypass"
+        # vertical lock: gain swept up, freq HELD at ~1 kHz despite horizontal travel
+        assert result.state["vgain"] > 4.0, "alt-drag vertical moves gain"
+        assert abs(result.state["vfreq"] - 1000.0) < 80.0, "freq held during a vertical alt-drag"
+        assert result.state["venab"] == 1, "alt-DRAG must NOT toggle bypass"
 
     def test_wheel_adjusts_q_and_emits(self):
         result = run_jsui(eq_curve_js(), """

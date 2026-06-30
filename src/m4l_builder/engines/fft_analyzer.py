@@ -134,7 +134,8 @@ def fft_analyzer_dsp(
     """Wire a ``pfft~`` analyzer from ``source_id`` for ``target_id`` to poll.
 
     Emits the kernel support file, instantiates ``pfft~`` writing magnitudes
-    into a device-local ``buffer~``, and tells the consumer where to look via
+    into a named ``buffer~`` (see the ⚠️ collision caveat at ``buffer_name`` below),
+    and tells the consumer where to look via
     ``<announce_selector> <name> <bins>`` at load (default
     ``set_analyzer_buffer``; pass ``announce_selector="set_dyn_buffer"`` for a
     second, detector-only analyzer that drives a dynamic detector instead of the
@@ -151,6 +152,16 @@ def fft_analyzer_dsp(
     kernel_filename = kernel_filename or f"{id_prefix}_analyzer_core.maxpat"
     stem = kernel_filename[:-len(".maxpat")] if kernel_filename.endswith(".maxpat") else kernel_filename
     bins = fft_size // 2
+    # ⚠️ COLLISION CAVEAT (Live-verified 2026-06): this is a FIXED, GLOBAL buffer~
+    # name — NOT per-instance-unique. buffer~ names are global across the Max app,
+    # so TWO instances of the same device (e.g. after duplicate_track, or two copies
+    # in a Set) both bind "<id_prefix>_specbuf"; deleting one leaves the survivor's
+    # analyzer DEAD (spectrum draws empty though audio is loud). Reload fixes it.
+    # PROPER FIX (tracked): make this per-instance-unique like Rainbow's
+    # DEVICE_UNIQUE_ID+name — a "#0" patcher-instance prefix, or a live.thisdevice/
+    # LOM-derived suffix set at load. Needs grounding (#0 in an M4L root) + a
+    # duplication Live-verify across ALL devices that call this (Para EQ, Linear
+    # Phase EQ, Strip), so it's a focused task, not an in-line change.
     buffer_name = f"{id_prefix}_specbuf"
     device.add_support_file(
         kernel_filename,

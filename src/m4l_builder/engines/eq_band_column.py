@@ -73,6 +73,7 @@ def eq_band_column_js(
     show_header=True,
     show_frame=True,
     force_regular_layout=False,
+    horizontal=False,
     bg_color="0.09, 0.10, 0.12, 1.0",
     panel_color="0.08, 0.09, 0.11, 1.0",
     border_color="0.18, 0.20, 0.24, 1.0",
@@ -114,6 +115,7 @@ def eq_band_column_js(
         show_header="1" if show_header else "0",
         show_frame="1" if show_frame else "0",
         force_regular_layout="1" if force_regular_layout else "0",
+        horizontal="1" if horizontal else "0",
         bg_color=bg_color,
         panel_color=panel_color,
         border_color=border_color,
@@ -157,6 +159,7 @@ var SHOW_TOGGLE_STACK = $show_toggle_stack;
 var SHOW_HEADER = $show_header;
 var SHOW_FRAME = $show_frame;
 var FORCE_REGULAR_LAYOUT = $force_regular_layout;
+var HORIZONTAL = $horizontal;
 
 var BG_COLOR = [$bg_color];
 var PANEL_COLOR = [$panel_color];
@@ -350,6 +353,18 @@ function knob_defs(band) {
     var h = mgraphics.size[1];
     var center_x = SHOW_TYPE_CONTROLS ? Math.floor(w * 0.5) : (SHOW_TOGGLE_STACK ? Math.floor(w * 0.41) : Math.floor(w * 0.5));
     var motion_pad = 0;
+    if (HORIZONTAL) {
+        // Three knobs in a ROW (EQ8 bottom-strip style): each owns a width-third,
+        // name label above + value below, vertically centered with room for both.
+        var hcell = w / 3.0;
+        var hrad = Math.max(9, Math.min(13, Math.floor(Math.min(hcell * 0.22, (h - 22) * 0.5))));
+        var hcy = Math.floor(h * 0.5) + 2;
+        return [
+            {key: "freq",  label: "FREQ", cx: Math.floor(hcell * 0.5), cy: hcy, radius: hrad},
+            {key: "gain",  label: "GAIN", cx: Math.floor(hcell * 1.5), cy: hcy, radius: hrad},
+            {key: "q_alt", label: "Q",    cx: Math.floor(hcell * 2.5), cy: hcy, radius: hrad}
+        ];
+    }
     if (uses_minimal_rail_layout()) {
         // Three knobs split the column into equal thirds. Radius is bounded so
         // the name label (cy - r - 9) and value label (cy + r + 7) both stay
@@ -906,6 +921,15 @@ function emit_value(control, value) {
         return;
     }
 }
+
+// Native-dial edit bridge: a real live.dial in the device (FREQ/GAIN/Q for the
+// SELECTED band) sends "set_dial_freq <v>" / "set_dial_gain <v>" / "set_dial_q <v>".
+// Route it through emit_value so the band updates exactly like a graph drag (the
+// selected_band index is owned here). The band param echoes set_band back, which
+// re-syncs the dial via emit_selected_sync (sent to the dial as "set" = no echo).
+function set_dial_freq(v) { emit_value("freq", v); }
+function set_dial_gain(v) { emit_value("gain", v); }
+function set_dial_q(v) { emit_value("q", v); }
 
 function apply_type_change(next_type) {
     var band = current_band();

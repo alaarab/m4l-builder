@@ -1,5 +1,6 @@
 """Theme system for coordinated M4L device styling."""
 
+import colorsys
 from dataclasses import dataclass
 from typing import Optional
 
@@ -36,8 +37,19 @@ class Theme:
     text: list[float]      # Primary text
     text_dim: list[float]  # Secondary/label text
 
-    # Accent (ONE color that means "active/selected")
+    # Accent (the PRIMARY color that means "active/selected")
     accent: list[float]
+
+    # Second accent — the SELECTION/secondary color (Rupture's pink-on-cyan).
+    # Two-accent devices read far more premium than one-accent ones. Defaults to
+    # accent (single-accent) when omitted.
+    accent2: Optional[list[float]] = None
+
+    # v8ui panel gradient (the ui_kit premium top-lit panel_bg). Derived from
+    # surface (top, lit) and bg (bottom) when omitted.
+    panel_hi: Optional[list[float]] = None
+    panel_lo: Optional[list[float]] = None
+    panel_border: Optional[list[float]] = None
 
     # Font
     fontname: str = "Ableton Sans Medium"
@@ -67,15 +79,43 @@ class Theme:
     spectrum_color: Optional[list[float]] = None  # Spectrum fill/line (neutral grey)
     grid_color: Optional[list[float]] = None      # Graph grid lines
 
+    # LCD numbox/readout colors (appearance=4 — the dominant premium numbox look)
+    lcd_on: Optional[list[float]] = None    # lcdcolor — the lit digit
+    lcd_bg: Optional[list[float]] = None    # lcdbgcolor — the dark readout field
+    lcd_off: Optional[list[float]] = None   # inactivelcdcolor — dim/unlit segments
+
     def __post_init__(self):
+        if self.accent2 is None:
+            self.accent2 = list(self.accent)
+        if self.panel_lo is None:
+            self.panel_lo = [self.bg[0], self.bg[1], self.bg[2], 1.0]
+        if self.panel_hi is None:
+            self.panel_hi = [min(self.surface[0] + 0.03, 1.0),
+                             min(self.surface[1] + 0.03, 1.0),
+                             min(self.surface[2] + 0.03, 1.0), 1.0]
+        if self.panel_border is None:
+            self.panel_border = alpha(self.text_dim, 0.5)
         if self.dial_color is None:
             self.dial_color = list(self.accent)
         if self.needle_color is None:
             self.needle_color = list(self.text)
+        if self.lcd_bg is None:
+            # a dark recessed readout field, slightly darker than the panel bg
+            self.lcd_bg = [max(self.bg[0] - 0.03, 0.0),
+                           max(self.bg[1] - 0.03, 0.0),
+                           max(self.bg[2] - 0.03, 0.0), 1.0]
+        if self.lcd_on is None:
+            self.lcd_on = list(self.accent)            # lit digits = the accent
+        if self.lcd_off is None:
+            self.lcd_off = alpha(self.text_dim, 0.35)  # dim unlit segments
         if self.tab_bg is None:
             self.tab_bg = list(self.surface)
         if self.tab_bg_on is None:
-            self.tab_bg_on = list(self.accent)
+            # Two-accent premium: the SELECTED tab uses accent2 (the selection
+            # color, Rupture's pink-on-cyan), the primary accent stays for dials/
+            # bars. Single-accent themes set accent2 == accent above, so they are
+            # visually unchanged; only a distinct-accent2 theme gets the second hue.
+            self.tab_bg_on = list(self.accent2)
         if self.tab_text is None:
             self.tab_text = list(self.text_dim)
         if self.tab_text_on is None:
@@ -105,6 +145,34 @@ class Theme:
             'warmcolor': self.meter_warm,
             'hotcolor': self.meter_hot,
             'overloadcolor': self.meter_over,
+        }
+
+    def accent_str(self) -> str:
+        """Primary accent as a ``"r, g, b"`` string (custom-control accent kwarg)."""
+        return js_color(self.accent[:3])
+
+    def accent2_str(self) -> str:
+        """Selection accent as a ``"r, g, b"`` string (two-accent devices)."""
+        return js_color((self.accent2 or self.accent)[:3])
+
+    def panel_bg_kwargs(self) -> dict:
+        """Kwargs for ``ui_kit.panel_bg_js`` — a premium top-lit panel in this palette."""
+        return {
+            'lo': js_color(self.panel_lo),
+            'hi': js_color(self.panel_hi),
+            'border': js_color(self.panel_border),
+        }
+
+    def knob_bg_args(self, device_height, inset: float = 4.0) -> dict:
+        """Kwargs for ``Device.add_custom_knob`` so a knob's self-painted
+        background matches this palette's panel gradient (seamless, no object box)."""
+        hi = self.panel_hi or self.surface
+        lo = self.panel_lo or self.bg
+        return {
+            'bg_hi': [hi[0], hi[1], hi[2]],
+            'bg_lo': [lo[0], lo[1], lo[2]],
+            'device_height': device_height,
+            'inset': inset,
         }
 
     def scope_kwargs(self) -> dict:
@@ -201,6 +269,34 @@ class Theme:
         )
         defaults.update(overrides)
         return cls(**defaults)
+
+
+# Hue rotations (fraction of the wheel) for the standard accent-pair schemes.
+_SCHEME_ROTATION = {
+    "complementary": 0.5,        # 180° — max contrast (the premium default)
+    "split": 150.0 / 360.0,      # 150° — softer than complementary
+    "triadic": 120.0 / 360.0,    # 120°
+    "analogous": 30.0 / 360.0,   # 30°  — harmonious, low contrast
+}
+
+
+def derive_palette(accent, *, scheme="complementary", bg=None, surface=None):
+    """Derive a premium TWO-accent dark :class:`Theme` from a single accent (B2).
+
+    ``accent2`` is the accent hue-rotated by the ``scheme`` amount (complementary =
+    180°, split = 150°, triadic = 120°, analogous = 30°) in HLS space, preserving
+    the accent's lightness and saturation so the pair reads balanced. Two-accent
+    devices look far more premium than one-accent ones. ``bg`` / ``surface`` pass
+    through to :meth:`Theme.from_accent` (derived from the accent if omitted).
+    """
+    r, g, b = accent[0], accent[1], accent[2]
+    a = accent[3] if len(accent) > 3 else 1.0
+    h, light, s = colorsys.rgb_to_hls(r, g, b)
+    rot = _SCHEME_ROTATION.get(scheme, 0.5)
+    r2, g2, b2 = colorsys.hls_to_rgb((h + rot) % 1.0, light, s)
+    theme = Theme.from_accent(list(accent), bg=bg, surface=surface)
+    theme.accent2 = [r2, g2, b2, a]
+    return theme
 
 
 MIDNIGHT = Theme(
@@ -336,3 +432,93 @@ INDUSTRIAL = Theme(
     meter_hot=[0.92, 0.42, 0.08, 1.0],
     meter_over=[0.90, 0.15, 0.10, 1.0],
 )
+
+# ── Two-accent palettes (the diversity set — each device picks its OWN) ───────
+# Primary + selection accent, distinct bg character. Built for the PRO UI kit so
+# no two devices share the copy-pasted 5-constant block. accent = primary draw
+# color; accent2 = selection/secondary (Rupture's pink-on-cyan idea).
+
+RUPTURE = Theme(  # deep navy, cyan primary + pink selection (the Rupture bar)
+    bg=[0.052, 0.062, 0.082, 1.0],
+    surface=[0.085, 0.10, 0.13, 1.0],
+    section=[0.11, 0.13, 0.17, 1.0],
+    text=[0.80, 0.85, 0.92, 1.0],
+    text_dim=[0.42, 0.47, 0.56, 1.0],
+    accent=[0.30, 0.80, 0.86, 1.0],
+    accent2=[0.92, 0.40, 0.62, 1.0],
+    meter_cold=[0.28, 0.72, 0.78, 1.0],
+    meter_warm=[0.55, 0.62, 0.80, 1.0],
+    meter_hot=[0.85, 0.45, 0.62, 1.0],
+    meter_over=[0.90, 0.22, 0.30, 1.0],
+)
+
+TAPELEAP = Theme(  # near-pure black, hot orange + crimson (the TapeLeap bar)
+    bg=[0.014, 0.014, 0.017, 1.0],
+    surface=[0.040, 0.040, 0.046, 1.0],
+    section=[0.070, 0.070, 0.078, 1.0],
+    text=[0.88, 0.86, 0.82, 1.0],
+    text_dim=[0.46, 0.45, 0.42, 1.0],
+    accent=[0.96, 0.56, 0.16, 1.0],
+    accent2=[0.90, 0.22, 0.26, 1.0],
+    meter_cold=[0.55, 0.55, 0.30, 1.0],
+    meter_warm=[0.85, 0.62, 0.18, 1.0],
+    meter_hot=[0.92, 0.40, 0.12, 1.0],
+    meter_over=[0.90, 0.18, 0.16, 1.0],
+)
+
+AMBER = Theme(  # warm charcoal, amber primary + teal selection
+    bg=[0.060, 0.057, 0.050, 1.0],
+    surface=[0.105, 0.097, 0.082, 1.0],
+    section=[0.140, 0.130, 0.110, 1.0],
+    text=[0.92, 0.88, 0.80, 1.0],
+    text_dim=[0.54, 0.50, 0.42, 1.0],
+    accent=[0.94, 0.70, 0.26, 1.0],
+    accent2=[0.28, 0.78, 0.74, 1.0],
+    meter_cold=[0.30, 0.72, 0.62, 1.0],
+    meter_warm=[0.82, 0.72, 0.22, 1.0],
+    meter_hot=[0.90, 0.48, 0.12, 1.0],
+    meter_over=[0.88, 0.20, 0.14, 1.0],
+)
+
+NEON = Theme(  # black, lime primary + magenta selection
+    bg=[0.030, 0.034, 0.030, 1.0],
+    surface=[0.060, 0.068, 0.060, 1.0],
+    section=[0.090, 0.100, 0.090, 1.0],
+    text=[0.86, 0.92, 0.84, 1.0],
+    text_dim=[0.46, 0.52, 0.46, 1.0],
+    accent=[0.66, 0.94, 0.26, 1.0],
+    accent2=[0.94, 0.26, 0.74, 1.0],
+    meter_cold=[0.50, 0.85, 0.30, 1.0],
+    meter_warm=[0.78, 0.82, 0.20, 1.0],
+    meter_hot=[0.90, 0.45, 0.55, 1.0],
+    meter_over=[0.92, 0.18, 0.40, 1.0],
+)
+
+# Two-accent set on an existing palette (cyan + magenta).
+SYNTHWAVE.accent2 = [0.92, 0.18, 0.62, 1.0]
+
+STRANULAR = Theme(  # violet + cyan (+ amber meters) — colors lifted from stranular
+    bg=[0.055, 0.050, 0.072, 1.0],
+    surface=[0.092, 0.084, 0.118, 1.0],
+    section=[0.125, 0.114, 0.158, 1.0],
+    text=[0.96, 0.98, 0.89, 1.0],        # stranular's near-white text
+    text_dim=[0.52, 0.50, 0.58, 1.0],
+    accent=[0.70, 0.42, 0.89, 1.0],      # stranular violet (its primary, 9 uses)
+    accent2=[0.43, 0.83, 1.0, 1.0],      # stranular cyan (its secondary, 7 uses)
+    meter_cold=[0.43, 0.83, 1.0, 1.0],   # cyan
+    meter_warm=[0.96, 0.83, 0.16, 1.0],  # stranular yellow
+    meter_hot=[1.0, 0.71, 0.20, 1.0],    # stranular amber (its 3rd accent)
+    meter_over=[0.90, 0.22, 0.26, 1.0],
+)
+
+# Registry of the distinct two-accent palettes for iteration / pick-by-name.
+PALETTES = {
+    'rupture': RUPTURE,
+    'tapeleap': TAPELEAP,
+    'amber': AMBER,
+    'neon': NEON,
+    'synthwave': SYNTHWAVE,
+    'violet': VIOLET,
+    'industrial': INDUSTRIAL,
+    'stranular': STRANULAR,
+}

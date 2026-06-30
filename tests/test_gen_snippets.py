@@ -16,6 +16,7 @@ from m4l_builder.gen_snippets import (
     dynamics_band,
     exciter_harmonics,
     exp_pole,
+    grain_window_lookup,
     hardclip_adaa,
     isp_catmull_4x,
     kweight_coeffs_bs1770,
@@ -26,6 +27,7 @@ from m4l_builder.gen_snippets import (
     ms_mode_merge,
     ms_mode_split,
     ms_width,
+    ms_width_equal_power,
     multiband_split,
     one_pole_coeff,
     one_pole_hp,
@@ -1574,3 +1576,37 @@ def test_kweight_lufs_tracks_level_in_db():
     assert 15.0 < (lufs_loud - lufs_quiet) < 25.0
     # a near-full-scale 1 kHz sine sits in a sane LUFS range.
     assert -6.0 < lufs_loud < 6.0
+
+
+def _run_sqrt(code, **vars):
+    from math import sqrt
+    ns = {"sqrt": sqrt}
+    ns.update(vars)
+    exec(code, ns)
+    return ns
+
+
+def test_ms_width_equal_power_neutral_at_half():
+    ns = _run_sqrt(ms_width_equal_power("L", "R", "Lo", "Ro", "W"), L=0.61, R=-0.27, W=0.5)
+    assert abs(ns["Lo"] - 0.61) < 1e-12
+    assert abs(ns["Ro"] - (-0.27)) < 1e-12
+
+
+def test_ms_width_equal_power_zero_is_mono():
+    ns = _run_sqrt(ms_width_equal_power("L", "R", "Lo", "Ro", "W"), L=0.6, R=-0.2, W=0.0)
+    assert abs(ns["Lo"] - 0.4) < 1e-12   # both channels -> (L+R)
+    assert abs(ns["Ro"] - 0.4) < 1e-12
+
+
+def test_grain_window_lookup_normalized_phase_idiom():
+    # the verbatim stranular idiom: index="phase" (0..1) + interp="linear"
+    snip = grain_window_lookup("pCoutScaled", chan='peek(data_winPokedIndex, 0, i)')
+    assert snip == (
+        'win = peek(buf_win, pCoutScaled, peek(data_winPokedIndex, 0, i), '
+        'index="phase", interp="linear");'
+    )
+
+
+def test_grain_window_lookup_custom_buffer_and_out():
+    snip = grain_window_lookup("ph", buf="buf_hann", chan="0", out="g")
+    assert snip == 'g = peek(buf_hann, ph, 0, index="phase", interp="linear");'

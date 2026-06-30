@@ -8,12 +8,15 @@ from m4l_builder.theme import (
     LIGHT,
     LOFI,
     MIDNIGHT,
+    PALETTES,
     SOLAR,
+    STRANULAR,
     SYNTHWAVE,
     VIOLET,
     WARM,
     Theme,
     alpha,
+    derive_palette,
     js_color,
 )
 
@@ -84,6 +87,7 @@ class TestThemeDataclass:
         assert t.tab_bg == [0.15, 0.15, 0.15, 1.0]
 
     def test_tab_bg_on_derived_from_accent(self):
+        # single-accent theme: accent2 == accent, so the selected tab stays on accent
         t = Theme(
             bg=[0.1, 0.1, 0.1, 1.0],
             surface=[0.15, 0.15, 0.15, 1.0],
@@ -93,6 +97,21 @@ class TestThemeDataclass:
             accent=[0.5, 0.8, 0.6, 1.0],
         )
         assert t.tab_bg_on == [0.5, 0.8, 0.6, 1.0]
+
+    def test_tab_bg_on_uses_accent2_when_two_accent(self):
+        # two-accent premium: the SELECTED tab takes the selection accent (accent2),
+        # the primary accent stays for dials/bars.
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.30, 0.80, 0.86, 1.0],     # cyan primary
+            accent2=[0.92, 0.40, 0.62, 1.0],    # pink selection
+        )
+        assert t.tab_bg_on == [0.92, 0.40, 0.62, 1.0]   # selected tab = accent2
+        assert t.dial_color == [0.30, 0.80, 0.86, 1.0]  # dials stay on accent
 
     def test_tab_text_derived_from_text_dim(self):
         t = Theme(
@@ -355,12 +374,25 @@ class TestDeviceThemeIntegration:
         box = d.boxes[0]["box"]
         assert box["activebgoncolor"] == MIDNIGHT.accent
 
+    def test_menu_highlighted_item_text_is_themed(self):
+        # live.menu's highlighted item: bg = hltcolor (tab_bg_on / accent2), and its
+        # TEXT = hlttextcolor (tab_text_on). The theme must inject textoncolor so the
+        # highlight text is legible — corpus themes hlttextcolor; tab already does too.
+        d = Device("Test", 200, 100, theme=WARM)
+        d.add_menu("m1", "mode", [0, 0, 80, 15], options=["A", "B"])
+        box = d.boxes[0]["box"]
+        assert box["hltcolor"] == WARM.tab_bg_on        # highlight bg = accent
+        assert box["hlttextcolor"] == WARM.tab_text_on  # highlight TEXT now themed
+
     def test_scope_gets_theme_colors(self):
+        # live.scope~ trace is the BARE linecolor (verified across the real-device
+        # corpus); activelinecolor is not a real live.scope~ attribute.
         d = Device("Test", 200, 100, theme=COOL)
         d.add_scope("s1", [0, 0, 200, 100])
         box = d.boxes[0]["box"]
         assert box["bgcolor"] == COOL.scope_bgcolor
-        assert box["activelinecolor"] == COOL.scope_color
+        assert box["linecolor"] == COOL.scope_color
+        assert "activelinecolor" not in box
 
     def test_meter_gets_theme_colors(self):
         d = Device("Test", 200, 100, theme=MIDNIGHT)
@@ -570,3 +602,42 @@ class TestThemePresetsWave2:
         assert LOFI.accent != SYNTHWAVE.accent
         assert SYNTHWAVE.accent != INDUSTRIAL.accent
         assert LOFI.accent != INDUSTRIAL.accent
+
+
+class TestDerivePalette:
+    """B2: HSL accent-pair derivation; B3: stranular-grounded two-accent preset."""
+
+    def test_complementary_rotates_accent_180(self):
+        # complementary accent2 = the hue-opposite of the accent
+        t = derive_palette([0.90, 0.20, 0.20, 1.0], scheme="complementary")
+        assert t.accent == [0.90, 0.20, 0.20, 1.0]
+        # red -> cyan-ish: green & blue dominate accent2, red is lowest
+        assert t.accent2[0] < t.accent2[1]
+        assert t.accent2[0] < t.accent2[2]
+
+    def test_accent2_preserves_lightness_and_saturation(self):
+        import colorsys
+        acc = [0.20, 0.55, 0.85, 1.0]
+        t = derive_palette(acc, scheme="complementary")
+        _h1, l1, s1 = colorsys.rgb_to_hls(*acc[:3])
+        _h2, l2, s2 = colorsys.rgb_to_hls(*t.accent2[:3])
+        assert abs(l1 - l2) < 1e-9 and abs(s1 - s2) < 1e-9
+
+    def test_scheme_changes_the_rotation(self):
+        acc = [0.20, 0.55, 0.85, 1.0]
+        comp = derive_palette(acc, scheme="complementary").accent2
+        analog = derive_palette(acc, scheme="analogous").accent2
+        assert comp != analog
+
+    def test_derived_theme_is_usable(self):
+        # a derived two-accent theme renders on a device like any preset
+        t = derive_palette([0.66, 0.94, 0.26, 1.0])
+        d = AudioEffect("t", width=120, height=80, theme=t)
+        assert d.theme.accent2 is not None
+
+    def test_stranular_preset_two_accent_grounded(self):
+        # violet primary + cyan secondary, lifted from stranular
+        assert STRANULAR.accent == [0.70, 0.42, 0.89, 1.0]
+        assert STRANULAR.accent2 == [0.43, 0.83, 1.0, 1.0]
+        assert STRANULAR.accent != STRANULAR.accent2
+        assert PALETTES["stranular"] is STRANULAR

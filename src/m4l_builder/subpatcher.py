@@ -25,6 +25,16 @@ class Subpatcher(GraphContainer):
         """Return the inner patcher dict (without the outer box wrapper)."""
         return self.profile.build_subpatcher_patcher(self.boxes, self.lines)
 
+    def to_presentation_patcher_dict(self) -> dict:
+        """Inner patcher with presentation mode ON — for a VISIBLE bpatcher module.
+
+        (The default ``to_patcher_dict`` builds an invisible ``p`` subpatch with
+        ``openinpresentation=0``; an embedded bpatcher that shows its UI needs 1.)
+        """
+        patcher = self.to_patcher_dict()
+        patcher["openinpresentation"] = 1
+        return patcher
+
     def to_box(self, id: str, rect: list, *,
                numinlets: int = 1, numoutlets: int = 1,
                outlettype: list = None) -> dict:

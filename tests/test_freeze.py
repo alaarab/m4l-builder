@@ -11,6 +11,7 @@ import struct
 from m4l_builder.constants import AUDIO_EFFECT
 from m4l_builder.freeze import (
     assemble_frozen_amxd,
+    extract_frozen_amxd,
     footer_type_for,
     freeze_amxd_file,
 )
@@ -239,3 +240,35 @@ def test_public_api_exports():
     assert hasattr(m4l_builder, "freeze_amxd_file")
     assert hasattr(m4l_builder, "device_to_frozen_bytes")
     assert hasattr(m4l_builder, "assemble_frozen_amxd")
+
+
+# --- extract_frozen_amxd (the inverse — reuse a download's bundled assets) ----
+
+
+class TestExtractFrozenAmxd:
+    def test_round_trips_device_json_and_dependencies(self):
+        dev = b'{"patcher":{"boxes":[]}}\x00'
+        deps = [("myLiveDial.js", b"function paint(){}"),
+                ("grainGUI.maxpat", b'{"patcher":{}}'),
+                ("knob.svg", b"<svg></svg>")]
+        frozen = assemble_frozen_amxd(AUDIO_EFFECT, "Reverb.amxd", dev, deps)
+        out = extract_frozen_amxd(frozen)
+        # the device's own JSON + every dependency come back, byte-exact
+        assert out["Reverb.amxd"] == dev
+        for name, raw in deps:
+            assert out[name] == raw
+
+    def test_extracts_exact_bytes_for_a_painter(self):
+        painter = b"// premium knob\nfunction paint(){ mgraphics.fill(); }"
+        frozen = assemble_frozen_amxd(AUDIO_EFFECT, "X.amxd", b"{}\x00",
+                                      [("dial.js", painter)])
+        assert extract_frozen_amxd(frozen)["dial.js"] == painter
+
+    def test_raises_on_unfrozen_data(self):
+        import pytest
+        with pytest.raises(ValueError):
+            extract_frozen_amxd(b"ampf\x04\x00\x00\x00aaaa unfrozen device, no bundle")
+
+    def test_public_api_export(self):
+        import m4l_builder
+        assert hasattr(m4l_builder, "extract_frozen_amxd")

@@ -17,6 +17,8 @@ fresh sidecar filename for every embedding device (the products version their JS
 filenames; bump them when the embedded design-system version changes).
 """
 
+import hashlib
+
 # Bump whenever DESIGN_SYSTEM_JS changes; products fold version_tag() awareness
 # into their versioned JS filenames so Max reloads the new snippet everywhere.
 DESIGN_SYSTEM_VERSION = 1
@@ -25,6 +27,24 @@ DESIGN_SYSTEM_VERSION = 1
 def version_tag():
     """Short token (e.g. ``"ds1"``) for folding into sidecar filenames."""
     return "ds" + str(DESIGN_SYSTEM_VERSION)
+
+
+def js_sidecar_name(filename, js_code, *, hash_len=8):
+    """Content-address a v8ui/jsui sidecar filename: ``{stem}_{hash}.js``.
+
+    Max caches a ``.js``/``v8ui`` sidecar BY NAME for the WHOLE Live session, so
+    editing the JS without renaming the file serves the STALE cached snippet — the
+    fix is dead-on-arrival (a real bug: the v8ui-drag fix never took until the
+    filenames were hand-bumped). Folding a hash of ``js_code`` into the name makes
+    ANY edit auto-rename → Max reloads fresh, with ZERO manual ``_vN`` bumps. The
+    stem stays a stable, human-readable label; only the appended hash moves. Mirror
+    of the gen~ side's :func:`m4l_builder.gen_patcher.gendsp_support_name`.
+    """
+    stem = filename[:-3] if filename.endswith(".js") else filename
+    digest = hashlib.blake2b(
+        js_code.encode("utf-8"), digest_size=(hash_len + 1) // 2
+    ).hexdigest()
+    return f"{stem}_{digest[:hash_len]}.js"
 
 
 # ── The shared ES5 snippet ────────────────────────────────────────────────

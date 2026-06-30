@@ -3,11 +3,15 @@
 from m4l_builder import AudioEffect
 from m4l_builder.recipes import (
     arpeggio_quantized_stage,
+    bypass_wrapper,
     convolver_controlled_stage,
+    dial_label_cell,
+    dial_value_cell,
     dry_wet_stage,
     gain_controlled_stage,
     grain_playback_controlled,
     lfo_matrix_distribute,
+    mc_poly_spine,
     midi_learn_macro_assignment,
     midi_note_gate,
     parametric_eq_band_backend,
@@ -15,9 +19,12 @@ from m4l_builder.recipes import (
     sample_drop_target,
     sidechain_compressor_recipe,
     spectral_gate_stage,
+    stacked_panels,
     stereo_width_stage,
+    switchable_bank,
     tempo_synced_delay,
     transport_sync_lfo_recipe,
+    two_panel_strip,
 )
 
 
@@ -120,6 +127,200 @@ class TestGainControlledStage:
         r2 = gain_controlled_stage(device, "vol2", [60, 10, 40, 40])
         assert r1["dial"] != r2["dial"]
         assert r1["gain"] != r2["gain"]
+
+
+class TestMcPolySpine:
+    def test_returns_spine_ids(self):
+        device = AudioEffect("test", width=200, height=100)
+        res = mc_poly_spine(device, "syn")
+        for key in ("noteallocator", "click", "gen", "mixdown", "audio_unpack"):
+            assert key in res
+        ids = _box_ids(device)
+        assert res["gen"] in ids and res["noteallocator"] in ids
+
+    def test_objects_are_the_mc_spine(self):
+        device = AudioEffect("test", width=200, height=100)
+        mc_poly_spine(device, "syn", voices=16)
+        texts = _box_texts(device)
+        # the poly~-free spine — verbatim object grammar (steal on by default)
+        assert "mc.noteallocator~ @voices 16 @steal 1" in texts
+        assert "mc.click~ @chans 16" in texts
+        assert "mc.gen~ @chans 16" in texts
+        assert "mc.mixdown~ 1 @autogain 0" in texts
+        assert "mc.unpack~ 1" in texts
+
+    def test_voice_active_feedback_loop_is_wired(self):
+        # the jewel: mc.gen~[0] -> mc.noteallocator~[0] enables voice stealing.
+        device = AudioEffect("test", width=200, height=100)
+        res = mc_poly_spine(device, "syn")
+        pairs = _line_pairs(device)
+        assert (res["gen"], res["noteallocator"]) in pairs        # feedback
+        assert (res["click"], res["gen"]) in pairs                # trigger
+        assert (res["gen"], res["mixdown"]) in pairs              # audio sum
+        assert (res["mixdown"], res["audio_unpack"]) in pairs
+        assert ("syn_midiin", "syn_midiparse") in pairs
+        assert ("syn_midiparse", res["noteallocator"]) in pairs
+
+    def test_mpe_and_voice_count_options(self):
+        device = AudioEffect("test", width=200, height=100)
+        mc_poly_spine(device, "mpe", voices=8, mpe=True, gen_name="myvoice")
+        texts = _box_texts(device)
+        # Chiral's MPE allocator grammar + a named .gendsp voice
+        assert "mc.noteallocator~ @mpemode 1 @voices 8 @steal 1" in texts
+        assert "mc.gen~ myvoice @chans 8" in texts
+        assert "mc.click~ @chans 8" in texts
+
+
+class TestTwoPanelStrip:
+    def test_grounded_as_console_geometry(self):
+        device = AudioEffect("test", width=231, height=167)
+        res = two_panel_strip(device, "strip")
+        # the SABROI AS Console two-panel grammar: wide main + narrow side, gap 2
+        assert res["main_rect"] == [0, 0, 174, 167]
+        assert res["side_rect"] == [176, 0, 56, 167]
+        assert res["total_width"] == 232
+        ids = _box_ids(device)
+        assert "strip_main_panel" in ids and "strip_side_panel" in ids
+
+    def test_panels_are_backgrounds(self):
+        device = AudioEffect("test", width=231, height=167)
+        two_panel_strip(device, "strip")
+        panels = [b["box"] for b in device.boxes if b["box"].get("maxclass") == "panel"]
+        assert len(panels) == 2
+        assert all(pp.get("background") == 1 for pp in panels)
+
+    def test_content_rects_inset(self):
+        device = AudioEffect("test", width=231, height=167)
+        res = two_panel_strip(device, "strip")
+        assert res["main_content"] == [4, 4, 166, 159]    # inset by 4
+        assert res["side_content"][0] == 180             # side_x + inset
+
+
+class TestDialLabelCell:
+    def test_dial_with_caption_below(self):
+        device = AudioEffect("test", width=200, height=120)
+        res = dial_label_cell(device, "drive", "Drive", [10, 10, 36, 36],
+                              label="DRIVE", min_val=0.0, max_val=24.0)
+        ids = _box_ids(device)
+        assert res["dial"] in ids and res["label"] in ids
+        # the label sits directly below the dial (y = dial_y + dial_h + gap)
+        label_box = next(b["box"] for b in device.boxes
+                         if b["box"]["id"] == "drive_label")
+        assert label_box["presentation_rect"][1] == 10 + 36 + 1
+        assert label_box.get("text") == "DRIVE"
+        # the caption is the comment below — the dial must NOT also draw its name
+        # inside the knob (factory default showname=1 would double the label).
+        dial_box = next(b["box"] for b in device.boxes
+                        if b["box"]["id"] == "drive_dial")
+        assert dial_box["showname"] == 0
+
+    def test_showname_override_passes_through(self):
+        device = AudioEffect("test", width=200, height=120)
+        dial_label_cell(device, "drive", "Drive", [10, 10, 36, 36], showname=1)
+        dial_box = next(b["box"] for b in device.boxes
+                        if b["box"]["id"] == "drive_dial")
+        assert dial_box["showname"] == 1
+
+    def test_cell_registers_the_parameter(self):
+        device = AudioEffect("test", width=200, height=120)
+        res = dial_label_cell(device, "mix", "Mix", [0, 0, 40, 40])
+        assert "Mix" in res.params
+
+
+class TestDialValueCell:
+    def test_caption_above_native_value_below(self):
+        device = AudioEffect("test", width=200, height=140)
+        res = dial_value_cell(device, "tilt", "Tilt", [10, 40, 41, 35],
+                              label="TILT", min_val=-6.0, max_val=6.0,
+                              accent=[0.45, 0.75, 0.65, 1.0])
+        ids = _box_ids(device)
+        assert res["dial"] in ids and res["label"] in ids
+        # caption sits ABOVE the dial (y = dial_y - label_h - gap)
+        cap = next(b["box"] for b in device.boxes if b["box"]["id"] == "tilt_cap")
+        assert cap["presentation_rect"][1] == 40 - 10 - 1
+        assert cap.get("text") == "TILT"
+        # native dial: no painter, name hidden, value SHOWN, accent ring
+        dial = next(b["box"] for b in device.boxes if b["box"]["id"] == "tilt_dial")
+        assert dial["maxclass"] == "live.dial"
+        assert dial["showname"] == 0 and dial["shownumber"] == 1
+        assert dial["activedialcolor"] == [0.45, 0.75, 0.65, 1.0]
+
+    def test_cell_registers_the_parameter(self):
+        device = AudioEffect("test", width=200, height=140)
+        res = dial_value_cell(device, "w", "Width", [0, 20, 41, 35])
+        assert "Width" in res.params
+
+
+class TestSwitchableBank:
+    def test_selector_bank_with_tab_shim(self):
+        device = AudioEffect("test", width=240, height=120)
+        res = switchable_bank(device, "alg", ["Clean", "Tape", "Tube"])
+        texts = _box_texts(device)
+        assert "selector~ 3 1" in texts          # N inputs
+        assert "+ 1" in texts                     # 0-indexed tab -> 1-indexed selector
+        pairs = _line_pairs(device)
+        assert ("alg_tab", "alg_shim") in pairs
+        assert ("alg_shim", "alg_sel") in pairs
+        # one input port per option + an output
+        assert {"in_0", "in_1", "in_2", "audio_out"} <= set(res.ports)
+        assert "alg_select" in res.params
+
+    def test_custom_tab_param_name(self):
+        device = AudioEffect("test", width=240, height=120)
+        res = switchable_bank(device, "ab", ["A", "B"], tab_param="ABComp")
+        assert "ABComp" in res.params
+        assert "selector~ 2 1" in _box_texts(device)
+
+
+class TestBypassWrapper:
+    def test_selector_switch_with_param_toggle(self):
+        device = AudioEffect("test", width=200, height=120)
+        res = bypass_wrapper(device, "comp")
+        texts = _box_texts(device)
+        assert "selector~ 2 1" in texts
+        assert "expr 2-$i1" in texts          # toggle 0->wet(2), 1->dry(1)
+        # the bypass is a first-class parameter (automatable/saved)
+        btn = next(b["box"] for b in device.boxes if b["box"]["id"] == "comp_bypass")
+        assert btn["maxclass"] == "live.text" and btn["parameter_enable"] == 1
+        pairs = _line_pairs(device)
+        assert ("comp_bypass", "comp_inv") in pairs
+        assert ("comp_inv", "comp_sel") in pairs
+        assert "comp_bypass" in res.params
+
+    def test_ports_exposed(self):
+        device = AudioEffect("test", width=200, height=120)
+        res = bypass_wrapper(device, "eq")
+        assert "dry_in" in res.ports and "wet_in" in res.ports
+        assert "audio_out" in res.ports
+
+
+class TestStackedPanels:
+    def test_tab_swaps_panels_via_thispatcher(self):
+        device = AudioEffect("test", width=240, height=180)
+        # caller adds the panels (scripting names) first, at the same content rect
+        for pid in ("panA", "panB", "panC"):
+            device.add_panel(pid, [0, 20, 240, 160], bgcolor=[0.1, 0.1, 0.1, 1.0])
+        res = stacked_panels(device, "sec", "Section", ["panA", "panB", "panC"],
+                             rect=[0, 0, 240, 18], labels=["A", "B", "C"])
+        texts = _box_texts(device)
+        # a hide for every panel + a show for every panel + the fork + a thispatcher
+        assert "script hide panA" in texts and "script show panA" in texts
+        assert "script hide panC" in texts and "script show panC" in texts
+        assert "t i b" in texts and "thispatcher" in texts
+        assert "sel 0 1 2" in texts
+        pairs = _line_pairs(device)
+        # fork hide-bang (outlet 1) reaches a hide message; sel reaches a show message
+        assert (res["tab"], "sec_fork") in pairs
+        assert ("sec_fork", "sec_hide0") in pairs
+        assert ("sec_show1", "sec_thisp") in pairs
+
+    def test_ghost_tab_is_transparent(self):
+        device = AudioEffect("test", width=240, height=180)
+        device.add_panel("only", [0, 20, 240, 160], bgcolor=[0.1, 0.1, 0.1, 1.0])
+        stacked_panels(device, "g", "Sel", ["only"], rect=[0, 0, 240, 18], ghost=True)
+        tab = next(b["box"] for b in device.boxes if b["box"]["id"] == "g_tab")
+        assert tab["bgcolor"] == [0.0, 0.0, 0.0, 0.0]
+        assert tab["textcolor"] == [0.0, 0.0, 0.0, 0.0]
 
 
 class TestParametricEqBandBackend:

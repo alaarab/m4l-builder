@@ -61,11 +61,13 @@ from ..theme import (
     LOFI,
     MIDNIGHT,
     SOLAR,
+    STRANULAR,
     SYNTHWAVE,
     VIOLET,
     WARM,
     Theme,
     alpha,
+    derive_palette,
     js_color,
 )
 from ..ui import (
@@ -145,6 +147,8 @@ __all__ = [
     "Theme",
     "js_color",
     "alpha",
+    "derive_palette",
+    "STRANULAR",
     "MIDNIGHT",
     "WARM",
     "COOL",

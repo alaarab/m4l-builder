@@ -1131,6 +1131,126 @@ def poly_midi_gate(device, id_prefix, x=30, y=30):
     )
 
 
+def mc_poly_spine(device, id_prefix, *, voices=16, gen_name=None, gen_inlets=2,
+                  mpe=False, steal=True, autogain=False, x=30, y=30):
+    """Add the modern ``mc.*`` polyphony spine — the poly~-free voice allocator
+    that Superberry (``@voices 16``) and Chiral (``@mpemode 1 @voices 8 @steal 1``)
+    both use. Topology + port indices are VERBATIM from those devices.
+
+    Builds and wires::
+
+        midiin -> midiparse[7] -> mc.noteallocator~ @voices N [@mpemode 1] [@steal 1]
+        mc.noteallocator~[0] (note list) -> unpack -> pitch mc.target -> mc.gen~[1]
+        mc.noteallocator~[5] (voice index) -> pitch mc.target[1]
+        mc.click~ @chans N -> mc.gen~[0]                  (per-voice trigger)
+        mc.gen~[0] -> mc.noteallocator~[0]                (voice-active feedback / steal)
+        mc.gen~[1] -> mc.mixdown~ 1 [@autogain 0] -> mc.unpack~ 1   (summed audio)
+
+    The per-voice DSP is supplied as a ``.gendsp`` (``gen_name``, built with
+    :func:`m4l_builder.gen_patcher.build_gendsp`) loaded by ``mc.gen~``; that gen
+    voice should read its trigger on ``in 1`` and pitch on ``in 2``, and write its
+    audio on ``out 1`` and a voice-active flag on ``out 2`` (the steal feedback).
+    Attach further per-voice controls (velocity, MPE pressure/slide) with extra
+    ``mc.target`` objects fed by the exposed ``note_out`` / ``voice_index_out``
+    ports.
+
+    Args:
+        voices: polyphony (``@voices``/``@chans``).
+        gen_name: basename of the ``.gendsp`` the ``mc.gen~`` loads (None = bare).
+        gen_inlets: inlet count of the gen voice (>=2: trigger + pitch).
+        mpe: emit ``@mpemode 1`` on the noteallocator (Chiral path).
+        steal: emit ``@steal 1`` (voice stealing).
+        autogain: ``@autogain 1`` on the mixdown (default 0, like Superberry).
+
+    Returns:
+        StageResult with the spine IDs and ports (``note_out``, ``voice_index_out``,
+        ``trigger_out``, ``audio_out``, ``gen``).
+    """
+    p = id_prefix
+    na_attrs = f"@voices {voices}"
+    if mpe:
+        na_attrs = f"@mpemode 1 {na_attrs}"
+    if steal:
+        na_attrs += " @steal 1"
+    gen_text = f"mc.gen~ {gen_name} @chans {voices}" if gen_name else f"mc.gen~ @chans {voices}"
+
+    midiin_id = device.add_newobj(
+        f"{p}_midiin", "midiin", numinlets=1, numoutlets=1,
+        outlettype=["int"], patching_rect=[x, y, 60, 20],
+    )
+    midiparse_id = device.add_newobj(
+        f"{p}_midiparse", "midiparse", numinlets=1, numoutlets=8,
+        outlettype=["", "", "", "int", "int", "", "int", ""],
+        patching_rect=[x, y + 30, 120, 20],
+    )
+    na_id = device.add_newobj(
+        f"{p}_noteallocator", f"mc.noteallocator~ {na_attrs}",
+        numinlets=1, numoutlets=6,
+        outlettype=["list", "list", "int", "int", "int", "int"],
+        patching_rect=[x, y + 60, 180, 20],
+    )
+    unpack_id = device.add_newobj(
+        f"{p}_note_unpack", "unpack 0 0", numinlets=1, numoutlets=2,
+        outlettype=["int", "int"], patching_rect=[x, y + 90, 70, 20],
+    )
+    pitch_target_id = device.add_newobj(
+        f"{p}_pitch_target", "mc.target", numinlets=2, numoutlets=2,
+        outlettype=["setvalue", "int"], patching_rect=[x, y + 120, 70, 20],
+    )
+    click_id = device.add_newobj(
+        f"{p}_click", f"mc.click~ @chans {voices}", numinlets=1, numoutlets=1,
+        outlettype=["multichannelsignal"], patching_rect=[x + 200, y + 90, 120, 20],
+    )
+    gen_id = device.add_newobj(
+        f"{p}_gen", gen_text, numinlets=max(2, gen_inlets), numoutlets=2,
+        outlettype=["multichannelsignal", "multichannelsignal"],
+        patching_rect=[x, y + 160, 200, 20],
+    )
+    mixdown_id = device.add_newobj(
+        f"{p}_mixdown", f"mc.mixdown~ 1 @autogain {1 if autogain else 0}",
+        numinlets=2, numoutlets=1, outlettype=["multichannelsignal"],
+        patching_rect=[x, y + 200, 160, 20],
+    )
+    unpack_audio_id = device.add_newobj(
+        f"{p}_audio_unpack", "mc.unpack~ 1", numinlets=1, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x, y + 230, 100, 20],
+    )
+
+    # MIDI front end -> allocator (raw MIDI on midiparse outlet 7, verbatim).
+    device.add_line(midiin_id, 0, midiparse_id, 0)
+    device.add_line(midiparse_id, 7, na_id, 0)
+    # note list -> unpack pitch -> pitch target (value) ; voice index -> target right.
+    device.add_line(na_id, 0, unpack_id, 0)
+    device.add_line(unpack_id, 0, pitch_target_id, 0)
+    device.add_line(na_id, 5, pitch_target_id, 1)
+    device.add_line(pitch_target_id, 0, gen_id, 1)
+    # per-voice trigger.
+    device.add_line(click_id, 0, gen_id, 0)
+    # voice-active feedback (gen outlet 0 -> allocator inlet 0) — enables stealing.
+    device.add_line(gen_id, 0, na_id, 0)
+    # summed audio path.
+    device.add_line(gen_id, 1, mixdown_id, 0)
+    device.add_line(mixdown_id, 0, unpack_audio_id, 0)
+
+    return stage_result(
+        {
+            "noteallocator": na_id,
+            "click": click_id,
+            "gen": gen_id,
+            "mixdown": mixdown_id,
+            "audio_unpack": unpack_audio_id,
+        },
+        name="mc_poly_spine",
+        ports={
+            "note_out": device.box(na_id).outlet(0),
+            "voice_index_out": device.box(na_id).outlet(5),
+            "trigger_out": device.box(click_id).outlet(0),
+            "audio_out": device.box(unpack_audio_id).outlet(0),
+            "gen": device.box(gen_id).outlet(1),
+        },
+    )
+
+
 def transport_sync_lfo_recipe(device, id_prefix, x=30, y=30):
     """Add a transport-synced LFO with depth dial and division menu.
 
@@ -1428,4 +1548,277 @@ def sample_drop_target(device, id_prefix, buffer_box_id, drop_rect, *,
             "loaded": loaded_id,
         },
         name="sample_drop_target",
+    )
+
+
+def two_panel_strip(device, id_prefix, *, main_width=174, side_width=56, height=167,
+                    gap=2, bgcolor=None, side_bgcolor=None, border=1,
+                    bordercolor=None, rounded=0):
+    """Two-panel channel-strip SHELL — the SABROI AS Console grammar: a wide MAIN
+    panel for the primary controls + a narrow SIDE column for toggles/meters.
+
+    Geometry is grounded in AS_Console_Norm: main panel ``[0,0,174,167]`` + side
+    panel ``[176,0,55,167]`` (gap 2). The device width should be
+    ``main_width + gap + side_width`` (231 by default). Fill the panels with
+    :func:`dial_label_cell` cells, a DSP module via
+    ``device.add_bpatcher_module`` (F3), side-column toggles, etc.; re-tint the
+    whole frame at runtime with ``device.add_theme_bus`` (B1).
+
+    Build-time ``bgcolor`` / ``side_bgcolor`` are placeholders (the theme bus wins
+    when ``follow_live``). Returns a StageResult whose mapping carries the panel ids
+    plus the content rects the caller lays out into: ``main_rect`` / ``side_rect``
+    (the panels) and ``main_content`` / ``side_content`` (inset by 4 px).
+    """
+    p = id_prefix
+    bgcolor = bgcolor or [0.16, 0.16, 0.17, 1.0]
+    side_bgcolor = side_bgcolor or [0.12, 0.12, 0.13, 1.0]
+    inset = 4
+    side_x = main_width + gap
+    main_rect = [0, 0, main_width, height]
+    side_rect = [side_x, 0, side_width, height]
+
+    main_id = device.add_panel(f"{p}_main_panel", main_rect, bgcolor=bgcolor,
+                               border=border, bordercolor=bordercolor, rounded=rounded)
+    side_id = device.add_panel(f"{p}_side_panel", side_rect, bgcolor=side_bgcolor,
+                               border=border, bordercolor=bordercolor, rounded=rounded)
+
+    return stage_result(
+        {
+            "main_panel": main_id,
+            "side_panel": side_id,
+            "main_rect": main_rect,
+            "side_rect": side_rect,
+            "main_content": [inset, inset, main_width - 2 * inset, height - 2 * inset],
+            "side_content": [side_x + inset, inset, side_width - 2 * inset,
+                             height - 2 * inset],
+            "total_width": side_x + side_width,
+            "height": height,
+        },
+        name="two_panel_strip",
+    )
+
+
+def dial_label_cell(device, id_prefix, param_name, rect, *, label=None,
+                    min_val=0.0, max_val=100.0, initial=0.0, unitstyle=1,
+                    label_h=14, gap=1, **dial_kwargs):
+    """A dial with a caption directly below it — the AS Console control cell.
+
+    ``rect`` is the DIAL's ``[x, y, w, h]``; a ``live.comment`` label is placed just
+    below (``label`` text, defaulting to ``param_name``). The dial shows its live
+    value in Live's native readout. Extra ``dial_kwargs`` pass through to
+    ``device.add_dial`` (e.g. ``annotation_name``, ``units``). Returns a StageResult
+    with ``dial`` and ``label`` ids and the cell's overall ``rect``.
+    """
+    p = id_prefix
+    text = label or param_name
+    # The caption is the comment BELOW; force showname=0 so the dial does not ALSO
+    # draw its parameter name inside the knob (the factory default is showname=1) and
+    # double the label. Caller can still override via dial_kwargs.
+    dial_id = device.add_dial(
+        f"{p}_dial", param_name, rect, min_val=min_val, max_val=max_val,
+        initial=initial, unitstyle=unitstyle,
+        showname=dial_kwargs.pop("showname", 0),
+        annotation_name=dial_kwargs.pop("annotation_name", text), **dial_kwargs,
+    )
+    lx, ly = rect[0], rect[1] + rect[3] + gap
+    label_id = device.add_comment(f"{p}_label", [lx, ly, rect[2], label_h], text)
+
+    return stage_result(
+        {
+            "dial": dial_id,
+            "label": label_id,
+            "rect": [rect[0], rect[1], rect[2], rect[3] + gap + label_h],
+        },
+        name="dial_label_cell",
+        params={param_name: device.parameter(dial_id)},
+    )
+
+
+def dial_value_cell(device, id_prefix, param_name, dial_rect, *, label=None,
+                    min_val=0.0, max_val=100.0, initial=0.0, unitstyle=1,
+                    accent=None, fill=None, label_color=None,
+                    label_h=10, label_gap=1, label_fontsize=7.5,
+                    label_fontname="Ableton Sans Medium", appearance=0,
+                    **dial_kwargs):
+    """The AS Console / Rainbow / Chiral atomic control cell: an uppercase caption
+    ABOVE a native ``live.dial`` whose OWN persistent value reads out BELOW the knob.
+
+    Grounded in AS_Console_1.02: its dials are 41x35, ``showname=0``, with an accent
+    ring (``activedialcolor``) + grey value arc (``activefgdialcolor``) and rely on
+    the native value display (``shownumber=1`` — the Max ``live.dial`` reference:
+    "shownumber toggles the display of the parameter value"). NO ``paint_control``:
+    a render-only painter fills the dial rect and HIDES that native value (the dim,
+    value-less knobs we shipped). ``dial_rect`` is the DIAL's ``[x, y, w, h]``; the
+    caption is placed just above it.
+
+    ``accent`` -> ``activedialcolor`` (the lit ring, the device accent); ``fill`` ->
+    ``activefgdialcolor`` (the value arc; defaults to a neutral grey like AS Console).
+    Extra ``dial_kwargs`` pass through to ``device.add_dial`` (``parameter_exponent``,
+    ``annotation_name`` …). Returns a StageResult with ``dial``/``label`` ids, the
+    overall cell ``rect`` and the param.
+    """
+    p = id_prefix
+    text = label if label is not None else param_name
+    lx = dial_rect[0]
+    ly = dial_rect[1] - label_h - label_gap
+    cap_kwargs = dict(fontsize=label_fontsize, fontname=label_fontname, justification=1)
+    if label_color is not None:
+        cap_kwargs["textcolor"] = list(label_color)
+    label_id = device.add_comment(
+        f"{p}_cap", [lx, ly, dial_rect[2], label_h], text, **cap_kwargs,
+    )
+    dk = dict(showname=0, shownumber=1, appearance=appearance)
+    dk["activedialcolor"] = list(accent) if accent is not None else None
+    dk["activefgdialcolor"] = list(fill) if fill is not None else [0.59, 0.59, 0.59, 1.0]
+    dk = {k: v for k, v in dk.items() if v is not None}
+    dk.update(dial_kwargs)
+    annotation = dk.pop("annotation_name", text)
+    dial_id = device.add_dial(
+        f"{p}_dial", param_name, dial_rect, min_val=min_val, max_val=max_val,
+        initial=initial, unitstyle=unitstyle, annotation_name=annotation, **dk,
+    )
+    return stage_result(
+        {
+            "dial": dial_id,
+            "label": label_id,
+            "rect": [lx, ly, dial_rect[2], (dial_rect[1] + dial_rect[3]) - ly],
+        },
+        name="dial_value_cell",
+        params={param_name: device.parameter(dial_id)},
+    )
+
+
+def stacked_panels(device, id_prefix, tab_param, panel_ids, *, rect, labels=None,
+                   ghost=False, x=30, y=400):
+    """Tabbed panel sections (C6): a ``live.tab`` selects which of N pre-added
+    panels is shown, swapping them IN PLACE via ``thispatcher`` script show/hide.
+
+    ``panel_ids`` are the scripting names (``varname``) of the panels the caller
+    already added at the SAME content rect (e.g. ``add_bpatcher_module`` modules or
+    panels). On every tab change the recipe hides ALL panels then shows the selected
+    one (a ``t i b`` fork fires the hide bang first, then the show index), so exactly
+    one panel is visible. ``ghost=True`` makes the tab strip itself invisible
+    (alpha-0) — a hidden selector you drive from elsewhere. ``rect`` is the tab
+    strip's ``[x,y,w,h]``. Returns ``{tab, content_rect}``.
+
+    NOTE: the script show/hide wiring is structurally grounded in the framework's
+    flyout mechanism; the actual swap is Live-verified when a device first uses it.
+    """
+    p = id_prefix
+    labels = list(labels or [str(i + 1) for i in range(len(panel_ids))])
+    tab_kwargs = {}
+    if ghost:
+        clear = [0.0, 0.0, 0.0, 0.0]
+        tab_kwargs = dict(bgcolor=clear, bgoncolor=clear,
+                          textcolor=clear, textoncolor=clear)
+    tab_id = device.add_tab(f"{p}_tab", tab_param, rect, options=labels, **tab_kwargs)
+
+    fork = device.add_newobj(
+        f"{p}_fork", "t i b", numinlets=1, numoutlets=2,
+        outlettype=["int", "bang"], patching_rect=[x, y, 50, 20],
+    )
+    sel = device.add_newobj(
+        f"{p}_sel", "sel " + " ".join(str(i) for i in range(len(panel_ids))),
+        numinlets=1, numoutlets=len(panel_ids) + 1,
+        outlettype=["bang"] * len(panel_ids) + [""],
+        patching_rect=[x, y + 30, 160, 20],
+    )
+    thisp = device.add_newobj(
+        f"{p}_thisp", "thispatcher", numinlets=1, numoutlets=1,
+        outlettype=[""], patching_rect=[x, y + 130, 80, 20],
+    )
+    device.add_line(tab_id, 0, fork, 0)
+    device.add_line(fork, 0, sel, 0)            # index (fires 2nd) -> show selected
+    for i, pid in enumerate(panel_ids):
+        hide_msg = device.add_newobj(
+            f"{p}_hide{i}", f"script hide {pid}", numinlets=2, numoutlets=1,
+            maxclass="message", patching_rect=[x + 200, y + 30 + i * 22, 120, 18],
+        )
+        device.add_line(fork, 1, hide_msg, 0)   # hide bang (fires 1st) -> hide all
+        device.add_line(hide_msg, 0, thisp, 0)
+        show_msg = device.add_newobj(
+            f"{p}_show{i}", f"script show {pid}", numinlets=2, numoutlets=1,
+            maxclass="message", patching_rect=[x + i * 70, y + 70, 90, 18],
+        )
+        device.add_line(sel, i, show_msg, 0)
+        device.add_line(show_msg, 0, thisp, 0)
+
+    return stage_result(
+        {"tab": tab_id, "content_rect": list(rect)},
+        name="stacked_panels",
+        params={tab_param: device.parameter(tab_id)},
+    )
+
+
+def bypass_wrapper(device, id_prefix, *, label="Bypass", button_rect=None,
+                   x=30, y=30):
+    """Hard-bypass a DSP stage with a latching toggle (F4) — a ``selector~ 2 1``
+    crossfade-free switch between the DRY (bypass) and WET (processed) paths.
+
+    Wire the unprocessed signal into the ``dry_in`` port and your processed signal
+    into ``wet_in``; ``audio_out`` carries whichever the toggle selects (toggle OFF
+    = processed/wet, ON = dry/bypass). The toggle is a first-class ``live.text``
+    parameter (so the bypass state automates + saves). Returns the toggle/selector
+    ids and ``dry_in`` / ``wet_in`` / ``audio_out`` ports.
+    """
+    p = id_prefix
+    btn = device.add_live_text(f"{p}_bypass", label, button_rect or [x, y, 50, 16],
+                               mode=1)
+    # toggle 0 (active) -> selector control 2 (wet) ; toggle 1 (bypass) -> 1 (dry)
+    inv = device.add_newobj(
+        f"{p}_inv", "expr 2-$i1", numinlets=1, numoutlets=1,
+        outlettype=[""], patching_rect=[x, y + 30, 70, 20],
+    )
+    sel = device.add_newobj(
+        f"{p}_sel", "selector~ 2 1", numinlets=3, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x, y + 60, 90, 20],
+    )
+    device.add_line(btn, 0, inv, 0)
+    device.add_line(inv, 0, sel, 0)
+
+    return stage_result(
+        {"bypass": btn, "selector": sel},
+        name="bypass_wrapper",
+        params={f"{p}_bypass": device.parameter(btn)},
+        ports={
+            "dry_in": device.box(sel).inlet(1),
+            "wet_in": device.box(sel).inlet(2),
+            "audio_out": device.box(sel).outlet(0),
+        },
+    )
+
+
+def switchable_bank(device, id_prefix, options, *, tab_param=None, tab_rect=None,
+                    x=30, y=30):
+    """A/B / multi-algorithm signal bank (F4): a ``selector~ N 1`` whose active
+    input is chosen by a ``live.tab`` parameter, with a ``+ 1`` shim (the tab is
+    0-indexed, ``selector~`` is 1-indexed; 0 = silence).
+
+    ``options`` are the tab labels (one per bank input). Wire each candidate signal
+    into ``in_0 .. in_{N-1}``; ``audio_out`` carries the selected one. Returns the
+    tab + selector ids and the per-input + output ports.
+    """
+    p = id_prefix
+    n = len(options)
+    tab_param = tab_param or f"{p}_select"
+    tab_id = device.add_tab(f"{p}_tab", tab_param, tab_rect or [x, y, 40 * n, 18],
+                            options=list(options))
+    shim = device.add_newobj(
+        f"{p}_shim", "+ 1", numinlets=2, numoutlets=1, outlettype=[""],
+        patching_rect=[x, y + 30, 50, 20],
+    )
+    sel = device.add_newobj(
+        f"{p}_sel", f"selector~ {n} 1", numinlets=n + 1, numoutlets=1,
+        outlettype=["signal"], patching_rect=[x, y + 60, 30 + 30 * n, 20],
+    )
+    device.add_line(tab_id, 0, shim, 0)
+    device.add_line(shim, 0, sel, 0)
+
+    ports = {f"in_{i}": device.box(sel).inlet(i + 1) for i in range(n)}
+    ports["audio_out"] = device.box(sel).outlet(0)
+    return stage_result(
+        {"tab": tab_id, "selector": sel},
+        name="switchable_bank",
+        params={tab_param: device.parameter(tab_id)},
+        ports=ports,
     )

@@ -170,6 +170,55 @@ def assemble_frozen_amxd(
     return header + mxc
 
 
+def extract_frozen_amxd(data: bytes) -> dict[str, bytes]:
+    """Inverse of :func:`assemble_frozen_amxd`: pull every bundled file out of a
+    frozen ``.amxd``'s ``mx@c`` block. Returns ``{filename: raw_bytes}`` covering
+    the device's own JSON plus every embedded dependency — the real ``.maxpat``
+    bpatcher UIs, ``.js`` painters/jsui scripts, ``.svg``/``.png`` knob images, and
+    ``.gendsp`` DSP. This is how the premium UI of a downloaded device is reused:
+    a commercial ``.amxd`` ships its designed interface here as actual Max patchers
+    + assets, not in the patcher JSON.
+
+    Raises ``ValueError`` if the file has no ``mx@c`` block (an unfrozen device with
+    no bundled assets).
+    """
+    mx = data.find(b"mx@c")
+    if mx < 0:
+        raise ValueError("not a frozen .amxd: no mx@c block (no bundled assets)")
+    footer_offset = struct.unpack(">Q", data[mx + 8:mx + 16])[0]
+    foot = mx + footer_offset
+    if data[foot:foot + 4] != b"dlst":
+        raise ValueError("frozen mx@c footer 'dlst' not found at expected offset")
+    footer_size = struct.unpack(">I", data[foot + 4:foot + 8])[0]
+    out: dict[str, bytes] = {}
+    pos = foot + 8
+    foot_end = foot + footer_size
+    while pos + 8 <= foot_end and data[pos:pos + 4] == b"dire":
+        entry_size = struct.unpack(">I", data[pos + 4:pos + 8])[0]
+        fields = data[pos + 8:pos + entry_size]
+        fp = 0
+        fname: str | None = None
+        size: int | None = None
+        off: int | None = None
+        while fp + 8 <= len(fields):
+            tag = fields[fp:fp + 4]
+            fsize = struct.unpack(">I", fields[fp + 4:fp + 8])[0]
+            if fsize < 8:
+                break
+            payload = fields[fp + 8:fp + fsize]
+            if tag == b"fnam":
+                fname = payload.split(b"\x00", 1)[0].decode("ascii", "ignore")
+            elif tag == b"sz32":
+                size = struct.unpack(">I", payload[:4])[0]
+            elif tag == b"of32":
+                off = struct.unpack(">I", payload[:4])[0]
+            fp += fsize
+        if fname and size is not None and off is not None:
+            out[fname] = bytes(data[mx + off:mx + off + size])
+        pos += entry_size
+    return out
+
+
 def _asset_bytes(asset) -> bytes:
     content = asset.content
     if isinstance(content, bytes):

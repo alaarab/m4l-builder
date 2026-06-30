@@ -21,6 +21,7 @@ __all__ = [
     "ms_encode",
     "ms_decode",
     "ms_width",
+    "ms_width_equal_power",
     "ms_mode_split",
     "ms_mode_merge",
     "drive_blend",
@@ -59,6 +60,7 @@ __all__ = [
     "moog_ladder",
     "smooth_coeffs",
     "kweight_lufs",
+    "grain_window_lookup",
 ]
 
 
@@ -110,6 +112,46 @@ def ms_width(
         f"{side} = ({left} - {right}) * 0.5 * {width};\n"
         f"{out_left} = {mid} + {side};\n"
         f"{out_right} = {mid} - {side};"
+    )
+
+
+def ms_width_equal_power(
+    left: str,
+    right: str,
+    out_left: str,
+    out_right: str,
+    width: str,
+    *,
+    mid: str = "mid",
+    side: str = "side",
+) -> str:
+    """Equal-power (constant-sum) M/S width — VERBATIM law from SABROI AS Console
+    Width.
+
+    Orthonormal ``/sqrt(2)`` encode + decode with the constant-SUM gain law
+    ``gMid + gSide = 2``, so widening does NOT inflate level the way the legacy
+    :func:`ms_width` does (that one scales the Side by ``width`` post-encode, which
+    boosts side energy by ``width**2`` — louder as it widens). Prefer this for any
+    real stereo-width control.
+
+    CONVENTION DIFFERS from :func:`ms_width`: here ``width`` is ``0..1`` with **0.5
+    = neutral** (0 = mono, 1 = full-side); the legacy primitive uses ``1 =
+    neutral``. Emits::
+
+        mid       = (L + R) / sqrt(2);
+        side      = (L - R) / sqrt(2);
+        mid      *= 2 * (1 - width);
+        side     *= 2 * width;
+        out_left  = (mid + side) / sqrt(2);
+        out_right = (mid - side) / sqrt(2);
+    """
+    return (
+        f"{mid} = ({left} + {right}) / sqrt(2);\n"
+        f"{side} = ({left} - {right}) / sqrt(2);\n"
+        f"{mid} *= 2 * (1 - {width});\n"
+        f"{side} *= 2 * {width};\n"
+        f"{out_left} = ({mid} + {side}) / sqrt(2);\n"
+        f"{out_right} = ({mid} - {side}) / sqrt(2);"
     )
 
 
@@ -1432,3 +1474,28 @@ def kweight_lufs(
         f"{out} = -0.691 + 10. * log10({p}_ms + 0.0000000001);"
     )
     return "\n".join([decls, coeffs, l_s1, l_s2, r_s1, r_s2, ms])
+
+
+def grain_window_lookup(
+    phase: str,
+    *,
+    buf: str = "buf_win",
+    chan: str = "0",
+    out: str = "win",
+    interp: str = "linear",
+) -> str:
+    """Read a grain amplitude-window value from a Buffer by NORMALIZED phase.
+
+    Emits the verbatim stranular idiom::
+
+        win = peek(buf_win, <phase>, <chan>, index="phase", interp="linear");
+
+    ``index="phase"`` makes ``phase`` a 0..1 normalized position into the window
+    (so the same lookup works for any buffer length), and ``interp="linear"``
+    smooths between samples. ``buf`` holds the window shape (e.g. a Hann/Tukey
+    table), ``chan`` selects the window variant (stranular stores a per-voice
+    window index, e.g. ``peek(data_winPokedIndex, 0, i)``). Multiply a grain's
+    sample by ``out`` to apply the envelope; sum ``out`` across voices for the
+    normalization total (stranular's ``totalWin``).
+    """
+    return f'{out} = peek({buf}, {phase}, {chan}, index="phase", interp="{interp}");'

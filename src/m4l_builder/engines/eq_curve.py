@@ -48,8 +48,10 @@ Mouse interaction:
     Drag cut/notch/BP nodes: frequency horizontal, Q vertical
     Drag dynamic handle: adjust per-band dynamic range
     Mouse wheel on node: adjust Q
-    Shift + drag / wheel: fine tune
-    Cmd/Ctrl + drag: lock the secondary parameter
+    Shift + drag / wheel: fine-tune (Pro-Q)
+    Cmd/Ctrl + drag (vertical): adjust Q (Pro-Q)
+    Alt + drag: constrain to one axis - horizontal = freq, vertical = gain/Q (Pro-Q)
+    Alt + click a node: toggle that band's bypass (a tap; an Alt+drag constrains instead)
     Right-click node: open node menu for type / Motion / Dynamic / bypass / delete
     Double-click empty graph: add first disabled band at cursor
     Opt/Alt + click node: disable that band
@@ -79,7 +81,12 @@ def eq_curve_js(
     analyzer_fill_color="0.24, 0.78, 0.92, 0.12",
     analyzer_line_color="0.32, 0.84, 0.96, 0.48",
     analyzer_peak_color="0.92, 0.96, 1.0, 0.9",
+    # EQ8-style spectrum colour: a muted grey for the heavy solid fill + thin line
+    # used when the device flips to the "Ableton EQ Eight" look (vs the Rainbow
+    # cyan line). Selected at runtime by set_analyzer_style 0|1.
+    analyzer_eq8_color="0.70, 0.73, 0.78, 1.0",
     grid_color="0.2, 0.2, 0.22, 0.5",
+    grid_color_light="0.16, 0.16, 0.19, 0.4",   # minor (2-9) decade lines — dimmer than grid_color (major decades)
     text_color="0.5, 0.5, 0.52, 1.0",
     zero_line_color="0.3, 0.3, 0.32, 0.8",
     # No boost: combined with the +12 dB headroom above, a loud signal lands
@@ -112,7 +119,9 @@ def eq_curve_js(
         analyzer_fill_color=analyzer_fill_color,
         analyzer_line_color=analyzer_line_color,
         analyzer_peak_color=analyzer_peak_color,
+        analyzer_eq8_color=analyzer_eq8_color,
         grid_color=grid_color,
+        grid_color_light=grid_color_light,
         text_color=text_color,
         zero_line_color=zero_line_color,
         analyzer_trim_db=analyzer_trim_db,
@@ -142,7 +151,9 @@ var FILL_CLR       = [$fill_color];
 var ANALYZER_FILL_CLR = [$analyzer_fill_color];
 var ANALYZER_LINE_CLR = [$analyzer_line_color];
 var ANALYZER_PEAK_CLR = [$analyzer_peak_color];
+var ANALYZER_EQ8_CLR  = [$analyzer_eq8_color];   // muted grey for the EQ8-style fill
 var GRID_CLR       = [$grid_color];
+var GRID_LIGHT_CLR = [$grid_color_light];
 var TEXT_CLR       = [$text_color];
 var ZERO_LINE_CLR  = [$zero_line_color];
 
@@ -196,10 +207,13 @@ var DYNAMIC_GRAB_BIAS_SQ = 9.0;
 var MAX_BANDS       = 8;
 var DEFAULT_SR      = 48000.0;
 var ANALYZER_MIN_DB = -78.0;
-// Headroom above 0 dBFS so even a loud signal sits ~80% up (a backdrop) instead
-// of pegging the top of the plot like a wall (EQ8 maps the analyzer this way).
-var ANALYZER_MAX_DB = 12.0;
+// Ceiling at 0 dBFS (matches our Spectrum Analyzer's MIN_DB=-78/MAX_DB=0, which
+// fills the body to the top). The old +12 headroom reserved 12 dB above 0 that
+// real audio never reaches, so the spectrum sat squished at the vertical centre
+// (Rainbow uses +18 but its FFT runs hotter; ours needs the realistic 0 ceiling).
+var ANALYZER_MAX_DB = 0.0;
 var ANALYZER_BINS   = 512;        // log-spaced display points (was 256 -> too blocky on a wide graph; 512 ~= 1.5px/segment, FabFilter-smooth)
+var ANALYZER_RCORNERS = 4.0;      // path_roundcorners radius (Rainbow spectRCorners=4): rounds the max-per-column polyline into Rainbow's smooth line instead of Catmull-Rom grass
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
 var EXTERNAL_SPECTRUM = $external_spectrum;   // 1 = a compiled spectrum (spectroscope~) draws behind; skip jsui bg + spectrum
 var MINIMAL_GRID = $minimal_grid;   // 1 = only the 0 dB line + range labels (no interior dB lines)
@@ -222,6 +236,7 @@ var MARGIN_BOTTOM = 12;
 // ── State ────────────────────────────────────────────────────────────
 var sample_rate = DEFAULT_SR;
 var analyzer_enabled = 1;
+var ANALYZER_STYLE = 0;   // 0 = Rainbow (thin colour line + light wash); 1 = EQ8 (heavy grey fill, smoothed)
 // Display-domain spectrum tilt around a 1 kHz pivot (SPAN/Pro-Q style):
 // +4.5 dB/oct makes pink noise read ~flat behind the curve. Pure render
 // transform — never touches the audio path. Freeze halts the ballistics and
@@ -248,6 +263,15 @@ var drag_start_freq = 0;
 var drag_start_gain = 0;
 var drag_start_q = 1.0;
 var drag_start_dynamic = 0.0;
+// Pro-Q Alt gestures: drag_start_x/y anchor the axis-constrain; alt_drag_pending
+// marks a press that began with Alt held on a node (decide bypass-toggle vs
+// constrain on release); alt_moved flips once the drag travels; constrain_axis is
+// 0 undecided / 1 horizontal (freq) / 2 vertical (gain or Q).
+var drag_start_x = 0;
+var drag_start_y = 0;
+var alt_drag_pending = 0;
+var alt_moved = 0;
+var constrain_axis = 0;
 var menu_band = -1;
 var menu_x = 0;
 var menu_y = 0;
@@ -543,79 +567,48 @@ function update_analyzer_from_fft(mags) {
     var m = mags.length;
     if (m < 4) return;
     ensure_analyzer_arrays();
-    var hz_per_bin = (sample_rate * 0.5) / m;   // mags = FFT_SIZE/2 bins -> Nyquist
-    // ~1/9-octave cell: smooth enough that harmonics read as a clean rolling
-    // envelope (the EQ Eight / Pro-Q look) rather than grassy spikes — narrower
-    // than this looked "weird and spiky". The smoothness comes from the cell +
-    // the peak/mean blend + temporal + draw smoothing; the SOLID fill (bold
-    // analyzer_fill alpha) is what makes it read as a filled spectrum, not lines.
-    var half = 0.0050;
-    var i, k, klo, khi, norm, f_lo, f_hi, fc, kf, k0, fr, m0, m1, peak, sum, cnt, mag, energy, db, atk, rel;
-    for (i = 0; i < ANALYZER_BINS; i++) {
-        norm = i / (ANALYZER_BINS - 1);
-        f_lo = Math.exp(LOG_MIN + (norm - half) * LOG_RANGE);
-        f_hi = Math.exp(LOG_MIN + (norm + half) * LOG_RANGE);
-        klo = Math.floor(f_lo / hz_per_bin);
-        khi = Math.ceil(f_hi / hz_per_bin);
-        if (klo < 0) klo = 0;
-        if (khi >= m) khi = m - 1;
-        if (khi < klo) khi = klo;
-        if (khi - klo <= 1) {
-            // Sparse low-freq cell: interpolate the magnitude at the cell
-            // centre between the two nearest FFT bins so the log low end
-            // is a smooth curve, not blocky stair-steps (bins are far
-            // apart down here). Dense high cells stay peak-dominant.
-            fc = Math.exp(LOG_MIN + norm * LOG_RANGE);
-            kf = fc / hz_per_bin;
-            k0 = Math.floor(kf);
-            if (k0 < 0) k0 = 0;
-            if (k0 > m - 2) k0 = m - 2;
-            fr = kf - k0;
-            m0 = mags[k0]; if (m0 < 0.0) m0 = -m0; if (m0 !== m0) m0 = 0.0;
-            m1 = mags[k0 + 1]; if (m1 < 0.0) m1 = -m1; if (m1 !== m1) m1 = 0.0;
-            energy = m0 * (1.0 - fr) + m1 * fr;
-            db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
-            db += ANALYZER_TRIM_DB;
-            db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
-            if (db > analyzer_display[i]) {
-                analyzer_display[i] = analyzer_display[i] * 0.35 + db * 0.65;
-            } else {
-                analyzer_display[i] = analyzer_display[i] * 0.82 + db * 0.18;
-            }
-            if (analyzer_display[i] > analyzer_peaks[i]) {
-                analyzer_peaks[i] = analyzer_display[i];
-            } else {
-                analyzer_peaks[i] = Math.max(ANALYZER_MIN_DB, analyzer_peaks[i] - 0.22);
-            }
-            continue;
-        }
-        peak = 0.0; sum = 0.0; cnt = 0;
-        for (k = klo; k <= khi; k++) {
-            mag = mags[k];
-            if (mag < 0.0) mag = -mag;
-            if (mag !== mag) mag = 0.0;       // NaN guard
-            if (mag > peak) peak = mag;
-            sum += mag; cnt++;
-        }
-        // More peak-dominant (0.72 vs 0.65) so harmonic peaks stand TALLER +
-        // crisper, matching EQ Eight's dynamic peaks instead of our compressed
-        // blob — safe now that the smooth Catmull-Rom curve + solid fill keep it
-        // reading as clean filled humps, not the grassy spikes of the line-only era.
-        energy = cnt > 0 ? (0.72 * peak + 0.28 * (sum / cnt)) : 0.0;
-        db = energy > 1e-9 ? (20.0 * Math.log(energy) / Math.LN10) : ANALYZER_MIN_DB;
+    // Rainbow/Ableton MAX-per-pixel-COLUMN rebin (the Spectrum Analyzer v42 algorithm,
+    // ground-truth-verified vs Ableton Spectrum + EQ8): forward-map every linear FFT
+    // bin to its LOG display column and keep the MAX bin per column; interpolate the
+    // sparse low columns. Replaces the old wide-cell band (which blobbed the lows /
+    // plateaued the mids). Lows smooth (~1 bin/col -> line between bins), highs peaky
+    // (many bins/col -> max rides the partials). NO frequency averaging, NO tilt.
+    var nyq = sample_rate * 0.5;
+    var fmin = Math.exp(LOG_MIN), fmax = Math.exp(LOG_MIN + LOG_RANGE);
+    var i, b, a, k, col = [];
+    for (i = 0; i < ANALYZER_BINS; i++) col[i] = -999.0;   // -999 = empty column
+    for (b = 1; b < m; b++) {
+        var f = nyq * b / (m - 1);
+        if (f < fmin || f > fmax) continue;
+        var px = Math.round(((Math.log(f) - LOG_MIN) / LOG_RANGE) * (ANALYZER_BINS - 1));
+        if (px < 0) px = 0; else if (px > ANALYZER_BINS - 1) px = ANALYZER_BINS - 1;
+        var mag = mags[b]; if (mag < 0.0) mag = -mag; if (mag !== mag) mag = 0.0;
+        var db = mag > 1e-9 ? (20.0 * Math.log(mag) / Math.LN10) : ANALYZER_MIN_DB;
         db += ANALYZER_TRIM_DB;
-        db = clamp(db, ANALYZER_MIN_DB, ANALYZER_MAX_DB);
-        // Frame-rate-independent enough at ~30fps: fast attack, slow release.
-        if (db > analyzer_display[i]) {
-            analyzer_display[i] = analyzer_display[i] * 0.35 + db * 0.65;
-        } else {
-            analyzer_display[i] = analyzer_display[i] * 0.82 + db * 0.18;
+        if (db > col[px]) col[px] = db;     // MAX per column
+    }
+    // Fill empty low columns (<1 bin/column) by linear interpolation between filled
+    // neighbours (Rainbow joins its sparse low points with line_to).
+    var lastIdx = -1, lastVal = ANALYZER_MIN_DB;
+    for (i = 0; i < ANALYZER_BINS; i++) {
+        if (col[i] > -998.0) {
+            if (lastIdx < 0) { for (a = 0; a < i; a++) col[a] = col[i]; }
+            else if (i - lastIdx > 1) {
+                for (k = lastIdx + 1; k < i; k++)
+                    col[k] = lastVal + (col[i] - lastVal) * (k - lastIdx) / (i - lastIdx);
+            }
+            lastIdx = i; lastVal = col[i];
         }
-        if (analyzer_display[i] > analyzer_peaks[i]) {
-            analyzer_peaks[i] = analyzer_display[i];
-        } else {
-            analyzer_peaks[i] = Math.max(ANALYZER_MIN_DB, analyzer_peaks[i] - 0.22);
-        }
+    }
+    if (lastIdx < 0) { for (i = 0; i < ANALYZER_BINS; i++) col[i] = ANALYZER_MIN_DB; }
+    else { for (i = lastIdx + 1; i < ANALYZER_BINS; i++) col[i] = lastVal; }
+    // Ballistics: instant attack, slewed release (no rise smoothing).
+    for (i = 0; i < ANALYZER_BINS; i++) {
+        var v = clamp(col[i], ANALYZER_MIN_DB, ANALYZER_MAX_DB);
+        if (v >= analyzer_display[i]) analyzer_display[i] = v;
+        else analyzer_display[i] = analyzer_display[i] * 0.82 + v * 0.18;
+        if (analyzer_display[i] > analyzer_peaks[i]) analyzer_peaks[i] = analyzer_display[i];
+        else analyzer_peaks[i] = Math.max(ANALYZER_MIN_DB, analyzer_peaks[i] - 0.22);
     }
     request_redraw();
 }
@@ -727,6 +720,17 @@ function set_analyzer_slope(v) {
 // no-op) so you can EQ against a captured spectrum; thaw resumes ballistics.
 function set_analyzer_freeze(v) {
     analyzer_frozen = v ? 1 : 0;
+    force_redraw();
+}
+
+// Spectrum render style: 0 = Rainbow (thin colour line + 5% wash, max-per-column
+// detail); 1 = EQ Eight (heavy muted-grey solid fill + smoothing → the creamy
+// filled look from Ableton's EQ8); 2 = Both (grey filled backdrop + the crisp
+// cyan line on top — energy AND a precise envelope, the most useful for real EQ
+// work). Render-only; the FFT feed + dB mapping are identical, draw_analyzer branches.
+function set_analyzer_style(v) {
+    if (v === undefined || v !== v) v = 0;
+    ANALYZER_STYLE = v < 0 ? 0 : (v > 2 ? 2 : Math.round(v));
     force_redraw();
 }
 
@@ -1479,56 +1483,92 @@ function gain_grid_values() {
     return vals;
 }
 
+// Rainbow EQ-grid recipe (EQ_DESIGN_TEARDOWN.md): log-decade two-tone ruler +
+// half-pixel-snapped hairlines + bg edge-fade gradients (the #1 "looks nice"
+// factor) + Ableton Sans Bold labels + bright 0 dB + dual axis (EQ-dB left /
+// spectrum-dB right).
 function draw_grid() {
-    var i, x, y, label, metrics;
-    var gain_lines = gain_grid_values();
+    var i, x, y, label, metrics, sx, sy, grad;
+    var L = plot_left(), R = plot_right(), T = plot_top(), B = plot_bottom();
+    var W = mgraphics.size[0], H = mgraphics.size[1];
+    var gains = gain_grid_values();
 
+    // ── Frequency decade ruler: 1,2..9,10,20..90,100.. — MAJOR at decades (bright
+    //    GRID_CLR), minor 2-9 dim (GRID_LIGHT_CLR). 0.5px lines snapped to x+0.5.
     mgraphics.set_line_width(0.5);
-    for (i = 0; i < FREQ_LINES.length; i++) {
-        x = freq_to_x(FREQ_LINES[i]);
-        mgraphics.set_source_rgba(GRID_CLR);
-        mgraphics.move_to(x, plot_top());
-        mgraphics.line_to(x, plot_bottom());
-        mgraphics.stroke();
-
-        mgraphics.set_source_rgba(TEXT_CLR);
-        mgraphics.select_font_face("Arial");
-        mgraphics.set_font_size(8);
-        label = FREQ_LABELS[i];
-        metrics = mgraphics.text_measure(label);
-        mgraphics.move_to(x - metrics[0] * 0.5, plot_bottom() - 2);
-        mgraphics.show_text(label);
+    var fact10 = 10.0, freq = 0.0;
+    while (freq < MAX_FREQ) {
+        freq = freq + fact10;
+        var nf = fact10 * 10.0;
+        if (Math.floor(nf) === Math.floor(freq)) fact10 = nf;   // crossed a decade -> step x10
+        if (freq < MIN_FREQ || freq > MAX_FREQ) continue;
+        x = freq_to_x(freq);
+        if (x < L + 1 || x > R - 1) continue;
+        mgraphics.set_source_rgba((Math.abs(fact10 - freq) < 0.5) ? GRID_CLR : GRID_LIGHT_CLR);
+        sx = Math.floor(x) + 0.5;
+        mgraphics.move_to(sx, T); mgraphics.line_to(sx, B); mgraphics.stroke();
     }
 
-    for (i = 0; i < gain_lines.length; i++) {
-        var is_zero = Math.abs(gain_lines[i]) < 0.0001;
-        var is_extreme = (i === 0 || i === gain_lines.length - 1);
-        y = gain_to_y(gain_lines[i]);
-        // Lines: MINIMAL mode draws ONLY the 0 dB reference; full mode draws all.
-        if (!MINIMAL_GRID || is_zero) {
-            if (is_zero) {
-                mgraphics.set_source_rgba(ZERO_LINE_CLR);
-                mgraphics.set_line_width(1.0);
-            } else {
-                mgraphics.set_source_rgba(GRID_CLR);
-                mgraphics.set_line_width(0.5);
-            }
-            mgraphics.move_to(plot_left(), y);
-            mgraphics.line_to(plot_right(), y);
-            mgraphics.stroke();
-        }
-        // Labels: MINIMAL -> 0 dB + the top/bottom range only; full -> every major step.
-        var show_label = MINIMAL_GRID
-            ? (is_zero || is_extreme)
-            : (Math.abs(gain_lines[i] % gain_grid_step()) < 0.0001 || is_zero);
-        if (show_label) {
+    // ── EQ dB lines: 0 dB BRIGHT (the spine), ±6/±12 dim. Snapped to y+0.5.
+    for (i = 0; i < gains.length; i++) {
+        var isz = Math.abs(gains[i]) < 0.0001;
+        if (MINIMAL_GRID && !isz) continue;
+        y = gain_to_y(gains[i]); sy = Math.floor(y) + 0.5;
+        if (isz) { mgraphics.set_source_rgba(ZERO_LINE_CLR); mgraphics.set_line_width(1.0); }
+        else { mgraphics.set_source_rgba(GRID_LIGHT_CLR); mgraphics.set_line_width(0.5); }
+        mgraphics.move_to(L, sy); mgraphics.line_to(R, sy); mgraphics.stroke();
+    }
+
+    // ── THE premium move: edge-fade — gridlines DISSOLVE into BG_COLOR over the
+    //    outer ~44px L/R + the bottom label band, instead of hard-clipping.
+    var gW = 44.0;
+    mgraphics.rectangle(0, 0, W, H);
+    grad = mgraphics.pattern_create_linear(W - gW, 0, W, 0);
+    grad.add_color_stop_rgba(0.0, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 0.0);
+    grad.add_color_stop_rgba(0.9, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 1.0);
+    mgraphics.set_source(grad); mgraphics.fill_preserve();
+    grad = mgraphics.pattern_create_linear(gW, 0, 0, 0);
+    grad.add_color_stop_rgba(0.0, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 0.0);
+    grad.add_color_stop_rgba(0.9, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 1.0);
+    mgraphics.set_source(grad); mgraphics.fill();
+    grad = mgraphics.pattern_create_linear(0, B - 16, 0, B + 3);
+    grad.add_color_stop_rgba(0.0, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 0.0);
+    grad.add_color_stop_rgba(1.0, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 1.0);
+    mgraphics.set_source(grad); mgraphics.rectangle(0, B - 16, W, 19); mgraphics.fill();
+
+    // ── Labels (drawn AFTER the fade so they melt at the edges). Ableton Sans Bold.
+    mgraphics.select_font_face("Ableton Sans Bold");
+    mgraphics.set_font_size(9.5);
+    mgraphics.set_source_rgba(TEXT_CLR);
+    for (i = 0; i < FREQ_LINES.length; i++) {
+        x = freq_to_x(FREQ_LINES[i]);
+        if (x < L + 8 || x > R - 8) continue;
+        label = FREQ_LABELS[i];
+        metrics = mgraphics.text_measure(label);
+        mgraphics.move_to(x - metrics[0] * 0.5, B - 3);
+        mgraphics.show_text(label);
+    }
+    // EQ dB labels LEFT + spectrum dB labels RIGHT = the dual axis.
+    mgraphics.set_font_size(8.5);
+    for (i = 0; i < gains.length; i++) {
+        var iz = Math.abs(gains[i]) < 0.0001;
+        var ie = (i === 0 || i === gains.length - 1);
+        var show = MINIMAL_GRID ? (iz || ie) : (Math.abs(gains[i] % gain_grid_step()) < 0.0001 || iz);
+        if (!show) continue;
+        y = gain_to_y(gains[i]);
+        label = iz ? "0" : (gains[i] > 0 ? "+" + gains[i] : "" + gains[i]);
+        mgraphics.set_source_rgba(TEXT_CLR);
+        mgraphics.move_to(3, y + 3); mgraphics.show_text(label);
+    }
+    if (!EXTERNAL_SPECTRUM) {
+        var sdbs = [0, -12, -24, -36, -48, -60], sl;
+        for (i = 0; i < sdbs.length; i++) {
+            y = analyzer_db_to_y(sdbs[i]);
+            if (y < T + 6 || y > B - 6) continue;
+            sl = "" + sdbs[i];
+            metrics = mgraphics.text_measure(sl);
             mgraphics.set_source_rgba(TEXT_CLR);
-            mgraphics.select_font_face("Arial");
-            mgraphics.set_font_size(8);
-            label = gain_lines[i] > 0 ? "+" + gain_lines[i] : "" + gain_lines[i];
-            if (is_zero) label = " 0";
-            mgraphics.move_to(2, y + 3);
-            mgraphics.show_text(label);
+            mgraphics.move_to(W - metrics[0] - 3, y + 3); mgraphics.show_text(sl);
         }
     }
 }
@@ -1582,23 +1622,6 @@ function draw_analyzer_snapshot() {
     mgraphics.stroke();
 }
 
-// Catmull-Rom smooth path through (xs[i], ys[i]) for i in [0, n). The pen must
-// already be at (xs[0], ys[0]). Each segment becomes a cubic bezier (curve_to)
-// so the spectrum reads as a SMOOTH ROLL (EQ Eight) instead of angular straight
-// segments / plateau steps from the log-binned data — the main "blocky" fix.
-function analyzer_curve_through(xs, ys, n) {
-    var i, x0, y0, x1, y1, x2, y2, x3, y3;
-    for (i = 0; i < n - 1; i++) {
-        x1 = xs[i]; y1 = ys[i];
-        x2 = xs[i + 1]; y2 = ys[i + 1];
-        x0 = i > 0 ? xs[i - 1] : x1; y0 = i > 0 ? ys[i - 1] : y1;
-        x3 = i < n - 2 ? xs[i + 2] : x2; y3 = i < n - 2 ? ys[i + 2] : y2;
-        mgraphics.curve_to(x1 + (x2 - x0) / 6.0, y1 + (y2 - y0) / 6.0,
-                           x2 - (x3 - x1) / 6.0, y2 - (y3 - y1) / 6.0,
-                           x2, y2);
-    }
-}
-
 function draw_analyzer() {
     var i, n, freq;
     var xs = [];
@@ -1625,32 +1648,64 @@ function draw_analyzer() {
         py[i] = analyzer_db_to_y(analyzer_tilted_db(analyzer_peaks[i], tilt));
     }
 
-    // Filled area under the spectrum, with a vertical gradient that fades
-    // toward the floor. One pattern fill for the whole shape (cheap; avoids
-    // per-slice fills).
-    var grad = mgraphics.pattern_create_linear(left, top, left, bottom);
-    grad.add_color_stop_rgba(0.0,
-        ANALYZER_FILL_CLR[0], ANALYZER_FILL_CLR[1], ANALYZER_FILL_CLR[2],
-        ANALYZER_FILL_CLR[3]);
-    grad.add_color_stop_rgba(1.0,
-        ANALYZER_FILL_CLR[0], ANALYZER_FILL_CLR[1], ANALYZER_FILL_CLR[2], 0.0);
-    mgraphics.set_source(grad);
-    mgraphics.move_to(xs[0], bottom);
+    // Two render styles (set_analyzer_style): both use the SAME max-per-column data
+    // ROUNDED with path_roundcorners (spectRCorners=4); only the fill weight, line
+    // and smoothing differ.
+    //   0 Rainbow — thin colour line + 5% wash (display.js StereoSpectrum), detail kept.
+    //   1 EQ8     — heavy muted-grey solid fill + an extra ±3-tap smooth that lifts the
+    //               inter-harmonic valleys into the creamy filled envelope of Ableton EQ8.
+    var ai;
+    var style = ANALYZER_STYLE;        // 0 Rainbow, 1 EQ8, 2 Both
+    var eq8 = (style === 1);
+    var both = (style === 2);
+    if (eq8) {
+        // Creamy EQ8 smooth (pure EQ8 only — Rainbow + Both keep max-per-column
+        // detail so resonances stay visible for real EQ work).
+        var sm = [], j, acc, cnt;   // box-smooth in y (= dB; the map is linear) → fill the comb gaps
+        for (i = 0; i < n; i++) {
+            acc = 0; cnt = 0;
+            for (j = i - 3; j <= i + 3; j++) { if (j >= 0 && j < n) { acc += ys[j]; cnt++; } }
+            sm[i] = acc / cnt;
+        }
+        ys = sm;
+    }
+    // Fill: Rainbow = light cyan wash; EQ8 = heavy grey; Both = a grey backdrop
+    // (lighter than EQ8) UNDER the crisp cyan line — energy + a precise envelope.
+    var fc, fTopA, fBotA;
+    if (eq8)       { fc = ANALYZER_EQ8_CLR;  fTopA = 0.30; fBotA = 0.46; }
+    else if (both) { fc = ANALYZER_EQ8_CLR;  fTopA = 0.16; fBotA = 0.30; }
+    else           { fc = ANALYZER_FILL_CLR; fTopA = ANALYZER_FILL_CLR[3] * 0.5; fBotA = ANALYZER_FILL_CLR[3]; }
+    mgraphics.move_to(xs[0], bottom + 2);
     mgraphics.line_to(xs[0], ys[0]);
-    analyzer_curve_through(xs, ys, n);   // smooth top edge
-    mgraphics.line_to(xs[n - 1], bottom);
+    for (ai = 1; ai < n; ai++) mgraphics.line_to(xs[ai], ys[ai]);
+    mgraphics.line_to(xs[n - 1], bottom + 2);
     mgraphics.close_path();
+    mgraphics.path_roundcorners(ANALYZER_RCORNERS);
+    var grad = mgraphics.pattern_create_linear(left, top, left, bottom);
+    grad.add_color_stop_rgba(0.0, fc[0], fc[1], fc[2], fTopA);
+    grad.add_color_stop_rgba(1.0, fc[0], fc[1], fc[2], fBotA);
+    mgraphics.set_source(grad);
     mgraphics.fill();
 
-    // Spectrum line on top of the fill (same smooth curve).
-    mgraphics.set_source_rgba(ANALYZER_LINE_CLR);
-    mgraphics.set_line_width(1.4);
+    // Envelope on top — Rainbow = bright thin colour line; EQ8 = a quiet grey edge
+    // (the fill is the spectrum, not the line).
     mgraphics.move_to(xs[0], ys[0]);
-    analyzer_curve_through(xs, ys, n);
+    for (ai = 1; ai < n; ai++) mgraphics.line_to(xs[ai], ys[ai]);
+    mgraphics.path_roundcorners(ANALYZER_RCORNERS);
+    if (eq8) {
+        mgraphics.set_source_rgba(ANALYZER_EQ8_CLR[0], ANALYZER_EQ8_CLR[1], ANALYZER_EQ8_CLR[2], 0.85);
+        mgraphics.set_line_width(1.0);
+    } else {
+        mgraphics.set_source_rgba(ANALYZER_LINE_CLR);
+        mgraphics.set_line_width(1.1);
+    }
     mgraphics.stroke();
 
-    // Peak-hold line (slow-decaying), drawn thin above the live spectrum.
-    if (ANALYZER_PEAK_CLR[3] > 0.001) {
+    // Peak-hold line (slow-decaying), drawn thin above the live spectrum. Cyan +
+    // grassy (the peaks aren't smoothed), so it belongs to the DETAIL styles only:
+    // skip it in EQ8 mode, where it would read as a second overlaid spectrum on top
+    // of the clean grey fill (EQ8 = monochrome smooth).
+    if (!eq8 && ANALYZER_PEAK_CLR[3] > 0.001) {
         mgraphics.set_source_rgba(ANALYZER_PEAK_CLR);
         mgraphics.set_line_width(1.0);
         var started = 0;
@@ -1780,6 +1835,7 @@ function draw_composite_curve() {
     var zero_y = gain_to_y(0);
     var xs = [];
     var ys = [];
+    var vis = [];
     var i;
 
     for (j = 0; j < NUM_POINTS; j++) {
@@ -1790,15 +1846,16 @@ function draw_composite_curve() {
                 total_db += band_response_db(i, f);
             }
         }
-        x = freq_to_x(f);
-        if (curve_db_is_visible(total_db)) {
-            y = gain_to_y(total_db);
-            xs[j] = x;
-            ys[j] = y;
-        } else {
-            xs[j] = x;
-            ys[j] = null;
-        }
+        // The FILL plots EVERY point clamped to the display floor, so a sustained
+        // cut (LP / HP / deep notch) pins to the bottom — never the old phantom
+        // rise to 0 dB. The STROKE, though, is GAPPED where the curve is at/below
+        // the floor (vis=0): the bright line drops and exits through the bottom
+        // rather than running as a hard line along the bottom edge — the value is
+        // off the bottom of the scale, so its line shouldn't show there.
+        vis[j] = (total_db > DISPLAY_FLOOR + 0.05) ? 1 : 0;
+        if (total_db < DISPLAY_FLOOR) total_db = DISPLAY_FLOOR;
+        xs[j] = freq_to_x(f);
+        ys[j] = gain_to_y(total_db);
     }
 
     if (num_bands > 0) {
@@ -1820,7 +1877,7 @@ function draw_composite_curve() {
         mgraphics.set_source(cgrad);
         mgraphics.move_to(xs[0], zero_y);
         for (j = 0; j < NUM_POINTS; j++) {
-            if (ys[j] !== null) mgraphics.line_to(xs[j], ys[j]);
+            mgraphics.line_to(xs[j], ys[j]);
         }
         mgraphics.line_to(xs[NUM_POINTS - 1], zero_y);
         mgraphics.close_path();
@@ -1828,20 +1885,15 @@ function draw_composite_curve() {
     }
 
     if (num_bands > 0) {
+        // Stroke only the in-range part; gap where the curve sits at/below the
+        // display floor so the line exits the bottom instead of a hard bottom edge.
         mgraphics.set_source_rgba(COMPOSITE_CLR);
         mgraphics.set_line_width(2.0);
         started = 0;
         for (j = 0; j < NUM_POINTS; j++) {
-            if (ys[j] === null) {
-                started = 0;
-                continue;
-            }
-            if (!started) {
-                mgraphics.move_to(xs[j], ys[j]);
-                started = 1;
-            } else {
-                mgraphics.line_to(xs[j], ys[j]);
-            }
+            if (!vis[j]) { started = 0; continue; }
+            if (!started) { mgraphics.move_to(xs[j], ys[j]); started = 1; }
+            else mgraphics.line_to(xs[j], ys[j]);
         }
         if (started) mgraphics.stroke();
     }
@@ -1970,8 +2022,15 @@ function draw_nodes() {
         mgraphics.set_source_rgba(1.0, 1.0, 1.0, band_cache[i].enabled ? 0.88 : 0.42);
         mgraphics.select_font_face("Arial");
         mgraphics.set_font_size(i === selected_band ? 9.0 : 8.0);
-        mgraphics.move_to(x + r + 3, y - r + 1);
-        mgraphics.show_text("" + (i + 1));
+        // The band-number caption sits upper-RIGHT of the node, but FLIP it to the
+        // left when the node nears the right edge so it doesn't crowd the right-edge
+        // dB scale labels (user-flagged: a node at ~19 kHz parked its "4" on -36).
+        var cap = "" + (i + 1);
+        var capw = cap.length * 6 + 2;
+        var capx = x + r + 3;
+        if (capx + capw > plot_right()) capx = x - r - 3 - capw;
+        mgraphics.move_to(capx, y - r + 1);
+        mgraphics.show_text(cap);
     }
 }
 
@@ -2746,6 +2805,13 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     last_click_ms = now_ms;
     last_click_band = clicked_band;
 
+    // Anchor every press for the Alt axis-constrain math; default to a non-Alt press.
+    drag_start_x = x;
+    drag_start_y = y;
+    alt_drag_pending = 0;
+    alt_moved = 0;
+    constrain_axis = 0;
+
     if (middle_click) {
         dragging = 0;
         drag_mode = 0;
@@ -2778,11 +2844,19 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     if (option_click) {
         if (dynamic_hit >= 0 || hit >= 0) {
             var opt_idx = dynamic_hit >= 0 ? dynamic_hit : hit;
-            bands[opt_idx].enabled = bands[opt_idx].enabled ? 0 : 1;
+            // Pro-Q: Alt+CLICK toggles the band bypass, Alt+DRAG constrains to one
+            // axis. We can't tell which yet, so ARM a drag now and decide on release:
+            // a tap (no travel) toggles bypass in onpointerup; a move constrains.
             selected_band = opt_idx;
-            rebuild_band_cache();
-            outlet(0, "band_enable", opt_idx, bands[opt_idx].enabled);
+            dragging = 1;
+            drag_mode = (dynamic_hit >= 0) ? 2 : 1;
+            drag_start_freq = bands[opt_idx].freq;
+            drag_start_gain = bands[opt_idx].gain;
+            drag_start_q = bands[opt_idx].q;
+            drag_start_dynamic = bands[opt_idx].dynamic_amount || 0.0;
+            alt_drag_pending = 1;
             outlet(0, "selected_band", opt_idx);
+            close_node_menu();
             mgraphics.redraw();
             return;
         }
@@ -2907,7 +2981,7 @@ function handle_double_click(x, y) {
     // (Pro-Q create gesture), so a double-click on empty space is a no-op.
 }
 
-function handle_drag_at(x, y, but, cmd, shift) {
+function handle_drag_at(x, y, but, cmd, shift, opt) {
     if (but === 0) {
         dragging = 0;
         drag_mode = 0;
@@ -2915,6 +2989,11 @@ function handle_drag_at(x, y, but, cmd, shift) {
         return;
     }
     if (!dragging || selected_band < 0 || selected_band >= num_bands) return;
+
+    // Once an Alt-armed drag travels, it's a constrain-drag, not a bypass tap.
+    if (alt_drag_pending && (Math.abs(x - drag_start_x) > 2 || Math.abs(y - drag_start_y) > 2)) {
+        alt_moved = 1;
+    }
 
     var b = bands[selected_band];
     var cache = band_cache[selected_band];
@@ -2980,6 +3059,26 @@ function handle_drag_at(x, y, but, cmd, shift) {
 
     if (shift) {
         new_freq = b.freq + (new_freq - b.freq) * 0.15;
+    }
+
+    // Pro-Q Alt+drag: constrain to ONE axis, chosen by the dominant initial travel.
+    // Horizontal -> frequency only (hold gain + Q); vertical -> gain/Q only (hold freq).
+    if (opt && drag_mode === 1) {
+        var adx = Math.abs(x - drag_start_x);
+        var ady = Math.abs(y - drag_start_y);
+        if (constrain_axis === 0 && (adx > 3 || ady > 3)) {
+            constrain_axis = (adx >= ady) ? 1 : 2;
+        }
+        if (constrain_axis === 1) {
+            new_gain = drag_start_gain;
+            new_q = drag_start_q;
+        } else if (constrain_axis === 2) {
+            new_freq = drag_start_freq;
+        } else {
+            new_freq = drag_start_freq;
+            new_gain = drag_start_gain;
+            new_q = drag_start_q;
+        }
     }
 
     // Continuous frequency (0.1 Hz resolution) — the old 10 Hz snap above
@@ -3131,7 +3230,8 @@ function onpointermove(pointerevent) {
             y,
             buttons,
             pointer_command_key(pointerevent, 0),
-            pointer_shift_key(pointerevent, 0)
+            pointer_shift_key(pointerevent, 0),
+            pointer_option_key(pointerevent, 0)
         );
         return;
     }
@@ -3147,8 +3247,17 @@ function onpointerup(pointerevent) {
     var y = pointer_y(pointerevent, 0);
     if (sketching) { sketch_commit(); return; }
     if (dragging) {
+        // Pro-Q: an Alt+CLICK (armed a drag but never travelled) toggles band bypass.
+        if (alt_drag_pending && !alt_moved && selected_band >= 0 && selected_band < num_bands) {
+            bands[selected_band].enabled = bands[selected_band].enabled ? 0 : 1;
+            rebuild_band_cache();
+            outlet(0, "band_enable", selected_band, bands[selected_band].enabled);
+        }
         dragging = 0;
         drag_mode = 0;
+        alt_drag_pending = 0;
+        alt_moved = 0;
+        constrain_axis = 0;
         mgraphics.redraw();
     } else {
         handle_hover(x, y);
@@ -3177,7 +3286,7 @@ function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) {
 
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
     if (sketch_mode) return;
-    handle_drag_at(x, y, but, cmd, shift);
+    handle_drag_at(x, y, but, cmd, shift, opt);
 }
 
 function onidle(x, y, but, cmd, shift, caps, opt, ctrl) {

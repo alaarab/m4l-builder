@@ -14,10 +14,11 @@ from ..device import (
 from ..freeze import (
     assemble_frozen_amxd,
     device_to_frozen_bytes,
+    extract_frozen_amxd,
     freeze_amxd_file,
 )
 from ..gen_lint import lint_genexpr
-from ..gen_patcher import build_gendsp
+from ..gen_patcher import build_gendsp, embed_gendsp
 from ..gen_sim import GenKernel, UnsupportedKernel, simulate
 from ..gen_snippets import (
     biquad_df1,
@@ -96,6 +97,7 @@ __all__ = [
     "find_v8ui_contract_issues",
     "validate_v8ui_contract",
     "build_gendsp",
+    "embed_gendsp",
     "lint_genexpr",
     "ms_encode",
     "ms_decode",
@@ -133,6 +135,7 @@ __all__ = [
     "build_amxd",
     "write_amxd",
     "assemble_frozen_amxd",
+    "extract_frozen_amxd",
     "device_to_frozen_bytes",
     "freeze_amxd_file",
     "newobj",

@@ -14,6 +14,11 @@ from .validation import BuildValidationError, format_validation_issues
 
 
 def _parameter_banks_payload(device) -> dict[str, dict]:
+    # Live/Push expect each bank's `parameters` to be a FLAT 8-slot list of param
+    # LONGNAME strings, positioned by slot, with "-" placeholders for empty slots
+    # (verified against real devices, e.g. SABROI AS Console). Emitting a
+    # list-of-dicts {index,name,visible} silently broke Push banks on every
+    # multi-param device. parameter_longname == ParameterSpec.name here.
     banks: dict[str, dict] = {}
     for varname, (bank, position) in device._param_banks.items():
         bank_key = str(bank)
@@ -21,16 +26,12 @@ def _parameter_banks_payload(device) -> dict[str, dict]:
             banks[bank_key] = {
                 "index": bank,
                 "name": device._param_bank_names.get(bank, ""),
-                "parameters": [],
+                "parameters": ["-"] * 8,
             }
-        spec = device.parameter(varname)
-        banks[bank_key]["parameters"].append(
-            {
-                "index": position,
-                "name": varname,
-                "visible": 1 if spec is None else getattr(spec, "visible", 1),
-            }
-        )
+        if 0 <= position < 8:
+            spec = device.parameter(varname)
+            longname = getattr(spec, "name", None) or varname
+            banks[bank_key]["parameters"][position] = longname
     return banks
 
 
@@ -210,18 +211,30 @@ def device_from_amxd(path: str):
         bank_name = bank_data.get("name") or None
         if bank_name is not None:
             device.set_parameter_bank_name(bank_index, bank_name)
-        for entry in bank_data.get("parameters", []):
-            name = entry.get("name")
-            if name is None:
-                continue
-            device.assign_parameter_bank(
-                name,
-                bank=bank_index,
-                position=entry.get("index", 0),
-                bank_name=bank_name,
-            )
-            spec = device.parameter(name)
-            if spec is not None and "visible" in entry:
-                spec.visible = int(entry.get("visible", 1))
+        for position, entry in enumerate(bank_data.get("parameters", [])):
+            if isinstance(entry, dict):
+                # Legacy emitter shape {index,name,visible} — still readable.
+                name = entry.get("name")
+                if name is None:
+                    continue
+                device.assign_parameter_bank(
+                    name,
+                    bank=bank_index,
+                    position=entry.get("index", position),
+                    bank_name=bank_name,
+                )
+                spec = device.parameter(name)
+                if spec is not None and "visible" in entry:
+                    spec.visible = int(entry.get("visible", 1))
+            else:
+                # Correct Live shape: flat 8-slot longname list, "-" = empty slot.
+                if not entry or entry == "-":
+                    continue
+                device.assign_parameter_bank(
+                    entry,
+                    bank=bank_index,
+                    position=position,
+                    bank_name=bank_name,
+                )
 
     return device

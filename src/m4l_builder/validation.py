@@ -38,6 +38,16 @@ class BuildValidationError(ValueError):
         super().__init__(format_validation_issues(combined))
 
 
+# Pure-decoration UI maxclasses: a background panel, a text label, a divider rule,
+# an image. They carry no signal/data and are NEVER patched, so the orphan-box
+# check must not flag them (they would ALWAYS be "orphans", burying a genuinely
+# unwired DSP/message object). Grounded in the kit's own emitted maxclass strings
+# (panel / live.comment / live.line / fpic) plus the reversed-device "comment".
+_DECORATION_MAXCLASSES = frozenset(
+    {"panel", "comment", "live.comment", "live.line", "fpic"}
+)
+
+
 def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[ValidationIssue]:
     """Validate common structural and Max-specific graph rules."""
     issues = []
@@ -189,15 +199,20 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
             )
 
     for box_id in seen_ids:
-        if box_id not in connected:
-            issues.append(
-                ValidationIssue(
-                    code="orphan-box",
-                    message=f"Orphan box (no connections): {box_id}",
-                    severity="warning",
-                    box_id=box_id,
-                )
+        if box_id in connected:
+            continue
+        # Skip pure-decoration UI objects — they are never patched, so flagging
+        # them "orphan" is noise that hides a real unwired FUNCTIONAL box.
+        if seen_ids[box_id].get("maxclass") in _DECORATION_MAXCLASSES:
+            continue
+        issues.append(
+            ValidationIssue(
+                code="orphan-box",
+                message=f"Orphan box (no connections): {box_id}",
+                severity="warning",
+                box_id=box_id,
             )
+        )
 
     return issues
 
