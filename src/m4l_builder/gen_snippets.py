@@ -21,6 +21,7 @@ __all__ = [
     "ms_encode",
     "ms_decode",
     "ms_width",
+    "ms_width_equal_power",
     "ms_mode_split",
     "ms_mode_merge",
     "drive_blend",
@@ -59,6 +60,7 @@ __all__ = [
     "moog_ladder",
     "smooth_coeffs",
     "kweight_lufs",
+    "grain_window_lookup",
 ]
 
 
@@ -110,6 +112,44 @@ def ms_width(
         f"{side} = ({left} - {right}) * 0.5 * {width};\n"
         f"{out_left} = {mid} + {side};\n"
         f"{out_right} = {mid} - {side};"
+    )
+
+
+def ms_width_equal_power(
+    left: str,
+    right: str,
+    out_left: str,
+    out_right: str,
+    width: str,
+    *,
+    mid: str = "mid",
+    side: str = "side",
+) -> str:
+    """Equal-power M/S stereo width: an orthonormal M/S encode/decode with a
+    sine/cosine gain law on mid and side.
+
+    ``mid`` and ``side`` are ``(L ± R)/sqrt(2)``; the width angle
+    ``theta = width * pi/2`` scales them by ``sqrt(2)·cos(theta)`` and
+    ``sqrt(2)·sin(theta)``, and the result decodes back through ``/sqrt(2)``.
+    ``gMid² + gSide² = 2`` at every width, so for decorrelated L/R material the
+    output power stays constant from mono to full side — the usual equal-power
+    pan law applied to the M/S pair. The legacy :func:`ms_width` instead scales
+    the side by ``width`` (side energy grows with ``width**2``). Prefer this for
+    any real stereo-width control.
+
+    CONVENTION DIFFERS from :func:`ms_width`: here ``width`` is ``0..1`` with **0.5
+    = neutral** (bit-for-bit passthrough within float rounding; 0 = mono, 1 =
+    side only); the legacy primitive uses ``1 = neutral``. ``width`` is clipped
+    to 0..1. ``mid`` / ``side`` name the scratch variables (rename them to avoid
+    a clash when the primitive is used twice in one codebox).
+    """
+    return (
+        f"{mid} = ({left} + {right}) * 0.7071067811865476;\n"
+        f"{side} = ({left} - {right}) * 0.7071067811865476;\n"
+        f"{mid} = {mid} * 1.4142135623730951 * cos(clip({width}, 0, 1) * halfpi);\n"
+        f"{side} = {side} * 1.4142135623730951 * sin(clip({width}, 0, 1) * halfpi);\n"
+        f"{out_left} = ({mid} + {side}) * 0.7071067811865476;\n"
+        f"{out_right} = ({mid} - {side}) * 0.7071067811865476;"
     )
 
 
@@ -1432,3 +1472,28 @@ def kweight_lufs(
         f"{out} = -0.691 + 10. * log10({p}_ms + 0.0000000001);"
     )
     return "\n".join([decls, coeffs, l_s1, l_s2, r_s1, r_s2, ms])
+
+
+def grain_window_lookup(
+    phase: str,
+    *,
+    buf: str = "buf_win",
+    chan: str = "0",
+    out: str = "win",
+    interp: str = "linear",
+) -> str:
+    """Read a grain amplitude-window value from a Buffer by NORMALIZED phase.
+
+    Emits the standard window-lookup idiom::
+
+        win = peek(buf_win, <phase>, <chan>, index="phase", interp="linear");
+
+    ``index="phase"`` makes ``phase`` a 0..1 normalized position into the window
+    (so the same lookup works for any buffer length), and ``interp="linear"``
+    smooths between samples. ``buf`` holds the window shape (e.g. a Hann/Tukey
+    table), ``chan`` selects the window variant (a granular device stores a per-voice
+    window index, e.g. ``peek(data_winPokedIndex, 0, i)``). Multiply a grain's
+    sample by ``out`` to apply the envelope; sum ``out`` across voices for the
+    normalization total (a granular device's ``totalWin``).
+    """
+    return f'{out} = peek({buf}, {phase}, {chan}, index="phase", interp="{interp}");'
