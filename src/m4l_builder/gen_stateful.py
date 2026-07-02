@@ -15,7 +15,7 @@ Verified gen signatures (Codebox form): ``poke(data, value, channel, index)``,
 from __future__ import annotations
 
 __all__ = [
-    "viz_declares", "viz_poke_block", "poly_lfo_engine",
+    "viz_declares", "viz_poke_block", "poly_lfo_engine", "freeze_capture_block",
     "rampsmooth_fn", "ring_delay", "lowpass_12_fn", "highpass_12_fn",
     "allpass_fn", "diffuse_fn", "granular_voice_fn", "compose_gen_code",
     "variable_sigmoid_fn", "modulated_allpass_reverb",
@@ -249,6 +249,40 @@ def granular_voice_fn() -> str:
     polyphonic playback loop with a freeze mode, returning ``(outR, outL)``. See
     ``GRANULAR_VOICE_FN`` for the required Data/Buffer/Delay caller contract."""
     return GRANULAR_VOICE_FN
+
+
+def freeze_capture_block(*, freeze_param: str = "freezeTgt",
+                         data: str = "data_freeze",
+                         lines: tuple = ("delaySigR", "delaySigL"),
+                         capture_samps: str = "freezeSamps",
+                         ramp_ms: float = 400.0,
+                         ramp_state: str = "his_freezeRamp") -> str:
+    """The Particle-Reverb freeze gesture for a granular caller: on the RISING
+    edge of ``freeze_param``, copy the last ``capture_samps`` of both Delay
+    ``lines`` TIME-REVERSED into ``data`` (channels 0/1 — verbatim: ``index =
+    freezeSamps - i``), then slew a 0..1 ramp over ``ramp_ms`` whose
+    equal-power split ``freezeG = sqrt(ramp)`` / ``invFreezeG = sqrt(1-ramp)``
+    feeds ``granular_vp``'s freeze/invFreeze gains — the click-free seam.
+
+    Caller declares ``History {ramp_state}(0);``, the ``Data {data}(n, 2)``,
+    both ``Delay`` lines, and (if symbolic) ``capture_samps``. Splice the
+    result into the per-sample body; it defines ``freezeG``/``invFreezeG``.
+    """
+    line_r, line_l = lines
+    return (
+        f"freezeChange = change({freeze_param} > 0.5);\n"
+        f"if (freezeChange == 1) {{\n"
+        f"\tfor (fz_i = 0; fz_i < {capture_samps}; fz_i += 1) {{\n"
+        f"\t\tfz_idx = {capture_samps} - fz_i;\n"
+        f"\t\tpoke({data}, {line_r}.read(fz_idx), fz_i, 0);\n"
+        f"\t\tpoke({data}, {line_l}.read(fz_idx), fz_i, 1);\n"
+        f"\t}}\n"
+        f"}}\n"
+        f"{ramp_state} = clamp({ramp_state} + "
+        f"(({freeze_param} > 0.5) * 2 - 1) / mstosamps({ramp_ms}), 0, 1);\n"
+        f"freezeG = sqrt({ramp_state});\n"
+        f"invFreezeG = sqrt(1 - {ramp_state});"
+    )
 
 
 def _param_decl(p) -> str:
