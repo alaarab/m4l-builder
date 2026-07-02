@@ -202,3 +202,47 @@ class TestOtherCells:
         s.finalize()
         data = d.to_bytes()
         assert len(data) > 1000
+
+
+class TestLayoutLint:
+    def test_surface_device_lints_clean(self):
+        d = _device()
+        s = Surface(d, accent="pressure")
+        s.hero("h", width=200)
+        sec = s.section("a", "COMP", cols=3)
+        for i in range(6):
+            sec.dial(f"P{i}")
+        s.finalize()
+        codes = {i.code for i in d.lint()}
+        assert "control-overlap" not in codes
+        assert "dead-zone" not in codes
+        assert "width-mismatch" not in codes
+        assert "setwidth-mismatch" not in codes
+
+    def test_dead_zone_and_width_mismatch_detected(self):
+        d = _device()
+        s = Surface(d, accent="pressure")
+        sec = s.section("a", None, cols=2)
+        sec.dial("P0")
+        s.finalize()
+        d.width = d.width + 160          # simulate the stale-width bug class
+        codes = {i.code for i in d.lint()}
+        assert "dead-zone" in codes and "width-mismatch" in codes
+
+    def test_setwidth_wider_than_device_is_error(self):
+        d = _device()
+        s = Surface(d, accent="pressure")
+        sec = s.section("a", None, cols=2)
+        sec.dial("P0")
+        w = s.finalize()
+        d.add_width_collapse(full_width=w + 138, mini_width=100,
+                             rect=[12, 1, 42, 9])
+        issues = [i for i in d.lint() if i.code == "setwidth-mismatch"]
+        assert issues and issues[0].severity == "error"
+
+    def test_overlapping_dials_detected(self):
+        d = AudioEffect("overlap", width=200, height=168, theme=GRAPHITE)
+        d.add_dial("a", "PA", [20, 20, 41, 35], min_val=0, max_val=1, initial=0)
+        d.add_dial("b", "PB", [30, 30, 41, 35], min_val=0, max_val=1, initial=0)
+        codes = {i.code for i in d.lint()}
+        assert "control-overlap" in codes
