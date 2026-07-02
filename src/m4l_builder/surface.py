@@ -202,6 +202,7 @@ class Section:
 
     def toggle(self, param_name: str, label: str | None = None, *,
                on: str = "ON", off: str = "OFF", initial: int = 0,
+               shortname: str | None = None,
                at: tuple[int, int] | None = None, **kwargs: Any) -> str:
         """A captioned 2-state ``live.text`` cell (self-documenting enum, corpus
         convention). Returns the button box id."""
@@ -216,13 +217,16 @@ class Section:
             textcolor=list(theme.text_dim), textoncolor=list(TEXT_ON_ACCENT),
         )
         bkw.update(kwargs)
+        spec = ParameterSpec(name=param_name, parameter_type=2,
+                             enum=[off, on], initial=[initial],
+                             initial_enable=True)
+        if shortname:
+            spec.shortname = shortname
         self.surface.device.add_live_text(  # type: ignore[attr-defined]
             f"{p}_btn", param_name,
             [cx, cy + ns.CAPTION_H + ns.CAPTION_GAP, ns.CELL_W, SHORT_CTRL_H],
             text_on=on, text_off=off,
-            parameter=ParameterSpec(name=param_name, parameter_type=2,
-                                    enum=[off, on], initial=[initial],
-                                    initial_enable=True),
+            parameter=spec,
             **bkw,
         )
         return f"{p}_btn"
