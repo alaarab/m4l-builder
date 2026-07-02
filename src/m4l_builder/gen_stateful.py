@@ -15,6 +15,7 @@ Verified gen signatures (Codebox form): ``poke(data, value, channel, index)``,
 from __future__ import annotations
 
 __all__ = [
+    "viz_declares", "viz_poke_block",
     "rampsmooth_fn", "ring_delay", "lowpass_12_fn", "highpass_12_fn",
     "allpass_fn", "diffuse_fn", "granular_voice_fn", "compose_gen_code",
     "variable_sigmoid_fn", "modulated_allpass_reverb",
@@ -25,6 +26,33 @@ __all__ = [
     "OP_FN", "QPOW_FN", "FADE_FN", "RAMP_FN", "TANA_FN", "SVF_FN", "LFO_OSC_FN",
 ]
 
+
+# ── D4 viz bus: gen -> named buffer~ -> jsui (the corpus "keystone for live
+# displays"; stranular / lfo-cluster / Particle-Reverb verbatim idiom). The gen
+# side declares BARE Buffer names and pokes per-frame screen state on a
+# counter-gated GUI tick; the DEVICE binds each Buffer to a ---scoped buffer~
+# via a rebind message into gen~ inlet 0 (see Device.add_viz_bus), and a
+# buffer_viz_js jsui peeks the same buffers on its own poll Task.
+
+def viz_declares(*buffers: str, counter: str = "his_guiCout") -> str:
+    """Declarations for a viz bus: bare ``Buffer`` decls (bound at load by the
+    device-side rebind message — the stranular contract) plus the GUI-tick
+    counter ``History``. Place with your OTHER declarations, BEFORE any
+    executable statement (gen requires all decls first)."""
+    lines = [f"Buffer {name};" for name in buffers]
+    lines.append(f"History {counter}(0);")
+    return "\n".join(lines)
+
+
+def viz_poke_block(body: str, *, refresh_ms: float = 40.0,
+                   counter: str = "his_guiCout") -> str:
+    """The counter-gated GUI tick (stranular/lfo-cluster verbatim): every
+    ``refresh_ms`` worth of samples, run ``body`` once — the block that pokes
+    per-voice/per-frame screen state into the viz Buffers. Declare ``counter``
+    via :func:`viz_declares`. Splice the result into the per-sample body."""
+    indented = "\n".join("\t" + ln for ln in body.strip().split("\n"))
+    return (f"{counter} = wrap({counter} + 1, 0, mstosamps({refresh_ms}));\n"
+            f"if ({counter} == 1) {{\n{indented}\n}}")
 
 # Verbatim from Particle-Reverb_6.0 — the granular voice scatter (scheduler +
 # polyphonic playback + freeze mode). The keystone for a granular device.

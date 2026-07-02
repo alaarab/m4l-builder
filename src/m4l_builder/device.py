@@ -1519,6 +1519,68 @@ class Device(GraphContainer):
             ids.append(bid)
         return ids
 
+    def add_viz_bus(
+        self,
+        buffers,
+        *,
+        gen_box_id: str,
+        viz_box_id: str,
+        set_msg: str = "set_buffers",
+        id_prefix: str = "vizbus",
+        x: int = 700,
+        y: int = 2600,
+    ) -> dict:
+        """Wire the D4 gen->named-buffer->jsui viz bus (the corpus keystone for
+        live displays; stranular-verbatim contract).
+
+        ``buffers``: list of ``(name, samps, channels)``. For each, adds a
+        ``buffer~ ---<name> -1 <chans> @samps <samps>`` box. Then ONE
+        ``live.thisdevice -> deferlow -> t b b`` fires, right-first:
+        (1) the gen REBIND message ``<n1> ---<n1>, <n2> ---<n2>, ...`` into
+        ``gen_box_id`` inlet 0 — gen's bare ``Buffer <n>;`` decls bind to the
+        ``---``-resolved buffer~ objects (grounded in stranular's top patcher);
+        (2) ``<set_msg> ---<n1> ---<n2> ...`` into ``viz_box_id`` inlet 0 —
+        delivers the resolved names to the buffer_viz jsui and starts its poll
+        Task (``---`` substitutes in message-box text at load).
+
+        Returns the created box ids.
+        """
+        p = id_prefix
+        for i, (name, samps, chans) in enumerate(buffers):
+            self.add_newobj(
+                f"{p}_buf{i}", f"buffer~ ---{name} -1 {int(chans)} @samps {int(samps)}",
+                numinlets=1, numoutlets=2, outlettype=["float", "bang"],
+                patching_rect=[x + i * 190, y, 180, 20])
+        rebind_text = ", ".join(f"{name} ---{name}" for name, _s, _c in buffers)
+        names_text = f"{set_msg} " + " ".join(f"---{name}" for name, _s, _c in buffers)
+        self.add_newobj(f"{p}_td", "live.thisdevice", numinlets=1, numoutlets=3,
+                        outlettype=["bang", "int", "int"],
+                        patching_rect=[x, y + 30, 90, 20])
+        self.add_newobj(f"{p}_dl", "deferlow", numinlets=1, numoutlets=1,
+                        outlettype=[""], patching_rect=[x, y + 60, 60, 20])
+        self.add_newobj(f"{p}_t", "t b b", numinlets=1, numoutlets=2,
+                        outlettype=["bang", "bang"],
+                        patching_rect=[x, y + 90, 50, 20])
+        self.add_box({"box": {
+            "id": f"{p}_rebind", "maxclass": "message", "text": rebind_text,
+            "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+            "patching_rect": [x, y + 120, 260, 20]}})
+        self.add_box({"box": {
+            "id": f"{p}_names", "maxclass": "message", "text": names_text,
+            "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+            "patching_rect": [x + 280, y + 120, 260, 20]}})
+        self.add_line(f"{p}_td", 0, f"{p}_dl", 0)
+        self.add_line(f"{p}_dl", 0, f"{p}_t", 0)
+        self.add_line(f"{p}_t", 1, f"{p}_rebind", 0)   # right first: rebind gen
+        self.add_line(f"{p}_t", 0, f"{p}_names", 0)    # then arm the jsui poll
+        self.add_line(f"{p}_rebind", 0, gen_box_id, 0)
+        self.add_line(f"{p}_names", 0, viz_box_id, 0)
+        return {
+            "buffers": [f"{p}_buf{i}" for i in range(len(buffers))],
+            "rebind": f"{p}_rebind", "names": f"{p}_names",
+            "thisdevice": f"{p}_td",
+        }
+
     def add_theme_bus(
         self,
         specs,
