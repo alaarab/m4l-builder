@@ -123,7 +123,12 @@ KNOB_LABEL_H = 8     # the caption rect above each compact knob
 
 
 def knob_column(x, y0, n, *, height=DENSE_COL_H, knob_w=40, label_h=KNOB_LABEL_H):
-    """``n`` dense knob CELLS stacked vertically to fill ``height`` (Rainbow/Pressure
+    """LEGACY (valuepopup era) — prefer ``m4l_builder.surface.Surface`` sections.
+    This helper's 4-high column only ever fit by HIDING the dial value
+    (``valuepopup`` hover), which the fleet standard now forbids (persistent
+    values, max 3 rows — see ``MAX_VALUE_ROWS``). Kept for the clone studies.
+
+    ``n`` dense knob CELLS stacked vertically to fill ``height`` (Rainbow/Pressure
     look). Returns a list of ``(label_rect, dial_rect)`` tuples — caption rect above,
     knob rect below — evenly spaced.
 

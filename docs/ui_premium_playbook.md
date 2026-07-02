@@ -1,95 +1,109 @@
-# Premium M4L UI Playbook — build devices that look like the downloads
+# Premium M4L UI Playbook — the Surface era
 
-> Written after measuring the UI of the commercial devices we cloned (Superberry,
-> Chiral, AS Console, stranular, Particle Reverb, Rainbow, Roulette). The point of
-> this doc: my first authored devices (Channel Strip, Halo) used **bare `add_dial` +
-> one flat `add_panel` + plain `add_comment`** — the *primitive* path — and looked
-> cheap. The downloads never do that. This is the grammar they actually use, mapped
-> to the kit primitives that already exist (I just wasn't using them).
+> **Rewritten 2026-07 (UI Foundations v2).** The first edition of this doc preached
+> "NEVER bare `add_dial` — paint every knob." That thesis was tried and **reversed**:
+> painted knobs produced dim, value-less controls, while the corpus's actual workhorse
+> (AS Console, Rainbow, Chiral's rails) is a **bare native `live.dial` with an accent
+> ring and its own persistent value**, laid out on a disciplined grid. The kit now
+> encodes that grammar as the **Surface layout engine** (`m4l_builder.surface`), and
+> the whole flagship fleet ships on it. This doc is the current law; the old edition's
+> paint-first advice is superseded.
 
-## What the downloads actually do (MEASURED, per device)
+## The corpus principles the fleet now encodes
 
-| Device | The premium engine | Counts |
-|--------|--------------------|--------|
-| **Superberry** | custom-PAINTED native controls + 2 scope heroes | 34 `jspainterfile`, 14 dial, 11 `live.line`, 2 jsui (lfoscope, superscope), `<Monospaced>` LCD numbers |
-| **Chiral** | painted controls + a big wave hero + lots of jsui | 11 `jspainterfile`, **9 jsui**, 13 `live.line`, wave_display 250×91 hero |
-| **AS Console** | **fpic image assets** + bpatcher modules + dense dividers | **33 `fpic`**, **14 `bpatcher`**, **75 `live.line`**, 19 `live.tab`, 24 dial |
-| **Rainbow** | **17 bpatcher modules** + 9 big spectral jsui displays | 17 `bpatcher`, 9 jsui (448×131 displays), 12 panel |
-| **Roulette** | **gradient fills** + a grid + a notes hero | 24 gradient `bgfillcolor`, live.grid, jsui hero |
-| **stranular** | bpatcher modules + jsui grain displays | 6 `bpatcher`, 4 jsui |
+Distilled from the 16-device commercial teardown corpus
+(`research/amxd_corpus/JEWELS_SYNTHESIS.md`, `STUDY_SYNTHESIS.md`):
 
-**The throughline:** every premium device has (1) a **jsui/v8ui HERO visualization**,
-(2) **custom-drawn controls** (painted `jspainterfile`, baked `fpic`, or v8ui), (3) a
-**non-flat background**, (4) **structural `live.line` dividers** carving sections, (5)
-**monospaced LCD-style numeric readouts**. My devices had zero of these.
+- **P2 — the value of every parameter is always legible.** Persistent native value
+  under/in each knob (`shownumber=1`). Hover-only `valuepopup` knobs are the
+  "amateur" tell and are not expressible through Surface.
+- **P3/P4 — grouped sections; caption above, bare dial, value below.** Uppercase
+  7.5pt caption over a 41×35 `DIAL_COMPACT` dial on a card. Section grouping comes
+  from the card chrome itself; **section header titles are OFF by default**
+  (user sign-off 2026-07: "mixed on labels") and opt-in per device.
+- **P5 — one disciplined accent** (occasionally a second, semantic one), tiered by
+  alpha, from the shared `theme.ACCENTS` registry. Never a rainbow.
+- **P10 — a hero display anchors the layout,** fed by DSP probes, in a recessed
+  screen panel on the left.
+- **P1 — the device reads first-party on bypass.** The **hybrid brand-dim bus**:
+  baked brand accent while enabled, the user's Live-skin zombie grey when bypassed.
+  Live-proven (Strip v9): the ONLY reliable runtime source is a `live.observer` on
+  the Device-On parameter — `live.thisdevice`'s enable outlet fires at load only,
+  and `Device.is_active` is get-only.
+- **P14 — premium = restraint + coherence,** not spectacle. Flat line-art, good
+  typography, exact grids. Bespoke hierarchies (Ceiling's big INPUT lever, Pocket
+  Delay's bipolar hero knob, Shard's slicer deck) are kept, not flattened —
+  coherence is not uniformity.
 
-## The 6 non-negotiables — a device is NOT done without all six
+## The default path: Surface
 
-1. **A HERO display.** The centerpiece visualization, top or center, ≥ ~40% of width.
-   It is what makes a device read as "designed," not a control rack. Pick the one that
-   *shows the DSP*: a filter/EQ device → `filter_curve`/`eq_curve`; comp → `transfer_curve`
-   + `level_history`; reverb → a decay/size bloom or `energy_history`; LFO/mod → `lfo_display`;
-   granular → `grain_display`; saturator → `waveshape_curve`/`transfer_curve`. The kit ships
-   **35+** of these in `engines/`. Feed it the live param values (control `_dial` outlet → hero inlet).
-2. **Custom-painted controls — NEVER bare `add_dial`.** Use `add_custom_knob` (v8ui knob ⇄
-   hidden `live.dial`, with `**Theme.knob_bg_args(H)`), `add_custom_toggle`, `add_custom_segment`,
-   `add_cycle_button` (glyphs). For a native control that must stay native, paint it with
-   `paint_control(box_id, "x.js", painter_js=...)` (the Superberry `jspainterfile` route).
-3. **A gradient / material background — NEVER a single flat `add_panel`.** Use a full-device
-   `add_v8ui("bg", [0,0,W,H], js_code=panel_bg_js(**Theme.panel_bg_kwargs()), background=1,
-   ignoreclick=1)`. Add framed sub-panels with `border=1, rounded=6` for sections.
-4. **Structural dividers + sections.** Carve the face with `live.line` dividers and framed
-   panels (AS Console uses 75 lines). Group controls into labelled sections, not one row.
-5. **Monospaced LCD readouts.** Numeric values in `<Monospaced>` (or the `add_draggable_readout`
-   LCD) — the gradient-filled "lit digit" look, not plain Ableton text. `add_custom_knob` bakes
-   a readout into the knob; use `unitstyle` + `decimals` + the `fmtUnit` formatter for kHz/dB/%.
-6. **Two-accent theme, applied.** `AudioEffect(..., theme=RUPTURE)` (or AMBER/STRANULAR). Primary
-   accent = the value arcs/dials; **accent2 = selection/secondary** (`A2 = theme.accent2_str()`),
-   used for a second control aisle / the hero playhead / selected states.
+```python
+from m4l_builder.surface import Surface
+from m4l_builder.theme import GRAPHITE
 
-## Download technique → kit primitive (use these, they already exist)
-
-| Download technique | Kit primitive |
-|--------------------|---------------|
-| jsui hero (scope/wave/spectrum/curve) | `engines/<x>_display.py` / `<x>_curve.py` (35+) via `add_jsui`/`add_v8ui` |
-| painted knob (`jspainterfile`) | `add_custom_knob(id, label, rect, vmin, vmax, initial, unit, decimals, accent, **knob_bg)` |
-| painted toggle / glyph button | `add_custom_toggle`, `add_cycle_button`, `add_custom_segment` |
-| paint a NATIVE control | `Device.paint_control` + `engines/painters.py` |
-| `fpic` knob/background image | `Asset(...)` + `add_fpic` (`usepicture`/SVG) |
-| gradient material panel | `panel_bg_js(**Theme.panel_bg_kwargs())` in a `background=1` v8ui |
-| bpatcher DSP+UI module | `Device.add_bpatcher_module(subpatcher, ...)` (F3) |
-| `live.line` dividers | `add_live_line` (thin theme-dim lines between sections) |
-| LCD numeric readout | `add_draggable_readout` / `<Monospaced>` numbox / the in-knob readout |
-| runtime Live-skin retint | `Device.add_theme_bus` (B1) |
-
-## Composition recipe (the layout grammar the downloads use)
-
-```
-[ gradient v8ui background, full device ]
-  TITLE (Ableton Sans Bold) + subtitle (dim)        ← top-left
-  ┌─ HERO jsui ─────────────┐   ┌─ section panel ──┐
-  │  the DSP visualization   │   │ custom knobs in   │   ← framed, rounded
-  │  (fed by the params)     │   │ a labelled grid   │
-  └──────────────────────────┘   └───────────────────┘
-  live.line dividers between sections; LCD readouts under/in each knob
-  two-accent: aisle A = accent, aisle B = accent2
+device = AudioEffect(NAME, width=1, height=168, theme=GRAPHITE)  # width derived
+surf = Surface(device, accent="pressure")          # ACCENTS key or RGBA
+hero = surf.hero("graph", width=348)               # recessed screen; hero.rect inside
+device.add_v8ui("display", list(hero.rect), ...)   # or hero.v8ui(...)
+card = surf.section("comp", None, cols=3)          # untitled card, cols x <=3 rows
+thresh = card.dial("Threshold", "THRESH", min_val=-60, max_val=0, initial=0,
+                   unitstyle=UNITSTYLE_DB)["dial"] # persistent-value cell
+card.toggle("Bypass", on="BYPASSED", off="ACTIVE", shortname="Bypass")
+card.menu("Filter", ["LP", "HP", "BP"])
+surf.probe("gr_probe", "GRProbe", ...)             # parked diagnostic param
+WIDTH = surf.finalize()                            # derives device.width, wires the
+                                                   # brand-dim bus, patches the bg
+device.add_width_collapse(mini_width=370, rect=[12, 1, 42, 9])  # FULL = derived
 ```
 
-## The hard gate (run before calling any device "done")
+What Surface owns so you never hand-write it again:
 
-- [ ] Has a **hero jsui** ≥ ~40% width, wired to live params?
-- [ ] **Zero bare `add_dial`** in presentation — all knobs are `add_custom_knob`/painted?
-- [ ] Background is a **gradient v8ui**, not a single flat panel?
-- [ ] At least a few **`live.line` dividers** / framed sub-panels carving sections?
-- [ ] Numeric readouts are **LCD/monospaced**, not plain comments?
-- [ ] `theme=` passed, **accent2 used** somewhere (selection/second aisle)?
-- [ ] **Live A/B**: screenshot next to a download — does it read as the same tier?
+| Concern | How |
+|---|---|
+| Rect math / pitches / margins | `native_sizes` cell grammar (CELL_W 44, COL_PITCH 48, VALUE_CELL_H 46) |
+| Persistent values | every dial is a `recipes.dial_value_cell` (`shownumber=1`) |
+| The 3-row rule | >3 persistent-value rows per 156px band **raises** (`SurfaceError`) |
+| Device width | **derived from content** at `finalize()` — stale-width dead zones are unrepresentable |
+| Bypass dim | one `live_brand_dim` bus per accent, fanned from a single receiver |
+| Layout QA | `validation.layout_issues` in `Device.lint()`: control-overlap, dead-zone, width-mismatch, `setwidth`-mismatch (error) |
 
-## Anti-patterns (exactly what made Channel Strip/Halo look cheap)
+**Bespoke-layout devices** (deliberate hierarchies that should NOT be gridded) skip
+Surface and call `device.add_brand_dim(ACCENT, [dial_ids...])` directly for the dim.
+Known exclusions: Parametric/Linear-Phase EQ keep **per-band color systems** a
+single-accent bus would clobber (a per-band dim awaits the F2 component bank);
+painter-drawn dials (Nimbus) and dial-less meters have no applicable targets.
 
-- ❌ `add_dial` for every knob (stock Ableton knob look).
-- ❌ One flat `add_panel(bgcolor=BG)` as the whole background.
-- ❌ `add_comment` value labels instead of LCD readouts.
-- ❌ **No hero display at all** — the single biggest tell.
-- ❌ One undivided row of knobs — no sections, no dividers, no chrome.
-- ❌ Two-accent palette imported but only the primary accent used.
+## Migration discipline (Live-proven across 9 devices)
+
+1. Snapshot the shipping `.amxd`, rewrite ONLY the UI block onto Surface, capture
+   `Section.dial(...)["dial"]` ids into the old variable names so DSP wiring loops
+   just switch from string literals to variables.
+2. **Longname gate**: `tools/longname_snapshot.py old.amxd new.amxd` must be
+   identical — `parameter_longname` is the ONLY save-set identity; rects/colors/ids
+   are free to change.
+3. Run BOTH gates: the kit gate (`ruff` + `mypy` + `pytest` in m4l-builder) AND the
+   devices suite (`uv run --project ~/Projects/m4l-builder python -m pytest tests -q`
+   in Max4LivePlugins).
+4. Live-verify: load on a throwaway track, meter > 0, hero animating, and a REAL
+   power-button click for the dim (LiveMCP's `enable_device` is a phantom — it
+   reports success without flipping Device On).
+5. Re-freeze the curated dist **in the same change** (explicit UL paths — the
+   no-arg freeze grabs every experiment).
+
+## When custom drawing is still right
+
+- **Heroes** and DSP visualizations: jsui/v8ui, always (the 35+ `engines/` displays).
+- **A genuinely bespoke one-off control** (Nimbus's painter dial): `paint_control`
+  (`jspainterfile`) — one painter per archetype, never the default knob path.
+- Compiled displays (`spectroscope~`/`scope~`) via `add_compiled_display` /
+  `Theme.scope_kwargs()` — remember a compiled box renders ABOVE any v8ui.
+
+## The hard gate (before calling a device "done")
+
+- [ ] Hero display wired to live DSP (probe-fed, not GUI state)?
+- [ ] Every visible parameter shows a persistent value?
+- [ ] Layout via Surface — or a justified bespoke hierarchy + `add_brand_dim`?
+- [ ] One accent from `ACCENTS` (plus at most one semantic secondary)?
+- [ ] Longname gate identical; both test gates green; layout lint clean?
+- [ ] Live: audio passing, dim greys on a real power click, values legible?
+- [ ] Curated dist re-frozen in the same change?

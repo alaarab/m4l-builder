@@ -9,34 +9,25 @@ phren memory — **never guess attributes; look them up here or in the docs.**
 > run documents one topic + fixes one concrete issue. Status legend: ✅ mastered ·
 > TODO todo · 🔬 investigating.
 
-## ⭐ THE premium-control method — REUSE the downloads' real painters (not hand-rolled)
+## ⭐ THE premium-control method — the Surface layout engine (native persistent-value cells)
 
-Hard-won lesson (after 3 hand-rolled UIs that looked like trash): **the premium look of
-the downloaded commercial devices lives in baked `.js` painter / `.svg` image assets
-bundled inside their `.amxd`** (the `mx@c` freeze chunk), NOT in the patcher JSON and NOT
-reproducible by hand-coding v8ui from scratch. The right method:
+**Current law (UI Foundations v2, 2026-07; supersedes the earlier "reuse extracted
+painters" thesis):** the fleet's premium default is `m4l_builder.surface.Surface` —
+hero slot(s) + untitled section cards of **native `dial_value_cell`s** (caption above,
+bare 41×35 `DIAL_COMPACT` dial, its own persistent `shownumber=1` value), width
+DERIVED from content at `finalize()`, and the hybrid brand-dim theme bus (baked
+accent while enabled → Live-skin zombie grey on a Device-On bypass; Live-proven via
+the Device-On-param `live.observer`, the only reliable runtime source). See
+`docs/ui_premium_playbook.md` for the API walkthrough and migration discipline.
 
-1. **Extract a download's real assets:** `extract_frozen_amxd(amxd_bytes) -> {filename: bytes}`
-   (in `freeze.py`; the inverse of `assemble_frozen_amxd`). Saved for the corpus at
-   `research/extracted/<device>/`. This yields their actual painted knobs, sliders, LCD
-   readouts, scope/meter heroes, UI `.maxpat` modules, and `.svg` graphics.
-2. **Drop a painter onto a NATIVE control** via `Device.paint_control(box_id, "x.js",
-   painter_js=<extracted JS>)`. A `jspainterfile` painter (e.g. `myLiveDial.js`) reads the
-   host control's attrs (`box.getattr("activedialcolor"/"_parameter_range"/…)` +
-   `box.getvalueof()`) and draws it — the control stays a full native automatable parameter.
-   **Live-PROVEN** (Nimbus): a small native `live.dial` (34×34) + `activedialcolor` +
-   `paint_control(myLiveDial.js)` renders as Particle Reverb's exact premium knob.
-3. **Register the painter once** (`device.register_asset("x.js", js, asset_type="TEXT")`),
-   then `paint_control(..., painter_js=None)` on each control that shares it.
-
-**Reusable painters extracted from the corpus** (`research/extracted/`): knobs —
-`myLiveDial.js`, `tinydial`/`tinydial_lcd`/`tinydial_bipolar`, `jsui_cstmDial`, `lcd_dial_alt`,
-`mini_knob_lcd`; sliders — `lcdsliderslim`, `slidershort`, `b_env_slider`; LCD numboxes —
-`painter_tiltNumbox`, `painter_curveNumbox`; heroes — `superscope`, `lfoscope`, `waveScope`,
-`wave_display`, `compDisplay`, `grMeter`/`levelMeter`/`StereoMeter`, Particle Reverb's
-`grainGUI`/`debrisGUI`, Rainbow's spectral `display`. **DECISION RULE: reuse a real extracted
-painter before hand-rolling ANYTHING.** Hand-write a v8ui only for a genuinely novel element no
-download has.
+Corrections to the old text kept here for the record:
+- The extraction workflow lives at `Max4LivePlugins/_assets/extracted/` (built by
+  `_assets/extract_all.py` from the owned downloads) — **study-only, never shipped**;
+  the old `research/extracted/` path never existed in this repo. Devices ship
+  ORIGINAL painters only (`engines/painters.py`).
+- `paint_control` (`jspainterfile`) remains Live-proven (Nimbus) but is the path for
+  a genuinely bespoke ONE-OFF control, **not** the default knob — painters hide the
+  native value readout, which is the corpus's #1 legibility rule (P2).
 
 ## Core principle — native-first, custom for what native can't draw
 
@@ -1664,3 +1655,53 @@ Default to NATIVE. Reach for a CUSTOM v8ui control only when the right column ap
 
 Rule of thumb: **native for the controls, custom for the centerpiece.** A premium device
 is mostly native controls sized compact + ONE custom hero, in a two-accent palette.
+
+## Surface layout engine — API reference (UI Foundations v2)
+
+`m4l_builder.surface.Surface` owns ALL faceplate rect math. Immediate-mode with a
+finalize pass; slots flow left→right in the 156px band (BAND_Y=6) of a 168px device.
+
+```python
+Surface(device, *, accent=<ACCENTS key | RGBA>, accent2=None, theme=GRAPHITE,
+        height=168, margin=8, gap=6, follow_live=True)
+  .hero(id, *, width, recess=True) -> HeroSlot     # recessed screen (scope_bgcolor,
+                                                   # 1px panel_border, rounded 4);
+                                                   # .rect = 2px-inset content rect
+  .section(id, title=None, *, cols, rows<=3,       # untitled card by default (user
+           material="card"|"rail",                 # sign-off: headers are opt-in);
+           col_pitch=COL_PITCH, pad=8) -> Section  # >3 rows RAISES (P2 fit rule)
+  .probe(id, param_name, **dial_kw) -> id          # hidden param at PARK_RECT
+  .finalize() -> width                             # derives device.width, patches the
+                                                   # bg panel, emits the brand-dim bus
+Section.dial(param, label=None, *, min_val, max_val, initial, unitstyle,
+             at=(col,row)|None, accent2=False, **dial_kw) -> StageResult
+Section.toggle(param, label=None, *, on, off, initial=0, shortname=None, **kw) -> id
+Section.menu(param, options, label=None, **kw) -> id
+Section.numbox_lcd(param, label=None, *, ...) -> id
+Section.slot_rect(at=None) -> [x, y, CELL_W, VALUE_CELL_H]   # claim a cell for
+Section.blank()                                              # bespoke content
+```
+
+Cell math (tokens in `native_sizes`): `VALUE_CELL_H = CAPTION_H(10) + gap(1) +
+DIAL_COMPACT[1](35) = 46`; **`MAX_VALUE_ROWS = 3`** — a 4th persistent-value row
+provably overflows the band (the old `knob_column` n=4 layout only ever fit by
+hiding the value, which Surface forbids). Cells fill **column-major**; captions are
+7.5pt "Ableton Sans Medium" `text_dim`; section id prefixes the generated box ids
+(`{sect}_{param_slug}_dial` / `_btn` / `_menu` / `_cap`).
+
+Theme bus: `finalize()` emits one `live_brand_dim` bus per accent (`---surfacc`,
+`---surfacc2`) fanned from a single receiver to every dial the engine placed.
+Bespoke-layout devices call `device.add_brand_dim(rgba, [ids], bus=...)` directly
+(one call per accent color). Live-proven facts baked into `live_brand_dim`:
+`live.thisdevice`'s middle outlet reports enable state at LOAD ONLY; LOM
+`Device.is_active` is get-only; **`DeviceParameter.value` on `this_device
+parameters 0` is the reliable observe source** (fires on attach + every toggle);
+`t i i` coerces the observer's float for `sel`.
+
+Hero z-order caveat: a COMPILED display (`spectroscope~`/`scope~`) renders ABOVE
+any v8ui regardless of box order — keep compiled fills semi-transparent or draw
+the spectrum inside the v8ui.
+
+Layout lint (`validation.layout_issues`, in every `Device.lint()`):
+`control-overlap` / `dead-zone` (>=40px empty band) / `width-mismatch` (warnings) +
+`setwidth-mismatch` (ERROR — a width-collapse FULL wider than the layout).
