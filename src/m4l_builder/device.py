@@ -1557,6 +1557,39 @@ class Device(GraphContainer):
                 ry += 30
         return {"thisdevice": f"{id_prefix}_td", "bus": bus}
 
+    def add_brand_dim(
+        self,
+        brand_rgba,
+        targets,
+        *,
+        bus: str = "brandacc",
+        attrs=("activedialcolor",),
+        x: int = 700,
+        y: int = 2000,
+    ) -> str:
+        """Wire the HYBRID brand-dim theme bus (the Surface default) into a
+        BESPOKE-layout device: while enabled every target keeps the baked brand
+        accent; on a Device-On bypass they all grey to the user's Live-skin
+        "zombie" color (Live-proven on Strip v9 — the Device-On param observer
+        is the only reliable runtime source; see
+        :func:`engines.live_theme.live_brand_dim`).
+
+        ``targets``: control box ids (fanned from ONE ``r ---<bus>`` receiver).
+        Call once per accent color (distinct ``bus`` per call) on multi-accent
+        devices. Returns the bus name.
+        """
+        from .engines.live_theme import live_brand_dim
+
+        boxes, lines = live_brand_dim(bus, brand_rgba, attrs=attrs,
+                                      id_prefix=f"{bus}_dim", x=x, y=y)
+        self.add_dsp(boxes, lines)
+        rx = f"{bus}_rx"
+        self.add_newobj(rx, f"r ---{bus}", numinlets=0, numoutlets=1,
+                        outlettype=[""], patching_rect=[x, y + 320, 90, 20])
+        for tid in targets:
+            self.add_line(rx, 0, tid, 0)
+        return bus
+
     def paint_control(self, box_id, painter_filename: str, *, painter_js: str = None):
         """Attach a render-only ``jspainterfile`` painter to a NATIVE control (C1).
 
