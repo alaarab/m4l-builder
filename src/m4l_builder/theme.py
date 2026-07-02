@@ -544,7 +544,6 @@ ACCENTS: dict[str, list[float]] = {
     "parametric_eq": [0.38, 0.76, 0.58, 1.0],  # curve green
     "spectrum": [0.28, 0.78, 0.94, 1.0],     # analyzer cyan
     "tilt": [1.0, 0.64, 0.30, 1.0],          # orange
-    "mono_maker": [1.0, 0.64, 0.30, 1.0],    # orange
     "nimbus": [0.80, 0.88, 0.95, 1.0],       # ice
 }
 

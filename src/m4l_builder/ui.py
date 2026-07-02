@@ -110,7 +110,7 @@ def panel(id: str, rect: list, *, bgcolor: list, border: int = 0,
     alpha ``bgcolor`` this is the lightweight **bypass-dim / glass overlay** (approach B): a
     transparent film that tints everything below and passes clicks through; drive its
     ``bgcolor`` from ``live.thisdevice`` outlet 1 to darken on bypass. (The ``background=0`` +
-    ``ignoreclick=1`` foreground-overlay pattern is PROVEN in the kit — ``mono_maker``'s
+    ``ignoreclick=1`` foreground-overlay pattern is PROVEN in the kit — ``tilt``'s
     ``band_display`` v8ui uses exactly it as a working transparent overlay on top of the
     panel below; a panel does the same, filling its ``bgcolor`` instead of painting.)
     """
