@@ -545,6 +545,8 @@ ACCENTS: dict[str, list[float]] = {
     "spectrum": [0.28, 0.78, 0.94, 1.0],     # analyzer cyan
     "tilt": [1.0, 0.64, 0.30, 1.0],          # orange
     "nimbus": [0.80, 0.88, 0.95, 1.0],       # ice
+    "orbit": [0.96, 0.70, 0.20, 1.0],        # cluster amber (cyan 2nd local)
+    "motes": [0.62, 0.75, 0.96, 1.0],        # grain blue
 }
 
 # Registry of the distinct two-accent palettes for iteration / pick-by-name.

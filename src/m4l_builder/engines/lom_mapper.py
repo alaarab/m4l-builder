@@ -155,8 +155,12 @@ function attach(id) {{
         if (GUARD.test(pname)) return 0;
     }}
     target_id = id;
-    status("min", p.get("min"));
-    status("max", p.get("max"));
+    // LiveAPI get() returns ARRAYS — unwrap before outlet (a nested array
+    // inside the status list does not flatten; the range never arrives)
+    var mn = p.get("min");
+    var mx = p.get("max");
+    status("min", (mn instanceof Array) ? mn[0] : mn);
+    status("max", (mx instanceof Array) ? mx[0] : mx);
     status("pname", "set", "" + p.get("name"));
     status("dname", "set", friendly_device_name(dev, p));
     status("path", dequote(p.path));
