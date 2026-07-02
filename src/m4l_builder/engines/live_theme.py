@@ -98,6 +98,78 @@ def live_theme_receiver(bus, target_id, *, inlet=0, id_prefix="ltheme_rx", x=20,
     return boxes, lines
 
 
+def live_brand_dim(bus, brand_rgba, *, attrs=("activedialcolor",),
+                   zombie_token="lcd_control_fg_zombie",
+                   id_prefix="lbdim", x=20, y=20):
+    """Generate the HYBRID brand-accent dim distributor (Surface default).
+
+    The hybrid theming decision: the device keeps its BAKED brand accent while
+    enabled (each device's one disciplined accent, corpus P5), but greys out to
+    the user's actual Live skin "zombie" color when bypassed (the half of the J1
+    theme jewel that makes a device read first-party). Per state:
+
+        live.thisdevice[1] (enabled 1/0, fires on load too)
+            ├─ t i i ── right ─► int (store current state, silent)
+            └─ left  ─► sel 1 0
+                ├─ 1 (enabled)  ─► message "<r> <g> <b> <a>"  (the baked brand accent)
+                └─ 0 (bypassed) ─► message "<zombie_token>" ─► live.colors[0]
+                                   live.colors[0] ─► route <zombie_token>
+        (either color list) ─► prepend <attr> ─► s ---<bus>     (one per attr)
+        live.colors[1] (Live theme switched) ─► bang int ─► sel  (re-fires the
+        CURRENT state, so a skin change while bypassed re-derives the new zombie)
+
+    Controls subscribe with :func:`live_theme_receiver` (or one shared ``r`` box
+    fanned to many controls). Returns ``(boxes, lines)``.
+    """
+    p = id_prefix
+    td, tii, ist, sl = f"{p}_td", f"{p}_t", f"{p}_int", f"{p}_sel"
+    m_a, m_z, col, rt = f"{p}_mact", f"{p}_mzomb", f"{p}_col", f"{p}_rt"
+    brand_text = " ".join(f"{float(c):g}" for c in brand_rgba)
+    boxes = [
+        newobj(td, "live.thisdevice", numinlets=1, numoutlets=3,
+               outlettype=["bang", "", ""], patching_rect=[x, y, 90, 20]),
+        newobj(tii, "t i i", numinlets=1, numoutlets=2,
+               outlettype=["int", "int"], patching_rect=[x, y + 30, 50, 20]),
+        newobj(ist, "int", numinlets=2, numoutlets=1,
+               outlettype=["int"], patching_rect=[x + 70, y + 30, 40, 20]),
+        newobj(sl, "sel 1 0", numinlets=1, numoutlets=3,
+               outlettype=["bang", "bang", ""], patching_rect=[x, y + 60, 60, 20]),
+        newobj(m_a, brand_text, numinlets=2, numoutlets=1, maxclass="message",
+               patching_rect=[x, y + 90, 140, 18]),
+        newobj(m_z, zombie_token, numinlets=2, numoutlets=1, maxclass="message",
+               patching_rect=[x + 150, y + 90, 140, 18]),
+        newobj(col, "live.colors", numinlets=1, numoutlets=2,
+               outlettype=["", ""], patching_rect=[x + 150, y + 120, 70, 20]),
+        newobj(rt, f"route {zombie_token}", numinlets=1, numoutlets=2,
+               outlettype=["", ""], patching_rect=[x + 150, y + 150, 150, 20]),
+    ]
+    lines = [
+        patchline(td, 1, tii, 0),      # MIDDLE outlet = enabled/disabled (1/0)
+        patchline(tii, 1, ist, 1),     # right first: store state silently
+        patchline(tii, 0, sl, 0),      # then drive the selector
+        patchline(ist, 0, sl, 0),      # re-fired state (on theme change) -> selector
+        patchline(col, 1, ist, 0),     # Live theme switched -> bang out stored state
+        patchline(sl, 0, m_a, 0),      # enabled -> baked brand accent list
+        patchline(sl, 1, m_z, 0),      # bypassed -> query the Live zombie grey
+        patchline(m_z, 0, col, 0),
+        patchline(col, 0, rt, 0),
+    ]
+    for k, attr in enumerate(attrs):
+        pre, snd = f"{p}_pre{k}", f"{p}_s{k}"
+        boxes += [
+            newobj(pre, f"prepend {attr}", numinlets=1, numoutlets=1,
+                   outlettype=[""], patching_rect=[x, y + 180 + k * 30, 130, 20]),
+            newobj(snd, f"s ---{bus}", numinlets=1, numoutlets=0,
+                   patching_rect=[x + 150, y + 180 + k * 30, 90, 20]),
+        ]
+        lines += [
+            patchline(m_a, 0, pre, 0),   # brand accent -> this attr
+            patchline(rt, 0, pre, 0),    # zombie grey  -> same attr
+            patchline(pre, 0, snd, 0),
+        ]
+    return boxes, lines
+
+
 def live_theme_state_dim(bus, *, attrs=("activedialcolor",),
                          active_token="lcd_control_fg",
                          zombie_token="lcd_control_fg_zombie",

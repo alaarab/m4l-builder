@@ -1724,9 +1724,9 @@ class Device(GraphContainer):
     def add_width_collapse(
         self,
         *,
-        full_width: int,
         mini_width: int,
         rect: list,
+        full_width: int = None,
         param_name: str = "Size",
         button_id: str = "width_collapse",
         text_full: str = "FULL",
@@ -1741,12 +1741,19 @@ class Device(GraphContainer):
         169px. The toggle is a real Live param (enum ``[text_full, text_mini]``,
         FULL=0 default) so it's automatable + recalled with the set.
 
+        ``full_width`` DEFAULTS to the current ``device.width`` (rounded) — call
+        this AFTER the layout is final (e.g. after ``Surface.finalize()``). A
+        stale hand-typed ``full_width`` is how Pressure shipped a 688px FULL on
+        a 550px layout (~148px dead zone); deriving it kills that bug class.
+
         PLACE THE BUTTON ON THE LEFT: a MINI width clips the right side off (it
         does not reflow), so the toggle must sit inside ``mini_width`` to stay
         clickable, and the device's essentials should live on the left.
 
         Returns the toggle button id.
         """
+        if full_width is None:
+            full_width = round(self.width)
         bkw = {"text_on": text_mini, "text_off": text_full, "rounded": 4,
                "fontsize": 7.5, "mode": 1}
         if button_kwargs:

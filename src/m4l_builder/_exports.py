@@ -390,6 +390,13 @@ BUILDER_RECIPE_EXPORTS = _dedupe(
     ROOT_RECIPE_EXPORTS,
 )
 
+# The Surface layout engine (m4l_builder.surface) — the semantic faceplate
+# composer devices build their UI with (UI Foundations v2).
+SURFACE_EXPORTS = [
+    "Surface",
+    "SurfaceError",
+]
+
 REVERSE_EXPORTS = [
     "read_amxd",
     "snapshot_from_device",
@@ -503,6 +510,7 @@ ROOT_ALL = _dedupe(
     REVERSE_EXPORTS,
     ANALYSIS_EXPORTS,
     ROOT_RECIPE_EXPORTS,
+    SURFACE_EXPORTS,
 )
 
 BUILDER_ALL = _dedupe(
@@ -540,6 +548,7 @@ ROOT_EXPORT_GROUPS = (
     ("m4l_builder.builder.dsp", DSP_EXPORTS),
     ("m4l_builder.builder.live", LIVE_EXPORTS),
     ("m4l_builder.builder.recipes", ROOT_RECIPE_EXPORTS),
+    ("m4l_builder.surface", SURFACE_EXPORTS),
     ("m4l_builder.reverse_api", REVERSE_EXPORTS),
     ("m4l_builder.analysis_api", ANALYSIS_EXPORTS),
 )
