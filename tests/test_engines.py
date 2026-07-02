@@ -1234,10 +1234,13 @@ class TestFftAnalyzer:
             for b in device.boxes
             if "box" in b
         ]
-        assert any(t.startswith("pfft~ t_analyzer_core 2048 4") for t in texts)
-        assert "buffer~ t_specbuf" in texts
+        import re as _re
+        assert any(_re.match(r"pfft~ t_analyzer_[0-9a-f]{8} 2048 4", t)
+                   for t in texts)   # content-addressed kernel
+        # per-instance-unique buffer (--- device scoping — collision fix)
+        assert "buffer~ ---t_specbuf" in texts
         assert "sizeinsamps 2048" in texts
-        assert "set_analyzer_buffer t_specbuf 1024" in texts
+        assert "set_analyzer_buffer ---t_specbuf 1024" in texts
         assert "prepend set_samplerate" in texts
 
     def test_eq_curve_consumes_analyzer_sources(self):

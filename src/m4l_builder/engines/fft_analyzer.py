@@ -25,6 +25,7 @@ scheduler-free, and survives FFT-size changes.
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 from ..objects import newobj, patchline
@@ -149,27 +150,28 @@ def fft_analyzer_dsp(
     gate). Default ``None`` keeps existing devices byte-identical. Returns the
     created object ids.
     """
-    kernel_filename = kernel_filename or f"{id_prefix}_analyzer_core.maxpat"
-    stem = kernel_filename[:-len(".maxpat")] if kernel_filename.endswith(".maxpat") else kernel_filename
     bins = fft_size // 2
-    # ⚠️ COLLISION CAVEAT (Live-verified 2026-06): this is a FIXED, GLOBAL buffer~
-    # name — NOT per-instance-unique. buffer~ names are global across the Max app,
-    # so TWO instances of the same device (e.g. after duplicate_track, or two copies
-    # in a Set) both bind "<id_prefix>_specbuf"; deleting one leaves the survivor's
-    # analyzer DEAD (spectrum draws empty though audio is loud). Reload fixes it.
-    # PROPER FIX (tracked): make this per-instance-unique like Rainbow's
-    # DEVICE_UNIQUE_ID+name — a "#0" patcher-instance prefix, or a live.thisdevice/
-    # LOM-derived suffix set at load. Needs grounding (#0 in an M4L root) + a
-    # duplication Live-verify across ALL devices that call this (Para EQ, Linear
-    # Phase EQ, Strip), so it's a focused task, not an in-line change.
-    buffer_name = f"{id_prefix}_specbuf"
-    device.add_support_file(
-        kernel_filename,
-        fft_analyzer_kernel(
-            buffer_name=buffer_name, fft_size=fft_size, window=window,
-        ),
-        file_type="JSON",
+    # Per-instance-unique buffer via ``---`` device scoping (the viz-bus-proven
+    # mechanism, Live-verified with two independent instances): buffer~ names
+    # are global across the Max app, so a bare "<id_prefix>_specbuf" collided
+    # between two copies of the same device — deleting one left the survivor's
+    # analyzer DEAD (Live-verified 2026-06). ``---`` resolves to a device-unique
+    # prefix in every box-text context this name reaches: the kernel's
+    # ``poke~``, the device-side ``buffer~``, and the announce message (the
+    # consumer receives the RESOLVED name at load, set_analyzer_buffer idiom).
+    buffer_name = f"---{id_prefix}_specbuf"
+    kernel = fft_analyzer_kernel(
+        buffer_name=buffer_name, fft_size=fft_size, window=window,
     )
+    if kernel_filename is None:
+        # content-addressed (same discipline as gendsp_support_name): Max
+        # caches .maxpat sidecars by NAME for the whole Live session, so a
+        # kernel edit under a fixed name serves the stale compile.
+        digest = hashlib.blake2b(kernel.encode("utf-8"),
+                                 digest_size=4).hexdigest()
+        kernel_filename = f"{id_prefix}_analyzer_{digest}.maxpat"
+    stem = kernel_filename[:-len(".maxpat")] if kernel_filename.endswith(".maxpat") else kernel_filename
+    device.add_support_file(kernel_filename, kernel, file_type="JSON")
 
     pfft_id = f"{id_prefix}_pfft"
     buf_id = f"{id_prefix}_buf"
