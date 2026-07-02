@@ -17,7 +17,7 @@ from .parameters import ParameterSpec
 from .profiles import DEFAULT_PATCHER_PROFILE
 from .ui import jsui, v8ui
 from .ui_registry import DEVICE_WIDGET_SPECS, make_device_widget_method
-from .validation import _DECORATION_MAXCLASSES, ValidationIssue
+from .validation import _DECORATION_MAXCLASSES, ValidationIssue, layout_issues
 
 # Device-view height ceiling: Live's device chain shows only ~DEVICE_H px tall
 # regardless of the authored height, so a taller chain device (audio_effect /
@@ -80,6 +80,10 @@ class Device(GraphContainer):
           backgrounds, labels, dividers) and FULLY off-canvas boxes (the parked /
           hidden ~(900,900) probe idiom) are excluded — empirically false-positive
           -free across the 33-device fleet.
+        * :func:`~m4l_builder.validation.layout_issues` — ``control-overlap`` /
+          ``dead-zone`` / ``width-mismatch`` (warnings) + ``setwidth-mismatch``
+          (error): the space-utilization rules from the corpus audit (a FULL
+          collapse wider than the layout, >=40px dead bands, stale widths).
         """
         issues = list(super().lint(device_type=device_type))
         effective_type = device_type or self.device_type
@@ -100,6 +104,7 @@ class Device(GraphContainer):
                 severity="warning",
             ))
         issues.extend(self._clipped_control_issues())
+        issues.extend(layout_issues(self.boxes, self.width, self.height))
         return issues
 
     def _clipped_control_issues(self) -> list:

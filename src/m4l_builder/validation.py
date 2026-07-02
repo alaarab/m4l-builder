@@ -264,3 +264,146 @@ def final_checklist_issues(boxes: list) -> list[ValidationIssue]:
                     severity="warning", box_id=bid))
 
     return issues
+
+
+# ── Device-level LAYOUT lint (UI Foundations v2) ─────────────────────────────
+# Interactive control classes for the overlap rule: two of THESE intersecting is
+# almost always a real authoring bug. Displays (jsui/v8ui/scope~/…) are exempt —
+# stacking a transparent display/overlay is a legitimate corpus pattern (P6), as
+# is an alpha-0 "ghost" control (stacked_panels tabs, drop targets).
+_INTERACTIVE_MAXCLASSES = frozenset({
+    "live.dial", "live.menu", "live.numbox", "live.text", "live.toggle",
+    "live.tab", "live.slider", "live.gain~", "live.button", "textbutton",
+    "number", "flonum",
+})
+# A vertical band this wide with no content reads as DEAD SPACE (the stale-width
+# / pressure-688 bug class). Section padding is ~8-16px; 40 clears it safely.
+_DEAD_ZONE_MIN_W = 40.0
+_LAYOUT_MARGIN = 8.0
+_WIDTH_MISMATCH_TOL = 12.0
+
+
+def _alpha0_bg(payload: dict) -> bool:
+    bg = payload.get("bgcolor")
+    return bool(bg) and len(bg) >= 4 and float(bg[3]) == 0.0
+
+
+def _onscreen_rect(payload: dict, width: float, height: float):
+    if payload.get("presentation") != 1:
+        return None
+    rect = payload.get("presentation_rect")
+    if not rect or len(rect) < 4:
+        return None
+    try:
+        x, y, w, h = (float(v) for v in rect[:4])
+    except (TypeError, ValueError):
+        return None
+    if x >= width or y >= height or x + w <= 0 or y + h <= 0:
+        return None  # parked / fully off-canvas
+    return x, y, w, h
+
+
+def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIssue]:
+    """Device-level layout rules (all WARNING except ``setwidth-mismatch``):
+
+    * ``control-overlap`` — two INTERACTIVE controls' rects intersect by more
+      than 4px on both axes (alpha-0 "ghost" controls and ``ignoreclick`` boxes
+      exempt — transparent-stack patterns are legitimate);
+    * ``dead-zone`` — a vertical band >= 40px wide inside the content margins
+      with no non-panel content (the stale-width / pressure-688 bug class);
+    * ``width-mismatch`` — the rightmost content edge + margin disagrees with
+      the authored device width by > 12px;
+    * ``setwidth-mismatch`` — a ``setwidth N`` message wider than the device
+      (ERROR: a width-collapse FULL wider than the layout re-creates the dead
+      zone at runtime).
+
+    Pure function over the box list so it can lint a live ``Device`` (via
+    ``Device.lint()``) or a reverse-loaded .amxd alike.
+    """
+    issues: list[ValidationIssue] = []
+    interactive: list[tuple[str, str, tuple[float, float, float, float]]] = []
+    content_spans: list[tuple[float, float]] = []
+    content_right = 0.0
+
+    for box in boxes:
+        payload = box.get("box", {})
+        rect = _onscreen_rect(payload, width, height)
+        if rect is None:
+            continue
+        x, y, w, h = rect
+        maxclass = payload.get("maxclass") or ""
+        # Everything except the full-bleed device bg counts as content: hero
+        # frames and section cards are DELIBERATE structure, so a "dead zone"
+        # is a band with nothing at all (the pressure-688 signature).
+        full_bleed_panel = (maxclass == "panel" and x <= 0.5 and w >= width - 1.0)
+        if not full_bleed_panel:
+            content_spans.append((x, x + w))
+            content_right = max(content_right, x + w)
+        if (maxclass in _INTERACTIVE_MAXCLASSES
+                and not _alpha0_bg(payload)
+                and not payload.get("ignoreclick")):
+            interactive.append((payload.get("id") or "?", maxclass, rect))
+
+    # control-overlap
+    for i, (id_a, cls_a, ra) in enumerate(interactive):
+        ax, ay, aw, ah = ra
+        for id_b, cls_b, rb in interactive[i + 1:]:
+            bx, by, bw, bh = rb
+            ox = min(ax + aw, bx + bw) - max(ax, bx)
+            oy = min(ay + ah, by + bh) - max(ay, by)
+            if ox > 4.0 and oy > 4.0:
+                issues.append(ValidationIssue(
+                    code="control-overlap",
+                    message=(f"interactive controls overlap by {ox:g}x{oy:g}px: "
+                             f"{id_a} ({cls_a}) vs {id_b} ({cls_b})"),
+                    severity="warning", box_id=id_a))
+
+    # dead-zone: gaps in the x-projection of non-panel content
+    if content_spans:
+        spans = sorted(content_spans)
+        cursor = _LAYOUT_MARGIN
+        gaps: list[tuple[float, float]] = []
+        for x0, x1 in spans:
+            if x0 - cursor >= _DEAD_ZONE_MIN_W:
+                gaps.append((cursor, x0))
+            cursor = max(cursor, x1)
+        if (width - _LAYOUT_MARGIN) - cursor >= _DEAD_ZONE_MIN_W:
+            gaps.append((cursor, width - _LAYOUT_MARGIN))
+        for g0, g1 in gaps:
+            issues.append(ValidationIssue(
+                code="dead-zone",
+                message=(f"no content between x={g0:g} and x={g1:g} "
+                         f"({g1 - g0:g}px of dead space in a {width:g}px device)"),
+                severity="warning"))
+
+        # width-mismatch (only meaningful when there IS content)
+        expected = content_right + _LAYOUT_MARGIN
+        if abs(width - expected) > _WIDTH_MISMATCH_TOL and width > expected:
+            issues.append(ValidationIssue(
+                code="width-mismatch",
+                message=(f"authored width {width:g} but content ends at "
+                         f"x={content_right:g} (+{_LAYOUT_MARGIN:g} margin -> "
+                         f"~{expected:g}); derive the width from content "
+                         f"(Surface.finalize) or tighten it"),
+                severity="warning"))
+
+    # setwidth-mismatch
+    for box in boxes:
+        payload = box.get("box", {})
+        if payload.get("maxclass") != "message":
+            continue
+        text = (payload.get("text") or "").strip()
+        parts = text.split()
+        if len(parts) == 2 and parts[0] == "setwidth":
+            try:
+                target = float(parts[1])
+            except ValueError:
+                continue
+            if target > width + 0.5:
+                issues.append(ValidationIssue(
+                    code="setwidth-mismatch",
+                    message=(f"'{text}' exceeds the authored device width "
+                             f"{width:g} — a width-collapse FULL wider than the "
+                             f"layout re-creates the dead-zone bug at runtime"),
+                    severity="error", box_id=payload.get("id")))
+    return issues
