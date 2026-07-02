@@ -1430,8 +1430,14 @@ class Device(GraphContainer):
         numoutlets: int = 1,
         outlettype: list = None,
         patching_rect: list = None,
+        args: list = None,
     ):
         """Embed a Subpatcher as a VISIBLE bpatcher module (DSP + UI shown).
+
+        ``args`` become the bpatcher arguments — Max substitutes ``#1``/``#2``
+        placeholders inside the embedded patcher (object text AND param
+        longnames) at load, which is how one component stamps into N uniquely
+        named instances (see :meth:`add_component_rack`).
 
         Unlike ``add_subpatcher`` (an invisible ``p name`` box), this embeds the
         sub-patch as a ``bpatcher`` whose PRESENTATION view renders inside the
@@ -1461,7 +1467,57 @@ class Device(GraphContainer):
         }
         if outlettype:
             box["outlettype"] = outlettype
+        if args:
+            box["args"] = list(args)
         return self.add_box({"box": box})
+
+    def add_component_rack(
+        self,
+        component,
+        count: int,
+        *,
+        rects: list,
+        id_prefix: str = "comp",
+        args=None,
+        name: str = "component",
+        numinlets: int = 1,
+        numoutlets: int = 1,
+        outlettype: list = None,
+    ) -> list:
+        """Stamp ONE Subpatcher component ``count`` times as embedded bpatchers —
+        the corpus P11 rack (GROUNDED in lfo-cluster: six ``bpatcher args=[i]``
+        of one component whose param longnames embed ``#1``; NO
+        parameter_overrides — Max's ``#1`` substitution IS the mechanism).
+
+        Author the component ONCE with placeholder param names
+        (``ParameterSpec(name="#1 Rate", linknames=1)``); instance ``i``'s param
+        resolves to ``"1 Rate"``, ``"2 Rate"``, … — unique, automatable,
+        recallable Live params. ``args`` maps an instance index (0-based) to its
+        bpatcher args; default ``[i + 1]``. ``rects`` are the per-instance
+        presentation rects. Returns the bpatcher box ids.
+
+        Live-proven (UIKit Rack): 3 stamps of one 2-param component -> six
+        unique automatable params ('1 Rate' ... '3 Amount'), independent per
+        instance. CAVEAT: ``#1`` substitutes in param longnames and object
+        ARGUMENTS, but NOT in comment text inside an embedded bpatcher — drive
+        instance captions from the arg (e.g. a message to a comment) if needed.
+        """
+        if len(rects) != count:
+            raise ValueError(f"add_component_rack: {count} instances need "
+                             f"{count} rects, got {len(rects)}")
+        arg_fn = args or (lambda i: [i + 1])
+        ids = []
+        for i in range(count):
+            bid = f"{id_prefix}_{i + 1}"
+            self.add_bpatcher_module(
+                component, bid, list(rects[i]), name=name,
+                numinlets=numinlets, numoutlets=numoutlets,
+                outlettype=outlettype,
+                patching_rect=[700, 2400 + i * 40, rects[i][2], rects[i][3]],
+                args=list(arg_fn(i)),
+            )
+            ids.append(bid)
+        return ids
 
     def add_theme_bus(
         self,

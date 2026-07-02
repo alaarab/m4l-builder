@@ -83,6 +83,10 @@ class ParameterSpec:
     enum: list[str] | None = None
     visible: int = 1
     invisible: int | None = None
+    # parameter_linknames: tie the box scripting name to the longname (1) —
+    # REQUIRED inside stamped components so '#1'-substituted longnames stay
+    # coherent per instance (the lfo-cluster rack mechanism).
+    linknames: int | None = None
     bank: int | None = None
     position: int | None = None
     bank_name: str | None = None
@@ -202,6 +206,8 @@ class ParameterSpec:
             valueof["parameter_enum"] = list(self.enum)
         if self.invisible is not None:
             valueof["parameter_invisible"] = self.invisible
+        if self.linknames is not None:
+            valueof["parameter_linknames"] = int(self.linknames)
         if self.annotation_name:
             valueof["parameter_annotation_name"] = self.annotation_name
         if self.info:
