@@ -285,7 +285,9 @@ _WIDTH_MISMATCH_TOL = 12.0
 
 def _alpha0_bg(payload: dict) -> bool:
     bg = payload.get("bgcolor")
-    return bool(bg) and len(bg) >= 4 and float(bg[3]) == 0.0
+    if not isinstance(bg, (list, tuple)) or len(bg) < 4:
+        return False
+    return float(bg[3]) == 0.0
 
 
 def _onscreen_rect(payload: dict, width: float, height: float):
