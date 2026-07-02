@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 
 __all__ = [
+    "viz_declares", "viz_poke_block",
     "rampsmooth_fn", "ring_delay", "lowpass_12_fn", "highpass_12_fn",
     "allpass_fn", "diffuse_fn", "granular_voice_fn", "compose_gen_code",
     "variable_sigmoid_fn", "modulated_allpass_reverb",
@@ -27,6 +28,40 @@ __all__ = [
     "OP_FN", "QPOW_FN", "FADE_FN", "RAMP_FN", "TANA_FN", "SVF_FN", "LFO_OSC_FN",
 ]
 
+
+# ── D4 viz bus: gen -> named buffer~ -> jsui (the library "keystone for live
+# displays"; standard idiom). The gen
+# side declares BARE Buffer names and pokes per-frame screen state on a
+# counter-gated GUI tick; the DEVICE binds each Buffer to a ---scoped buffer~
+# via a rebind message into gen~ inlet 0 (see Device.add_viz_bus), and a
+# buffer_viz_js jsui peeks the same buffers on its own poll Task.
+
+def viz_declares(*buffers: str, counter: str = "his_guiCout") -> str:
+    """Declarations for a viz bus: bare ``Buffer`` decls (bound at load by the
+    device-side rebind message — the viz-bus contract) plus the GUI-tick
+    counter ``History``. Place with your OTHER declarations, BEFORE any
+    executable statement (gen requires all decls first)."""
+    lines = [f"Buffer {name};" for name in buffers]
+    lines.append(f"History {counter}(0);")
+    return "\n".join(lines)
+
+
+def viz_poke_block(body: str, *, refresh_ms: float = 40.0,
+                   counter: str = "his_guiCout") -> str:
+    """Run ``body`` once per ``refresh_ms`` of samples — the GUI tick that pokes
+    per-voice/per-frame screen state into the viz Buffers.
+
+    ``counter`` is a sample counter (declare it with :func:`viz_declares`); it
+    counts up every sample and, on reaching ``refresh_ms`` worth of samples,
+    resets and runs ``body``. Splice the result into the per-sample body."""
+    inner = "\n".join("\t" + line for line in body.splitlines())
+    return (
+        f"{counter} = {counter} + 1;\n"
+        f"if ({counter} >= mstosamps({refresh_ms})) {{\n"
+        f"\t{counter} = 0;\n"
+        f"{inner}\n"
+        "}"
+    )
 
 # ── Granular voice scatter + freeze capture ─────────────────────────────────
 # Standard granular synthesis (C. Roads, "Microsound", MIT Press 2001): a hop
