@@ -246,3 +246,17 @@ class TestLayoutLint:
         d.add_dial("b", "PB", [30, 30, 41, 35], min_val=0, max_val=1, initial=0)
         codes = {i.code for i in d.lint()}
         assert "control-overlap" in codes
+
+
+class TestBrandDimHelper:
+    def test_add_brand_dim_wires_bus_and_fanout(self):
+        d = AudioEffect("bd", width=300, height=168, theme=GRAPHITE)
+        d.add_dial("a", "PA", [20, 20, 41, 35], min_val=0, max_val=1, initial=0)
+        d.add_dial("b", "PB", [80, 20, 41, 35], min_val=0, max_val=1, initial=0)
+        bus = d.add_brand_dim([0.9, 0.5, 0.1, 1.0], ["a", "b"])
+        assert bus == "brandacc"
+        assert _box(d, "brandacc_rx")["text"] == "r ---brandacc"
+        assert _box(d, "brandacc_dim_mact")["text"] == "0.9 0.5 0.1 1"
+        fan = {ln["patchline"]["destination"][0] for ln in d.lines
+               if ln["patchline"]["source"][0] == "brandacc_rx"}
+        assert fan == {"a", "b"}
