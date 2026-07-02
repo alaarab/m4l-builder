@@ -511,6 +511,43 @@ STRANULAR = Theme(  # violet + cyan (+ amber meters) — colors lifted from stra
     meter_over=[0.90, 0.22, 0.26, 1.0],
 )
 
+# ── The fleet shell theme + accent registry (Surface era) ────────────────────
+# GRAPHITE is THE canonical branded card material — it consolidates the color
+# block that was copy-pasted (byte-identical) across pressure/heat/ceiling/
+# echotide/snap and near-identical in sheen/aurora. Devices import GRAPHITE +
+# pick their accent from ACCENTS instead of re-declaring 8 constants each.
+GRAPHITE = Theme(
+    bg=[0.13, 0.13, 0.14, 1.0],            # was per-device BG
+    surface=[0.17, 0.17, 0.18, 1.0],       # was SURFACE (the card)
+    section=[0.24, 0.24, 0.25, 1.0],       # was CONTROL_BG (buttons/menus)
+    text=[0.93, 0.95, 0.98, 1.0],
+    text_dim=[0.63, 0.64, 0.66, 1.0],
+    accent=[0.96, 0.66, 0.16, 1.0],        # strip amber — fleet default; devices
+                                           # override via ACCENTS[name]
+    scope_bgcolor=[0.08, 0.09, 0.10, 1.0],  # was GRAPH_BG (recessed hero screen)
+    panel_border=[0.28, 0.28, 0.30, 1.0],   # was GRAPH_BORDER
+)
+
+# One accent per device (corpus P5: a single disciplined accent, never a
+# rainbow). Values lifted verbatim from the shipping build.py files so adopting
+# the registry is a zero-visual-delta refactor. Secondary accents (sheen's warm
+# LOW band, aurora's ACCENT2) stay device-local.
+ACCENTS: dict[str, list[float]] = {
+    "strip": [0.96, 0.66, 0.16, 1.0],        # vivid amber
+    "pressure": [0.95, 0.62, 0.28, 1.0],     # orange
+    "heat": [0.95, 0.45, 0.22, 1.0],         # hot orange
+    "ceiling": [0.85, 0.25, 0.30, 1.0],      # limiter red
+    "echotide": [0.30, 0.75, 0.95, 1.0],     # cyan
+    "snap": [0.36, 0.86, 0.56, 1.0],         # transient green
+    "sheen": [0.36, 0.78, 0.96, 1.0],        # air-band blue (HI accent)
+    "aurora": [0.30, 0.85, 0.74, 1.0],       # teal
+    "parametric_eq": [0.38, 0.76, 0.58, 1.0],  # curve green
+    "spectrum": [0.28, 0.78, 0.94, 1.0],     # analyzer cyan
+    "tilt": [1.0, 0.64, 0.30, 1.0],          # orange
+    "mono_maker": [1.0, 0.64, 0.30, 1.0],    # orange
+    "nimbus": [0.80, 0.88, 0.95, 1.0],       # ice
+}
+
 # Registry of the distinct two-accent palettes for iteration / pick-by-name.
 PALETTES = {
     'rupture': RUPTURE,

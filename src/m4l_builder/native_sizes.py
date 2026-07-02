@@ -50,6 +50,37 @@ LED_DOT = (10, 10)        # tiny status dot
 ROW_PITCH_TIGHT = 17      # measured tight row spacing (AS-suite dense grids)
 LABEL_FONTSIZE_PRIMARY = 9.5  # the premium label size (corpus); LABEL_FONTSIZE 7.0 = _TINY
 
+# Remaining measured premium tiers (corpus synthesis C4 — sizes cited per device
+# in research/amxd_corpus/: Rainbow NUMBOX_LCD, lfo-pnoise NUMBOX_HERO 72x23,
+# Rainbow meterGainSlider 35x163, AS Console labelled dial).
+NUMBOX_LCD = (40, 17)     # appearance=4 LCD readout (the premium numbox)
+NUMBOX_HERO = (72, 23)    # big touched-value hero readout (fontsize ~18)
+METER_FADER = (35, 163)   # full-height meter+fader lane (Rainbow, x3)
+DIAL_LABELLED = (44, 65)  # dial with native name+number shown (showname/shownumber 1)
+
+# ── Surface cell grammar ─────────────────────────────────────────────────────
+# The vocabulary the Surface layout engine (m4l_builder.surface) composes with.
+# A VALUE CELL is the corpus atomic control (AS Console / Chiral / Superberry):
+# uppercase caption ABOVE a bare DIAL_COMPACT dial whose native shownumber=1
+# value reads out inside the dial rect (recipes.dial_value_cell). Persistent
+# values are the fleet standard — valuepopup hover was the value-less regression.
+CELL_W = 44               # cell width over a 41-wide dial (caption spans this)
+COL_PITCH = 48            # x pitch between dial columns (corpus 44-51)
+CAPTION_H = 10            # caption rect height (dial_value_cell default)
+CAPTION_GAP = 1           # caption -> dial gap
+VALUE_CELL_H = 46         # CAPTION_H + CAPTION_GAP + DIAL_COMPACT height
+SECTION_HEADER_H = 14     # labeled section title band inside a card
+MAX_VALUE_ROWS = 3        # HARD RULE: persistent-value dial rows per 156px column
+                          # (4 rows only ever fit with the value hidden — rejected)
+PARK_RECT = [900, 900, 1, 1]  # canonical off-canvas parking for hidden probe params
+ALPHA_TIERS = (1.0, 0.5, 0.25, 0.10)  # P5: one accent expressed at tiered alphas
+
+# Typography standard (fleet-wide): captions 7.5, section headers 9.5.
+# The 5.6 dense-card caption size is retired.
+CAPTION_FONTSIZE = 7.5    # per-knob caption (fits CELL_W=44; strip-verified)
+HEADER_FONTSIZE = 9.5     # section headers / rail titles (== LABEL_FONTSIZE_PRIMARY)
+FONTNAME = "Ableton Sans Medium"
+
 # Device shell.
 DEVICE_H = 168           # the device-view ceiling (taller clips in Live)
 FRAME_MARGIN = 6         # keep control cells this far inside the panel border

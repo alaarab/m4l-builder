@@ -66,3 +66,41 @@ def test_toggle_column_cells_within_band_and_no_overlap():
     for i in range(3):
         assert cells[i][1][1] + cells[i][1][3] <= cells[i + 1][0][1]
     assert cells[-1][1][1] + cells[-1][1][3] <= 6 + ns.DENSE_COL_H
+
+
+# ── Surface cell-grammar tokens (Phase 1, UI Foundations v2) ─────────────────
+
+def test_value_cell_height_invariant():
+    # A persistent-value cell = caption + gap + DIAL_COMPACT (value renders
+    # INSIDE the dial rect via shownumber=1, so the dial height is the cell floor).
+    assert ns.VALUE_CELL_H == ns.CAPTION_H + ns.CAPTION_GAP + ns.DIAL_COMPACT[1]
+
+
+def test_max_value_rows_fit_dense_band_with_header():
+    # 3 persistent-value rows + a section header must fit the 156px column band;
+    # 4 rows must NOT (that is the valuepopup-era layout we retired).
+    assert ns.MAX_VALUE_ROWS * ns.VALUE_CELL_H + ns.SECTION_HEADER_H <= ns.DENSE_COL_H
+    assert (ns.MAX_VALUE_ROWS + 1) * ns.VALUE_CELL_H > ns.DENSE_COL_H
+
+
+def test_col_pitch_clears_cell_width_dial():
+    # Columns at COL_PITCH must not overlap 41-wide dials (>= 4px gutter... the
+    # corpus gap is ~7 on a 41-wide dial at pitch 48).
+    assert ns.COL_PITCH >= ns.DIAL_COMPACT[0] + 4
+    assert ns.CELL_W >= ns.DIAL_COMPACT[0]
+
+
+def test_park_rect_is_far_off_canvas():
+    x, y, w, h = ns.PARK_RECT
+    assert x >= 900 and y >= 900 and w <= 1 and h <= 1
+
+
+def test_alpha_tiers_descend_from_opaque():
+    assert ns.ALPHA_TIERS[0] == 1.0
+    assert list(ns.ALPHA_TIERS) == sorted(ns.ALPHA_TIERS, reverse=True)
+
+
+def test_typography_tokens():
+    assert ns.CAPTION_FONTSIZE == 7.5
+    assert ns.HEADER_FONTSIZE == ns.LABEL_FONTSIZE_PRIMARY == 9.5
+    assert ns.FONTNAME == "Ableton Sans Medium"

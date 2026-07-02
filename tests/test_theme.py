@@ -641,3 +641,30 @@ class TestDerivePalette:
         assert STRANULAR.accent2 == [0.43, 0.83, 1.0, 1.0]
         assert STRANULAR.accent != STRANULAR.accent2
         assert PALETTES["stranular"] is STRANULAR
+
+
+class TestGraphiteAndAccents:
+    def test_graphite_consolidates_the_fleet_constants(self):
+        from m4l_builder.theme import GRAPHITE
+        # byte-identical to the block copied across pressure/heat/ceiling/echotide/snap
+        assert GRAPHITE.bg == [0.13, 0.13, 0.14, 1.0]
+        assert GRAPHITE.surface == [0.17, 0.17, 0.18, 1.0]
+        assert GRAPHITE.section == [0.24, 0.24, 0.25, 1.0]        # CONTROL_BG
+        assert GRAPHITE.text == [0.93, 0.95, 0.98, 1.0]
+        assert GRAPHITE.text_dim == [0.63, 0.64, 0.66, 1.0]
+        assert GRAPHITE.scope_bgcolor == [0.08, 0.09, 0.10, 1.0]  # GRAPH_BG
+        assert GRAPHITE.panel_border == [0.28, 0.28, 0.30, 1.0]   # GRAPH_BORDER
+
+    def test_accent_registry_matches_shipping_devices(self):
+        from m4l_builder.theme import ACCENTS
+        # verbatim from the build.py files (zero-visual-delta adoption)
+        assert ACCENTS["pressure"] == [0.95, 0.62, 0.28, 1.0]
+        assert ACCENTS["strip"] == [0.96, 0.66, 0.16, 1.0]
+        assert ACCENTS["aurora"] == [0.30, 0.85, 0.74, 1.0]
+        for name, rgba in ACCENTS.items():
+            assert len(rgba) == 4 and all(0.0 <= c <= 1.0 for c in rgba), name
+
+    def test_graphite_usable_on_device(self):
+        from m4l_builder.theme import GRAPHITE
+        d = AudioEffect("g", width=120, height=80, theme=GRAPHITE)
+        assert d.theme.bg == [0.13, 0.13, 0.14, 1.0]
