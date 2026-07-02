@@ -57,10 +57,12 @@ from .io import (
     stereo_io,
 )
 from .live import (
+    live_modulate,
     live_param_signal,
     live_remote,
     macromap,
     quantize_time,
+    retargetable_param_sink,
     tempo_sync,
 )
 from .midi import (
@@ -175,6 +177,7 @@ __all__ = [
     "lfo",
     "lfsr_generator",
     "limiter",
+    "live_modulate",
     "live_param_signal",
     "live_remote",
     "loadbang",
@@ -215,6 +218,7 @@ __all__ = [
     "probability_gate",
     "program_change_in",
     "quantize_time",
+    "retargetable_param_sink",
     "random_note",
     "random_walk",
     "receive_msg",

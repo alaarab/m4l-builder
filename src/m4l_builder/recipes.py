@@ -1822,3 +1822,181 @@ def switchable_bank(device, id_prefix, options, *, tab_param=None, tab_rect=None
         params={tab_param: device.parameter(tab_id)},
         ports=ports,
     )
+
+
+def modulator_slot_component(device, *, accent, text_color=None,
+                             dim_color=None, self_map_guard=None,
+                             debounce_ms=20, width=170, height=66,
+                             normalized=0, js_filename="lom_mapper.js"):
+    """The E2/E3 mapping slot — ONE ``#1``-parameterized Subpatcher to stamp N
+    times via :meth:`Device.add_component_rack` (the lfo-cluster slot, F2+E2).
+
+    Each stamped instance is a full click-to-map modulation lane:
+      MAP (``#1 Map``) arms the ``lom_mapper`` v8 script's selected-parameter
+      observer; picking a param in Live attaches the slot's retargetable sink
+      (``dsp.live.retargetable_param_sink`` — live.remote~/live.modulate~ with
+      the id on the RIGHT inlet via deferlow); the target's name lands in the
+      readout and its native min/max uplink to the ctl bus for gen-side scaling.
+
+    I/O (``#1`` = instance number, standalone tokens only — Live-proven:
+    ``#1`` EMBEDDED mid-symbol like ``depth_#1``/``msig_r#1`` stays LITERAL).
+    Everything crosses the bpatcher boundary by inlet/outlet, the
+    corpus-verbatim discipline (lfo-cluster's slot feeds its sinks from inlet
+    boxes and talks to the parent through outlets). Inlets by x-position:
+      inlet 0: mapper messages (``settarget``/``setid``/``unmap``/``map``,
+               and the parent's ``announce N`` fan-back for exclusivity);
+      inlet 1: live.remote~ signal (native units unless ``normalized=1``);
+      inlet 2: live.modulate~ signal (0..1 relative).
+    Outlet 0 — the ctl uplink route bus, UNINDEXED keys (each stamp has its
+    own outlet patchcord, so the parent knows the slot topologically):
+    ``depth v``, ``umin v``, ``umax v``, ``bipolar v`` (slot params),
+    ``tmin v``/``tmax v`` (target native range) and ``announce N`` (MAP armed
+    — fan it back into EVERY slot's inlet 0 so the other slots stand down).
+
+    Registers the mapper source as a device js asset (content-addressed).
+    Returns ``(subpatcher, ids)``.
+    """
+    from .dsp import retargetable_param_sink
+    from .engines.design_system import js_sidecar_name
+    from .engines.lom_mapper import DEFAULT_SELF_MAP_GUARD, lom_mapper_js
+    from .objects import newobj
+    from .parameters import ParameterSpec
+    from .subpatcher import Subpatcher
+    from .ui import comment, dial, live_text, textedit
+
+    guard = self_map_guard or DEFAULT_SELF_MAP_GUARD
+    tx = list(text_color) if text_color else [0.85, 0.87, 0.89, 1.0]
+    dim = list(dim_color) if dim_color else [0.55, 0.58, 0.61, 1.0]
+    acc = list(accent)
+
+    js_code = lom_mapper_js(self_map_guard=guard, debounce_ms=debounce_ms)
+    fname = js_sidecar_name(js_filename, js_code)
+    device.register_asset(fname, js_code, asset_type="TEXT", category="js")
+
+    sub = Subpatcher("modslot")
+    # ---- UI ----------------------------------------------------------------
+    sub.add_box(live_text(
+        "slot_map", "#1 Map", [4, 3, 34, 15], text_on="MAP", text_off="MAP",
+        mode=1, fontsize=8.0, bgoncolor=acc, textcolor=dim,
+        parameter=ParameterSpec(name="#1 Map", shortname="#1 Map",
+                                minimum=0, maximum=1, enum=["MAP", "MAP"],
+                                parameter_type=2, initial=0,
+                                initial_enable=True, linknames=1)))
+    sub.add_box(textedit(
+        "slot_pname", [42, 4, 124, 14], text="—", fontsize=8.0,
+        textcolor=tx, bgcolor=[0.0, 0.0, 0.0, 0.0], border=0, rounded=0,
+        textjustification=0, ignoreclick=1))
+    for cap_id, cap, cx in (("slot_cap_d", "DEPTH", 2), ("slot_cap_n", "MIN", 47),
+                            ("slot_cap_x", "MAX", 92)):
+        sub.add_box(comment(cap_id, [cx, 17, 41, 8], cap, fontsize=7.5,
+                            fontname="Ableton Sans Medium", textcolor=dim,
+                            justification=1))
+    for did, pname, cx, init in (("slot_depth", "#1 Depth", 2, 1.0),
+                                 ("slot_umin", "#1 Min", 47, 0.0),
+                                 ("slot_umax", "#1 Max", 92, 1.0)):
+        sub.add_box(dial(
+            did, pname, [cx, 26, 41, 35], min_val=0.0, max_val=1.0,
+            initial=init, showname=0, shownumber=1, activedialcolor=acc,
+            activefgdialcolor=[0.59, 0.59, 0.59, 1.0],
+            parameter=ParameterSpec(name=pname, shortname=pname,
+                                    minimum=0.0, maximum=1.0, initial=init,
+                                    initial_enable=True, linknames=1)))
+    sub.add_box(live_text(
+        "slot_bipolar", "#1 Bipolar", [137, 36, 29, 14], text_on="BI",
+        text_off="BI", mode=1, fontsize=8.0, bgoncolor=acc, textcolor=dim,
+        parameter=ParameterSpec(name="#1 Bipolar", shortname="#1 Bipolar",
+                                minimum=0, maximum=1, enum=["OFF", "ON"],
+                                parameter_type=2, initial=0,
+                                initial_enable=True, linknames=1)))
+    # ---- mapper script + sink ----------------------------------------------
+    # bpatcher inlet 0 -> js: the programmatic hook (settarget/setid/unmap
+    # from the parent device — the headless-proof and preset-restore path)
+    sub.add_box({"box": {
+        "id": "slot_in", "maxclass": "inlet", "numinlets": 0, "numoutlets": 1,
+        "outlettype": [""], "patching_rect": [4, 340, 25, 25],
+        "comment": "mapper messages (settarget/setid/unmap/map)"}})
+    sub.add_box(newobj(
+        "slot_js", f"v8 {fname} #1", numinlets=1, numoutlets=2,
+        outlettype=["", ""], patching_rect=[30, 400, 180, 20],
+        saved_object_attributes={"filename": fname, "parameter_enable": 0}))
+    sub.add_line("slot_in", 0, "slot_js", 0)
+    sink_boxes, sink_lines = retargetable_param_sink(
+        "slot_sink", normalized=normalized)
+    sub.add_dsp(sink_boxes, sink_lines)
+    # signal delivery is by bpatcher INLET (corpus-verbatim: lfo-cluster's
+    # mapping slot feeds live.remote~/live.modulate~ from inlet boxes, never
+    # send~/receive~ across the bpatcher boundary) — inlet order is by
+    # x-position: 0 = mapper messages, 1 = remote signal, 2 = modulate signal
+    sub.add_box({"box": {
+        "id": "slot_rsig_r", "maxclass": "inlet", "numinlets": 0,
+        "numoutlets": 1, "outlettype": [""],
+        "patching_rect": [200, 340, 25, 25],
+        "comment": "remote signal (native units)"}})
+    sub.add_box({"box": {
+        "id": "slot_rsig_m", "maxclass": "inlet", "numinlets": 0,
+        "numoutlets": 1, "outlettype": [""],
+        "patching_rect": [240, 340, 25, 25],
+        "comment": "modulate signal (0..1 relative)"}})
+    # ---- status route bus ----------------------------------------------------
+    sub.add_newobj("slot_route",
+                   "route mapped min max pname dname path flash announce",
+                   numinlets=1, numoutlets=9,
+                   outlettype=["", "", "", "", "", "", "", "", ""],
+                   patching_rect=[30, 430, 300, 20])
+    sub.add_box({"box": {
+        "id": "slot_seton", "maxclass": "message", "text": "set $1",
+        "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+        "patching_rect": [330, 460, 50, 20]}})
+    sub.add_box({"box": {
+        "id": "slot_extunmap", "maxclass": "message", "text": "extunmap",
+        "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+        "patching_rect": [30, 520, 70, 20]}})
+    # ---- uplinks. Keys are UNINDEXED: `#1` embedded mid-symbol (depth_#1)
+    # does NOT substitute (Live-proven — only standalone #1 tokens and
+    # longname-leading #1 resolve), and no index is needed anyway: each
+    # stamped slot has its own outlet patchcord, so the parent knows the
+    # slot topologically and stamps literal indices at build time.
+    ups = [("slot_up_depth", "prepend depth", "slot_depth", 0),
+           ("slot_up_umin", "prepend umin", "slot_umin", 0),
+           ("slot_up_umax", "prepend umax", "slot_umax", 0),
+           ("slot_up_bip", "prepend bipolar", "slot_bipolar", 0),
+           ("slot_up_tmin", "prepend tmin", "slot_route", 1),
+           ("slot_up_tmax", "prepend tmax", "slot_route", 2)]
+    for k, (uid, text, src, srcout) in enumerate(ups):
+        sub.add_newobj(uid, text, numinlets=1, numoutlets=1, outlettype=[""],
+                       patching_rect=[400, 400 + 30 * k, 130, 20])
+        sub.add_line(src, srcout, uid, 0)
+    # the ctl uplink leaves by OUTLET (--- does not cross the embed boundary)
+    sub.add_box({"box": {
+        "id": "slot_out", "maxclass": "outlet", "numinlets": 1,
+        "numoutlets": 0, "patching_rect": [400, 590, 25, 25],
+        "comment": "ctl uplink (depth_N/umin_N/umax_N/bipolar_N/"
+                   "tmin_N/tmax_N/announce N)"}})
+    for uid, _t, _s, _o in ups:
+        sub.add_line(uid, 0, "slot_out", 0)
+    # ---- MAP button -> js; status -> UI --------------------------------------
+    sub.add_newobj("slot_prep_map", "prepend map", numinlets=1, numoutlets=1,
+                   outlettype=[""], patching_rect=[30, 370, 90, 20])
+    sub.add_line("slot_map", 0, "slot_prep_map", 0)
+    sub.add_line("slot_prep_map", 0, "slot_js", 0)
+    sub.add_line("slot_js", 0, "slot_sink_reg", 0)
+    sub.add_line("slot_js", 1, "slot_route", 0)
+    sub.add_line("slot_route", 3, "slot_pname", 0)      # pname -> "set <n>"
+    sub.add_line("slot_route", 6, "slot_seton", 0)      # flash -> set $1
+    sub.add_line("slot_seton", 0, "slot_map", 0)
+    sub.add_line("slot_sink_unmapped", 0, "slot_extunmap", 0)
+    sub.add_line("slot_extunmap", 0, "slot_js", 0)
+    sub.add_line("slot_rsig_r", 0, "slot_sink_remote", 0)
+    sub.add_line("slot_rsig_m", 0, "slot_sink_mod", 0)
+    # ---- cross-slot exclusivity: announce goes UP the outlet; the parent
+    # fans it back into every slot's inlet 0 (js ignores its own index)
+    sub.add_newobj("slot_prep_ann", "prepend announce", numinlets=1,
+                   numoutlets=1, outlettype=[""],
+                   patching_rect=[30, 460, 120, 20])
+    sub.add_line("slot_route", 7, "slot_prep_ann", 0)
+    sub.add_line("slot_prep_ann", 0, "slot_out", 0)
+
+    ids = {"js": "slot_js", "map": "slot_map", "readout": "slot_pname",
+           "sink_reg": "slot_sink_reg", "remote": "slot_sink_remote",
+           "modulate": "slot_sink_mod", "rect": [0, 0, width, height]}
+    return (sub, ids)

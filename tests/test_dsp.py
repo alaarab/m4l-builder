@@ -1956,11 +1956,13 @@ class TestLiveRemote:
         assert box["text"] == "live.remote~"
 
     def test_inlets_outlets(self):
+        # corpus-verbatim (lfo-cluster obj-42): 2 inlets — value signal left,
+        # `id <n>` on the RIGHT; one MESSAGE outlet (`mapped 0|1`), not signal
         boxes, _ = live_remote("lr")
         box = _find_box(boxes, "lr_remote")
-        assert box["numinlets"] == 3
+        assert box["numinlets"] == 2
         assert box["numoutlets"] == 1
-        assert box["outlettype"] == ["signal"]
+        assert box["outlettype"] == [""]
 
     def test_ids_use_prefix(self):
         boxes, _ = live_remote("ctrl")
