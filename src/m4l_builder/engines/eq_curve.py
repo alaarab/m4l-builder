@@ -17,6 +17,7 @@ Inlet 0 messages:
     set_motion_depth band_idx percent
     set_motion_direction band_idx degrees
     set_analyzer_buffer name bins   (spectrum DISPLAY polls this buffer~)
+    set_pre_overlay 0|1             (dim pre-EQ spectrum behind the post trace; default 1)
     set_dyn_buffer name [bins]      (dynamic DETECTOR polls this pre-EQ buffer~;
                                      empty/none = fall back to the display buffer)
 
@@ -562,11 +563,13 @@ function ensure_analyzer_arrays() {
     }
 }
 
-function update_analyzer_from_fft(mags) {
-    if (analyzer_frozen) return;   // hold the snapshot
+// Shared Rainbow/Ableton MAX-per-pixel-COLUMN rebin (the Spectrum Analyzer v42
+// algorithm) — used by BOTH the post-EQ display path and the pre-EQ overlay so
+// the two traces are column-for-column comparable. Returns ANALYZER_BINS dB
+// columns (floor-filled), or null when the frame is unusable.
+function rebin_fft_to_columns(mags) {
     var m = mags.length;
-    if (m < 4) return;
-    ensure_analyzer_arrays();
+    if (m < 4) return null;
     // Rainbow/Ableton MAX-per-pixel-COLUMN rebin (the Spectrum Analyzer v42 algorithm,
     // ground-truth-verified vs Ableton Spectrum + EQ8): forward-map every linear FFT
     // bin to its LOG display column and keep the MAX bin per column; interpolate the
@@ -602,7 +605,16 @@ function update_analyzer_from_fft(mags) {
     }
     if (lastIdx < 0) { for (i = 0; i < ANALYZER_BINS; i++) col[i] = ANALYZER_MIN_DB; }
     else { for (i = lastIdx + 1; i < ANALYZER_BINS; i++) col[i] = lastVal; }
+    return col;
+}
+
+function update_analyzer_from_fft(mags) {
+    if (analyzer_frozen) return;   // hold the snapshot
+    var col = rebin_fft_to_columns(mags);
+    if (col === null) return;
+    ensure_analyzer_arrays();
     // Ballistics: instant attack, slewed release (no rise smoothing).
+    var i;
     for (i = 0; i < ANALYZER_BINS; i++) {
         var v = clamp(col[i], ANALYZER_MIN_DB, ANALYZER_MAX_DB);
         if (v >= analyzer_display[i]) analyzer_display[i] = v;
@@ -611,6 +623,90 @@ function update_analyzer_from_fft(mags) {
         else analyzer_peaks[i] = Math.max(ANALYZER_MIN_DB, analyzer_peaks[i] - 0.22);
     }
     request_redraw();
+}
+
+// ── PRE-EQ overlay (Pro-Q 3 grammar): the dedicated pre-EQ detector buffer is
+// rebinned with the SAME column algorithm and drawn as a dim neutral backdrop
+// behind the live post-EQ spectrum, so cuts/boosts read as pre-vs-post daylight.
+var pre_overlay = 1;            // set_pre_overlay 0|1 (default ON)
+var pre_display = [];
+function update_pre_from_fft(mags) {
+    if (analyzer_frozen) return;
+    var col = rebin_fft_to_columns(mags);
+    if (col === null) return;
+    var i;
+    if (pre_display.length !== ANALYZER_BINS) {
+        pre_display = [];
+        for (i = 0; i < ANALYZER_BINS; i++) pre_display[i] = ANALYZER_MIN_DB;
+    }
+    for (i = 0; i < ANALYZER_BINS; i++) {
+        var v = clamp(col[i], ANALYZER_MIN_DB, ANALYZER_MAX_DB);
+        if (v >= pre_display[i]) pre_display[i] = v;
+        else pre_display[i] = pre_display[i] * 0.82 + v * 0.18;
+    }
+}
+
+function set_pre_overlay(v) {
+    pre_overlay = v ? 1 : 0;
+    request_redraw();
+}
+
+function pre_smooth_at(i, n) {
+    var R = 1, acc = 0.0, wsum = 0.0, k, idx, w;
+    for (k = -R; k <= R; k++) {
+        idx = i + k;
+        if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;
+        w = (R + 1) - (k < 0 ? -k : k);
+        acc += pre_display[idx] * w;
+        wsum += w;
+    }
+    return acc / wsum;
+}
+
+function pre_is_flat() {
+    var n = pre_display.length, i;
+    if (n < 2) return true;
+    for (i = 0; i < n; i++) {
+        if (pre_display[i] > ANALYZER_MIN_DB + 1.5) return false;
+    }
+    return true;
+}
+
+// Dim neutral pre-EQ trace — fill-only wash + a quiet grey edge, drawn BEFORE
+// the live post spectrum (never over it). Respects the display tilt so the
+// pre/post pair stays comparable at any slope setting.
+function draw_analyzer_pre() {
+    if (!pre_overlay || !analyzer_enabled) return;
+    if (dyn_buffer_name === "") return;      // no dedicated pre tap on this device
+    var n = pre_display.length, k, freq, tilt;
+    if (n < 2 || pre_is_flat()) return;
+    var left = plot_left(), right = plot_right();
+    var bottom = plot_bottom(), top = plot_top();
+    var sx = [], sy = [];
+    for (k = 0; k < n; k++) {
+        freq = analyzer_bin_freq(k, n);
+        tilt = analyzer_slope_at(freq);
+        sx[k] = freq_to_x(freq);
+        sy[k] = analyzer_db_to_y(analyzer_tilted_db(pre_smooth_at(k, n), tilt));
+    }
+    var grad = mgraphics.pattern_create_linear(left, top, left, bottom);
+    grad.add_color_stop_rgba(0.0, 0.62, 0.66, 0.72, 0.05);
+    grad.add_color_stop_rgba(1.0, 0.62, 0.66, 0.72, 0.13);
+    mgraphics.set_source(grad);
+    mgraphics.move_to(sx[0], bottom + 2);
+    for (k = 0; k < n; k++) mgraphics.line_to(sx[k], sy[k]);
+    mgraphics.line_to(sx[n - 1], bottom + 2);
+    mgraphics.close_path();
+    mgraphics.path_roundcorners(ANALYZER_RCORNERS);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(0.62, 0.66, 0.72, 0.35);
+    mgraphics.set_line_width(1.0);
+    for (k = 0; k < n; k++) {
+        if (k === 0) mgraphics.move_to(sx[k], sy[k]);
+        else mgraphics.line_to(sx[k], sy[k]);
+    }
+    mgraphics.path_roundcorners(ANALYZER_RCORNERS);
+    mgraphics.stroke();
 }
 
 // Draw-time triangular smoothing of the analyzer (read-only -> never compounds
@@ -675,6 +771,10 @@ function poll_analyzer_buffer() {
     // Dynamic detector: read the DEDICATED pre-EQ buffer when one is set, else
     // fall back to the display buffer so other eq_curve devices are unchanged.
     var dyn_vals = dyn_buffer_name !== "" ? read_buffer_frame(dyn_buffer_name, dyn_buffer_bins) : null;
+    // Pre/post overlay: the dedicated pre-EQ tap doubles as the PRE trace.
+    if (dyn_vals && dyn_vals.length >= 4 && analyzer_enabled && pre_overlay) {
+        update_pre_from_fft(dyn_vals);
+    }
     if (dyn_vals === null) dyn_vals = vals;
     if (dyn_vals && dyn_vals.length >= 4) {
         if (update_dynamic_from_fft(dyn_vals)) request_redraw();
@@ -1446,6 +1546,7 @@ function paint() {
     draw_grid();
     if (!EXTERNAL_SPECTRUM) {
         draw_analyzer_snapshot();   // it173: A/B reference behind the live analyzer
+        draw_analyzer_pre();        // pre-EQ dim backdrop (Pro-Q pre/post grammar)
         draw_analyzer();
     }
     // Re-sweep each motion band's drawn coeffs so the curve moves with the LFO.
