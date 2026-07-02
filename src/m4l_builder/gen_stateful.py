@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 
 __all__ = [
-    "viz_declares", "viz_poke_block", "poly_lfo_engine",
+    "viz_declares", "viz_poke_block", "poly_lfo_engine", "freeze_capture_block",
     "rampsmooth_fn", "ring_delay", "lowpass_12_fn", "highpass_12_fn",
     "allpass_fn", "diffuse_fn", "granular_voice_fn", "compose_gen_code",
     "variable_sigmoid_fn", "modulated_allpass_reverb",
@@ -255,6 +255,49 @@ def granular_voice_fn() -> str:
     returning ``(outR, outL)``. See ``GRANULAR_VOICE_FN`` for the
     Data/Buffer/Delay caller contract."""
     return GRANULAR_VOICE_FN
+
+
+def freeze_capture_block(*, freeze_param: str = "freezeTgt",
+                         data: str = "data_freeze",
+                         lines: tuple = ("delaySigR", "delaySigL"),
+                         capture_samps: str = "freezeSamps",
+                         ramp_ms: float = 400.0,
+                         ramp_state: str = "his_freezeRamp") -> str:
+    """The freeze gesture for a ``granular_voice_fn`` caller: capture the newest
+    audio when ``freeze_param`` rises and crossfade live to frozen.
+
+    When ``freeze_param`` crosses 0.5 upward, copy the newest ``capture_samps``
+    samples of each Delay in ``lines`` into ``data`` (channel ``i`` from
+    ``lines[i]``; frame ``j`` holds the sample ``j + 1`` behind the write head,
+    the same addressing as a live tap) and store the captured length in the
+    last frame of channel 0, which ``granular_vp`` uses to wrap frozen reads.
+    ``ramp_state`` then moves linearly toward 1 (frozen) or 0 (live) over
+    ``ramp_ms`` and feeds an equal-power crossfade, ``freezeG = sin(ramp*pi/2)``
+    and ``invFreezeG = cos(ramp*pi/2)``, for ``granular_vp``'s
+    ``freeze``/``invFreeze`` arguments.
+
+    Caller declares ``History {ramp_state}(0);``, the ``Data {data}(n, 2)``,
+    both ``Delay`` lines, and (if symbolic) ``capture_samps``. Splice the
+    result into the per-sample body after the Delay writes; it defines
+    ``freezeG``/``invFreezeG``.
+    """
+    first, second = lines
+    return "\n".join([
+        f"fz_on = {freeze_param} > 0.5;",
+        "fz_rise = change(fz_on) > 0;",
+        "if (fz_rise) {",
+        f"\tfz_len = clip(floor({capture_samps}), 2, dim({data}) - 1);",
+        "\tfor (fz_k = 0; fz_k < fz_len; fz_k += 1) {",
+        f"\t\tpoke({data}, {first}.read(fz_k + 1, interp=\"none\"), fz_k, 0);",
+        f"\t\tpoke({data}, {second}.read(fz_k + 1, interp=\"none\"), fz_k, 1);",
+        "\t}",
+        f"\tpoke({data}, fz_len, dim({data}) - 1, 0);",
+        "}",
+        f"{ramp_state} = clip({ramp_state} + (2 * fz_on - 1) / "
+        f"max(mstosamps({ramp_ms}), 1), 0, 1);",
+        f"freezeG = sin({ramp_state} * halfpi);",
+        f"invFreezeG = cos({ramp_state} * halfpi);",
+    ])
 
 
 def _param_decl(p) -> str:
