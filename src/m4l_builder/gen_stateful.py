@@ -15,7 +15,7 @@ Verified gen signatures (Codebox form): ``poke(data, value, channel, index)``,
 from __future__ import annotations
 
 __all__ = [
-    "viz_declares", "viz_poke_block",
+    "viz_declares", "viz_poke_block", "poly_lfo_engine",
     "rampsmooth_fn", "ring_delay", "lowpass_12_fn", "highpass_12_fn",
     "allpass_fn", "diffuse_fn", "granular_voice_fn", "compose_gen_code",
     "variable_sigmoid_fn", "modulated_allpass_reverb",
@@ -24,6 +24,7 @@ __all__ = [
     "RAMPSMOOTH_FN", "LOWPASS_12_FN", "HIGHPASS_12_FN", "ALLPASS_FN",
     "DIFFUSE_FN", "GRANULAR_VOICE_FN", "VARIABLE_SIGMOID_FN",
     "OP_FN", "QPOW_FN", "FADE_FN", "RAMP_FN", "TANA_FN", "SVF_FN", "LFO_OSC_FN",
+    "LFO_VOICE_FN", "lfo_voice_fn",
 ]
 
 
@@ -53,6 +54,106 @@ def viz_poke_block(body: str, *, refresh_ms: float = 40.0,
     indented = "\n".join("\t" + ln for ln in body.strip().split("\n"))
     return (f"{counter} = wrap({counter} + 1, 0, mstosamps({refresh_ms}));\n"
             f"if ({counter} == 1) {{\n{indented}\n}}")
+
+# One LFO voice of the Orbit cluster: phase advance + 6 analytic shapes
+# (sine / tri / saw / square / S&H / drift), all state in caller-owned Data
+# rows so ONE function serves N voices (lfo-cluster's polyrhythmic cluster).
+LFO_VOICE_FN = """lfo_voice(data_ph, data_sh, data_dr, idx, rt, shp) {
+	ph = peek(data_ph, idx, 0);
+	ph += rt / samplerate;
+	if (ph >= 1) {
+		ph -= 1;
+		poke(data_sh, noise() * 0.5 + 0.5, idx, 0);
+		poke(data_dr, noise() * 0.5 + 0.5, idx, 1);
+	}
+	poke(data_ph, ph, idx, 0);
+	v = 0;
+	if (shp < 0.5) {
+		v = 0.5 - 0.5 * cos(ph * twopi);
+	} else if (shp < 1.5) {
+		v = 1 - abs(2 * ph - 1);
+	} else if (shp < 2.5) {
+		v = ph;
+	} else if (shp < 3.5) {
+		v = ph < 0.5;
+	} else if (shp < 4.5) {
+		v = peek(data_sh, idx, 0);
+	} else {
+		cur = peek(data_dr, idx, 0);
+		tgt = peek(data_dr, idx, 1);
+		cur += (tgt - cur) * min(1, rt * 8 / samplerate);
+		poke(data_dr, cur, idx, 0);
+		v = cur;
+	}
+	return v;
+}"""
+
+
+def lfo_voice_fn() -> str:
+    """Return the gen function-definition for one Orbit LFO voice (phase +
+    6 analytic shapes; state in caller Data rows). Caller declares
+    ``Data data_ph(N); Data data_sh(N); Data data_dr(N, 2);``."""
+    return LFO_VOICE_FN
+
+
+def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
+                    viz_buffer: str = "buf_orbit_gui") -> str:
+    """The Orbit poly-LFO codebox (lfo-cluster class): ``voices`` LFOs whose
+    rates spread from ONE Rate by the cluster fold ``r = fold(offset +
+    bias*i, 0, 1)`` -> ``rate * (1 + 3r)`` (the radius->rate polyrhythm), with
+    per-slot Depth/Min/Max/Bipolar windows and target-range scaling.
+
+    Signal outs (``build_gendsp(code, 1, 2*voices)``):
+      out 1..voices        REMOTE family, native units for a ``normalized=0``
+                           live.remote~: ``tmin_i + (tmax_i-tmin_i) *
+                           (umin_i + (umax_i-umin_i) * vv_i)`` where ``vv_i``
+                           is the depth/bipolar-windowed wave;
+      out voices+1..2v     MODULATE family: ``vv_i`` raw (0..1 relative).
+
+    Message params on gen inlet 0: global ``rate/bias/offset/shape`` + per
+    slot ``depth_i/umin_i/umax_i/bipolar_i`` (slot dials) and
+    ``tmin_i/tmax_i`` (the mapper's target min/max reads). The GUI tick pokes
+    ``[radius, phase, value, depth]`` per voice into ``viz_buffer`` (samps =
+    ``4*voices``) for the polar_cluster hero.
+    """
+    params: list = [("rate", 1.0, 0.02, 8.0), ("bias", 0.13, 0.0, 1.0),
+                    ("offset", 0.0, 0.0, 1.0), ("shape", 0.0, 0.0, 5.0)]
+    for i in range(1, voices + 1):
+        # depth/umin/umax arrive as 0..100 percents (the slot numboxes read
+        # "100 %" like the stock modulators); scaled by 0.01 in the body
+        params += [(f"depth_{i}", 100.0, 0.0, 100.0),
+                   (f"umin_{i}", 0.0, 0.0, 100.0),
+                   (f"umax_{i}", 100.0, 0.0, 100.0),
+                   (f"bipolar_{i}", 0.0, 0.0, 1.0),
+                   (f"tmin_{i}", 0.0), (f"tmax_{i}", 1.0)]
+    decls = [f"Data data_ph({voices});", f"Data data_sh({voices});",
+             f"Data data_dr({voices}, 2);",
+             viz_declares(viz_buffer)]
+    voice_lines = []
+    pokes = []
+    for i in range(1, voices + 1):
+        k = i - 1
+        voice_lines += [
+            f"r_{i} = fold(offset + bias * {k}, 0, 1);",
+            f"rt_{i} = rate * (1 + 3 * r_{i});",
+            f"v_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, shape);",
+            f"d_{i} = depth_{i} * 0.01;",
+            f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
+            f"v_{i} * d_{i};",
+            f"out{i} = tmin_{i} + (tmax_{i} - tmin_{i}) * "
+            f"(umin_{i} * 0.01 + (umax_{i} - umin_{i}) * 0.01 * vv_{i});",
+            f"out{voices + i} = vv_{i};",
+        ]
+        pokes += [
+            f"poke({viz_buffer}, r_{i}, {4 * k}, 0);",
+            f"poke({viz_buffer}, peek(data_ph, {k}, 0), {4 * k + 1}, 0);",
+            f"poke({viz_buffer}, vv_{i}, {4 * k + 2}, 0);",
+            f"poke({viz_buffer}, d_{i}, {4 * k + 3}, 0);",
+        ]
+    body = "\n".join(decls + voice_lines) + "\n" + viz_poke_block(
+        "\n".join(pokes), refresh_ms=gui_refresh_ms)
+    return compose_gen_code(params=params, functions=[LFO_VOICE_FN], body=body)
+
 
 # Verbatim from Particle-Reverb_6.0 — the granular voice scatter (scheduler +
 # polyphonic playback + freeze mode). The keystone for a granular device.

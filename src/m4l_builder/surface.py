@@ -336,6 +336,19 @@ class Surface:
         self._advance(sect.width)
         return sect
 
+    def reserve(self, width: int) -> int:
+        """Reserve a custom-width region at the cursor and return its left x.
+
+        For non-Surface content inside the band — a component rack of stamped
+        bpatchers (Orbit's 2x2 modulation slots), a bespoke panel. The caller
+        places its own boxes in ``[x, BAND_Y .. BAND_Y + band_h]``; the region
+        participates in the width derivation like any hero/section slot.
+        """
+        self._check_open()
+        x = self._x
+        self._advance(width)
+        return x
+
     def probe(self, id: str, param_name: str, **dial_kwargs: Any) -> str:
         """A hidden diagnostic/probe param parked at :data:`ns.PARK_RECT`."""
         dial_kwargs.setdefault("showname", 0)

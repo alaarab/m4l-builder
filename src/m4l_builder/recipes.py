@@ -1826,10 +1826,17 @@ def switchable_bank(device, id_prefix, options, *, tab_param=None, tab_rect=None
 
 def modulator_slot_component(device, *, accent, text_color=None,
                              dim_color=None, self_map_guard=None,
-                             debounce_ms=20, width=170, height=66,
+                             debounce_ms=20, width=240, height=17,
                              normalized=0, js_filename="lom_mapper.js"):
     """The E2/E3 mapping slot — ONE ``#1``-parameterized Subpatcher to stamp N
     times via :meth:`Device.add_component_rack` (the lfo-cluster slot, F2+E2).
+
+    Presentation is the STOCK-MODULATOR ROW (Live 12 LFO / Envelope Follower:
+    the whole mapping UI is one ~15px strip — Map button, target chip, inline
+    percent values; knobs are for the device's own DSP only):
+    ``MAP | target readout | Depth% | Min% | Max% | BI`` at ``width x height``
+    (default 240x17). Stack N stamped rows in a single narrow column and put
+    ONE shared caption header above the stack (the slot has no captions).
 
     Each stamped instance is a full click-to-map modulation lane:
       MAP (``#1 Map``) arms the ``lom_mapper`` v8 script's selected-parameter
@@ -1862,7 +1869,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
     from .objects import newobj
     from .parameters import ParameterSpec
     from .subpatcher import Subpatcher
-    from .ui import comment, dial, live_text, textedit
+    from .ui import live_text, number_box, textedit
 
     guard = self_map_guard or DEFAULT_SELF_MAP_GUARD
     tx = list(text_color) if text_color else [0.85, 0.87, 0.89, 1.0]
@@ -1874,36 +1881,32 @@ def modulator_slot_component(device, *, accent, text_color=None,
     device.register_asset(fname, js_code, asset_type="TEXT", category="js")
 
     sub = Subpatcher("modslot")
-    # ---- UI ----------------------------------------------------------------
+    # ---- UI: ONE stock-modulator row (no knobs, no captions) ---------------
     sub.add_box(live_text(
-        "slot_map", "#1 Map", [4, 3, 34, 15], text_on="MAP", text_off="MAP",
-        mode=1, fontsize=8.0, bgoncolor=acc, textcolor=dim,
+        "slot_map", "#1 Map", [0, 1, 28, 15], text_on="MAP", text_off="MAP",
+        mode=1, fontsize=7.5, bgoncolor=acc, textcolor=dim,
         parameter=ParameterSpec(name="#1 Map", shortname="#1 Map",
                                 minimum=0, maximum=1, enum=["MAP", "MAP"],
                                 parameter_type=2, initial=0,
                                 initial_enable=True, linknames=1)))
     sub.add_box(textedit(
-        "slot_pname", [42, 4, 124, 14], text="—", fontsize=8.0,
+        "slot_pname", [31, 2, 62, 13], text="—", fontsize=8.0,
         textcolor=tx, bgcolor=[0.0, 0.0, 0.0, 0.0], border=0, rounded=0,
         textjustification=0, ignoreclick=1))
-    for cap_id, cap, cx in (("slot_cap_d", "DEPTH", 2), ("slot_cap_n", "MIN", 47),
-                            ("slot_cap_x", "MAX", 92)):
-        sub.add_box(comment(cap_id, [cx, 17, 41, 8], cap, fontsize=7.5,
-                            fontname="Ableton Sans Medium", textcolor=dim,
-                            justification=1))
-    for did, pname, cx, init in (("slot_depth", "#1 Depth", 2, 1.0),
-                                 ("slot_umin", "#1 Min", 47, 0.0),
-                                 ("slot_umax", "#1 Max", 92, 1.0)):
-        sub.add_box(dial(
-            did, pname, [cx, 26, 41, 35], min_val=0.0, max_val=1.0,
-            initial=init, showname=0, shownumber=1, activedialcolor=acc,
-            activefgdialcolor=[0.59, 0.59, 0.59, 1.0],
+    # 0..100 ranges so unitstyle=5 reads "100 %" like the stock modulators
+    # (consumers scale by 0.01 — poly_lfo_engine does it inside gen)
+    for nid, pname, nx, init in (("slot_depth", "#1 Depth", 96, 100.0),
+                                 ("slot_umin", "#1 Min", 135, 0.0),
+                                 ("slot_umax", "#1 Max", 174, 100.0)):
+        sub.add_box(number_box(
+            nid, pname, [nx, 1, 36, 15], min_val=0.0, max_val=100.0,
+            initial=init, unitstyle=5, lcdcolor=acc,
             parameter=ParameterSpec(name=pname, shortname=pname,
-                                    minimum=0.0, maximum=1.0, initial=init,
+                                    minimum=0.0, maximum=100.0, initial=init,
                                     initial_enable=True, linknames=1)))
     sub.add_box(live_text(
-        "slot_bipolar", "#1 Bipolar", [137, 36, 29, 14], text_on="BI",
-        text_off="BI", mode=1, fontsize=8.0, bgoncolor=acc, textcolor=dim,
+        "slot_bipolar", "#1 Bipolar", [213, 1, 24, 15], text_on="BI",
+        text_off="BI", mode=1, fontsize=7.5, bgoncolor=acc, textcolor=dim,
         parameter=ParameterSpec(name="#1 Bipolar", shortname="#1 Bipolar",
                                 minimum=0, maximum=1, enum=["OFF", "ON"],
                                 parameter_type=2, initial=0,
