@@ -2935,11 +2935,16 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
             return;
         }
         if (!menu_hit) {
+            // Click-off DISMISSES AND CONSUMES the press (standard popup
+            // semantics) — falling through here silently added a band at the
+            // click point (Live-verified), the exact "weird things when
+            // clicking off" failure the fleet forbids.
             close_node_menu();
-        } else {
             mgraphics.redraw();
             return;
         }
+        mgraphics.redraw();
+        return;
     }
 
     if (option_click) {
