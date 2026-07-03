@@ -47,6 +47,12 @@ WIRING_INTEGRITY_CODES = frozenset(
         "outlet-index-out-of-range",
         "inlet-index-out-of-range",
         "selector-initial-out-of-range",
+        # Live-proven UI bug classes (Interaction arc): a visible live.text
+        # with parameter_enable=0 never receives clicks; an interactive
+        # control past the device edge (below the parking band) is
+        # unreachable. Both shipped as real bugs — gate every build.
+        "dead-live-text",
+        "stranded-control",
     }
 )
 
