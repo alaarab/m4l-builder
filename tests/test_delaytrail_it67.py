@@ -55,14 +55,16 @@ class TestDelayTrailDiagonalDrag:
         assert abs(feedbacks[0][2] - result.state["fb"]) <= 0.5
 
     def test_opt_click_toggles_pingpong_without_moving_pad(self):
-        # Opt-click flips PING-PONG (the trail visualises it) and leaves the
-        # time/feedback pad untouched; a normal drag never touches ping-pong.
+        # A bare alt-CLICK (down+up, no drag) flips PING-PONG on release and
+        # leaves the time/feedback pad alone; an alt-DRAG is DAMP instead
+        # (resolved by the dead-zone), so ping-pong stays a pure click gesture.
         result = run_jsui(delay_trail_js(), """
             set_time(350.0); set_feedback(45.0); set_pingpong(0);
             onpointerdown({x: 120, y: 80, altKey: 1});
+            onpointerup({x: 120, y: 80, altKey: 1});
             var p1 = pingpong, t1 = time_ms, f1 = feedback_pct;
-            onpointerup({x: 120, y: 80});
             onpointerdown({x: 120, y: 80, altKey: 1});
+            onpointerup({x: 120, y: 80, altKey: 1});
             dump({p1: p1, p2: pingpong, t1: t1, f1: f1});
         """, size=(326, 152))
         assert result.state["p1"] == 1, "opt-click toggles ping-pong on"
@@ -262,3 +264,133 @@ class TestDelayTrailTide:
         assert result.state["armed"] == 0
         assert result.state["l"] == 0
         assert result.state["ign"] == 0
+
+
+class TestDelayTrailGestureMatrix:
+    """Part 2 — the fleet Para EQ gesture grammar on the trail: plain =
+    feedback, Cmd = mix, Alt = damp, Shift = fine; a modifier DRAG locks time."""
+
+    def test_wheel_plain_is_feedback(self):
+        r = run_jsui(delay_trail_js(), """
+            set_feedback(45);
+            onwheel(100, 50, 0, 1, 0, 0, 0, 0, 0);   // scroll up, no modifiers
+            dump({fb: feedback_pct});
+        """, size=(326, 152))
+        assert _named(r.outlets, "feedback")
+        assert r.state["fb"] == 47   # +2 coarse
+
+    def test_wheel_cmd_is_mix(self):
+        r = run_jsui(delay_trail_js(), """
+            set_mix(35);
+            onwheel(100, 50, 0, 1, 1, 0, 0, 0, 0);   // Cmd
+            dump({mix: mix_pct});
+        """, size=(326, 152))
+        assert _named(r.outlets, "mix")
+        assert not _named(r.outlets, "feedback")
+        assert r.state["mix"] == 37
+
+    def test_wheel_alt_is_damp(self):
+        r = run_jsui(delay_trail_js(), """
+            set_damp(20);
+            onwheel(100, 50, 0, 1, 0, 0, 0, 1, 0);   // Alt
+            dump({damp: damp_pct});
+        """, size=(326, 152))
+        assert _named(r.outlets, "damp")
+        assert r.state["damp"] == 22
+
+    def test_wheel_shift_is_fine(self):
+        r = run_jsui(delay_trail_js(), """
+            set_feedback(45);
+            onwheel(100, 50, 0, 1, 0, 1, 0, 0, 0);   // Shift = fine
+            dump({fb: feedback_pct});
+        """, size=(326, 152))
+        assert abs(r.state["fb"] - 45.5) < 1e-6   # +0.5 fine
+
+    def test_plain_drag_moves_time_and_feedback(self):
+        r = run_jsui(delay_trail_js(), """
+            set_time(350); set_feedback(45);
+            onpointerdown({x: 100, y: 100, buttons: 1});
+            onpointermove({x: 180, y: 40, buttons: 1});
+            dump({t: time_ms, fb: feedback_pct});
+        """, size=(326, 152))
+        assert _named(r.outlets, "time")
+        assert _named(r.outlets, "feedback")
+
+    def test_cmd_drag_is_mix_and_holds_time(self):
+        r = run_jsui(delay_trail_js(), """
+            set_time(350); set_mix(35);
+            onpointerdown({x: 100, y: 100, buttons: 1});
+            onpointermove({x: 180, y: 20, buttons: 1, commandKey: 1});
+            dump({t: time_ms});
+        """, size=(326, 152))
+        assert _named(r.outlets, "mix")
+        assert not _named(r.outlets, "time")   # time held during a modifier drag
+        assert r.state["t"] == 350
+
+    def test_alt_drag_is_damp_and_holds_time(self):
+        # Alt held from the press; a real drag past the dead-zone commits to DAMP
+        # (not the ping-pong click), and time stays locked.
+        r = run_jsui(delay_trail_js(), """
+            set_time(350); set_damp(20); set_pingpong(0);
+            onpointerdown({x: 100, y: 100, buttons: 1, altKey: 1});
+            onpointermove({x: 180, y: 20, buttons: 1, altKey: 1});
+            dump({t: time_ms, pp: pingpong});
+        """, size=(326, 152))
+        assert _named(r.outlets, "damp")
+        assert not _named(r.outlets, "time")
+        assert not _named(r.outlets, "pingpong")   # a drag is damp, not a toggle
+        assert r.state["t"] == 350
+        assert r.state["pp"] == 0
+
+
+class TestDelayTrailReactivePaint:
+    """Part 1 — paint runs with the Living-Delay render (rivers, comets, feedback
+    loop, thermal) both with a tide feed and without (geometric fallback)."""
+
+    STUB = """
+        Buffer = function (name) {
+            this.peek = function (ch, start, count) {
+                var out = [];
+                for (var i = 0; i < count; i++) out.push(0);
+                out[10] = 0.8; out[40] = 0.5;   // some real energy in a few bins
+                out[256] = 20;                  // head index
+                out[257] = 0.3;                 // wobble
+                return out;
+            };
+        };
+    """
+
+    def test_helpers_present(self):
+        js = delay_trail_js()
+        for fn in ("function thermal(", "function draw_river(",
+                   "function glow_bezier("):
+            assert fn in js, fn
+
+    def test_paint_reactive_and_geometric_both_safe(self):
+        r = run_jsui(delay_trail_js(), self.STUB + """
+            paint();                       // no feed -> geometric comets
+            set_buffers("---t"); poll_tide();
+            set_feedback(80); set_character(1);
+            paint();                       // reactive river + comets + loop
+            set_freeze(1); paint();        // frozen ice mood
+            dump({ok: 1, lit: tideL === null ? 0 : 1});
+        """, size=(326, 152))
+        assert r.state["ok"] == 1
+        assert r.state["lit"] == 1
+
+
+class TestDelayTrailKnobViz:
+    """Knob->display links: WIDTH spreads the L/R lanes, SPREAD drifts the
+    comets. Both are display-only set_* handlers driving paint()."""
+
+    def test_width_and_spread_handlers(self):
+        r = run_jsui(delay_trail_js(), """
+            set_width(0);    var narrow = lane_y(0);
+            set_width(200);  var wide = lane_y(0);
+            set_spread(80);
+            paint();                                   // spread drift path
+            dump({narrow: narrow, wide: wide, sp: spread_pct});
+        """, size=(326, 152))
+        # Width 200% spreads lane 0 (upper) HIGHER (smaller y) than width 0%.
+        assert r.state["wide"] < r.state["narrow"]
+        assert r.state["sp"] == 80
