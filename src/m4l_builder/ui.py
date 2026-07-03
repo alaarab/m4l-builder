@@ -80,6 +80,23 @@ def _resolve_parameter_spec(
     return spec.copy(**updates)
 
 
+
+
+def _apply_info_view_annotations(box: dict, spec) -> None:
+    """Official-adopt 2 (Ableton Final Checklist): every UI parameter carries
+    BOX-level ``annotation_name`` (Live Info View title) + ``annotation``
+    (body) so hovering the control in Live shows real help text instead of a
+    blank pane. Derives from the richer ``parameter_annotation_name`` when the
+    widget provided one, else the param longname; explicit attrs always win
+    (setdefault) and raw box dicts (reverse-engineered builds) are untouched.
+    """
+    title = getattr(spec, "annotation_name", None) or getattr(spec, "name", None)
+    if title:
+        # alphabetical insertion order — the reverse codegen normalises box
+        # keys alphabetically, so this keeps reversed rebuilds byte-identical
+        box.setdefault("annotation", str(title))
+        box.setdefault("annotation_name", str(title))
+
 def _presentation_box(id: str, maxclass: str, rect: list, *,
                       numinlets: int = 1, numoutlets: int = 0,
                       patching_rect: list = None, **kwargs) -> dict:
@@ -243,6 +260,7 @@ def dial(id: str, varname: str, rect: list, *,
     if valuepopuplabel is not None:
         box["valuepopuplabel"] = valuepopuplabel
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -320,6 +338,7 @@ def tab(id: str, varname: str, rect: list, *,
         box["textoncolor"] = textoncolor
         box["inactivetextoncolor"] = textoncolor
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -360,6 +379,7 @@ def toggle(id: str, varname: str, rect: list, *, shortname: str = None,
     if rounded != 0.0:
         box["rounded"] = rounded
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -478,6 +498,7 @@ def menu(id: str, varname: str, rect: list, *, options: list,
     if textoncolor:
         box["hlttextcolor"] = textoncolor       # highlighted-item text (live.menu has no textoncolor)
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -559,6 +580,7 @@ def number_box(id: str, varname: str, rect: list, *,
             "use ParameterSpec.integer(..., allow_wide_range=True) or set allow_wide_int_range=True"
         )
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -595,6 +617,7 @@ def slider(id: str, varname: str, rect: list, *,
         "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -637,6 +660,7 @@ def button(id: str, varname: str, rect: list, *, shortname: str = None,
     if bordercolor:
         box["bordercolor"] = bordercolor
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -783,6 +807,7 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
     if rounded != 0.0:
         box["rounded"] = rounded
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
@@ -855,6 +880,7 @@ def live_gain(id: str, varname: str, rect: list, *, min_val: float = -70.0,
         "saved_attribute_attributes": spec.to_saved_attributes(),
     }
     box.update(kwargs)
+    _apply_info_view_annotations(box, spec)
     return {"box": box}
 
 
