@@ -193,7 +193,7 @@ var ANALYZER_POLL_MS = 50;
 
 var MARGIN_LEFT = 16;
 var MARGIN_RIGHT = 4;
-var MARGIN_TOP = 8;
+var MARGIN_TOP = 4;   // plot reclaims the chip-era headroom (user)
 var MARGIN_BOTTOM = 9;
 
 var sample_rate = DEFAULT_SR;
