@@ -111,11 +111,19 @@ var RESET_FB   = $reset_feedback_pct;
 var time_ms = 350.0;
 var feedback_pct = 45.0;
 var damp_pct = 20.0;
+var mix_pct = 35.0;
+var width_pct = 100.0;   // wet stereo width -> how far apart the L/R lanes sit
+var spread_pct = 0.0;    // stereo spread -> L/R comets drift apart in time
 var pingpong = 0;
 var sync_label = "FREE";
 var wet_lvl = 0.0;
 var duck_lvl = 0.0;
 var character = 0;   // 0 DIGITAL (clean), 1 TAPE, 2 BBD -> warms/dims late repeats
+
+// Transient value bezel for the modifier gestures (Cmd=mix / Alt=damp): shows the
+// active param + value for a beat after a wheel/drag so the change is legible.
+var gesture_label = "";
+var gesture_ttl = 0;   // frames-to-live; decremented on idle redraws
 
 // ── TIDE (D4 viz bus): the REAL delay-line contents ──────────────────
 // The gen~ core pokes per-bin peak |written| (input + feedback) into a
@@ -137,6 +145,7 @@ var frozen = 0;
 var tide_poll = null;
 
 var dragging = 0;
+var alt_pending = 0;   // an alt-press that hasn't yet resolved to click (ping-pong) vs drag (damp)
 var hovering = 0;
 var hover_x = 0.0;
 var hover_y = 0.0;
@@ -144,6 +153,8 @@ var drag_start_x = 0;
 var drag_start_y = 0;
 var drag_start_time = 0.0;
 var drag_start_feedback = 0.0;
+var drag_start_mix = 35.0;
+var drag_start_damp = 20.0;
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -158,9 +169,109 @@ function ms_to_x(ms) {
     return plot_l() + clamp(ms / MAX_MS, 0.0, 1.0) * plot_w();
 }
 
+// Lane centres SPREAD with the wet WIDTH knob: 100% = the default spacing,
+// 0% collapses toward a single mono line, 200% blooms them wide apart — you
+// literally see the stereo image open and close.
 function lane_y(is_right) {
-    var third = plot_h() / 3.0;
-    return plot_t() + (is_right ? third * 2.2 : third * 0.8);
+    var w01 = clamp(width_pct / 200.0, 0.0, 1.0);   // 100% -> 0.5
+    var half = plot_h() * (0.06 + 0.35 * w01);      // 100% -> ~0.235h (matches old)
+    var cen = plot_t() + plot_h() * 0.5;
+    return is_right ? cen + half : cen - half;
+}
+
+// ── Living-Delay render helpers ──────────────────────────────────────
+// Energy = light = temperature. Real recirculating energy drives brightness,
+// size and colour; the feedback decay is only the envelope/ceiling.
+var REACT_FLOOR = 0.34;   // dim floor so the echo pattern still reads in silence
+var REACT_GAIN  = 1.15;   // how hard live audio drives the nodes within the envelope
+var REACT_CEIL  = 1.28;   // transient overshoot cap (>1 = a loud hit pops)
+var COOL_CLR    = [0.16, 0.20, 0.52];   // rest / low energy: deep indigo
+var _thc = [0.0, 0.0, 0.0];             // scratch thermal colour (avoid per-call GC)
+
+// Thermal palette: energy e in 0..1 -> deep indigo -> accent cyan -> incandescent
+// white. CHARACTER warms the hot anchor (TAPE amber / BBD deep amber); FREEZE
+// remaps the whole ramp toward ice. Writes into the out array.
+function thermal(e, out) {
+    e = e < 0 ? 0 : (e > 1 ? 1 : e);
+    var hr, hg, hb;
+    if (character > 1.5)      { hr = 0.98; hg = 0.62; hb = 0.24; }   // BBD deep amber
+    else if (character > 0.5) { hr = 1.00; hg = 0.74; hb = 0.34; }   // TAPE amber
+    else                      { hr = 0.96; hg = 0.99; hb = 1.00; }   // DIGITAL white-hot
+    var mr = ACCENT_CLR[0], mg = ACCENT_CLR[1], mb = ACCENT_CLR[2];
+    if (e < 0.5) {
+        var t = e * 2.0;
+        out[0] = COOL_CLR[0] + (mr - COOL_CLR[0]) * t;
+        out[1] = COOL_CLR[1] + (mg - COOL_CLR[1]) * t;
+        out[2] = COOL_CLR[2] + (mb - COOL_CLR[2]) * t;
+    } else {
+        var t2 = (e - 0.5) * 2.0;
+        out[0] = mr + (hr - mr) * t2;
+        out[1] = mg + (hg - mg) * t2;
+        out[2] = mb + (hb - mb) * t2;
+    }
+    if (frozen) {
+        out[0] = out[0] + (ICE_CLR[0] - out[0]) * 0.78;
+        out[1] = out[1] + (ICE_CLR[1] - out[1]) * 0.78;
+        out[2] = out[2] + (ICE_CLR[2] - out[2]) * 0.78;
+    }
+    return out;
+}
+
+// A glowing bezier: wide low-alpha underlay (bloom) + crisp core (no real blur in
+// v8ui — stacked alpha is the glow mechanism).
+function glow_bezier(x0, y0, c1x, c1y, c2x, c2y, x1, y1, clr, lw, alpha) {
+    mgraphics.set_source_rgba(clr[0], clr[1], clr[2], alpha * 0.30);
+    mgraphics.set_line_width(lw + 3.0);
+    mgraphics.move_to(x0, y0); mgraphics.curve_to(c1x, c1y, c2x, c2y, x1, y1); mgraphics.stroke();
+    mgraphics.set_source_rgba(clr[0], clr[1], clr[2], alpha);
+    mgraphics.set_line_width(lw);
+    mgraphics.move_to(x0, y0); mgraphics.curve_to(c1x, c1y, c2x, c2y, x1, y1); mgraphics.stroke();
+}
+
+// THE ENERGY RIVER: a glowing thermal ribbon per lane whose thickness = the real
+// per-bin recirculating energy, flowing along the delay ruler. Returns the lane's
+// PEAK energy (feeds the feedback-loop glow). A closed ribbon filled with a
+// vertical thermal gradient (eq_curve spectrum-river recipe).
+function draw_river(arr, ly) {
+    if (!arr) return 0.0;
+    var bin_ms = MAX_MS / TIDE_BINS;
+    var maxH = plot_h() * 0.17;
+    var pr = plot_r();
+    var peak = 0.0, any = 0;
+    // Decimate the 256-bin ring to every RIVER_STEP-th point: at the trail's
+    // pixel width one bin is sub-pixel, so this halves the vertex/roundcorners
+    // cost with no visible change (perf).
+    var STEP = 2;
+    var i, idx, raw, ev, xr, last_i = TIDE_BINS;
+    mgraphics.move_to(plot_l(), ly);
+    for (i = 0; i < TIDE_BINS; i += STEP) {
+        xr = ms_to_x(i * bin_ms);
+        if (xr > pr) { last_i = i; break; }
+        idx = ((tide_head - i) % TIDE_BINS + TIDE_BINS) % TIDE_BINS;
+        raw = arr[idx];
+        ev = (raw > 0.0) ? Math.pow(clamp(raw * 1.15, 0, 1), 0.55) : 0.0;
+        if (ev > peak) peak = ev;
+        mgraphics.line_to(xr, ly - ev * maxH);
+        any = 1;
+    }
+    for (i = last_i - STEP; i >= 0; i -= STEP) {
+        idx = ((tide_head - i) % TIDE_BINS + TIDE_BINS) % TIDE_BINS;
+        raw = arr[idx];
+        ev = (raw > 0.0) ? Math.pow(clamp(raw * 1.15, 0, 1), 0.55) : 0.0;
+        mgraphics.line_to(ms_to_x(i * bin_ms), ly + ev * maxH);
+    }
+    mgraphics.close_path();
+    if (!any) return 0.0;
+    thermal(0.35 + 0.5 * peak, _thc);
+    var g = mgraphics.pattern_create_linear(0, ly - maxH, 0, ly + maxH);
+    var a = 0.08 + 0.38 * peak;
+    g.add_color_stop_rgba(0.0, _thc[0], _thc[1], _thc[2], 0.0);
+    g.add_color_stop_rgba(0.5, _thc[0], _thc[1], _thc[2], a);
+    g.add_color_stop_rgba(1.0, _thc[0], _thc[1], _thc[2], 0.0);
+    mgraphics.set_source(g);
+    mgraphics.path_roundcorners(3.0);
+    mgraphics.fill();
+    return peak;
 }
 
 function paint() {
@@ -204,137 +315,114 @@ function paint() {
     mgraphics.move_to(plot_l() + 3, lane_y(1) - 7);
     mgraphics.show_text("R");
 
-    // ── THE TIDE: real per-bin energy of the delay line, marching along the
-    // ruler in real time. Age 0 (just written) enters at t=0 and drifts right
-    // as it ages; when a packet reaches the delay time it is being READ — the
-    // tap above it ignites (drawn later, on top). L/R channels render on
-    // their own lanes, so PING-PONG shows as packets alternating lanes.
-    // CHARACTER warms the older water (generational loss painted literally);
-    // FREEZE turns the whole sea to ice.
-    if (tideL) {
-        var bin_ms = MAX_MS / TIDE_BINS;
-        var bw = plot_w() / TIDE_BINS;
-        if (bw < 1.0) bw = 1.0;
-        var t_h = plot_h() * TIDE_H;
-        var lanes = [tideL, tideR];
-        var bi, li2, arr2, idx2, raw2, ev, bx2, eh, tcw, t_r, t_g, t_b, ly2;
-        for (li2 = 0; li2 < 2; li2++) {
-            arr2 = lanes[li2];
-            ly2 = lane_y(li2);
-            for (bi = 0; bi < TIDE_BINS; bi++) {
-                idx2 = ((tide_head - bi) % TIDE_BINS + TIDE_BINS) % TIDE_BINS;
-                raw2 = arr2[idx2];
-                if (!(raw2 > 0.004)) continue;
-                ev = raw2 * 1.15;
-                if (ev > 1.0) ev = 1.0;
-                ev = Math.pow(ev, 0.55);
-                bx2 = ms_to_x(bi * bin_ms);
-                if (bx2 > plot_r()) break;
-                eh = ev * t_h;
-                tcw = character > 0.5
-                    ? clamp((bi * bin_ms) / (time_ms * 5.0), 0, 1) * (character > 1.5 ? 0.85 : 0.55)
-                    : 0;
-                t_r = TAP_CLR[0] + (0.95 - TAP_CLR[0]) * tcw;
-                t_g = TAP_CLR[1] + (0.55 - TAP_CLR[1]) * tcw;
-                t_b = TAP_CLR[2] + (0.22 - TAP_CLR[2]) * tcw;
-                if (frozen) {
-                    t_r = t_r + (ICE_CLR[0] - t_r) * 0.75;
-                    t_g = t_g + (ICE_CLR[1] - t_g) * 0.75;
-                    t_b = t_b + (ICE_CLR[2] - t_b) * 0.75;
-                }
-                mgraphics.set_source_rgba(t_r, t_g, t_b, 0.14 + ev * 0.42);
-                mgraphics.rectangle(bx2 - bw * 0.5, ly2 - eh, bw, eh * 2.0);
-                mgraphics.fill();
-            }
+    // ── THE ENERGY RIVER: the real per-lane recirculating energy flows down the
+    // delay ruler as a glowing thermal ribbon (thickness + brightness = the live
+    // signal). Peaks feed the recirculation-loop glow below.
+    var peakL = draw_river(tideL, lane_y(0));
+    var peakR = draw_river(tideR, lane_y(1));
+
+    // ── FEEDBACK LOOP: a luminous recirculation arc from the tail back to the
+    // source, brightening with feedback x live energy — faint when low, a bright
+    // continuous loop near self-oscillation (a gorgeous, functional runaway cue).
+    var fb_amt = clamp(feedback_pct / 110.0, 0, 1);
+    var loop_pk = peakL > peakR ? peakL : peakR;
+    var loop_a = fb_amt * (0.08 + 0.52 * loop_pk);
+    if (loop_a > 0.02 && !frozen) {
+        var tail_ms = clamp(time_ms * 3.0, time_ms, MAX_MS);
+        var src_x = ms_to_x(0) + 2;
+        var tail_x = ms_to_x(tail_ms);
+        thermal(0.55 + 0.4 * fb_amt, _thc);
+        var lli, lyy, lift;
+        for (lli = 0; lli < 2; lli++) {
+            lyy = lane_y(lli);
+            lift = (lli === 0 ? -1 : 1) * plot_h() * 0.24;
+            glow_bezier(tail_x, lyy,
+                        tail_x * 0.5 + src_x * 0.5, lyy + lift,
+                        tail_x * 0.2 + src_x * 0.8, lyy + lift,
+                        src_x, lyy, _thc, 1.3, loop_a);
         }
     }
 
-    // Input pulse at t=0 on both lanes — a real radial glow (design-system)
-    // that swells with the live wet level, then a bright core dot on top.
-    // FREEZE gates new input, so the pulse hollows to an ice ring.
+    // ── SOURCE BLOOM: the origin at t=0 flares white-hot with each transient —
+    // the birthplace of every wave. FREEZE stills it to an ice-crystal ring.
     var wet = clamp(wet_lvl, 0, 1);
     var in_x = ms_to_x(0) + 2;
     var li0;
     for (li0 = 0; li0 < 2; li0++) {
         if (frozen) {
-            mgraphics.set_source_rgba(ICE_CLR[0], ICE_CLR[1], ICE_CLR[2], 0.8);
-            mgraphics.set_line_width(1.2);
-            mgraphics.arc(in_x, lane_y(li0), 3.2, 0, Math.PI * 2); mgraphics.stroke();
+            mgraphics.set_source_rgba(ICE_CLR[0], ICE_CLR[1], ICE_CLR[2], 0.85);
+            mgraphics.set_line_width(1.3);
+            mgraphics.arc(in_x, lane_y(li0), 3.4, 0, Math.PI * 2); mgraphics.stroke();
+            mgraphics.arc(in_x, lane_y(li0), 6.2, 0, Math.PI * 2); mgraphics.stroke();
             continue;
         }
-        ds_node_glow(in_x, lane_y(li0), ACCENT_CLR, 6.0 + wet * 11.0, 0.30 + wet * 0.45);
-        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.55 + wet * 0.45);
-        mgraphics.arc(in_x, lane_y(li0), 3.2, 0, Math.PI * 2); mgraphics.fill();
+        thermal(0.55 + 0.45 * wet, _thc);
+        ds_node_glow(in_x, lane_y(li0), _thc, 7.0 + wet * 16.0, 0.30 + wet * 0.55);
+        mgraphics.set_source_rgba(0.96, 0.99, 1.0, 0.5 + wet * 0.5);
+        mgraphics.arc(in_x, lane_y(li0), 2.6 + wet * 1.6, 0, Math.PI * 2); mgraphics.fill();
     }
 
-    // Echo taps: amplitude decays by feedback per repeat; damping shrinks.
-    // Ping-pong alternates L/R; a normal stereo delay echoes BOTH channels
-    // equally, so each tap is drawn on both lanes (the R lane was dead in
-    // non-ping-pong mode — both channels echo, so both lanes should show it).
+    // ── ECHO COMETS: each repeat is a comet sized + coloured by the REAL
+    // recirculating energy at its delay position (audio-reactive), bounded by the
+    // feedback-decay envelope; L/R react to their own channel; later echoes recede
+    // into depth with a ghost trail for flow direction. No tide feed -> the
+    // geometric envelope alone (backward compatible / Node harness).
     var fb = clamp(feedback_pct / 100.0, 0.0, 1.1);
     var amp = fb;
-    // it177: the live DUCK depth recedes the WHOLE trail — when a dry transient
-    // ducks the wet, every echo dims in lock-step (even a full duck keeps a faint
-    // trail so the pattern stays readable). Makes the rail-only Duck knob visible.
     var duck = clamp(duck_lvl, 0, 1);
     var dim = 1.0 - duck * 0.72;
+    var has_tide = tideL ? 1 : 0;
+    var tap_px = ms_to_x(time_ms) - ms_to_x(0);   // one delay in px (ghost spacing)
+    var mid_y = plot_t() + plot_h() * 0.5;
     var t = time_ms;
     var n = 0;
-    var li, ly, stem, active_lane;
+    var li, active_lane;
     while (amp > 0.02 && t <= MAX_MS && n < 24) {
-        var size = (2.0 + amp * 5.0) * (1.0 - (damp_pct / 100.0) * 0.5 * (n / 8.0));
-        if (size < 1.0) size = 1.0;
-        // Live wobble shimmer: the tape LFO sways the READ position, so the
-        // taps (read points) sway with it — zero at Wobble 0 (wob_live is
-        // depth-scaled in the gen), swelling to a visible +/-4 px flutter.
-        x = ms_to_x(t) + wob_live * 4.0;
-        stem = amp * plot_h() * 0.16;
-        active_lane = (n % 2 === 0) ? 1 : 0;  // ping-pong: which lane this repeat
-        // CHARACTER tint: warm + dim later repeats for TAPE (gentle) / BBD (more);
-        // DIGITAL (0) -> w == 0 -> tcl == TAP_CLR (the trail is unchanged).
-        var cw = character > 0.5 ? clamp(n / 5.0, 0, 1) * (character > 1.5 ? 0.85 : 0.55) : 0;
-        var tcl = [TAP_CLR[0] + (0.95 - TAP_CLR[0]) * cw,
-                   TAP_CLR[1] + (0.55 - TAP_CLR[1]) * cw,
-                   TAP_CLR[2] + (0.22 - TAP_CLR[2]) * cw];
-        var cdim = dim * (1.0 - cw * 0.34);
+        x = ms_to_x(t) + wob_live * 4.0;             // tape-wobble sway
+        active_lane = (n % 2 === 0) ? 1 : 0;         // ping-pong: which lane
+        var depth = 1.0 - clamp(n / 26.0, 0, 0.5);   // 1.0 near -> 0.5 into the tail
         for (li = 0; li < 2; li++) {
             if (pingpong && li !== active_lane) continue;
-            ly = lane_y(li);
-            // Stem.
-            mgraphics.set_source_rgba(tcl[0], tcl[1], tcl[2], amp * 0.35 * cdim);
-            mgraphics.set_line_width(1.0);
-            mgraphics.move_to(x, ly - stem);
-            mgraphics.line_to(x, ly + stem);
-            mgraphics.stroke();
-            // Glowing tap: a radial glow (design-system) that fades with the
-            // echo amplitude, then a solid dot core — louder/earlier taps read
-            // as brighter lights fading down the trail (and dim under ducking).
-            ds_node_glow(x, ly, tcl, size + 5.0 + amp * 6.0,
-                         (0.20 + clamp(amp, 0, 1) * 0.45) * cdim);
-            mgraphics.set_source_rgba(tcl[0], tcl[1], tcl[2], clamp(amp, 0, 1) * cdim);
-            mgraphics.arc(x, ly, size, 0, Math.PI * 2);
-            mgraphics.fill();
-            // REAL ignition: the actual recirculating energy arriving at this
-            // tap right now (from the tide feed). A hot core + wide glow flare
-            // as the packet crosses, then a re-injection arc bridging back to
-            // t=0 — the feedback path, lit only while energy actually flows.
-            var ign = tide_energy(li === 0 ? tideL : tideR, t);
-            if (ign > 0.05) {
-                var ia = ign * cdim;
-                ds_node_glow(x, ly, tcl, size + 8.0 + ign * 10.0, 0.35 * ia);
-                mgraphics.set_source_rgba(0.92, 0.98, 1.0, 0.55 * ia);
-                mgraphics.arc(x, ly, size * 0.55 + 0.6, 0, Math.PI * 2);
-                mgraphics.fill();
-                if (fb > 0.02 && n < 6) {
-                    mgraphics.set_source_rgba(tcl[0], tcl[1], tcl[2],
-                                              0.38 * ign * clamp(fb, 0, 1));
-                    mgraphics.set_line_width(1.0);
-                    mgraphics.move_to(x, ly - stem - 3.0);
-                    mgraphics.curve_to(x * 0.66 + in_x * 0.34, ly - stem - 16.0,
-                                       x * 0.34 + in_x * 0.66, ly - stem - 16.0,
-                                       in_x, ly - stem - 3.0);
-                    mgraphics.stroke();
+            var ly = lane_y(li);
+            ly = ly + (mid_y - ly) * (1.0 - depth) * 0.55;   // converge to a horizon
+            // SPREAD drifts L/R apart, accumulating over the repeats (the DSP
+            // diverges the channels each pass) — you see the stereo spread open.
+            var cx = x + (li === 1 ? 1 : -1)
+                     * clamp(spread_pct * 0.01 * (1.5 + n * 0.7), 0, 14);
+            var real = has_tide ? tide_energy(li === 0 ? tideL : tideR, t) : -1.0;
+            var ramp = (real < 0)
+                ? amp
+                : amp * clamp(REACT_FLOOR + REACT_GAIN * real, 0, REACT_CEIL);
+            var lvl = clamp(ramp, 0, 1) * dim * depth;
+            var size = (1.8 + ramp * 6.0) * depth
+                       * (1.0 - (damp_pct / 100.0) * 0.4 * clamp(n / 8.0, 0, 1));
+            if (size < 0.8) size = 0.8;
+            thermal(clamp(ramp, 0, 1), _thc);
+            // Ghost trail: two faded dots trailing back toward the previous tap
+            // (skipped on dim echoes — invisible + saves fills).
+            if (lvl > 0.05) {
+                var gt, gx;
+                for (gt = 1; gt <= 2; gt++) {
+                    gx = cx - tap_px * 0.16 * gt;
+                    if (gx < in_x) break;
+                    mgraphics.set_source_rgba(_thc[0], _thc[1], _thc[2], lvl * 0.16 / gt);
+                    mgraphics.arc(gx, ly, size * (0.68 - gt * 0.16), 0, Math.PI * 2);
+                    mgraphics.fill();
                 }
+            }
+            // Bloom (radial gradient — the priciest per-comet op, so only for
+            // comets bright enough to show it) + thermal core on top.
+            if (lvl > 0.06) {
+                ds_node_glow(cx, ly, _thc, size + 6.0 + ramp * 11.0, 0.18 + lvl * 0.55);
+            }
+            mgraphics.set_source_rgba(_thc[0], _thc[1], _thc[2], 0.42 + lvl * 0.58);
+            mgraphics.arc(cx, ly, size, 0, Math.PI * 2);
+            mgraphics.fill();
+            // White-hot sparkle on a live transient (real energy above the floor).
+            if (real > 0.46) {
+                mgraphics.set_source_rgba(0.96, 0.99, 1.0, (real - 0.46) * 1.5 * dim);
+                mgraphics.arc(cx, ly, size * 0.52, 0, Math.PI * 2);
+                mgraphics.fill();
             }
         }
         n += 1;
@@ -363,6 +451,30 @@ function paint() {
         mgraphics.set_font_size(7.5);
         mgraphics.move_to(plot_l() + 16, plot_t() + 21 + (pingpong ? 10 : 0));
         mgraphics.show_text("FROZEN");
+    }
+
+    // MIX readout — bottom-right, persistent (mix is not otherwise drawn on the
+    // trail). While a Cmd=mix / Alt=damp gesture is active it brightens into a
+    // value bezel showing the param being changed.
+    var gr_x = plot_r() - 6;
+    var gr_y = plot_b() - 5;
+    mgraphics.set_font_size(7.5);
+    if (gesture_ttl > 0 && gesture_label !== "") {
+        var ga = clamp(gesture_ttl / 22.0, 0, 1);
+        var gw = gesture_label.length * 4.7;
+        mgraphics.set_source_rgba(0.05, 0.06, 0.09, 0.55 * ga);
+        mgraphics.rectangle(gr_x - gw - 5, gr_y - 10, gw + 8, 13);
+        mgraphics.fill();
+        mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.62 + 0.38 * ga);
+        mgraphics.move_to(gr_x - gw - 1, gr_y);
+        mgraphics.show_text(gesture_label);
+        gesture_ttl -= 1;
+    } else if (!(hovering && !dragging)) {
+        // Persistent MIX (hidden while the hover-preview owns the bottom edge).
+        var mtxt = "MIX " + Math.round(mix_pct) + "%";
+        mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2], 0.5);
+        mgraphics.move_to(gr_x - mtxt.length * 4.7, gr_y);
+        mgraphics.show_text(mtxt);
     }
 
     // it177: DUCK activity badge (top-right). An amber "DUCK ▾" + meter bar that
@@ -414,6 +526,9 @@ function paint() {
 function set_time(v)       { time_ms = clamp(v, 1.0, MAX_MS); mgraphics.redraw(); }
 function set_feedback(v)   { feedback_pct = clamp(v, 0.0, 110.0); mgraphics.redraw(); }
 function set_damp(v)       { damp_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
+function set_mix(v)        { mix_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
+function set_width(v)      { width_pct = clamp(v, 0.0, 200.0); mgraphics.redraw(); }
+function set_spread(v)     { spread_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
 function set_pingpong(v)   { pingpong = v ? 1 : 0; mgraphics.redraw(); }
 function set_sync_label(v) { sync_label = "" + v; mgraphics.redraw(); }
 function wet_level(v) { wet_lvl = v; mgraphics.redraw(); }
@@ -503,12 +618,34 @@ function pointer_buttons(pe, fb) {
     if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
     return fb;
 }
+// Cross-runtime modifier reads: v8ui pointer events expose .commandKey (NOT
+// metaKey) and .altKey/.optionKey; the classic jsui path passes positional
+// booleans. These prefer the pointerevent, fall back to the boolean.
+function pointer_command_key(pe, cmd) {
+    if (pe && (pe.commandKey || pe.controlKey)) return 1;
+    return cmd ? 1 : 0;
+}
+function pointer_option_key(pe, opt) {
+    if (pe && (pe.altKey || pe.optionKey)) return 1;
+    return opt ? 1 : 0;
+}
+// Gesture mode from modifiers: 1 = mix (Cmd/Ctrl), 2 = damp (Alt/Opt), 0 =
+// feedback (plain). Cmd wins if both are held.
+function drag_mode_of(pe, cmd, opt) {
+    if (pointer_command_key(pe, cmd)) return 1;
+    if (pointer_option_key(pe, opt)) return 2;
+    return 0;
+}
+function flash_bezel(label) { gesture_label = label; gesture_ttl = 22; }
 
 function start_drag(x, y) {
     dragging = 1;
-    // Anchor for shift=fine (relative-to-press, clamped — cannot slam).
+    // Anchor every axis for shift=fine (relative-to-press, clamped — cannot
+    // slam), so any modifier pressed AFTER the press still fine-adjusts.
     drag_start_time = time_ms;
     drag_start_feedback = feedback_pct;
+    drag_start_mix = mix_pct;
+    drag_start_damp = damp_pct;
 }
 
 // ABSOLUTE X/Y pad: the pointer POSITION maps directly to time (x, along the
@@ -517,24 +654,41 @@ function start_drag(x, y) {
 // (the relative model did exactly that live). The isNaN guard is belt-and-
 // suspenders: if every coordinate property is missing we leave state untouched
 // rather than poisoning time_ms with NaN.
-function drag_to(x, y, fine) {
+// ABSOLUTE X/Y pad with a modifier matrix. mode 0 = plain (X=time, Y=feedback,
+// today's behaviour verbatim); mode 1 = Cmd (Y=mix, TIME LOCKED); mode 2 = Alt
+// (Y=damp, TIME LOCKED). Modifier drags leave X/time untouched so you set
+// mix/damp without disturbing the delay time (eq_curve "hold one axis, drive
+// another"). Shift = fine (1/5 from the press anchor, per axis). isNaN guard
+// keeps a missing-coordinate frame from poisoning state.
+function drag_to(x, y, fine, mode) {
     if (!dragging) return;
     if (isNaN(x) || isNaN(y)) return;
-    var fx = clamp((x - plot_l()) / plot_w(), 0.0, 1.0);
     var fy = clamp((plot_b() - y) / plot_h(), 0.0, 1.0);
-    var t_target = clamp(fx * MAX_MS, 1.0, MAX_MS);
-    var f_target = clamp(fy * 110.0, 0.0, 110.0);
-    // Shift = fine-adjust (suite-wide tactile grammar): move 1/5th of the cursor
-    // distance from the press anchor — a stable 5x-finer drag for precise time /
-    // feedback. Plain drag stays absolute (the pad follows the cursor).
-    if (fine) {
-        t_target = drag_start_time + (t_target - drag_start_time) * 0.20;
-        f_target = drag_start_feedback + (f_target - drag_start_feedback) * 0.20;
+    if (mode === 1) {                 // Cmd -> MIX (time held)
+        var m_target = clamp(fy * 100.0, 0.0, 100.0);
+        if (fine) m_target = drag_start_mix + (m_target - drag_start_mix) * 0.20;
+        mix_pct = clamp(m_target, 0.0, 100.0);
+        outlet(0, "mix", Math.round(mix_pct));
+        flash_bezel("MIX " + Math.round(mix_pct) + "%");
+    } else if (mode === 2) {          // Alt -> DAMP (time held)
+        var d_target = clamp(fy * 100.0, 0.0, 100.0);
+        if (fine) d_target = drag_start_damp + (d_target - drag_start_damp) * 0.20;
+        damp_pct = clamp(d_target, 0.0, 100.0);
+        outlet(0, "damp", Math.round(damp_pct));
+        flash_bezel("DAMP " + Math.round(damp_pct) + "%");
+    } else {                          // plain -> X=time, Y=feedback
+        var fx = clamp((x - plot_l()) / plot_w(), 0.0, 1.0);
+        var t_target = clamp(fx * MAX_MS, 1.0, MAX_MS);
+        var f_target = clamp(fy * 110.0, 0.0, 110.0);
+        if (fine) {
+            t_target = drag_start_time + (t_target - drag_start_time) * 0.20;
+            f_target = drag_start_feedback + (f_target - drag_start_feedback) * 0.20;
+        }
+        time_ms = clamp(t_target, 1.0, MAX_MS);
+        feedback_pct = clamp(f_target, 0.0, 110.0);
+        outlet(0, "time", Math.round(time_ms));
+        outlet(0, "feedback", Math.round(feedback_pct));
     }
-    time_ms = clamp(t_target, 1.0, MAX_MS);
-    feedback_pct = clamp(f_target, 0.0, 110.0);
-    outlet(0, "time", Math.round(time_ms));
-    outlet(0, "feedback", Math.round(feedback_pct));
     mgraphics.redraw();
 }
 
@@ -566,14 +720,26 @@ function toggle_pingpong() {
 }
 
 function onpointerdown(pe) {
-    if (pointer_alt_key(pe)) { toggle_pingpong(); return; }
-    start_drag(pointer_x(pe, plot_l()), pointer_y(pe, plot_b()));
+    drag_start_x = pointer_x(pe, plot_l());
+    drag_start_y = pointer_y(pe, plot_b());
+    // Alt overloads: a bare alt-CLICK toggles ping-pong (it163); an alt-DRAG is
+    // the DAMP axis of the gesture matrix. Arm a pending toggle; the move/up
+    // handlers then decide (eq_curve's alt_drag_pending pattern).
+    alt_pending = pointer_alt_key(pe) ? 1 : 0;
+    start_drag(drag_start_x, drag_start_y);
 }
 function onpointermove(pe) {
     var b = pointer_buttons(pe, 0);
     if (dragging && ((b & 1) !== 0)) {
-        drag_to(pointer_x(pe, plot_l()), pointer_y(pe, plot_b()),
-                pe && pe.shiftKey ? 1 : 0);
+        var px = pointer_x(pe, plot_l()), py = pointer_y(pe, plot_b());
+        if (alt_pending) {
+            // Hold until it's clearly a drag (past a small dead-zone); a bare
+            // alt-click stays a ping-pong toggle (resolved on release).
+            if (Math.abs(px - drag_start_x) > 3 || Math.abs(py - drag_start_y) > 3) {
+                alt_pending = 0;
+            } else { return; }
+        }
+        drag_to(px, py, pe && pe.shiftKey ? 1 : 0, drag_mode_of(pe, 0, 0));
         return;
     }
     if (dragging && b === 0) { end_drag(); return; }
@@ -585,21 +751,39 @@ function onpointermove(pe) {
     hovering = 1;
     mgraphics.redraw();
 }
-function onpointerup(pe) { end_drag(); }
-function onpointerleave(pe) { hovering = 0; end_drag(); mgraphics.redraw(); }
+function onpointerup(pe) {
+    // A bare alt-click (never dragged past the dead-zone) toggles ping-pong.
+    if (alt_pending) { toggle_pingpong(); alt_pending = 0; }
+    end_drag();
+}
+function onpointerleave(pe) { alt_pending = 0; hovering = 0; end_drag(); mgraphics.redraw(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_pad(); }
 
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x, y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
-    if (but) drag_to(x, y, shift);
+    if (but) drag_to(x, y, shift, drag_mode_of(null, cmd, opt));
     else end_drag();
 }
 function onidle(x, y) { hover_x = x; hover_y = y; hovering = 1; mgraphics.redraw(); }
 function onidleout() { hovering = 0; mgraphics.redraw(); }
 
-function onwheel(x, y, scrollx, scrolly) {
-    feedback_pct = clamp(feedback_pct + (scrolly > 0 ? 2 : -2), 0, 110);
-    outlet(0, "feedback", Math.round(feedback_pct));
+// Wheel modifier matrix (the fleet Para EQ grammar): plain = feedback, Cmd/Ctrl =
+// mix, Alt/Opt = damp; Shift = fine. "Scroll up = more" throughout.
+function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl) {
+    var dir = scrolly > 0 ? 1 : -1;
+    var step = (shift ? 0.5 : 2.0) * dir;
+    if (pointer_command_key(null, cmd)) {
+        mix_pct = clamp(mix_pct + step, 0, 100);
+        outlet(0, "mix", Math.round(mix_pct));
+        flash_bezel("MIX " + Math.round(mix_pct) + "%");
+    } else if (pointer_option_key(null, opt)) {
+        damp_pct = clamp(damp_pct + step, 0, 100);
+        outlet(0, "damp", Math.round(damp_pct));
+        flash_bezel("DAMP " + Math.round(damp_pct) + "%");
+    } else {
+        feedback_pct = clamp(feedback_pct + step, 0, 110);
+        outlet(0, "feedback", Math.round(feedback_pct));
+    }
     mgraphics.redraw();
 }
 
