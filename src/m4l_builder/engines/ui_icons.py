@@ -13,6 +13,7 @@ ICON_NAMES = [
     "sine", "saw", "square", "triangle", "noise", "fold",
     "lowpass", "highpass", "bandpass", "notch",
     "power", "play", "pause", "loop", "bypass", "bell",
+    "expand", "collapse",
 ]
 
 _ICONS_JS = r"""
@@ -124,6 +125,29 @@ function draw_icon_bypass(cx, cy, s) {
     mgraphics.move_to(cx - s * 0.44, cy + s * 0.44);
     mgraphics.line_to(cx + s * 0.44, cy - s * 0.44); mgraphics.stroke();
 }
+function _ico_bracket(cx, cy, dx, dy, s) {
+    // one L-bracket at corner direction (dx,dy in {-1,1}); arms point inward.
+    var a = s * 0.9, arm = s * 0.55;
+    mgraphics.move_to(cx + dx * (a - arm), cy + dy * a);
+    mgraphics.line_to(cx + dx * a, cy + dy * a);
+    mgraphics.line_to(cx + dx * a, cy + dy * (a - arm));
+    mgraphics.stroke();
+}
+function draw_icon_expand(cx, cy, s) {
+    // fullscreen: four outward corner brackets
+    mgraphics.set_line_width(_ico_lw(s));
+    _ico_bracket(cx, cy, -1, -1, s); _ico_bracket(cx, cy, 1, -1, s);
+    _ico_bracket(cx, cy, -1, 1, s);  _ico_bracket(cx, cy, 1, 1, s);
+}
+function draw_icon_collapse(cx, cy, s) {
+    // exit-fullscreen / shrink: a solid small pane docked bottom-left of a frame
+    mgraphics.set_line_width(_ico_lw(s));
+    var a = s * 0.9;
+    mgraphics.rectangle(cx - a, cy - a, 2 * a, 2 * a);
+    mgraphics.stroke();
+    mgraphics.rectangle(cx - a, cy - s * 0.1, a * 1.0, a * 1.1);
+    mgraphics.fill();
+}
 function draw_glyph(name, cx, cy, s) {
     switch (name) {
         case 'sine': return draw_icon_sine(cx, cy, s);
@@ -142,6 +166,8 @@ function draw_glyph(name, cx, cy, s) {
         case 'pause': return draw_icon_pause(cx, cy, s);
         case 'loop': return draw_icon_loop(cx, cy, s);
         case 'bypass': return draw_icon_bypass(cx, cy, s);
+        case 'expand': return draw_icon_expand(cx, cy, s);
+        case 'collapse': return draw_icon_collapse(cx, cy, s);
         default: return draw_icon_bypass(cx, cy, s);
     }
 }

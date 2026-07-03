@@ -38,6 +38,7 @@ from m4l_builder.engines.grid_sequencer_display import (
     GRID_SEQ_OUTLETS,
     grid_sequencer_display_js,
 )
+from m4l_builder.engines.icon_overlay import icon_overlay_js
 from m4l_builder.engines.level_history import (
     LEVEL_HISTORY_INLETS,
     LEVEL_HISTORY_OUTLETS,
@@ -148,6 +149,8 @@ ALL_JSUI_FACTORIES = [
     loop_filter_curve_js,
     waveshape_curve_js,
     level_meter_js,
+    lambda: icon_overlay_js("expand"),
+    lambda: icon_overlay_js("collapse"),
     lambda: energy_history_js([
         {"color": "0.30, 0.74, 0.68, 0.85", "mode": "fill"},
         {"color": "0.94, 0.42, 0.62, 1.0", "mode": "line", "line_width": 1.8},
@@ -2905,3 +2908,12 @@ def test_final_checklist_issues_flags_forbidden_nonlocal_and_fractional():
     assert ("checklist/nonlocal-send", "s2") not in codes      # ---local is fine
     assert ("checklist/fractional-rect", "ui") in codes
     assert ("checklist/fractional-rect", "ok") not in codes
+
+
+class TestIconOverlay:
+    def test_glyph_embedded_and_unknown_rejected(self):
+        js = icon_overlay_js("expand")
+        assert 'draw_glyph("expand"' in js
+        assert "function draw_icon_expand(" in js
+        with pytest.raises(ValueError):
+            icon_overlay_js("nope")

@@ -26,6 +26,7 @@ Messages in (inlet 0):
     set_duck <lin>         live duck depth 0..1 (dims the trail; lights DUCK badge)
     set_freeze <0|1>       ice tint, gated input pulse, FROZEN badge
     set_reverse <0|1>      reverse-echo mode: ghost trails flip, REVERSE badge
+    set_corr <lin>         live stereo correlation -1..1 (readout under DUCK)
     set_buffers <name>     resolved tide buffer~ name (Device.add_viz_bus) —
                            arms the 33 ms peek Task for the delay-line tide
 
@@ -147,6 +148,7 @@ var tide_head = 0;
 var wob_live = 0.0;       // depth-scaled wobble LFO, -1..1 (0 at Wobble 0)
 var frozen = 0;
 var reversed = 0;         // reverse-echo mode: comet ghost-trails flip direction
+var corr_lvl = -2.0;      // live stereo correlation -1..1; -2 = no feed (hidden)
 var tide_poll = null;
 
 var dragging = 0;
@@ -486,11 +488,14 @@ function paint() {
         amp *= fb;
     }
 
-    // Border + readout.
-    mgraphics.set_source_rgba(BORDER_CLR);
-    mgraphics.set_line_width(1.0);
-    mgraphics.rectangle(plot_l() + 0.5, plot_t() + 0.5, plot_w() - 1, plot_h() - 1);
-    mgraphics.stroke();
+    // Border (skipped when the device passes an alpha-0 border for a
+    // borderless, float-on-the-faceplate hero) + readout.
+    if (BORDER_CLR.length < 4 || BORDER_CLR[3] > 0.01) {
+        mgraphics.set_source_rgba(BORDER_CLR);
+        mgraphics.set_line_width(1.0);
+        mgraphics.rectangle(plot_l() + 0.5, plot_t() + 0.5, plot_w() - 1, plot_h() - 1);
+        mgraphics.stroke();
+    }
 
     mgraphics.set_source_rgba(ACCENT_CLR);
     mgraphics.set_font_size(8.0);
@@ -572,6 +577,18 @@ function paint() {
     mgraphics.rectangle(bx, by + 9, 44 * dk, 2.5);
     mgraphics.fill();
 
+    // CORR readout (fed via set_corr; hidden until the first value arrives) —
+    // lives under the DUCK badge. Dim while the image is healthy; warms toward
+    // amber as the channels decorrelate (the phase-watch moment).
+    if (corr_lvl > -1.5) {
+        var cwarn = corr_lvl < 0.25 ? clamp((0.25 - corr_lvl) * 1.2, 0, 1) : 0;
+        mgraphics.set_font_size(7.0);
+        mgraphics.set_source_rgba(0.63 + 0.33 * cwarn, 0.64, 0.66 - 0.38 * cwarn,
+                                  0.42 + 0.5 * cwarn);
+        mgraphics.move_to(bx, by + 20);
+        mgraphics.show_text("CORR " + corr_lvl.toFixed(2));
+    }
+
     // Hover preview: a faint vertical crosshair at the cursor + the time/feedback
     // a click would set (the pad is absolute, X=time and Y=feedback). Time shows
     // only in FREE mode (in synced mode the X drag is overridden by the division).
@@ -618,6 +635,10 @@ function set_freeze(v) { frozen = v ? 1 : 0; mgraphics.redraw(); }
 // Reverse-echo mode: ghost trails lead forward + a REVERSE badge joins the
 // readout stack (the DSP plays each grain backward).
 function set_reverse(v) { reversed = v ? 1 : 0; mgraphics.redraw(); }
+
+// Live output stereo correlation (+1 mono / 0 wide / -1 anti-phase) — drawn
+// as a readout under the DUCK badge, warming amber as the image decorrelates.
+function set_corr(v) { corr_lvl = clamp(v, -1.0, 1.0); mgraphics.redraw(); }
 
 // ── TIDE feed (Device.add_viz_bus contract) ──────────────────────────
 function set_buffers() {
