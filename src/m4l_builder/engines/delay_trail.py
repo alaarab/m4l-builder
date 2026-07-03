@@ -25,6 +25,7 @@ Messages in (inlet 0):
     wet_level <lin>        live wet level 0..1 (~30ms)
     set_duck <lin>         live duck depth 0..1 (dims the trail; lights DUCK badge)
     set_freeze <0|1>       ice tint, gated input pulse, FROZEN badge
+    set_reverse <0|1>      reverse-echo mode: ghost trails flip, REVERSE badge
     set_buffers <name>     resolved tide buffer~ name (Device.add_viz_bus) —
                            arms the 33 ms peek Task for the delay-line tide
 
@@ -145,6 +146,7 @@ var tideR = null;
 var tide_head = 0;
 var wob_live = 0.0;       // depth-scaled wobble LFO, -1..1 (0 at Wobble 0)
 var frozen = 0;
+var reversed = 0;         // reverse-echo mode: comet ghost-trails flip direction
 var tide_poll = null;
 
 var dragging = 0;
@@ -442,12 +444,14 @@ function paint() {
             if (size < 0.8) size = 0.8;
             thermal(clamp(ramp, 0, 1), _thc);
             // Ghost trail: two faded dots trailing back toward the previous tap
-            // (skipped on dim echoes — invisible + saves fills).
+            // (skipped on dim echoes — invisible + saves fills). REVERSE flips
+            // the trail forward: each grain plays backward, so the flow leads.
             if (lvl > 0.05) {
                 var gt, gx;
+                var tdir = reversed ? 1 : -1;
                 for (gt = 1; gt <= 2; gt++) {
-                    gx = cx - tap_px * 0.16 * gt;
-                    if (gx < in_x) break;
+                    gx = cx + tdir * tap_px * 0.16 * gt;
+                    if (tdir < 0 ? gx < in_x : gx > plot_r() - 2) break;
                     mgraphics.set_source_rgba(_thc[0], _thc[1], _thc[2], lvl * 0.16 / gt);
                     mgraphics.arc(gx, ly, size * (0.68 - gt * 0.16), 0, Math.PI * 2);
                     mgraphics.fill();
@@ -503,6 +507,19 @@ function paint() {
         mgraphics.set_font_size(7.5);
         mgraphics.move_to(plot_l() + 16, plot_t() + 21 + (pingpong ? 10 : 0));
         mgraphics.show_text("FROZEN");
+    }
+    if (reversed) {
+        // Warm tape-amber badge + a wee left arrowhead: the line runs backward.
+        var rv_y = plot_t() + 21 + (pingpong ? 10 : 0) + (frozen ? 10 : 0);
+        mgraphics.set_source_rgba(0.98, 0.64, 0.30, 0.92);
+        mgraphics.set_font_size(7.5);
+        mgraphics.move_to(plot_l() + 16, rv_y);
+        mgraphics.show_text("REVERSE");
+        mgraphics.move_to(plot_l() + 14, rv_y - 6);
+        mgraphics.line_to(plot_l() + 14, rv_y - 1);
+        mgraphics.line_to(plot_l() + 9, rv_y - 3.5);
+        mgraphics.close_path();
+        mgraphics.fill();
     }
 
     // MIX readout — bottom-right, persistent (mix is not otherwise drawn on the
@@ -597,6 +614,10 @@ function set_character(v) { character = clamp(Math.round(v), 0, 2); mgraphics.re
 // FREEZE: the loop holds (unity feedback, input gated) — tide turns ice, the
 // input pulse hollows out, and a FROZEN badge joins the readout.
 function set_freeze(v) { frozen = v ? 1 : 0; mgraphics.redraw(); }
+
+// Reverse-echo mode: ghost trails lead forward + a REVERSE badge joins the
+// readout stack (the DSP plays each grain backward).
+function set_reverse(v) { reversed = v ? 1 : 0; mgraphics.redraw(); }
 
 // ── TIDE feed (Device.add_viz_bus contract) ──────────────────────────
 function set_buffers() {

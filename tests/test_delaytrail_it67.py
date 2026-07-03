@@ -394,3 +394,16 @@ class TestDelayTrailKnobViz:
         # Width 200% spreads lane 0 (upper) HIGHER (smaller y) than width 0%.
         assert r.state["wide"] < r.state["narrow"]
         assert r.state["sp"] == 80
+
+    def test_reverse_flag_flips_and_paint_safe(self):
+        # v21 REVERSE: set_reverse flips the flag; paint runs in both
+        # directions (ghost trails lead forward when reversed, amber badge
+        # joins the readout stack); 0 restores the trailing direction.
+        r = run_jsui(delay_trail_js(), """
+            set_feedback(80);
+            set_reverse(1); var on = reversed; paint();
+            set_reverse(0); var off = reversed; paint();
+            dump({on: on, off: off});
+        """, size=(326, 152))
+        assert r.state["on"] == 1
+        assert r.state["off"] == 0
