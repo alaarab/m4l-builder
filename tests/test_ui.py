@@ -3463,3 +3463,22 @@ class TestTwoAccentInvariant:
         for widget, attr in primary.items():
             tm = DEVICE_WIDGET_SPECS[widget].theme_mapping
             assert tm.get(attr) == "accent", f"{widget}.{attr} must map to accent"
+
+
+class TestSnapRect:
+    """Official-adopt 4: layout containers emit whole-integer pixel rects
+    (fractional presentation_rects render blurry/off-grid in Live)."""
+
+    def test_snap_rect_rounds_components(self):
+        from m4l_builder.layout import snap_rect
+        assert snap_rect([10.4, 7.5, 44.6, 15.0]) == [10, 8, 45, 15]
+        assert all(isinstance(v, int) for v in snap_rect([1.0, 2.0, 3.0, 4.0]))
+
+    def test_columns_span_layout_emits_integer_rects(self):
+        from m4l_builder.layout import Columns
+        class _Dev:  # rect sink
+            def add_panel(self, id, rect, **kw): return rect
+        # width 100 over 12 cols -> fractional col width; spans must snap.
+        cols = Columns(_Dev(), 3, 5, width=100, cols=12.0)
+        r = cols._next_rect(span=5)
+        assert all(isinstance(v, int) for v in r), r

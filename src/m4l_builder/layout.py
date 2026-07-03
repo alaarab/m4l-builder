@@ -1,6 +1,14 @@
 """Context manager-based layout containers for placing UI elements."""
 
 
+def snap_rect(rect):
+    """Snap a rect to whole-integer pixels (official-adopt 4, Ableton's
+    maxdevtools convention): fractional ``presentation_rect`` coordinates
+    render blurry / off-grid in Live. Rounds each component; int-valued
+    floats collapse to ints so emitted JSON stays clean."""
+    return [int(round(v)) for v in rect]
+
+
 def inset_rect(
     rect,
     *,
@@ -47,7 +55,7 @@ class _LayoutContainer:
     ):
         rect = self._next_rect(width, height, span=span)
         if any(value is not None for value in (pad_x, pad_y, left, top, right, bottom)) or pad:
-            return inset_rect(
+            return snap_rect(inset_rect(
                 rect,
                 pad=pad,
                 pad_x=pad_x,
@@ -56,8 +64,8 @@ class _LayoutContainer:
                 top=top,
                 right=right,
                 bottom=bottom,
-            )
-        return rect
+            ))
+        return snap_rect(rect)
 
     # Proxies whose shape is uniform — (id, rect, **kw) or (id, varname,
     # rect, **kw) — are generated below the class body; only widgets with
@@ -204,7 +212,7 @@ class Row(_LayoutContainer):
         rect = [self._cursor_x, self._y, w, h]
         self._cursor_x += w + self._spacing
         self._items += 1
-        return rect
+        return snap_rect(rect)
 
     def column(self, *, spacing=4, width=None, height=None):
         return _NestedColumn(self._device, self, self._cursor_x, self._y,
@@ -246,7 +254,7 @@ class Column(_LayoutContainer):
         rect = [self._x, self._cursor_y, w, h]
         self._cursor_y += h + self._spacing
         self._items += 1
-        return rect
+        return snap_rect(rect)
 
     def row(self, *, spacing=8, height=None, width=None):
         return _NestedRow(self._device, self, self._x, self._cursor_y,
@@ -306,7 +314,7 @@ class Grid(_LayoutContainer):
             self._current_col = 0
             self._current_row += 1
         self._items += 1
-        return rect
+        return snap_rect(rect)
 
 
 class Columns(_LayoutContainer):
@@ -376,7 +384,7 @@ class Columns(_LayoutContainer):
         rect = [round(self._x + self.used_width, 4), self._y, round(w, 4), h]
         self._cursor_cols += span
         self._items += 1
-        return rect
+        return snap_rect(rect)
 
 
 class _NestedRow(Row):
