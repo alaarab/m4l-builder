@@ -96,6 +96,164 @@ def lfo_voice_fn() -> str:
     return LFO_VOICE_FN
 
 
+# One chaos voice of the Entropy cluster: six sources on a shared rate clock,
+# ENTROPY scaling each source's own wildness axis, and the TAME gesture baked
+# in per voice — latch-and-crossfade toward the value where motion was caught,
+# calm the math (logistic r / lorenz rho pull back to stability), and a slew
+# that grows to a ~45 ms glide at full TAME. All state in caller-owned Data
+# rows (data_st: 0=value 1=drift-target 2=logistic-x 3..5=lorenz xyz;
+# data_out: 0=slewed-out 1=latched 2=tame-prev).
+CHAOS_VOICE_FN = """chaos_voice(data_ph, data_st, data_out, idx, rt, src, ent, tame) {
+	rte = rt * (1 - tame) * (1 - tame);
+	ph = peek(data_ph, idx, 0);
+	ph += rte / samplerate;
+	wrapped = 0;
+	if (ph >= 1) {
+		ph -= 1;
+		wrapped = 1;
+	}
+	poke(data_ph, ph, idx, 0);
+	v = peek(data_st, idx, 0);
+	if (src < 0.5) {
+		tgt = peek(data_st, idx, 1);
+		if (wrapped) {
+			tgt = noise() * 0.5 + 0.5;
+			poke(data_st, tgt, idx, 1);
+		}
+		v += (tgt - v) * min(1, rte * (2 + 6 * ent) / samplerate);
+	} else if (src < 1.5) {
+		if (wrapped) {
+			n = noise() * 0.5 + 0.5;
+			v = 0.5 + (n - 0.5) * (0.2 + 0.8 * ent);
+		}
+	} else if (src < 2.5) {
+		if (wrapped) {
+			v += noise() * (0.03 + 0.35 * ent);
+			if (v > 1) v = 2 - v;
+			if (v < 0) v = 0 - v;
+		}
+	} else if (src < 3.5) {
+		x = peek(data_st, idx, 2);
+		if (x <= 0.0001 || x >= 0.9999 || x != x) x = 0.5731 + 0.061 * idx;
+		if (wrapped) {
+			r = 3.2 + 0.7995 * ent;
+			r = r - tame * max(0, r - 3.4);
+			x = r * x * (1 - x);
+			poke(data_st, x, idx, 2);
+		}
+		v += (x - v) * min(1, rte * 24 / samplerate);
+	} else if (src < 4.5) {
+		lx = peek(data_st, idx, 3);
+		ly = peek(data_st, idx, 4);
+		lz = peek(data_st, idx, 5);
+		if ((lx == 0 && ly == 0 && lz == 0) || lx != lx || ly != ly || lz != lz) {
+			lx = 0.4 + 0.31 * idx;
+			ly = 0.1;
+			lz = 18 + 2 * idx;
+		}
+		dt = min(0.012, rte * 6 / samplerate);
+		rho = 14 + 14 * ent;
+		rho = rho - tame * max(0, rho - 10);
+		dx = 10 * (ly - lx);
+		dy = lx * (rho - lz) - ly;
+		dz = lx * ly - 2.6667 * lz;
+		lx = clamp(lx + dx * dt, -60, 60);
+		ly = clamp(ly + dy * dt, -60, 60);
+		lz = clamp(lz + dz * dt, 0, 90);
+		poke(data_st, lx, idx, 3);
+		poke(data_st, ly, idx, 4);
+		poke(data_st, lz, idx, 5);
+		tap = lx;
+		if (idx % 3 == 1) tap = ly;
+		if (idx % 3 == 2) tap = lz - 25;
+		v = clamp(tap / 45 + 0.5, 0, 1);
+	} else {
+		if (wrapped) {
+			if (noise() * 0.5 + 0.5 < 0.15 + 0.85 * ent) v = 1;
+		}
+		v = v * (1 - min(0.35, rte * (2 + 5 * (1 - ent)) / samplerate));
+	}
+	v = clamp(v, 0, 1);
+	poke(data_st, v, idx, 0);
+	tprev = peek(data_out, idx, 2);
+	if (tame > 0.02 && tprev <= 0.02) poke(data_out, v, idx, 1);
+	poke(data_out, tame, idx, 2);
+	lat = peek(data_out, idx, 1);
+	tc = tame * tame * (3 - 2 * tame);
+	vm = v + (lat - v) * tc;
+	sm = peek(data_out, idx, 0);
+	sm += (vm - sm) * (1 - tc * 0.9995);
+	poke(data_out, sm, idx, 0);
+	return sm;
+}"""
+
+
+def chaos_voice_fn() -> str:
+    """Return the gen function-definition for one Entropy chaos voice (six
+    sources + per-voice TAME latch/settle; state in caller Data rows). Caller
+    declares ``Data data_ph(N); Data data_st(N, 6); Data data_out(N, 3);``."""
+    return CHAOS_VOICE_FN
+
+
+def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
+                      viz_buffer: str = "buf_entropy_gui") -> str:
+    """The Entropy poly-chaos codebox — Orbit's cluster spine with chaos
+    sources. Same outer contract as :func:`poly_lfo_engine` (rates spread from
+    ONE Rate by the bias/offset fold; per-slot Depth/Min/Max/Bipolar windows;
+    ``build_gendsp(code, 1, 2*voices)`` outs = REMOTE natives then MODULATE
+    raws; the GUI tick pokes ``[radius, phase, value, depth]`` per voice for a
+    polar_cluster-family hero).
+
+    New globals on gen inlet 0 (all dial-percent scaled where noted):
+      ``source``  0..5 = Drift / S&H / Drunk / Logistic / Lorenz / Burst
+      ``entropy`` 0..100 %% — each source's wildness axis (drift slew, S&H
+                  width, drunk step, logistic r 3.2→3.9995, lorenz rho 14→28,
+                  burst probability)
+      ``tame``    0..100 %% — the bring-it-in gesture: motion freezes at the
+                  CAUGHT value (latch-and-crossfade), the math calms
+                  (r/rho pulled back to stable ranges), rates scale by
+                  (1-T)^2 and a slew grows to a glide. Automatable/mappable.
+    """
+    params: list = [("rate", 0.5, 0.02, 16.0), ("bias", 0.13, 0.0, 1.0),
+                    ("offset", 0.0, 0.0, 1.0), ("source", 0.0, 0.0, 5.0),
+                    ("entropy", 50.0, 0.0, 100.0), ("tame", 0.0, 0.0, 100.0)]
+    for i in range(1, voices + 1):
+        params += [(f"depth_{i}", 100.0, 0.0, 100.0),
+                   (f"umin_{i}", 0.0, 0.0, 100.0),
+                   (f"umax_{i}", 100.0, 0.0, 100.0),
+                   (f"bipolar_{i}", 0.0, 0.0, 1.0),
+                   (f"tmin_{i}", 0.0), (f"tmax_{i}", 1.0)]
+    decls = [f"Data data_ph({voices});", f"Data data_st({voices}, 6);",
+             f"Data data_out({voices}, 3);",
+             viz_declares(viz_buffer)]
+    setup = ["ent_s = entropy * 0.01;", "tame_s = tame * 0.01;"]
+    voice_lines = []
+    pokes = []
+    for i in range(1, voices + 1):
+        k = i - 1
+        voice_lines += [
+            f"r_{i} = fold(offset + bias * {k}, 0, 1);",
+            f"rt_{i} = rate * (1 + 3 * r_{i});",
+            f"v_{i} = chaos_voice(data_ph, data_st, data_out, {k}, rt_{i}, "
+            f"source, ent_s, tame_s);",
+            f"d_{i} = depth_{i} * 0.01;",
+            f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
+            f"v_{i} * d_{i};",
+            f"out{i} = tmin_{i} + (tmax_{i} - tmin_{i}) * "
+            f"(umin_{i} * 0.01 + (umax_{i} - umin_{i}) * 0.01 * vv_{i});",
+            f"out{voices + i} = vv_{i};",
+        ]
+        pokes += [
+            f"poke({viz_buffer}, r_{i}, {4 * k}, 0);",
+            f"poke({viz_buffer}, peek(data_ph, {k}, 0), {4 * k + 1}, 0);",
+            f"poke({viz_buffer}, vv_{i}, {4 * k + 2}, 0);",
+            f"poke({viz_buffer}, d_{i}, {4 * k + 3}, 0);",
+        ]
+    body = "\n".join(decls + setup + voice_lines) + "\n" + viz_poke_block(
+        "\n".join(pokes), refresh_ms=gui_refresh_ms)
+    return compose_gen_code(params=params, functions=[CHAOS_VOICE_FN], body=body)
+
+
 def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
                     viz_buffer: str = "buf_orbit_gui") -> str:
     """The Orbit poly-LFO codebox (lfo-cluster class): ``voices`` LFOs whose

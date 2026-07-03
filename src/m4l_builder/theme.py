@@ -543,6 +543,7 @@ ACCENTS: dict[str, list[float]] = {
     "aurora": [0.30, 0.85, 0.74, 1.0],       # teal
     "parametric_eq": [0.38, 0.76, 0.58, 1.0],  # curve green
     "spectrum": [0.28, 0.78, 0.94, 1.0],     # analyzer cyan
+    "entropy": [0.72, 0.38, 0.95, 1.0],      # chaos violet
     "tilt": [1.0, 0.64, 0.30, 1.0],          # orange
     "nimbus": [0.80, 0.88, 0.95, 1.0],       # ice
     "orbit": [0.96, 0.70, 0.20, 1.0],        # cluster amber (cyan 2nd local)
