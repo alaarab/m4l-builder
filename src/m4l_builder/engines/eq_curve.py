@@ -459,6 +459,11 @@ function analyzer_is_flat() {
         if (analyzer_display[i] < lo) lo = analyzer_display[i];
         if (analyzer_display[i] > hi) hi = analyzer_display[i];
     }
+    // Effective silence: even with residual bin spread (smoothing/averaging
+    // keeps a couple dB of wiggle at the floor), if the LOUDEST bin is still
+    // near the floor there is nothing to show — the old floor-band rendered
+    // as a fake grey bar hugging the plot bottom (user-flagged).
+    if (hi < ANALYZER_MIN_DB + 12.0) return 1;
     return (hi - lo < 1.5) ? 1 : 0;
 }
 
@@ -1518,7 +1523,15 @@ var freq_table = [];
 function draw_plot_background() {
     if (EXTERNAL_SPECTRUM) {
         // A compiled spectrum (spectroscope~) fills the plot behind this jsui —
-        // keep the jsui transparent so it shows through; draw only the border.
+        // keep the PLOT transparent so it shows through; draw only the border.
+        // The label GUTTER below the plot has no scope over it, so the lighter
+        // device panel showed through as a full-width grey band (user-flagged)
+        // — paint the gutter to the plot's dark bg so the axis numbers sit on
+        // the same ground as the graph.
+        mgraphics.set_source_rgba(BG_COLOR);
+        mgraphics.rectangle(0, plot_bottom(), mgraphics.size[0],
+                            mgraphics.size[1] - plot_bottom());
+        mgraphics.fill();
         mgraphics.set_source_rgba(PLOT_BORDER_CLR);
         mgraphics.rectangle(plot_left(), plot_top(), plot_w(), plot_h());
         mgraphics.set_line_width(1.0);
@@ -1632,10 +1645,9 @@ function draw_grid() {
     grad.add_color_stop_rgba(0.0, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 0.0);
     grad.add_color_stop_rgba(0.9, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 1.0);
     mgraphics.set_source(grad); mgraphics.fill();
-    grad = mgraphics.pattern_create_linear(0, B - 16, 0, B + 3);
-    grad.add_color_stop_rgba(0.0, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 0.0);
-    grad.add_color_stop_rgba(1.0, BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 1.0);
-    mgraphics.set_source(grad); mgraphics.rectangle(0, B - 16, W, 19); mgraphics.fill();
+    // (bottom fade band REMOVED: the freq labels moved to the gutter below
+    // the plot, and the band's baked BG_COLOR mismatched the panel bg — it
+    // rendered as a full-width grey bar at the -15 line, user-flagged.)
 
     // ── Labels (drawn AFTER the fade so they melt at the edges). Ableton Sans Bold.
     mgraphics.select_font_face("Ableton Sans Bold");
@@ -1646,7 +1658,9 @@ function draw_grid() {
         if (x < L + 8 || x > R - 8) continue;
         label = FREQ_LABELS[i];
         metrics = mgraphics.text_measure(label);
-        mgraphics.move_to(x - metrics[0] * 0.5, B - 3);
+        // SEATED in the reserved MARGIN_BOTTOM gutter BELOW the plot line
+        // (they floated inside the plot at B-3 — user-flagged placement bug)
+        mgraphics.move_to(x - metrics[0] * 0.5, B + 9.5);
         mgraphics.show_text(label);
     }
     // EQ dB labels LEFT + spectrum dB labels RIGHT = the dual axis.
