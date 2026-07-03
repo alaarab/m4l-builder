@@ -1219,6 +1219,27 @@ class TestLiveText:
         assert result["box"]["text"] == "BYPASS"
         assert result["box"]["texton"] == "ACTIVE"
 
+    def test_automation_labels_mirror_enum(self):
+        # Live's display/automation labels for live.text come from the
+        # BOX-level automation/automationon attrs (corpus: Rainbow/AS Console/
+        # stranular) — parameter_enum alone leaves "val1"/"val2" showing in
+        # Live's LOM display_value, automation lanes and MIDI map.
+        result = live_text("lt-1", "bypass", [0, 0, 60, 20],
+                            text_on="ACTIVE", text_off="BYPASS")
+        assert result["box"]["automation"] == "BYPASS"
+        assert result["box"]["automationon"] == "ACTIVE"
+
+    def test_automation_labels_follow_custom_parameter_enum(self):
+        from m4l_builder.parameters import ParameterSpec
+        result = live_text(
+            "lt-1", "freeze", [0, 0, 60, 20],
+            text_on="FROZEN", text_off="FREEZE",
+            parameter=ParameterSpec(
+                name="Freeze", shortname="Freeze", parameter_type=2,
+                enum=["FREEZE", "FROZEN"], initial=[0], initial_enable=True))
+        assert result["box"]["automation"] == "FREEZE"
+        assert result["box"]["automationon"] == "FROZEN"
+
     def test_parameter_enable_is_1(self):
         result = live_text("lt-1", "bypass", [0, 0, 60, 20])
         assert result["box"]["parameter_enable"] == 1

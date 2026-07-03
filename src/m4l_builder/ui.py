@@ -732,6 +732,15 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
         maximum=1,
         enum=[text_off, text_on],
     )
+    # Live's automation / MIDI-map DISPLAY labels for live.text come from the
+    # BOX-level ``automation`` (off state) / ``automationon`` (on state) attrs —
+    # ``parameter_enum`` + ``parameter_mmax`` alone still leave live.text's
+    # built-in "val1"/"val2" defaults showing in Live (LOM display_value,
+    # automation lanes, MIDI map). Corpus-verified: Rainbow / AS Console /
+    # stranular mirror their enum labels into these two attrs on every
+    # custom-labelled live.text.
+    auto_labels = (list(spec.enum) if getattr(spec, "enum", None)
+                   and len(spec.enum) == 2 else [text_off, text_on])
     box = {
         "id": id,
         "maxclass": "live.text",
@@ -742,6 +751,8 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
         "parameter_enable": 1,
         "text": text_off,
         "texton": text_on,
+        "automation": str(auto_labels[0]),
+        "automationon": str(auto_labels[1]),
         "fontname": fontname,
         "fontsize": fontsize,
         "mode": mode,
