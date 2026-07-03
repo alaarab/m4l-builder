@@ -35,6 +35,11 @@ from .fft_analyzer import (
 from .filter_curve import filter_curve_js
 from .grain_display import grain_display_js
 from .grid_sequencer_display import grid_sequencer_display_js
+from .icon_overlay import (
+    ICON_OVERLAY_INLETS,
+    ICON_OVERLAY_OUTLETS,
+    icon_overlay_js,
+)
 from .integrated_lufs import (
     INTEGRATED_LUFS_INLETS,
     INTEGRATED_LUFS_OUTLETS,
@@ -133,6 +138,9 @@ __all__ = [
     "peaking_eq_display_js",
     "step_grid_display_js",
     "grain_display_js",
+    "ICON_OVERLAY_INLETS",
+    "ICON_OVERLAY_OUTLETS",
+    "icon_overlay_js",
     "grid_sequencer_display_js",
     "wavetable_editor_js",
     "spectral_vocoder_display_js",
