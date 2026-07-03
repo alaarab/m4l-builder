@@ -1229,6 +1229,24 @@ class TestLiveText:
         assert result["box"]["automation"] == "BYPASS"
         assert result["box"]["automationon"] == "ACTIVE"
 
+    def test_info_view_annotations_default_to_longname(self):
+        # Official-adopt 2: every UI param box carries annotation_name +
+        # annotation (Live Info View) — defaulting to the param longname.
+        result = live_text("lt-1", "bypass", [0, 0, 60, 20])
+        assert result["box"]["annotation_name"] == "bypass"
+        assert result["box"]["annotation"] == "bypass"
+
+    def test_info_view_annotations_prefer_annotation_name(self):
+        from m4l_builder.parameters import ParameterSpec
+        result = live_text(
+            "lt-1", "freeze", [0, 0, 60, 20],
+            parameter=ParameterSpec(
+                name="Freeze", shortname="Freeze", parameter_type=2,
+                enum=["OFF", "ON"], initial=[0], initial_enable=True,
+                annotation_name="Freeze the current tail"))
+        assert result["box"]["annotation_name"] == "Freeze the current tail"
+        assert result["box"]["annotation"] == "Freeze the current tail"
+
     def test_automation_labels_follow_custom_parameter_enum(self):
         from m4l_builder.parameters import ParameterSpec
         result = live_text(
