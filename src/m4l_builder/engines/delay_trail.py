@@ -116,6 +116,7 @@ var width_pct = 100.0;   // wet stereo width -> how far apart the L/R lanes sit
 var spread_pct = 0.0;    // stereo spread -> L/R comets drift apart in time
 var tone_pct = 0.0;      // echo tone tilt -> palette leans warm (-) / bright (+)
 var sat_pct = 0.0;       // in-loop saturation -> gritty hot rim on the comets
+var beat_ph = -1.0;      // live transport beat phase 0..1 (-1 = no feed) -> grid pulse
 var pingpong = 0;
 var sync_label = "FREE";
 var wet_lvl = 0.0;
@@ -303,20 +304,45 @@ function paint() {
     mgraphics.rectangle(plot_l(), plot_t(), plot_w(), plot_h());
     mgraphics.fill();
 
-    // Time ruler every 250 ms with labels at 500s.
+    // Time ruler. FREE mode: every 250 ms with second labels. SYNC mode: the
+    // grid becomes MUSICAL — one line per division (= per echo), numbered, and
+    // the whole grid breathes with the live transport beat (beat_ph from
+    // plugsync~) so the delay's rhythm is visible on the graph itself.
     mgraphics.select_font_face("Arial");
     mgraphics.set_font_size(7.0);
-    for (ms = 250; ms < MAX_MS; ms += 250) {
-        x = ms_to_x(ms);
-        mgraphics.set_source_rgba(GRID_CLR);
-        mgraphics.set_line_width(1.0);
-        mgraphics.move_to(x, plot_t());
-        mgraphics.line_to(x, plot_b());
-        mgraphics.stroke();
-        if (ms % 500 === 0) {
-            mgraphics.set_source_rgba(TEXT_CLR);
-            mgraphics.move_to(x - 8, h - 5);
-            mgraphics.show_text((ms / 1000).toFixed(1) + "s");
+    var synced = sync_label !== "FREE";
+    var pulse = (synced && beat_ph >= 0) ? (1.0 - beat_ph) * (1.0 - beat_ph) : 0.0;
+    if (synced && time_ms > 30) {
+        var k, kx;
+        for (k = 1; k * time_ms < MAX_MS; k++) {
+            kx = ms_to_x(k * time_ms);
+            if (kx > plot_r() - 2) break;
+            mgraphics.set_source_rgba(GRID_CLR[0], GRID_CLR[1], GRID_CLR[2],
+                                      GRID_CLR[3] * (0.8 + pulse * 0.9));
+            mgraphics.set_line_width(1.0);
+            mgraphics.move_to(kx, plot_t());
+            mgraphics.line_to(kx, plot_b());
+            mgraphics.stroke();
+            if (k <= 12) {
+                mgraphics.set_source_rgba(TEXT_CLR[0], TEXT_CLR[1], TEXT_CLR[2],
+                                          0.6 + pulse * 0.4);
+                mgraphics.move_to(kx - 3, h - 5);
+                mgraphics.show_text("" + k);
+            }
+        }
+    } else {
+        for (ms = 250; ms < MAX_MS; ms += 250) {
+            x = ms_to_x(ms);
+            mgraphics.set_source_rgba(GRID_CLR);
+            mgraphics.set_line_width(1.0);
+            mgraphics.move_to(x, plot_t());
+            mgraphics.line_to(x, plot_b());
+            mgraphics.stroke();
+            if (ms % 500 === 0) {
+                mgraphics.set_source_rgba(TEXT_CLR);
+                mgraphics.move_to(x - 8, h - 5);
+                mgraphics.show_text((ms / 1000).toFixed(1) + "s");
+            }
         }
     }
 
@@ -557,6 +583,9 @@ function set_width(v)      { width_pct = clamp(v, 0.0, 200.0); mgraphics.redraw(
 function set_spread(v)     { spread_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
 function set_tone(v)       { tone_pct = clamp(v, -100.0, 100.0); mgraphics.redraw(); }
 function set_sat(v)        { sat_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
+// Live transport beat phase (plugsync~, throttled device-side). NO redraw here —
+// the tide poll's 30 Hz redraw carries the pulse animation for free.
+function set_beat(v)       { beat_ph = clamp(v, 0.0, 1.0); }
 function set_pingpong(v)   { pingpong = v ? 1 : 0; mgraphics.redraw(); }
 function set_sync_label(v) { sync_label = "" + v; mgraphics.redraw(); }
 function wet_level(v) { wet_lvl = v; mgraphics.redraw(); }
