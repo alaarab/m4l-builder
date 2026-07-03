@@ -114,6 +114,8 @@ var damp_pct = 20.0;
 var mix_pct = 35.0;
 var width_pct = 100.0;   // wet stereo width -> how far apart the L/R lanes sit
 var spread_pct = 0.0;    // stereo spread -> L/R comets drift apart in time
+var tone_pct = 0.0;      // echo tone tilt -> palette leans warm (-) / bright (+)
+var sat_pct = 0.0;       // in-loop saturation -> gritty hot rim on the comets
 var pingpong = 0;
 var sync_label = "FREE";
 var wet_lvl = 0.0;
@@ -189,14 +191,29 @@ var COOL_CLR    = [0.16, 0.20, 0.52];   // rest / low energy: deep indigo
 var _thc = [0.0, 0.0, 0.0];             // scratch thermal colour (avoid per-call GC)
 
 // Thermal palette: energy e in 0..1 -> deep indigo -> accent cyan -> incandescent
-// white. CHARACTER warms the hot anchor (TAPE amber / BBD deep amber); FREEZE
-// remaps the whole ramp toward ice. Writes into the out array.
+// white. CHARACTER warms the hot anchor (TAPE amber / BBD deep amber); TONE tilts
+// it on top (dark tone -> ember-warm, bright tone -> harder white); FREEZE remaps
+// the whole ramp toward ice. Writes into the out array.
 function thermal(e, out) {
     e = e < 0 ? 0 : (e > 1 ? 1 : e);
     var hr, hg, hb;
     if (character > 1.5)      { hr = 0.98; hg = 0.62; hb = 0.24; }   // BBD deep amber
     else if (character > 0.5) { hr = 1.00; hg = 0.74; hb = 0.34; }   // TAPE amber
     else                      { hr = 0.96; hg = 0.99; hb = 1.00; }   // DIGITAL white-hot
+    // TONE = the echoes' dark<->bright tilt, painted onto the hot anchor: darker
+    // tone pulls it toward a deep ember, brighter pushes it toward pure white.
+    var tn = clamp(tone_pct / 100.0, -1.0, 1.0);
+    if (tn < 0) {
+        var wt = -tn * 0.65;
+        hr = hr + (0.92 - hr) * wt;
+        hg = hg + (0.44 - hg) * wt;
+        hb = hb + (0.16 - hb) * wt;
+    } else if (tn > 0) {
+        var bt = tn * 0.6;
+        hr = hr + (1.0 - hr) * bt;
+        hg = hg + (1.0 - hg) * bt;
+        hb = hb + (1.0 - hb) * bt;
+    }
     var mr = ACCENT_CLR[0], mg = ACCENT_CLR[1], mb = ACCENT_CLR[2];
     if (e < 0.5) {
         var t = e * 2.0;
@@ -424,6 +441,15 @@ function paint() {
                 mgraphics.arc(cx, ly, size * 0.52, 0, Math.PI * 2);
                 mgraphics.fill();
             }
+            // SATURATION grit: the in-loop drive hardens each pass — drawn as a
+            // hot rim ring around lit comets, growing with SAT x brightness.
+            if (sat_pct > 1.0 && lvl > 0.12) {
+                mgraphics.set_source_rgba(1.0, 0.72, 0.36,
+                                          sat_pct * 0.01 * (0.25 + lvl * 0.55));
+                mgraphics.set_line_width(1.1);
+                mgraphics.arc(cx, ly, size + 1.6, 0, Math.PI * 2);
+                mgraphics.stroke();
+            }
         }
         n += 1;
         t += time_ms;
@@ -529,6 +555,8 @@ function set_damp(v)       { damp_pct = clamp(v, 0.0, 100.0); mgraphics.redraw()
 function set_mix(v)        { mix_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
 function set_width(v)      { width_pct = clamp(v, 0.0, 200.0); mgraphics.redraw(); }
 function set_spread(v)     { spread_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
+function set_tone(v)       { tone_pct = clamp(v, -100.0, 100.0); mgraphics.redraw(); }
+function set_sat(v)        { sat_pct = clamp(v, 0.0, 100.0); mgraphics.redraw(); }
 function set_pingpong(v)   { pingpong = v ? 1 : 0; mgraphics.redraw(); }
 function set_sync_label(v) { sync_label = "" + v; mgraphics.redraw(); }
 function wet_level(v) { wet_lvl = v; mgraphics.redraw(); }
