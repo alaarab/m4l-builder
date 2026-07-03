@@ -1300,6 +1300,70 @@ def transport_sync_lfo_recipe(device, id_prefix, x=30, y=30):
     )
 
 
+def beat_phase_gate(device, id_prefix="bpg", *, x=30, y=30):
+    """Transport beat-phase source (Q3 framework recipe) built on
+    ``plugsync~`` — the M4L-native transport reporter (scheduler-rate, no
+    LiveAPI round-trip; corpus precedent: Roulette / Superberry).
+
+    Derives four message-rate signals every tempo-synced device builds on:
+
+    * ``phase``        — beat phase 0..1 (0 = the beat), straight off
+                         plugsync~ outlet 3
+    * ``gate``         — ONE bang exactly when the beat-in-bar increments
+    * ``running``      — transport running 0/1 (drive a "SYNC OFF" cue;
+                         plugsync~ holds stale values while stopped)
+    * ``tempo``        — BPM float (replaces the heavier live.observer
+                         chain when a device only needs tempo)
+    * ``half_beat_ms`` — 30000/BPM, the classic swing unit: multiply by a
+                         swing amount + your off-beat mask downstream
+
+    plugsync~ outlet map — LIVE-PROBED 2026-07-03 (tools/probe_plugsync.py;
+    the Max-docs/corpus-inferred map was WRONG — outlet 5 is tempo, not
+    beats): 0 running(int) · 1 elapsed ms(int) · 2 beat-in-bar(int, 1-based)
+    · 3 BEAT PHASE 0..1(float) · 4 [bar beat unit] list · 5 tempo BPM(float)
+    · 6/7 large tick/sample counters · 8 bar number(int).
+
+    Returns a stage_result whose ports expose ``phase`` / ``gate`` /
+    ``running`` / ``tempo`` / ``half_beat_ms``.
+    """
+    p = id_prefix
+    sync_id = device.add_newobj(
+        f"{p}_sync", "plugsync~", numinlets=1, numoutlets=9,
+        outlettype=["int", "int", "int", "float", "list",
+                    "float", "float", "int", "int"],
+        patching_rect=[x, y, 120, 22])
+    # Beat gate: bang once per beat — the 1-based beat-in-bar (outlet 2)
+    # changes exactly at each beat crossing (change -> t b dedupes).
+    change_id = device.add_newobj(
+        f"{p}_change", "change", numinlets=1, numoutlets=3,
+        outlettype=["", "", ""], patching_rect=[x + 160, y + 30, 60, 20])
+    gate_id = device.add_newobj(
+        f"{p}_gate", "t b", numinlets=1, numoutlets=1,
+        outlettype=["bang"], patching_rect=[x + 160, y + 60, 40, 20])
+    device.add_line(sync_id, 2, change_id, 0)
+    device.add_line(change_id, 0, gate_id, 0)
+    # Swing unit: half a beat in ms at the current tempo.
+    halfbeat_id = device.add_newobj(
+        f"{p}_halfbeat", "expr 30000. / $f1", numinlets=1, numoutlets=1,
+        outlettype=[""], patching_rect=[x + 280, y + 30, 110, 20])
+    device.add_line(sync_id, 5, halfbeat_id, 0)
+    return stage_result(
+        {
+            "sync": sync_id,
+            "gate": gate_id,
+            "halfbeat": halfbeat_id,
+        },
+        name="beat_phase_gate",
+        ports={
+            "phase": device.box(f"{p}_sync").outlet(3),
+            "gate": device.box(f"{p}_gate").outlet(0),
+            "running": device.box(f"{p}_sync").outlet(0),
+            "tempo": device.box(f"{p}_sync").outlet(5),
+            "half_beat_ms": device.box(f"{p}_halfbeat").outlet(0),
+        },
+    )
+
+
 def midi_learn_macro_assignment(device, id_prefix, num_targets=4, x=30, y=30):
     """Add a MIDI learn chain with macro mappings for multiple targets.
 
