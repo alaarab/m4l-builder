@@ -172,3 +172,93 @@ class TestDelayTrailDiagonalDrag:
         assert _named(result.outlets, "time")[0][2] == 350
         assert len(_named(result.outlets, "feedback")) == 1
         assert _named(result.outlets, "feedback")[0][2] == 35
+
+
+class TestDelayTrailTide:
+    """The TIDE (D4 viz bus): real delay-line energy history rendered under
+    the tap lanes. set_buffers arms a 33 ms peek Task; poll_tide reads the
+    2-channel ring (256 bins + head + wobble slots); tide_energy maps an age
+    in ms onto the shaped bin value; freeze flips the ice state. All features
+    must be clean no-ops when no feed is wired (tideL stays null)."""
+
+    # A Buffer stub the driver swaps in: ch1 (L) carries 0.8 in the head bin
+    # and 0.4 five bins older; ch2 (R) is quiet; slot 256 = head index 10,
+    # slot 257 = wobble LFO 0.5.
+    STUB = """
+        Buffer = function (name) {
+            this.peek = function (ch, start, count) {
+                var out = [];
+                for (var i = 0; i < count; i++) out.push(0);
+                if (ch === 1) { out[10] = 0.8; out[5] = 0.4; }
+                if (ch === 2) { out[10] = 0.05; }
+                out[256] = 10;
+                out[257] = 0.5;
+                return out;
+            };
+        };
+    """
+
+    def test_set_buffers_arms_poll_and_peeks(self):
+        result = run_jsui(delay_trail_js(), self.STUB + """
+            set_buffers("---buf_et_tide");
+            poll_tide();
+            dump({armed: tide_poll !== null ? 1 : 0,
+                  name: tide_name, head: tide_head, wob: wob_live,
+                  l_head: tideL[10], r_head: tideR[10]});
+        """, size=(326, 152))
+        assert result.state["armed"] == 1
+        assert result.state["name"] == "---buf_et_tide"
+        assert result.state["head"] == 10
+        assert abs(result.state["wob"] - 0.5) < 1e-6
+        assert abs(result.state["l_head"] - 0.8) < 1e-6
+        assert abs(result.state["r_head"] - 0.05) < 1e-6
+
+    def test_tide_energy_age_mapping(self):
+        # Head bin 10 holds 0.8 (age 0); bin 5 holds 0.4 (5 bins older). With
+        # MAX_MS 2000 and 256 bins, one bin is ~7.8 ms — age 0 must read the
+        # head bin, age 5*bin_ms the older one, and out-of-window ages 0.
+        result = run_jsui(delay_trail_js(), self.STUB + """
+            set_buffers("---t");
+            poll_tide();
+            var bin_ms = 2000.0 / 256;
+            dump({e0: tide_energy(tideL, 0),
+                  e5: tide_energy(tideL, 5 * bin_ms + 1),
+                  e_out: tide_energy(tideL, 2500.0),
+                  e_null: tide_energy(null, 0)});
+        """, size=(326, 152))
+        assert result.state["e0"] > 0.8  # 0.8 shaped by pow(.55) brightens
+        assert 0 < result.state["e5"] < result.state["e0"]
+        assert result.state["e_out"] == 0
+        assert result.state["e_null"] == 0
+
+    def test_paint_safe_with_and_without_tide(self):
+        # paint() must not throw before any feed arrives (tideL null) NOR
+        # after a poll, frozen or not; set_freeze flips the flag.
+        result = run_jsui(delay_trail_js(), self.STUB + """
+            paint();
+            set_freeze(1);
+            var f1 = frozen;
+            set_buffers("---t");
+            poll_tide();
+            paint();
+            set_freeze(0);
+            paint();
+            dump({f1: f1, f2: frozen, ok: 1});
+        """, size=(326, 152))
+        assert result.state["f1"] == 1
+        assert result.state["f2"] == 0
+        assert result.state["ok"] == 1
+
+    def test_no_feed_is_clean_noop(self):
+        # Without set_buffers: no Task armed, tide null, ignition zero — the
+        # geometric trail still paints (backward compatible for any host that
+        # never wires a viz bus).
+        result = run_jsui(delay_trail_js(), """
+            paint();
+            dump({armed: tide_poll === null ? 0 : 1,
+                  l: tideL === null ? 0 : 1,
+                  ign: tide_energy(tideL, 350.0)});
+        """, size=(326, 152))
+        assert result.state["armed"] == 0
+        assert result.state["l"] == 0
+        assert result.state["ign"] == 0

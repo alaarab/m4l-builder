@@ -1,10 +1,20 @@
-"""Delay tap-trail display (Timeless-style hero graph).
+"""Delay tap-trail display (Timeless-style hero graph) + the TIDE.
 
 Two lanes (L top, R bottom) on a time ruler. Taps are drawn at each
 feedback repeat with opacity decaying by the feedback amount and size
 shrinking with damping; ping-pong alternates lanes. A live wet-level
 glow pulses the first taps. Drag horizontally to set time; wheel adjusts
 feedback. Outlets fire only on user gestures (no-echo rule).
+
+THE TIDE (D4 viz bus): when the device wires ``Device.add_viz_bus`` to a
+2-channel ring buffer of per-bin peak |written| delay-line energy (256
+bins across the 2 s window; slot 256 = head index, 257 = depth-scaled
+wobble LFO), the display peeks it on a 33 ms Task and renders the REAL
+delay-line contents marching along the ruler — a packet written now
+drifts rightward in real time and IGNITES its tap (plus a re-injection
+arc back to t=0) as the feedback consumes it. L/R render on their own
+lanes so ping-pong shows as alternating wave packets. With no feed
+wired, every tide feature is a clean no-op (geometric trail unchanged).
 
 Messages in (inlet 0):
     set_time <ms>          1..2000 (display + drag range)
@@ -14,6 +24,9 @@ Messages in (inlet 0):
     set_sync_label <text>  "FREE" or a division label for the readout
     wet_level <lin>        live wet level 0..1 (~30ms)
     set_duck <lin>         live duck depth 0..1 (dims the trail; lights DUCK badge)
+    set_freeze <0|1>       ice tint, gated input pulse, FROZEN badge
+    set_buffers <name>     resolved tide buffer~ name (Device.add_viz_bus) —
+                           arms the 33 ms peek Task for the delay-line tide
 
 Messages out (outlet 0):
     time <ms>              while dragging (only meaningful in FREE mode)
@@ -103,6 +116,26 @@ var sync_label = "FREE";
 var wet_lvl = 0.0;
 var duck_lvl = 0.0;
 var character = 0;   // 0 DIGITAL (clean), 1 TAPE, 2 BBD -> warms/dims late repeats
+
+// ── TIDE (D4 viz bus): the REAL delay-line contents ──────────────────
+// The gen~ core pokes per-bin peak |written| (input + feedback) into a
+// 2-channel ring buffer: 256 bins across the full time window, slot 256 =
+// head index, slot 257 = depth-scaled wobble LFO. set_buffers (positional,
+// from Device.add_viz_bus) delivers the resolved ---name; a 33 ms Task
+// peeks it — zero patchcord traffic, the display cannot desync from the
+// DSP. With no feed wired, tideL stays null and the tide is a no-op.
+var TIDE_BINS  = 256;
+var TIDE_SLOTS = 260;
+var TIDE_H     = 0.155;   // bar half-height as a fraction of plot_h
+var ICE_CLR    = [0.62, 0.86, 1.0];
+var tide_name = "";
+var tideL = null;
+var tideR = null;
+var tide_head = 0;
+var wob_live = 0.0;       // depth-scaled wobble LFO, -1..1 (0 at Wobble 0)
+var frozen = 0;
+var tide_poll = null;
+
 var dragging = 0;
 var hovering = 0;
 var hover_x = 0.0;
@@ -171,12 +204,64 @@ function paint() {
     mgraphics.move_to(plot_l() + 3, lane_y(1) - 7);
     mgraphics.show_text("R");
 
+    // ── THE TIDE: real per-bin energy of the delay line, marching along the
+    // ruler in real time. Age 0 (just written) enters at t=0 and drifts right
+    // as it ages; when a packet reaches the delay time it is being READ — the
+    // tap above it ignites (drawn later, on top). L/R channels render on
+    // their own lanes, so PING-PONG shows as packets alternating lanes.
+    // CHARACTER warms the older water (generational loss painted literally);
+    // FREEZE turns the whole sea to ice.
+    if (tideL) {
+        var bin_ms = MAX_MS / TIDE_BINS;
+        var bw = plot_w() / TIDE_BINS;
+        if (bw < 1.0) bw = 1.0;
+        var t_h = plot_h() * TIDE_H;
+        var lanes = [tideL, tideR];
+        var bi, li2, arr2, idx2, raw2, ev, bx2, eh, tcw, t_r, t_g, t_b, ly2;
+        for (li2 = 0; li2 < 2; li2++) {
+            arr2 = lanes[li2];
+            ly2 = lane_y(li2);
+            for (bi = 0; bi < TIDE_BINS; bi++) {
+                idx2 = ((tide_head - bi) % TIDE_BINS + TIDE_BINS) % TIDE_BINS;
+                raw2 = arr2[idx2];
+                if (!(raw2 > 0.004)) continue;
+                ev = raw2 * 1.15;
+                if (ev > 1.0) ev = 1.0;
+                ev = Math.pow(ev, 0.55);
+                bx2 = ms_to_x(bi * bin_ms);
+                if (bx2 > plot_r()) break;
+                eh = ev * t_h;
+                tcw = character > 0.5
+                    ? clamp((bi * bin_ms) / (time_ms * 5.0), 0, 1) * (character > 1.5 ? 0.85 : 0.55)
+                    : 0;
+                t_r = TAP_CLR[0] + (0.95 - TAP_CLR[0]) * tcw;
+                t_g = TAP_CLR[1] + (0.55 - TAP_CLR[1]) * tcw;
+                t_b = TAP_CLR[2] + (0.22 - TAP_CLR[2]) * tcw;
+                if (frozen) {
+                    t_r = t_r + (ICE_CLR[0] - t_r) * 0.75;
+                    t_g = t_g + (ICE_CLR[1] - t_g) * 0.75;
+                    t_b = t_b + (ICE_CLR[2] - t_b) * 0.75;
+                }
+                mgraphics.set_source_rgba(t_r, t_g, t_b, 0.14 + ev * 0.42);
+                mgraphics.rectangle(bx2 - bw * 0.5, ly2 - eh, bw, eh * 2.0);
+                mgraphics.fill();
+            }
+        }
+    }
+
     // Input pulse at t=0 on both lanes — a real radial glow (design-system)
     // that swells with the live wet level, then a bright core dot on top.
+    // FREEZE gates new input, so the pulse hollows to an ice ring.
     var wet = clamp(wet_lvl, 0, 1);
     var in_x = ms_to_x(0) + 2;
     var li0;
     for (li0 = 0; li0 < 2; li0++) {
+        if (frozen) {
+            mgraphics.set_source_rgba(ICE_CLR[0], ICE_CLR[1], ICE_CLR[2], 0.8);
+            mgraphics.set_line_width(1.2);
+            mgraphics.arc(in_x, lane_y(li0), 3.2, 0, Math.PI * 2); mgraphics.stroke();
+            continue;
+        }
         ds_node_glow(in_x, lane_y(li0), ACCENT_CLR, 6.0 + wet * 11.0, 0.30 + wet * 0.45);
         mgraphics.set_source_rgba(ACCENT_CLR[0], ACCENT_CLR[1], ACCENT_CLR[2], 0.55 + wet * 0.45);
         mgraphics.arc(in_x, lane_y(li0), 3.2, 0, Math.PI * 2); mgraphics.fill();
@@ -199,7 +284,10 @@ function paint() {
     while (amp > 0.02 && t <= MAX_MS && n < 24) {
         var size = (2.0 + amp * 5.0) * (1.0 - (damp_pct / 100.0) * 0.5 * (n / 8.0));
         if (size < 1.0) size = 1.0;
-        x = ms_to_x(t);
+        // Live wobble shimmer: the tape LFO sways the READ position, so the
+        // taps (read points) sway with it — zero at Wobble 0 (wob_live is
+        // depth-scaled in the gen), swelling to a visible +/-4 px flutter.
+        x = ms_to_x(t) + wob_live * 4.0;
         stem = amp * plot_h() * 0.16;
         active_lane = (n % 2 === 0) ? 1 : 0;  // ping-pong: which lane this repeat
         // CHARACTER tint: warm + dim later repeats for TAPE (gentle) / BBD (more);
@@ -226,6 +314,28 @@ function paint() {
             mgraphics.set_source_rgba(tcl[0], tcl[1], tcl[2], clamp(amp, 0, 1) * cdim);
             mgraphics.arc(x, ly, size, 0, Math.PI * 2);
             mgraphics.fill();
+            // REAL ignition: the actual recirculating energy arriving at this
+            // tap right now (from the tide feed). A hot core + wide glow flare
+            // as the packet crosses, then a re-injection arc bridging back to
+            // t=0 — the feedback path, lit only while energy actually flows.
+            var ign = tide_energy(li === 0 ? tideL : tideR, t);
+            if (ign > 0.05) {
+                var ia = ign * cdim;
+                ds_node_glow(x, ly, tcl, size + 8.0 + ign * 10.0, 0.35 * ia);
+                mgraphics.set_source_rgba(0.92, 0.98, 1.0, 0.55 * ia);
+                mgraphics.arc(x, ly, size * 0.55 + 0.6, 0, Math.PI * 2);
+                mgraphics.fill();
+                if (fb > 0.02 && n < 6) {
+                    mgraphics.set_source_rgba(tcl[0], tcl[1], tcl[2],
+                                              0.38 * ign * clamp(fb, 0, 1));
+                    mgraphics.set_line_width(1.0);
+                    mgraphics.move_to(x, ly - stem - 3.0);
+                    mgraphics.curve_to(x * 0.66 + in_x * 0.34, ly - stem - 16.0,
+                                       x * 0.34 + in_x * 0.66, ly - stem - 16.0,
+                                       in_x, ly - stem - 3.0);
+                    mgraphics.stroke();
+                }
+            }
         }
         n += 1;
         t += time_ms;
@@ -247,6 +357,12 @@ function paint() {
         mgraphics.set_source_rgba(TEXT_CLR);
         mgraphics.move_to(plot_l() + 16, plot_t() + 21);
         mgraphics.show_text("PING-PONG");
+    }
+    if (frozen) {
+        mgraphics.set_source_rgba(ICE_CLR[0], ICE_CLR[1], ICE_CLR[2], 0.9);
+        mgraphics.set_font_size(7.5);
+        mgraphics.move_to(plot_l() + 16, plot_t() + 21 + (pingpong ? 10 : 0));
+        mgraphics.show_text("FROZEN");
     }
 
     // it177: DUCK activity badge (top-right). An amber "DUCK ▾" + meter bar that
@@ -306,6 +422,56 @@ function set_duck(v) { duck_lvl = clamp(v, 0.0, 1.0); mgraphics.redraw(); }
 // later repeats warm toward amber and dim. DIGITAL (0, default) leaves the taps
 // the clean accent colour -> the trail is unchanged at the default.
 function set_character(v) { character = clamp(Math.round(v), 0, 2); mgraphics.redraw(); }
+// FREEZE: the loop holds (unity feedback, input gated) — tide turns ice, the
+// input pulse hollows out, and a FROZEN badge joins the readout.
+function set_freeze(v) { frozen = v ? 1 : 0; mgraphics.redraw(); }
+
+// ── TIDE feed (Device.add_viz_bus contract) ──────────────────────────
+function set_buffers() {
+    var args = arrayfromargs(arguments);
+    if (args.length > 0) tide_name = "" + args[0];
+    start_tide_poll();
+}
+
+function poll_tide() {
+    if (tide_name === "") return;
+    try {
+        var b = new Buffer(tide_name);
+        var l = b.peek(1, 0, TIDE_SLOTS);
+        var r = b.peek(2, 0, TIDE_SLOTS);
+        if (l && l.length >= TIDE_SLOTS && r && r.length >= TIDE_SLOTS) {
+            tideL = l;
+            tideR = r;
+            tide_head = ((Math.round(l[TIDE_BINS]) % TIDE_BINS) + TIDE_BINS) % TIDE_BINS;
+            wob_live = clamp(l[TIDE_BINS + 1], -1.0, 1.0);
+            mgraphics.redraw();
+        }
+    } catch (e) { /* buffer~ not instantiated yet — retry next tick */ }
+}
+
+function start_tide_poll() {
+    if (tide_poll !== null) return;
+    if (typeof Task !== "undefined") {
+        tide_poll = new Task(poll_tide);
+        tide_poll.interval = 33;
+        tide_poll.repeat();
+    }
+}
+
+// Age (ms back from "now") -> perceptually-shaped 0..1 energy from one
+// tide channel. Powers the real tap ignition + re-injection arcs.
+function tide_energy(arr, age_ms) {
+    if (!arr) return 0.0;
+    var bin_ms = MAX_MS / TIDE_BINS;
+    var age_bins = Math.floor(age_ms / bin_ms);
+    if (age_bins < 0 || age_bins >= TIDE_BINS) return 0.0;
+    var idx = ((tide_head - age_bins) % TIDE_BINS + TIDE_BINS) % TIDE_BINS;
+    var raw = arr[idx];
+    if (!(raw > 0.0)) return 0.0;
+    var v = raw * 1.15;
+    if (v > 1.0) v = 1.0;
+    return Math.pow(v, 0.55);
+}
 
 // ── Interaction: ABSOLUTE X/Y pad ────────────────────────────────────
 // Robust pointer-coordinate resolution. Max's v8ui pointer events expose the
