@@ -281,6 +281,12 @@ _INTERACTIVE_MAXCLASSES = frozenset({
 _DEAD_ZONE_MIN_W = 40.0
 _LAYOUT_MARGIN = 8.0
 _WIDTH_MISMATCH_TOL = 12.0
+# The deliberate parking band (PARK_RECT / HIDDEN_RECT / retired-rail convention):
+# boxes at x/y >= 900 are intentionally hidden. An interactive control past the
+# device edge but BEFORE this band is STRANDED — authored as visible yet
+# unreachable in Live. ``_onscreen_rect`` cannot tell the two apart (it treats
+# ALL fully-offscreen boxes as parked), which is how stranded controls shipped.
+_PARK_X = 900.0
 
 
 def _alpha0_bg(payload: dict) -> bool:
@@ -345,6 +351,22 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
                 and not _alpha0_bg(payload)
                 and not payload.get("ignoreclick")):
             interactive.append((payload.get("id") or "?", maxclass, rect))
+        # dead-live-text: a VISIBLE live.text with parameter_enable=0 renders
+        # but NEVER receives clicks in Live (proven on Para EQ's ANALYZER/
+        # ACTIVE, Linear Phase EQ's ANALYZER, Spectrum Analyzer's mode chips).
+        # A clickable live.text must be a real param; state-mirror displays
+        # should set ignoreclick=1 to declare they are not click targets.
+        if (maxclass == "live.text"
+                and payload.get("parameter_enable") == 0
+                and not payload.get("ignoreclick")):
+            issues.append(ValidationIssue(
+                code="dead-live-text",
+                message=(f"visible live.text '{payload.get('id')}' has "
+                         "parameter_enable=0 — it renders but never receives "
+                         "clicks in Live (the dead-button class); make it a "
+                         "real param, or set ignoreclick=1 if it is a "
+                         "display-only mirror"),
+                severity="error", box_id=payload.get("id")))
 
     # control-overlap
     for i, (id_a, cls_a, ra) in enumerate(interactive):
@@ -408,4 +430,34 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
                              f"{width:g} — a width-collapse FULL wider than the "
                              f"layout re-creates the dead-zone bug at runtime"),
                     severity="error", box_id=payload.get("id")))
+
+    # stranded-control: reads the RAW presentation_rect (NOT _onscreen_rect,
+    # which treats every fully-offscreen box as parked) — an interactive
+    # control between the device edge and the x/y>=900 parking band was
+    # authored to be visible but is unreachable in Live (the stranded M/S
+    # menu class).
+    for box in boxes:
+        payload = box.get("box", {})
+        if payload.get("presentation") != 1:
+            continue
+        if (payload.get("maxclass") or "") not in _INTERACTIVE_MAXCLASSES:
+            continue
+        rect = payload.get("presentation_rect")
+        if not rect or len(rect) < 4:
+            continue
+        try:
+            x, y = float(rect[0]), float(rect[1])
+        except (TypeError, ValueError):
+            continue
+        if x >= _PARK_X or y >= _PARK_X:
+            continue  # deliberate parking
+        if x >= width or y >= height:
+            issues.append(ValidationIssue(
+                code="stranded-control",
+                message=(f"interactive control '{payload.get('id')}' sits at "
+                         f"[{x:g}, {y:g}] — past the {width:g}x{height:g} "
+                         f"device edge but below the x/y>=900 parking band: "
+                         f"visible-intended yet unreachable in Live; move it "
+                         f"on-canvas or park it at >=900"),
+                severity="error", box_id=payload.get("id")))
     return issues
