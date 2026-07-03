@@ -340,3 +340,36 @@ class TestProQCreateGestures:
         assert abs(s["q"] - 1.0) > 0.01, "Q changed under cmd-drag"
         assert _named(result.outlets, "band_q"), "band_q was emitted"
         assert _named(result.outlets, "band_gain") == [], "no gain edit under cmd"
+
+
+class TestProQGestures:
+    """Interaction P2: the Pro-Q gesture matrix + in-graph value entry."""
+
+    def _js(self):
+        from m4l_builder.engines.eq_curve import eq_curve_js
+        return eq_curve_js()
+
+    def test_wheel_modifier_matrix(self):
+        js = self._js()
+        assert "var cmd_mod = cmd || ctrl;" in js
+        assert "if (opt && cmd_mod) {" in js          # linked gain<->dynamic
+        assert 'outlet(2, "band_gain", target, ng);' in js
+        assert 'outlet(0, "band_dynamic_amount", target, nd2);' in js
+
+    def test_cmd_alt_click_cycles_type(self):
+        js = self._js()
+        assert ("apply_band_type(clicked_band, (bands[clicked_band].type + 1)"
+                " % TYPE_NAMES.length);") in js
+
+    def test_sketch_abort_wired(self):
+        js = self._js()
+        assert js.count("sketch_cancel()") >= 2       # def + the abort call
+
+    def test_value_entry_not_shipped(self):
+        # SPIKE VERDICT (Live, 2026-07): Live's device view never forwards
+        # keystrokes to a v8ui — onkeydown is unreachable, so the in-graph
+        # typing entry must NOT ship (dead-UI doctrine). The native-textedit
+        # hybrid is queued; until then the engine carries no entry code.
+        js = self._js()
+        assert "onkeydown" not in js
+        assert "entry_band" not in js

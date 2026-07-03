@@ -2947,6 +2947,17 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
         return;
     }
 
+    // Pro-Q Cmd+Alt+click on a node: cycle the band type (PK->LS->HS->LP->
+    // HP->NT->BP->AP->PK). apply_band_type owns all the outlet plumbing.
+    if (command_click && option_click && clicked_band >= 0) {
+        close_node_menu();
+        selected_band = clicked_band;
+        outlet(0, "selected_band", clicked_band);
+        apply_band_type(clicked_band, (bands[clicked_band].type + 1) % TYPE_NAMES.length);
+        mgraphics.redraw();
+        return;
+    }
+
     if (option_click) {
         if (dynamic_hit >= 0 || hit >= 0) {
             var opt_idx = dynamic_hit >= 0 ? dynamic_hit : hit;
@@ -3305,7 +3316,16 @@ function draw_hover_crosshair() {
 function onpointerdown(pointerevent) {
     var x = pointer_x(pointerevent, 0);
     var y = pointer_y(pointerevent, 0);
-    if (sketch_mode) { sketch_begin(x, y); return; }
+    if (sketch_mode) {
+        // right-click during sketch = ABORT the stroke (dismiss-and-consume;
+        // sketch_cancel was orphaned — every overlay needs an escape hatch)
+        if (pointer_context_click(pointerevent, pointer_buttons(pointerevent, 1), 0)) {
+            sketch_cancel();
+            return;
+        }
+        sketch_begin(x, y);
+        return;
+    }
     note_pointer_press(x, y);
     handle_press(
         x,
@@ -3404,18 +3424,74 @@ function onidleout(x, y, but, cmd, shift, caps, opt, ctrl) {
 }
 
 function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl) {
+    // Pro-Q wheel matrix (Shift = fine everywhere):
+    //   plain      -> Q
+    //   Cmd/Ctrl   -> gain
+    //   Alt        -> dynamic range (auto-enables DYN, like the menu chip)
+    //   Alt+Cmd    -> linked gain<->dynamic trade (gain +x, dynamic -x)
     var target = hover_band >= 0 ? hover_band : selected_band;
     if (target < 0 || target >= num_bands) return;
     if (!bands[target].enabled) return;
+    var b = bands[target];
+    var uses_gain = band_uses_gain(b.type);
+    var cmd_mod = cmd || ctrl;
 
-    var q = bands[target].q;
+    if (opt && cmd_mod) {
+        if (!uses_gain || !band_supports_dynamic(b.type)) return;
+        var step_l = (shift ? 0.1 : 0.5) * (scrolly > 0 ? 1 : -1);
+        if (!scrolly) return;
+        var ng = Math.round(clamp(b.gain + step_l, MIN_GAIN, MAX_GAIN) * 10.0) / 10.0;
+        var nd = Math.round(clamp((b.dynamic_amount || 0.0) - step_l,
+                                  -MAX_DYNAMIC_RANGE, MAX_DYNAMIC_RANGE) * 10.0) / 10.0;
+        if (ng === b.gain && nd === (b.dynamic_amount || 0.0)) return;
+        b.gain = ng;
+        b.dynamic = 1;
+        b.dynamic_amount = nd;
+        rebuild_band_cache();
+        outlet(2, "band_gain", target, ng);
+        outlet(0, "band_dynamic", target, 1);
+        outlet(0, "band_dynamic_amount", target, nd);
+        mgraphics.redraw();
+        return;
+    }
+
+    if (opt) {
+        if (!band_supports_dynamic(b.type)) return;
+        var step_d = (shift ? 0.1 : 0.5) * (scrolly > 0 ? 1 : -1);
+        if (!scrolly) return;
+        var nd2 = Math.round(clamp((b.dynamic_amount || 0.0) + step_d,
+                                   -MAX_DYNAMIC_RANGE, MAX_DYNAMIC_RANGE) * 10.0) / 10.0;
+        if (nd2 === (b.dynamic_amount || 0.0)) return;
+        b.dynamic = 1;
+        b.dynamic_amount = nd2;
+        rebuild_band_cache();
+        outlet(0, "band_dynamic", target, 1);
+        outlet(0, "band_dynamic_amount", target, nd2);
+        mgraphics.redraw();
+        return;
+    }
+
+    if (cmd_mod) {
+        if (!uses_gain) return;
+        var step_g = (shift ? 0.1 : 0.5) * (scrolly > 0 ? 1 : -1);
+        if (!scrolly) return;
+        var ng2 = Math.round(clamp(b.gain + step_g, MIN_GAIN, MAX_GAIN) * 10.0) / 10.0;
+        if (ng2 === b.gain) return;
+        b.gain = ng2;
+        rebuild_band_cache();
+        outlet(2, "band_gain", target, ng2);
+        mgraphics.redraw();
+        return;
+    }
+
+    var q = b.q;
     var factor = shift ? 0.02 : 0.08;
     q = q * (1.0 + scrolly * factor);
     q = clamp(q, MIN_Q, MAX_Q);
     q = Math.round(q * 100.0) / 100.0;
-    if (q === bands[target].q) return;
+    if (q === b.q) return;
 
-    bands[target].q = q;
+    b.q = q;
     rebuild_band_cache();
     outlet(3, "band_q", target, q);
     mgraphics.redraw();
