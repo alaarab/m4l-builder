@@ -26,10 +26,17 @@ def test_poly_lfo_engine_shape():
         assert f"Param depth_{i}(100.0, min=0.0, max=100.0);" in code
         assert f"d_{i} = depth_{i} * 0.01;" in code
     assert "fold(offset + bias * 0, 0, 1)" in code
-    # GUI tick pokes [r, phase, value, depth] per voice into the viz buffer
+    # v2: per-lane shape (no shared menu) + lanes reveal count
+    for i in range(1, 5):
+        assert f"Param shape_{i}(0.0, min=0.0, max=5.0);" in code
+    assert "Param shape(" not in code
+    assert "Param lanes(4.0, min=1.0, max=4.0);" in code
+    # GUI tick pokes [value, shape, depth, windowed] per lane + lanes tail
+    # (the chaos_lanes lane-stack hero contract)
     assert "Buffer buf_orbit_gui;" in code
-    assert "poke(buf_orbit_gui, r_1, 0, 0);" in code
-    assert "poke(buf_orbit_gui, d_4, 15, 0);" in code
+    assert "poke(buf_orbit_gui, v_1, 0, 0);" in code
+    assert "poke(buf_orbit_gui, shape_1, 1, 0);" in code
+    assert "poke(buf_orbit_gui, lanes, 16, 0);" in code
 
 
 def test_polar_cluster_js_contract():

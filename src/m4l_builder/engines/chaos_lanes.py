@@ -25,12 +25,26 @@ SOURCE_COLORS = (
 )
 
 
+# Orbit's waveform palette (Sine/Tri/Saw/Square/S&H/Drift) — same family idea.
+LFO_COLORS = (
+    (0.96, 0.70, 0.20),   # Sine — amber
+    (0.95, 0.85, 0.40),   # Tri — gold
+    (0.55, 0.85, 0.45),   # Saw — green
+    (0.35, 0.80, 0.90),   # Square — cyan
+    (0.60, 0.55, 0.95),   # S&H — violet
+    (0.90, 0.45, 0.70),   # Drift — rose
+)
+
+
 def chaos_lanes_js(*, voices: int = 8, accent=(0.72, 0.38, 0.95, 1.0),
-                   history: int = 96, poll_ms: int = 33) -> str:
+                   history: int = 96, poll_ms: int = 33,
+                   palette=None) -> str:
     """v8ui source for the lane-stack hero (``frames.entropy``:
-    ``4*voices + 1`` samps, 1 channel)."""
+    ``4*voices + 1`` samps, 1 channel). ``palette`` = 6 lane tints by
+    source/shape index (defaults to the chaos SOURCE_COLORS)."""
+    colors = palette or SOURCE_COLORS
     acc = ", ".join(f"{c:g}" for c in accent[:3])
-    pal = ",\n    ".join(f"[{r:g}, {g:g}, {b:g}]" for r, g, b in SOURCE_COLORS)
+    pal = ",\n    ".join(f"[{r:g}, {g:g}, {b:g}]" for r, g, b in colors)
     draw = """
 var f = frames.entropy;
 if (f && f[0]) {

@@ -270,7 +270,10 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
     """The Orbit poly-LFO codebox (lfo-cluster class): ``voices`` LFOs whose
     rates spread from ONE Rate by the cluster fold ``r = fold(offset +
     bias*i, 0, 1)`` -> ``rate * (1 + 3r)`` (the radius->rate polyrhythm), with
-    per-slot Depth/Min/Max/Bipolar windows and target-range scaling.
+    per-slot Depth/Min/Max/Bipolar windows, PER-LANE ``shape_{i}`` (each lane
+    its own waveform — the Entropy v2 pattern) and a ``lanes`` reveal count.
+    GUI tick pokes ``[value, shape, depth, windowed]`` per lane + the lanes
+    count at ``4*voices`` — the chaos_lanes lane-stack hero contract.
 
     Signal outs (``build_gendsp(code, 1, 2*voices)``):
       out 1..voices        REMOTE family, native units for a ``normalized=0``
@@ -286,11 +289,14 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
     ``4*voices``) for the polar_cluster hero.
     """
     params: list = [("rate", 1.0, 0.02, 8.0), ("bias", 0.13, 0.0, 1.0),
-                    ("offset", 0.0, 0.0, 1.0), ("shape", 0.0, 0.0, 5.0)]
+                    ("offset", 0.0, 0.0, 1.0),
+                    ("lanes", float(voices), 1.0, float(voices))]
     for i in range(1, voices + 1):
         # depth/umin/umax arrive as 0..100 percents (the slot numboxes read
-        # "100 %" like the stock modulators); scaled by 0.01 in the body
-        params += [(f"depth_{i}", 100.0, 0.0, 100.0),
+        # "100 %" like the stock modulators); scaled by 0.01 in the body.
+        # shape is PER-LANE (Entropy v2 pattern): each lane its own waveform.
+        params += [(f"shape_{i}", 0.0, 0.0, 5.0),
+                   (f"depth_{i}", 100.0, 0.0, 100.0),
                    (f"umin_{i}", 0.0, 0.0, 100.0),
                    (f"umax_{i}", 100.0, 0.0, 100.0),
                    (f"bipolar_{i}", 0.0, 0.0, 1.0),
@@ -305,7 +311,7 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
         voice_lines += [
             f"r_{i} = fold(offset + bias * {k}, 0, 1);",
             f"rt_{i} = rate * (1 + 3 * r_{i});",
-            f"v_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, shape);",
+            f"v_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, shape_{i});",
             f"d_{i} = depth_{i} * 0.01;",
             f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
             f"v_{i} * d_{i};",
@@ -314,11 +320,12 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
             f"out{voices + i} = vv_{i};",
         ]
         pokes += [
-            f"poke({viz_buffer}, r_{i}, {4 * k}, 0);",
-            f"poke({viz_buffer}, peek(data_ph, {k}, 0), {4 * k + 1}, 0);",
-            f"poke({viz_buffer}, vv_{i}, {4 * k + 2}, 0);",
-            f"poke({viz_buffer}, d_{i}, {4 * k + 3}, 0);",
+            f"poke({viz_buffer}, v_{i}, {4 * k}, 0);",
+            f"poke({viz_buffer}, shape_{i}, {4 * k + 1}, 0);",
+            f"poke({viz_buffer}, d_{i}, {4 * k + 2}, 0);",
+            f"poke({viz_buffer}, vv_{i}, {4 * k + 3}, 0);",
         ]
+    pokes.append(f"poke({viz_buffer}, lanes, {4 * voices}, 0);")
     body = "\n".join(decls + voice_lines) + "\n" + viz_poke_block(
         "\n".join(pokes), refresh_ms=gui_refresh_ms)
     return compose_gen_code(params=params, functions=[LFO_VOICE_FN], body=body)
