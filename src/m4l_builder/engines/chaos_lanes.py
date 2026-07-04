@@ -48,7 +48,6 @@ def chaos_lanes_js(*, voices: int = 8, accent=(0.72, 0.38, 0.95, 1.0),
     draw = """
 var f = frames.entropy;
 if (f && f[0]) {
-    var lanes = Math.max(1, Math.min(VOICES, Math.round(f[0][VOICES * 4])));
     // push current values into the ring history
     for (var i = 0; i < VOICES; i++) {
         hist[i][hpos] = f[0][i * 4];
@@ -58,7 +57,7 @@ if (f && f[0]) {
     for (var i = 0; i < VOICES; i++) {
         var src = Math.max(0, Math.min(5, Math.round(f[0][i * 4 + 1])));
         var dp = f[0][i * 4 + 2];
-        var on = i < lanes ? 1 : 0;
+        var on = f[0][i * 4 + 3] > 0.5 ? 1 : 0;   // per-lane enable
         var c = PAL[src];
         var y0 = i * laneH;
         var alpha = on ? (0.28 + 0.62 * dp) : 0.07;
@@ -94,7 +93,7 @@ if (f && f[0]) {
 """
     return buffer_viz_js(
         draw=draw,
-        buffers=[("entropy", 4 * voices + 1, 1)],
+        buffers=[("entropy", 4 * voices, 1)],
         poll_ms=poll_ms,
         extra_globals=(
             f"var VOICES = {int(voices)};\n"

@@ -224,10 +224,12 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
     """
     params: list = [("rate", 0.5, 0.02, 16.0), ("bias", 0.13, 0.0, 1.0),
                     ("offset", 0.0, 0.0, 1.0),
-                    ("entropy", 50.0, 0.0, 100.0), ("tame", 0.0, 0.0, 100.0),
-                    ("lanes", float(voices), 1.0, float(voices))]
+                    ("entropy", 50.0, 0.0, 100.0), ("tame", 0.0, 0.0, 100.0)]
     for i in range(1, voices + 1):
+        # on_i (per-lane enable): gates the modulation (off -> the lane stops
+        # driving its target) and dims the lane's trace in the viz.
         params += [(f"source_{i}", 0.0, 0.0, 5.0),
+                   (f"on_{i}", 1.0, 0.0, 1.0),
                    (f"depth_{i}", 100.0, 0.0, 100.0),
                    (f"umin_{i}", 0.0, 0.0, 100.0),
                    (f"umax_{i}", 100.0, 0.0, 100.0),
@@ -246,7 +248,7 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
             f"rt_{i} = rate * (1 + 3 * r_{i});",
             f"v_{i} = chaos_voice(data_ph, data_st, data_out, {k}, rt_{i}, "
             f"source_{i}, ent_s, tame_s);",
-            f"d_{i} = depth_{i} * 0.01;",
+            f"d_{i} = depth_{i} * 0.01 * on_{i};",
             f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
             f"v_{i} * d_{i};",
             f"out{i} = tmin_{i} + (tmax_{i} - tmin_{i}) * "
@@ -257,9 +259,9 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
             f"poke({viz_buffer}, v_{i}, {4 * k}, 0);",
             f"poke({viz_buffer}, source_{i}, {4 * k + 1}, 0);",
             f"poke({viz_buffer}, d_{i}, {4 * k + 2}, 0);",
-            f"poke({viz_buffer}, vv_{i}, {4 * k + 3}, 0);",
+            f"poke({viz_buffer}, on_{i}, {4 * k + 3}, 0);",
         ]
-    pokes.append(f"poke({viz_buffer}, lanes, {4 * voices}, 0);")
+    # no lanes-count tail: all lanes always shown, dimmed per-lane by on_i
     body = "\n".join(decls + setup + voice_lines) + "\n" + viz_poke_block(
         "\n".join(pokes), refresh_ms=gui_refresh_ms)
     return compose_gen_code(params=params, functions=[CHAOS_VOICE_FN], body=body)
