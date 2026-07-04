@@ -37,20 +37,16 @@ var isopen = 0;
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
-    // the drawn dropdown triangle near the top (always renders — no font glyph)
+    // the drawn dropdown triangle near the top (always renders — no font glyph);
+    // it points RIGHT in BOTH states (the column's visibility is the open/closed
+    // cue), matching the original Rnd_Gen dropdown glyph — open just brightens it
     var cx = w * 0.5;
     var ay = w * 0.5 + 3;
     var s = Math.max(3, w * 0.30);
-    mgraphics.set_source_rgba(ACC[0], ACC[1], ACC[2], 0.95);
-    if (isopen) {
-        mgraphics.move_to(cx - s, ay + s * 0.55);
-        mgraphics.line_to(cx + s, ay + s * 0.55);
-        mgraphics.line_to(cx, ay - s * 0.55);
-    } else {
-        mgraphics.move_to(cx - s, ay - s * 0.55);
-        mgraphics.line_to(cx + s, ay - s * 0.55);
-        mgraphics.line_to(cx, ay + s * 0.55);
-    }
+    mgraphics.set_source_rgba(ACC[0], ACC[1], ACC[2], isopen ? 1.0 : 0.85);
+    mgraphics.move_to(cx - s * 0.55, ay - s * 0.8);
+    mgraphics.line_to(cx - s * 0.55, ay + s * 0.8);
+    mgraphics.line_to(cx + s * 0.75, ay);
     mgraphics.close_path();
     mgraphics.fill();
     // a thin accent spine down the bar's right edge

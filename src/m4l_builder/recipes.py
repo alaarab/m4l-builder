@@ -2266,7 +2266,7 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
         _col(f"{p}_spine", [lb + 2, 4, 3, h - 8])
     if label:
         device.add_comment(f"{p}_hdr", [park + 8, 4, cw - 11, 10], label,
-                           textcolor=dim, fontsize=7.5,
+                           textcolor=dim, fontsize=7.5, justification=1,
                            fontname="Ableton Sans Medium")
         _col(f"{p}_hdr", [lb + 8, 4, cw - 11, 10])
 
@@ -2274,7 +2274,7 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
     for i, (bid, name, lo, hi, ini, us, ann) in enumerate(sections):
         y = content_top + i * row_pitch
         device.add_comment(f"{bid}_cap", [park + 8, y, cw - 12, 9], name.upper(),
-                           textcolor=dim, fontsize=7.0,
+                           textcolor=dim, fontsize=7.0, justification=1,
                            fontname="Ableton Sans Medium")
         _col(f"{bid}_cap", [lb + 8, y, cw - 12, 9])
         device.add_number_box(bid, name, [park + 8, y + 11, cw - 12, 17],
@@ -2284,7 +2284,7 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
         section_ids.append(bid)
         if i < len(sections) - 1:
             device.add_live_line(f"{bid}_div", [park + 8, y + 33, cw - 12, 1],
-                                 linecolor=[0.30, 0.30, 0.33, 1.0])
+                                 linecolor=[0.32, 0.32, 0.32, 1.0])  # neutral grey
             _col(f"{bid}_div", [lb + 8, y + 33, cw - 12, 1])
 
     # ---- 5. reflow wiring: param -> sel -> closed / open message batches -------
