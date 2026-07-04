@@ -800,18 +800,23 @@ class TestStereoWidthStage:
         assert ("wid_side_gain", "wid_right") in pairs
 
 
-_SECTIONS = [
-    ("global_bias_num", "Bias", 0.0, 1.0, 0.13, 1, "spread"),
-    ("global_offset_num", "Offset", 0.0, 1.0, 0.0, 1, "rotate"),
-    ("global_lanes_num", "Lanes", 1.0, 8.0, 2.0, 0, "count"),
+_CONTROLS = [
+    {"id": "global_rate_dial", "name": "Rate", "min": 0.02, "max": 16.0,
+     "init": 0.5, "unit": 3, "kind": "dial", "exp": 3.0},
+    {"id": "global_bias_dial", "name": "Bias", "min": 0.0, "max": 1.0,
+     "init": 0.13, "unit": 1, "kind": "dial"},
+    {"id": "global_lanes_num", "name": "Lanes", "min": 1.0, "max": 8.0,
+     "init": 2.0, "unit": 0, "kind": "num"},
 ]
+# single column -> panel_width = 2*inset(6) + cell_w(40) = 52
+_CW = 52
 
 
 def _sidebar_device(mini=420):
     """A device with one pre-existing on-canvas control + the full-bleed bg."""
     device = AudioEffect("test", width=mini, height=168)
     device.add_panel("surf_bg", [0, 0, mini, 168], bgcolor=[0.1, 0.1, 0.1, 1.0])
-    device.add_dial("rate_dial", "Rate", [40, 20, 41, 35])   # main content
+    device.add_dial("rate_map", "Depth", [40, 20, 41, 35])   # main content
     return device
 
 
@@ -819,9 +824,9 @@ class TestSettingsSidebar:
     def test_left_bar_and_parked_param(self):
         device = _sidebar_device()
         res = settings_sidebar(device, "set", mini_width=420, accent=[1, 0.7, 0],
-                               sections=_SECTIONS, left_bar=18, panel_width=64)
+                               controls=_CONTROLS, left_bar=18)
         ids = _box_ids(device)
-        # thin LEFT bar: bg panel + the drawn ▾ jsui opener
+        # thin LEFT bar: bg panel + the drawn ▶ jsui opener
         assert "set_bar_bg" in ids and "set_bar" in ids
         bar = next(b["box"] for b in device.boxes if b["box"]["id"] == "set_bar_bg")
         assert bar["presentation_rect"] == [0, 0, 18, 168]   # left edge, thin
@@ -830,43 +835,44 @@ class TestSettingsSidebar:
         assert toggle["presentation_rect"][0] >= 900
         spec = device.parameter("Settings")
         assert spec.parameter_type == 2 and list(spec.enum) == ["Closed", "Open"]
-        assert res["full_width"] == 420 + 64
-        assert device.width == 420                            # loads closed
+        assert res["full_width"] == 420 + _CW   # panel width auto from cols=2
+        assert device.width == 420              # loads closed
 
-    def test_sections_built_and_parked_closed(self):
+    def test_controls_are_grid_of_dials_and_numboxes(self):
         device = _sidebar_device()
         res = settings_sidebar(device, "set", mini_width=420, accent=[1, 0.7, 0],
-                               sections=_SECTIONS, left_bar=18, panel_width=64)
-        assert res["section_ids"] == ["global_bias_num", "global_offset_num",
+                               controls=_CONTROLS, left_bar=18)
+        assert res["section_ids"] == ["global_rate_dial", "global_bias_dial",
                                       "global_lanes_num"]
-        # each section numbox is a real param AND authored parked (x>=900) so it
-        # loads hidden (the column slides in only when open)
-        for bid in res["section_ids"]:
-            box = next(b["box"] for b in device.boxes if b["box"]["id"] == bid)
-            assert box["presentation_rect"][0] >= 900
-        assert device.parameter("Bias") is not None
+        # dial-kind controls become live.dial, num-kind become live.numbox — all
+        # real params, all authored PARKED (x>=900) so they load hidden
+        rate = next(b["box"] for b in device.boxes if b["box"]["id"] == "global_rate_dial")
+        lanes = next(b["box"] for b in device.boxes if b["box"]["id"] == "global_lanes_num")
+        assert rate["maxclass"] == "live.dial" and lanes["maxclass"] == "live.numbox"
+        assert rate["presentation_rect"][0] >= 900
+        assert device.parameter("Rate") is not None and device.parameter("Lanes") is not None
 
     def test_reflow_shifts_main_content_right(self):
         device = _sidebar_device()
         settings_sidebar(device, "set", mini_width=420, accent=[1, 0.7, 0],
-                         sections=_SECTIONS, left_bar=18, panel_width=64)
+                         controls=_CONTROLS, left_bar=18)
         # the pre-existing dial got a scripting name and an OPEN reposition that
         # shifts it +panel_width (the mapping grid moves right to make room)
-        dial = next(b["box"] for b in device.boxes if b["box"]["id"] == "rate_dial")
+        dial = next(b["box"] for b in device.boxes if b["box"]["id"] == "rate_map")
         vn = dial["varname"]
         texts = {b["box"].get("text") for b in device.boxes}
-        assert f"script sendbox {vn} presentation_rect 104 20 41 35" in texts  # 40+64
+        assert f"script sendbox {vn} presentation_rect {40 + _CW} 20 41 35" in texts
         assert f"script sendbox {vn} presentation_rect 40 20 41 35" in texts   # closed
 
     def test_setwidth_and_bg_resize_wiring(self):
         device = _sidebar_device()
         settings_sidebar(device, "set", mini_width=420, accent=[1, 0.7, 0],
-                         sections=_SECTIONS, left_bar=18, panel_width=64)
+                         controls=_CONTROLS, left_bar=18)
         texts = {b["box"].get("text") for b in device.boxes}
-        assert "setwidth 420" in texts and "setwidth 484" in texts
+        assert "setwidth 420" in texts and f"setwidth {420 + _CW}" in texts
         # background resizes with the device (closed=mini, open=full)
         assert "script sendbox surf_bg presentation_rect 0 0 420 168" in texts
-        assert "script sendbox surf_bg presentation_rect 0 0 484 168" in texts
+        assert f"script sendbox surf_bg presentation_rect 0 0 {420 + _CW} 168" in texts
         pairs = _line_pairs(device)
         assert ("set_toggle", "set_sel") in pairs
         assert ("set_sel", "set_ctrig") in pairs and ("set_sel", "set_otrig") in pairs

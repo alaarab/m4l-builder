@@ -2159,12 +2159,12 @@ def modulator_slot_component(device, *, accent, text_color=None,
     return (sub, ids)
 
 
-def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
-                     left_bar=18, panel_width=64, height=None,
+def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
+                     left_bar=18, panel_width=None, height=None,
                      param_name="Settings", label="SETTINGS",
-                     panel_bgcolor=None, bar_bgcolor=None, spine=True,
-                     bg_id="surf_bg", row_pitch=40, content_top=18):
-    """A LEFT collapsible SETTINGS COLUMN behind a drawn ▾ dropdown in a thin
+                     panel_bgcolor=None, bar_bgcolor=None, column_bg=True,
+                     bg_id="surf_bg", content_top=6):
+    """A LEFT collapsible SETTINGS COLUMN behind a drawn ▶ dropdown in a thin
     left bar — the dnksaus_Rnd_Gen space-saver, FAITHFULLY: the opener sits in a
     thin bar on the LEFT edge, the settings menu slides out on the LEFT, and the
     main content (hero + mapping grid) shifts RIGHT to make room while the device
@@ -2179,11 +2179,15 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
     fires the whole batch through one ``thispatcher`` + ``live.thisdevice``; a
     load-time reset forces the device closed so a saved-open set reopens clean.
 
-    ``sections`` is the settings content, built BY the recipe so it can reflow
-    it: a list of ``(box_id, name, min, max, initial, unitstyle, annotation)`` —
-    each becomes a captioned LCD numbox in the column (``box_id`` lets the caller
-    wire it, e.g. to a gen). Call AFTER the main layout is final, and build that
-    layout with ``Surface(margin=left_bar)`` so it starts just right of the bar.
+    ``controls`` is the settings content, built BY the recipe so it can reflow it,
+    laid out as a SINGLE COLUMN of compact cells (a small caption over a small
+    dial or LCD numbox — this is how the macro KNOBS tuck into the menu; the dials
+    are small, so Live shows their value on hover/drag). Each control is a dict:
+    ``{"id", "name", "min", "max", "init", "unit", "kind"}`` where ``kind`` is
+    ``"dial"`` (default) or ``"num"``, plus optional ``"exp"``
+    (parameter_exponent) and ``"ann"`` (info text). Call AFTER the main layout is
+    final; build that layout with ``Surface(margin=left_bar)`` so it starts just
+    right of the bar.
 
     Returns a StageResult: ``button`` (parked param) / ``bar`` (jsui) ids, the
     created ``section_ids``, ``mini_width`` / ``full_width`` and the ``param``.
@@ -2196,8 +2200,13 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
     acc = list(accent)
     dim = [0.55, 0.58, 0.61, 1.0]
     h = int(round(height if height is not None else device.height))
-    cw = int(panel_width)
     lb = int(left_bar)
+    # SINGLE-COLUMN cells: a small caption over a compact dial / numbox (the
+    # macro KNOBS tuck into the menu small — Live shows the value on hover/drag).
+    inset, cell_w, dial_sz, cap_h = 6, 40, 16, 7
+    cw = int(panel_width) if panel_width else (2 * inset + cell_w)
+    rows = max(1, len(controls))
+    row_h = max(1, (h - content_top - 6) // rows)
     mini = int(round(mini_width))
     full = mini + cw
     park = 900
@@ -2267,34 +2276,38 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
         _tag(vn)
         col.append((vn, [float(v) for v in on_rect]))
 
-    device.add_panel(f"{p}_panel", [park, 0, cw, h], bgcolor=pbg, border=0)
-    _col(f"{p}_panel", [lb, 0, cw, h])
-    if spine:
-        device.add_panel(f"{p}_spine", [park + 2, 4, 3, h - 8], bgcolor=acc,
-                         border=0, rounded=1)
-        _col(f"{p}_spine", [lb + 2, 4, 3, h - 8])
-    if label:
-        device.add_comment(f"{p}_hdr", [park + 8, 4, cw - 11, 10], label,
-                           textcolor=dim, fontsize=7.5, justification=1,
-                           fontname="Ableton Sans Medium")
-        _col(f"{p}_hdr", [lb + 8, 4, cw - 11, 10])
+    if column_bg:
+        device.add_panel(f"{p}_panel", [park, 0, cw, h], bgcolor=pbg, border=0)
+        _col(f"{p}_panel", [lb, 0, cw, h])
 
     section_ids = []
-    for i, (bid, name, lo, hi, ini, us, ann) in enumerate(sections):
-        y = content_top + i * row_pitch
-        device.add_comment(f"{bid}_cap", [park + 8, y, cw - 12, 9], name.upper(),
-                           textcolor=dim, fontsize=7.0, justification=1,
-                           fontname="Ableton Sans Medium")
-        _col(f"{bid}_cap", [lb + 8, y, cw - 12, 9])
-        device.add_number_box(bid, name, [park + 8, y + 11, cw - 12, 17],
-                              min_val=lo, max_val=hi, initial=ini, unitstyle=us,
-                              lcdcolor=acc, annotation=ann)
-        _col(bid, [lb + 8, y + 11, cw - 12, 17])   # varname overridden to bid
+    cx = inset
+    for i, c in enumerate(controls):
+        cy = content_top + i * row_h
+        bid, name = c["id"], c["name"]
+        device.add_comment(f"{bid}_cap", [park + cx, cy, cell_w, cap_h],
+                           name.upper(), textcolor=dim, fontsize=6.5,
+                           justification=1, fontname="Ableton Sans Medium")
+        _col(f"{bid}_cap", [lb + cx, cy, cell_w, cap_h])
+        if c.get("kind", "dial") == "num":
+            nw = 34
+            nx = cx + (cell_w - nw) // 2
+            device.add_number_box(bid, name, [park + nx, cy + cap_h + 1, nw, 15],
+                                  min_val=c["min"], max_val=c["max"],
+                                  initial=c["init"], unitstyle=c["unit"],
+                                  lcdcolor=acc, annotation=c.get("ann", ""))
+            _col(bid, [lb + nx, cy + cap_h + 1, nw, 15])
+        else:
+            dx = cx + (cell_w - dial_sz) // 2
+            dkw = dict(min_val=c["min"], max_val=c["max"], initial=c["init"],
+                       unitstyle=c["unit"], showname=0, shownumber=0,
+                       activedialcolor=list(acc), annotation_name=c.get("ann", ""))
+            if c.get("exp"):
+                dkw["parameter_exponent"] = c["exp"]
+            device.add_dial(bid, name,
+                            [park + dx, cy + cap_h, dial_sz, dial_sz], **dkw)
+            _col(bid, [lb + dx, cy + cap_h, dial_sz, dial_sz])
         section_ids.append(bid)
-        if i < len(sections) - 1:
-            device.add_live_line(f"{bid}_div", [park + 8, y + 33, cw - 12, 1],
-                                 linecolor=[0.32, 0.32, 0.32, 1.0])  # neutral grey
-            _col(f"{bid}_div", [lb + 8, y + 33, cw - 12, 1])
 
     # ---- 5. reflow wiring: param -> sel -> closed / open message batches -------
     thisp, thisdev = f"{p}_this", f"{p}_thisdev"
