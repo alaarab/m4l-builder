@@ -2124,6 +2124,12 @@ def modulator_slot_component(device, *, accent, text_color=None,
                    patching_rect=[30, 460, 120, 20])
     sub.add_line("slot_route", 7, "slot_prep_ann", 0)
     sub.add_line("slot_prep_ann", 0, "slot_out", 0)
+    # a clean ``mapped <0|1>`` pulse up the outlet when this slot's mapping state
+    # changes — the parent chains ``mapped 1`` for Auto-Map (arm the next lane).
+    sub.add_newobj("slot_prep_mapped", "prepend mapped", numinlets=1,
+                   numoutlets=1, outlettype=[""], patching_rect=[30, 490, 120, 20])
+    sub.add_line("slot_route", 0, "slot_prep_mapped", 0)
+    sub.add_line("slot_prep_mapped", 0, "slot_out", 0)
 
     if source_enum:
         sub.add_newobj("slot_up_src", "prepend source", numinlets=1,
