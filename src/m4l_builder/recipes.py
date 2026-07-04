@@ -2180,9 +2180,11 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
     load-time reset forces the device closed so a saved-open set reopens clean.
 
     ``controls`` is the settings content, built BY the recipe so it can reflow it,
-    laid out as a SINGLE COLUMN of compact cells (a small caption over a small
-    dial or LCD numbox — this is how the macro KNOBS tuck into the menu; the dials
-    are small, so Live shows their value on hover/drag). Each control is a dict:
+    laid out as a SINGLE COLUMN of value rows — LABEL on the left, its live value
+    (a numbox by default, or a small ``kind:'dial'`` knob) on the right, the
+    Rnd_Gen drawer idiom (a drawer shows + tweaks config, so the value reads
+    better than a knob). Keep it to a few rows so they stay roomy. Each control is
+    a dict:
     ``{"id", "name", "min", "max", "init", "unit", "kind"}`` where ``kind`` is
     ``"dial"`` (default) or ``"num"``, plus optional ``"exp"``
     (parameter_exponent) and ``"ann"`` (info text). Call AFTER the main layout is
@@ -2201,10 +2203,14 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
     dim = [0.55, 0.58, 0.61, 1.0]
     h = int(round(height if height is not None else device.height))
     lb = int(left_bar)
-    # SINGLE-COLUMN cells: a small caption over a compact dial / numbox (the
-    # macro KNOBS tuck into the menu small — Live shows the value on hover/drag).
-    inset, cell_w, dial_sz, cap_h = 6, 40, 16, 7
-    cw = int(panel_width) if panel_width else (2 * inset + cell_w)
+    # SINGLE-COLUMN value rows: LABEL on the left, its live value (numbox) on the
+    # right — the Rnd_Gen drawer idiom. This is for the SETUP params; a drawer's
+    # job is to show + tweak config, so the VALUE reads better than a knob. (A
+    # ``kind:'dial'`` control still works — small knob on the right — but numboxes
+    # are the default here.) Keep the drawer to a few rows so they stay roomy.
+    inset, dial_sz, nw = 6, 18, 38
+    cw = int(panel_width) if panel_width else 90
+    label_w = cw - inset - nw - inset
     rows = max(1, len(controls))
     row_h = max(1, (h - content_top - 6) // rows)
     mini = int(round(mini_width))
@@ -2281,32 +2287,34 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
         _col(f"{p}_panel", [lb, 0, cw, h])
 
     section_ids = []
-    cx = inset
+    rx = cw - inset - nw          # right-aligned value/control column
     for i, c in enumerate(controls):
         cy = content_top + i * row_h
         bid, name = c["id"], c["name"]
-        device.add_comment(f"{bid}_cap", [park + cx, cy, cell_w, cap_h],
-                           name.upper(), textcolor=dim, fontsize=6.5,
-                           justification=1, fontname="Ableton Sans Medium")
-        _col(f"{bid}_cap", [lb + cx, cy, cell_w, cap_h])
-        if c.get("kind", "dial") == "num":
-            nw = 34
-            nx = cx + (cell_w - nw) // 2
-            device.add_number_box(bid, name, [park + nx, cy + cap_h + 1, nw, 15],
+        # label on the LEFT, vertically centred
+        device.add_comment(f"{bid}_cap", [park + inset, cy + (row_h - 11) // 2,
+                                          label_w, 11], name.upper(),
+                           textcolor=dim, fontsize=7.5, justification=0,
+                           fontname="Ableton Sans Medium")
+        _col(f"{bid}_cap", [lb + inset, cy + (row_h - 11) // 2, label_w, 11])
+        # its live value on the RIGHT — a numbox (default) or a small knob
+        if c.get("kind", "num") == "num":
+            ny = cy + (row_h - 15) // 2
+            device.add_number_box(bid, name, [park + rx, ny, nw, 15],
                                   min_val=c["min"], max_val=c["max"],
                                   initial=c["init"], unitstyle=c["unit"],
                                   lcdcolor=acc, annotation=c.get("ann", ""))
-            _col(bid, [lb + nx, cy + cap_h + 1, nw, 15])
+            _col(bid, [lb + rx, ny, nw, 15])
         else:
-            dx = cx + (cell_w - dial_sz) // 2
+            dy = cy + (row_h - dial_sz) // 2
+            dx = rx + (nw - dial_sz) // 2
             dkw = dict(min_val=c["min"], max_val=c["max"], initial=c["init"],
                        unitstyle=c["unit"], showname=0, shownumber=0,
                        activedialcolor=list(acc), annotation_name=c.get("ann", ""))
             if c.get("exp"):
                 dkw["parameter_exponent"] = c["exp"]
-            device.add_dial(bid, name,
-                            [park + dx, cy + cap_h, dial_sz, dial_sz], **dkw)
-            _col(bid, [lb + dx, cy + cap_h, dial_sz, dial_sz])
+            device.add_dial(bid, name, [park + dx, dy, dial_sz, dial_sz], **dkw)
+            _col(bid, [lb + dx, dy, dial_sz, dial_sz])
         section_ids.append(bid)
 
     # ---- 5. reflow wiring: param -> sel -> closed / open message batches -------
