@@ -204,8 +204,7 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
     raws; the GUI tick pokes ``[radius, phase, value, depth]`` per voice for a
     polar_cluster-family hero).
 
-    New globals on gen inlet 0 (all dial-percent scaled where noted):
-      ``source``  0..5 = Drift / S&H / Drunk / Logistic / Lorenz / Burst
+    Global macros on gen inlet 0 (the device identity):
       ``entropy`` 0..100 %% — each source's wildness axis (drift slew, S&H
                   width, drunk step, logistic r 3.2→3.9995, lorenz rho 14→28,
                   burst probability)
@@ -213,12 +212,23 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
                   CAUGHT value (latch-and-crossfade), the math calms
                   (r/rho pulled back to stable ranges), rates scale by
                   (1-T)^2 and a slew grows to a glide. Automatable/mappable.
+
+    PER-LANE ``source_{i}`` (0..5 = Drift / S&H / Drunk / Logistic / Lorenz /
+    Burst): each lane picks its OWN chaos source — the whole point of the
+    device. ``chaos_voice`` already takes ``src`` per call and ``data_st`` holds
+    every source's state per voice, so this is pure param plumbing.
+
+    The GUI tick pokes ``[value, source, depth, windowed]`` per lane (the raw
+    0..1 source value for the hero's scrolling trace, plus source for tint and
+    depth for brightness) — the chaos_lanes lane-stack hero contract.
     """
     params: list = [("rate", 0.5, 0.02, 16.0), ("bias", 0.13, 0.0, 1.0),
-                    ("offset", 0.0, 0.0, 1.0), ("source", 0.0, 0.0, 5.0),
-                    ("entropy", 50.0, 0.0, 100.0), ("tame", 0.0, 0.0, 100.0)]
+                    ("offset", 0.0, 0.0, 1.0),
+                    ("entropy", 50.0, 0.0, 100.0), ("tame", 0.0, 0.0, 100.0),
+                    ("lanes", float(voices), 1.0, float(voices))]
     for i in range(1, voices + 1):
-        params += [(f"depth_{i}", 100.0, 0.0, 100.0),
+        params += [(f"source_{i}", 0.0, 0.0, 5.0),
+                   (f"depth_{i}", 100.0, 0.0, 100.0),
                    (f"umin_{i}", 0.0, 0.0, 100.0),
                    (f"umax_{i}", 100.0, 0.0, 100.0),
                    (f"bipolar_{i}", 0.0, 0.0, 1.0),
@@ -235,7 +245,7 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
             f"r_{i} = fold(offset + bias * {k}, 0, 1);",
             f"rt_{i} = rate * (1 + 3 * r_{i});",
             f"v_{i} = chaos_voice(data_ph, data_st, data_out, {k}, rt_{i}, "
-            f"source, ent_s, tame_s);",
+            f"source_{i}, ent_s, tame_s);",
             f"d_{i} = depth_{i} * 0.01;",
             f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
             f"v_{i} * d_{i};",
@@ -244,11 +254,12 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
             f"out{voices + i} = vv_{i};",
         ]
         pokes += [
-            f"poke({viz_buffer}, r_{i}, {4 * k}, 0);",
-            f"poke({viz_buffer}, peek(data_ph, {k}, 0), {4 * k + 1}, 0);",
-            f"poke({viz_buffer}, vv_{i}, {4 * k + 2}, 0);",
-            f"poke({viz_buffer}, d_{i}, {4 * k + 3}, 0);",
+            f"poke({viz_buffer}, v_{i}, {4 * k}, 0);",
+            f"poke({viz_buffer}, source_{i}, {4 * k + 1}, 0);",
+            f"poke({viz_buffer}, d_{i}, {4 * k + 2}, 0);",
+            f"poke({viz_buffer}, vv_{i}, {4 * k + 3}, 0);",
         ]
+    pokes.append(f"poke({viz_buffer}, lanes, {4 * voices}, 0);")
     body = "\n".join(decls + setup + voice_lines) + "\n" + viz_poke_block(
         "\n".join(pokes), refresh_ms=gui_refresh_ms)
     return compose_gen_code(params=params, functions=[CHAOS_VOICE_FN], body=body)

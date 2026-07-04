@@ -1891,7 +1891,8 @@ def switchable_bank(device, id_prefix, options, *, tab_param=None, tab_rect=None
 def modulator_slot_component(device, *, accent, text_color=None,
                              dim_color=None, self_map_guard=None,
                              debounce_ms=20, width=240, height=17,
-                             normalized=0, js_filename="lom_mapper.js"):
+                             normalized=0, js_filename="lom_mapper.js",
+                             source_enum=None, reveal=False):
     """The E2/E3 mapping slot — ONE ``#1``-parameterized Subpatcher to stamp N
     times via :meth:`Device.add_component_rack` (the lfo-cluster slot, F2+E2).
 
@@ -1924,6 +1925,19 @@ def modulator_slot_component(device, *, accent, text_color=None,
     ``tmin v``/``tmax v`` (target native range) and ``announce N`` (MAP armed
     — fan it back into EVERY slot's inlet 0 so the other slots stand down).
 
+    Optional extensions (both default OFF — Orbit's call stays byte-identical):
+      ``source_enum``: list of source names — adds a ``#1 Source`` ``live.menu``
+        at the row start (each stamped lane picks its OWN source) plus a
+        ``source v`` key on the ctl uplink bus. Row becomes
+        ``SRC | MAP | target | Depth% | Min% | Max% | BI`` (width ~300).
+      ``reveal``: the Rnd_Gen page idiom — the slot listens for ``lanes N`` on
+        inlet 0 and HIDES ITSELF (message ``hidden $1`` to its own
+        ``thispatcher``, which targets the bpatcher box in the parent) when
+        ``N < #1``. Fan ``lanes <count>`` into every slot's inlet 0 alongside
+        ``announce`` and a Lanes param + "+" button give the stock-LFO
+        progressive reveal, all inline. (Deconstructed from
+        dnksaus_Rnd_Gen_v3.0: 8 same-rect pages hidden/shown exactly this way.)
+
     Registers the mapper source as a device js asset (content-addressed).
     Returns ``(subpatcher, ids)``.
     """
@@ -1946,22 +1960,39 @@ def modulator_slot_component(device, *, accent, text_color=None,
 
     sub = Subpatcher("modslot")
     # ---- UI: ONE stock-modulator row (no knobs, no captions) ---------------
+    # With a source menu the whole row shifts right by 55 (SRC occupies 0..52).
+    xoff = 55 if source_enum else 0
+    if source_enum:
+        from .ui import menu as _live_menu
+        sub.add_box(_live_menu(
+            "slot_source", "#1 Source", [0, 1, 52, 15],
+            options=list(source_enum), fontsize=7.5,
+            bgcolor=[0.16, 0.16, 0.18, 1.0], textcolor=tx, bgoncolor=acc,
+            annotation="This lane's modulation source — each lane can run a "
+                       "different generator.",
+            parameter=ParameterSpec(name="#1 Source", shortname="#1 Source",
+                                    minimum=0, maximum=len(source_enum) - 1,
+                                    enum=list(source_enum), parameter_type=2,
+                                    initial=0, initial_enable=True,
+                                    linknames=1)))
     sub.add_box(live_text(
-        "slot_map", "#1 Map", [0, 1, 28, 15], text_on="MAP", text_off="MAP",
+        "slot_map", "#1 Map", [xoff, 1, 28, 15], text_on="MAP", text_off="MAP",
         mode=1, fontsize=7.5, bgoncolor=acc, textcolor=dim,
+        annotation="When Map is on, the next Live parameter you click becomes "
+                   "this lane's target.",
         parameter=ParameterSpec(name="#1 Map", shortname="#1 Map",
                                 minimum=0, maximum=1, enum=["MAP", "MAP"],
                                 parameter_type=2, initial=0,
                                 initial_enable=True, linknames=1)))
     sub.add_box(textedit(
-        "slot_pname", [31, 2, 62, 13], text="—", fontsize=8.0,
+        "slot_pname", [xoff + 31, 2, 62, 13], text="—", fontsize=8.0,
         textcolor=tx, bgcolor=[0.0, 0.0, 0.0, 0.0], border=0, rounded=0,
         textjustification=0, ignoreclick=1))
     # 0..100 ranges so unitstyle=5 reads "100 %" like the stock modulators
     # (consumers scale by 0.01 — poly_lfo_engine does it inside gen)
-    for nid, pname, nx, init in (("slot_depth", "#1 Depth", 96, 100.0),
-                                 ("slot_umin", "#1 Min", 135, 0.0),
-                                 ("slot_umax", "#1 Max", 174, 100.0)):
+    for nid, pname, nx, init in (("slot_depth", "#1 Depth", xoff + 96, 100.0),
+                                 ("slot_umin", "#1 Min", xoff + 135, 0.0),
+                                 ("slot_umax", "#1 Max", xoff + 174, 100.0)):
         sub.add_box(number_box(
             nid, pname, [nx, 1, 36, 15], min_val=0.0, max_val=100.0,
             initial=init, unitstyle=5, lcdcolor=acc,
@@ -1969,7 +2000,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
                                     minimum=0.0, maximum=100.0, initial=init,
                                     initial_enable=True, linknames=1)))
     sub.add_box(live_text(
-        "slot_bipolar", "#1 Bipolar", [213, 1, 24, 15], text_on="BI",
+        "slot_bipolar", "#1 Bipolar", [xoff + 213, 1, 24, 15], text_on="BI",
         text_off="BI", mode=1, fontsize=7.5, bgoncolor=acc, textcolor=dim,
         parameter=ParameterSpec(name="#1 Bipolar", shortname="#1 Bipolar",
                                 minimum=0, maximum=1, enum=["OFF", "ON"],
@@ -2063,7 +2094,35 @@ def modulator_slot_component(device, *, accent, text_color=None,
     sub.add_line("slot_route", 7, "slot_prep_ann", 0)
     sub.add_line("slot_prep_ann", 0, "slot_out", 0)
 
+    if source_enum:
+        sub.add_newobj("slot_up_src", "prepend source", numinlets=1,
+                       numoutlets=1, outlettype=[""],
+                       patching_rect=[400, 590, 130, 20])
+        sub.add_line("slot_source", 0, "slot_up_src", 0)
+        sub.add_line("slot_up_src", 0, "slot_out", 0)
+    if reveal:
+        # Rnd_Gen page idiom: "lanes N" on inlet 0 -> hide self when N < #1.
+        # thispatcher inside a bpatcher addresses the BPATCHER BOX in the
+        # parent, so "hidden $1" hides this stamped lane in presentation.
+        sub.add_newobj("slot_lanes_route", "route lanes", numinlets=1,
+                       numoutlets=2, outlettype=["", ""],
+                       patching_rect=[4, 560, 90, 20])
+        sub.add_newobj("slot_lanes_cmp", "< #1", numinlets=2, numoutlets=1,
+                       outlettype=["int"], patching_rect=[4, 590, 50, 20])
+        sub.add_box({"box": {
+            "id": "slot_hide_msg", "maxclass": "message", "text": "hidden $1",
+            "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+            "patching_rect": [4, 620, 70, 20]}})
+        sub.add_newobj("slot_this", "thispatcher", numinlets=1, numoutlets=1,
+                       outlettype=[""], patching_rect=[4, 650, 80, 20])
+        sub.add_line("slot_in", 0, "slot_lanes_route", 0)
+        sub.add_line("slot_lanes_route", 0, "slot_lanes_cmp", 0)
+        sub.add_line("slot_lanes_cmp", 0, "slot_hide_msg", 0)
+        sub.add_line("slot_hide_msg", 0, "slot_this", 0)
+
     ids = {"js": "slot_js", "map": "slot_map", "readout": "slot_pname",
            "sink_reg": "slot_sink_reg", "remote": "slot_sink_remote",
            "modulate": "slot_sink_mod", "rect": [0, 0, width, height]}
+    if source_enum:
+        ids["source"] = "slot_source"
     return (sub, ids)
