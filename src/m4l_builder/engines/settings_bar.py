@@ -49,10 +49,6 @@ function paint() {
     mgraphics.line_to(cx + s * 0.75, ay);
     mgraphics.close_path();
     mgraphics.fill();
-    // a thin accent spine down the bar's right edge
-    mgraphics.set_source_rgba(ACC[0], ACC[1], ACC[2], 0.45);
-    mgraphics.rectangle(w - 1.5, ay + s + 4, 1.2, h - (ay + s + 8));
-    mgraphics.fill();
     // the rotated SETTINGS label (reads bottom -> top, like Rnd_Gen)
     mgraphics.set_source_rgba(0.62, 0.64, 0.67, 0.85);
     mgraphics.select_font_face("Ableton Sans Medium");
