@@ -61,6 +61,11 @@ from .linear_phase_eq_display import linear_phase_eq_display_js
 from .peaking_eq_display import peaking_eq_display_js
 from .piano_roll import piano_roll_js
 from .resonance_bank_display import resonance_bank_display_js
+from .shape_icon import (
+    SHAPE_ICON_INLETS,
+    SHAPE_ICON_OUTLETS,
+    shape_icon_js,
+)
 from .sidechain_display import sidechain_display_js
 from .slice_overview import slice_overview_js
 from .slice_pattern_display import slice_pattern_display_js
@@ -143,6 +148,9 @@ __all__ = [
     "ICON_OVERLAY_OUTLETS",
     "icon_overlay_js",
     "chaos_lanes_js",
+    "shape_icon_js",
+    "SHAPE_ICON_INLETS",
+    "SHAPE_ICON_OUTLETS",
     "grid_sequencer_display_js",
     "wavetable_editor_js",
     "spectral_vocoder_display_js",

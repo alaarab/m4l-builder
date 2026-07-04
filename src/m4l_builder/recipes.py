@@ -1892,7 +1892,8 @@ def modulator_slot_component(device, *, accent, text_color=None,
                              dim_color=None, self_map_guard=None,
                              debounce_ms=20, width=240, height=17,
                              normalized=0, js_filename="lom_mapper.js",
-                             source_enum=None, reveal=False):
+                             source_enum=None, source_glyphs=None,
+                             reveal=False):
     """The E2/E3 mapping slot — ONE ``#1``-parameterized Subpatcher to stamp N
     times via :meth:`Device.add_component_rack` (the lfo-cluster slot, F2+E2).
 
@@ -1959,13 +1960,19 @@ def modulator_slot_component(device, *, accent, text_color=None,
     device.register_asset(fname, js_code, asset_type="TEXT", category="js")
 
     sub = Subpatcher("modslot")
-    # ---- UI: ONE stock-modulator row (no knobs, no captions) ---------------
-    # With a source menu the whole row shifts right by 55 (SRC occupies 0..52).
-    xoff = 55 if source_enum else 0
+    # ---- UI: ONE tight stock-modulator row (Rnd_Gen density, no headers) ----
+    # When a source_enum is given the lane leads with a clickable SHAPE ICON
+    # (replaces the 52px text dropdown AND the column header — the parked menu
+    # stays the automatable param). Row geometry ported from
+    # dnksaus_Rnd_Gen: 15-16px controls, ~222px total, self-documenting.
+    icon = bool(source_enum and source_glyphs)
     if source_enum:
         from .ui import menu as _live_menu
+        # The Source enum is the automatable param. In icon mode the menu is
+        # PARKED offscreen and the glyph drives/reads it; else it shows inline.
+        menu_rect = [900, 900, 1, 1] if icon else [0, 1, 52, 15]
         sub.add_box(_live_menu(
-            "slot_source", "#1 Source", [0, 1, 52, 15],
+            "slot_source", "#1 Source", menu_rect,
             options=list(source_enum), fontsize=7.5,
             bgcolor=[0.16, 0.16, 0.18, 1.0], textcolor=tx, bgoncolor=acc,
             annotation="This lane's modulation source — each lane can run a "
@@ -1975,9 +1982,25 @@ def modulator_slot_component(device, *, accent, text_color=None,
                                     enum=list(source_enum), parameter_type=2,
                                     initial=0, initial_enable=True,
                                     linknames=1)))
+    if icon:
+        from .engines.shape_icon import shape_icon_js
+        ic_code = shape_icon_js(shapes=list(source_glyphs), accent=acc)
+        ic_fname = js_sidecar_name("shape_icon.js", ic_code)
+        device.register_asset(ic_fname, ic_code, asset_type="TEXT",
+                              category="js")
+        sub.add_box({"box": {
+            "id": "slot_shape_ui", "maxclass": "jsui",
+            "jsui_maxclass": "jsui", "filename": ic_fname,
+            "numinlets": 1, "numoutlets": 1, "outlettype": [""],
+            "parameter_enable": 0, "presentation": 1,
+            "presentation_rect": [1, 1, 15, 15],
+            "patching_rect": [1, 200, 15, 15]}})
+        MAP_X, PNAME_X, DEP_X, MIN_X, MAX_X, BI_X = 18, 46, 114, 148, 178, 208
+    else:
+        MAP_X, PNAME_X, DEP_X, MIN_X, MAX_X, BI_X = 0, 31, 96, 135, 174, 213
     sub.add_box(live_text(
-        "slot_map", "#1 Map", [xoff, 1, 28, 15], text_on="MAP", text_off="MAP",
-        mode=1, fontsize=7.5, bgoncolor=acc, textcolor=dim,
+        "slot_map", "#1 Map", [MAP_X, 1, 26, 15], text_on="MAP", text_off="MAP",
+        mode=1, fontsize=7.0, bgoncolor=acc, textcolor=dim,
         annotation="When Map is on, the next Live parameter you click becomes "
                    "this lane's target.",
         parameter=ParameterSpec(name="#1 Map", shortname="#1 Map",
@@ -1985,27 +2008,35 @@ def modulator_slot_component(device, *, accent, text_color=None,
                                 parameter_type=2, initial=0,
                                 initial_enable=True, linknames=1)))
     sub.add_box(textedit(
-        "slot_pname", [xoff + 31, 2, 62, 13], text="—", fontsize=8.0,
+        "slot_pname", [PNAME_X, 2, 66, 13], text="—", fontsize=8.0,
         textcolor=tx, bgcolor=[0.0, 0.0, 0.0, 0.0], border=0, rounded=0,
         textjustification=0, ignoreclick=1))
     # 0..100 ranges so unitstyle=5 reads "100 %" like the stock modulators
     # (consumers scale by 0.01 — poly_lfo_engine does it inside gen)
-    for nid, pname, nx, init in (("slot_depth", "#1 Depth", xoff + 96, 100.0),
-                                 ("slot_umin", "#1 Min", xoff + 135, 0.0),
-                                 ("slot_umax", "#1 Max", xoff + 174, 100.0)):
+    for nid, pname, nx, nw, init in (("slot_depth", "#1 Depth", DEP_X, 32, 100.0),
+                                     ("slot_umin", "#1 Min", MIN_X, 28, 0.0),
+                                     ("slot_umax", "#1 Max", MAX_X, 28, 100.0)):
         sub.add_box(number_box(
-            nid, pname, [nx, 1, 36, 15], min_val=0.0, max_val=100.0,
+            nid, pname, [nx, 1, nw, 15], min_val=0.0, max_val=100.0,
             initial=init, unitstyle=5, lcdcolor=acc,
             parameter=ParameterSpec(name=pname, shortname=pname,
                                     minimum=0.0, maximum=100.0, initial=init,
                                     initial_enable=True, linknames=1)))
     sub.add_box(live_text(
-        "slot_bipolar", "#1 Bipolar", [xoff + 213, 1, 24, 15], text_on="BI",
-        text_off="BI", mode=1, fontsize=7.5, bgoncolor=acc, textcolor=dim,
+        "slot_bipolar", "#1 Bipolar", [BI_X, 1, 15, 15], text_on="BI",
+        text_off="BI", mode=1, fontsize=6.5, bgoncolor=acc, textcolor=dim,
+        annotation="Bipolar — modulate above AND below the target's current "
+                   "value (centred), rather than only upward.",
         parameter=ParameterSpec(name="#1 Bipolar", shortname="#1 Bipolar",
                                 minimum=0, maximum=1, enum=["OFF", "ON"],
                                 parameter_type=2, initial=0,
                                 initial_enable=True, linknames=1)))
+    if icon:
+        # glyph <-> parked menu two-way: menu value echoes to the icon
+        # (display), the icon's click emits the next index into the menu
+        # (which sets the automatable param + drives the source uplink).
+        sub.add_line("slot_source", 0, "slot_shape_ui", 0)
+        sub.add_line("slot_shape_ui", 0, "slot_source", 0)
     # ---- mapper script + sink ----------------------------------------------
     # bpatcher inlet 0 -> js: the programmatic hook (settarget/setid/unmap
     # from the parent device — the headless-proof and preset-restore path)
