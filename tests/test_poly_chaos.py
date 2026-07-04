@@ -23,13 +23,15 @@ def test_poly_chaos_engine_shape():
         assert f"out{4 + i} = vv_{i};" in code
         assert f"Param depth_{i}(100.0, min=0.0, max=100.0);" in code
     assert "fold(offset + bias * 0, 0, 1)" in code
-    # GUI tick pokes [value, source, depth, windowed] per lane + lanes tail
-    # (the chaos_lanes lane-stack hero contract)
+    # GUI tick pokes [value, source, depth, on] per lane (chaos_lanes contract);
+    # on_i gates the modulation (d_i *= on_i) and dims that lane's trace.
     assert "Buffer buf_entropy_gui;" in code
     assert "poke(buf_entropy_gui, v_1, 0, 0);" in code
     assert "poke(buf_entropy_gui, source_1, 1, 0);" in code
-    assert "poke(buf_entropy_gui, vv_4, 15, 0);" in code
-    assert "poke(buf_entropy_gui, lanes, 16, 0);" in code
+    assert "poke(buf_entropy_gui, on_4, 15, 0);" in code
+    assert "poke(buf_entropy_gui, lanes," not in code       # no reveal tail
+    assert "Param on_1(1.0, min=0.0, max=1.0);" in code
+    assert "d_1 = depth_1 * 0.01 * on_1;" in code
 
 
 def test_per_lane_sources():
@@ -39,9 +41,12 @@ def test_per_lane_sources():
     for i in (1, 4, 8):
         assert f"Param source_{i}(0.0, min=0.0, max=5.0);" in code
         assert f"source_{i}, ent_s, tame_s);" in code
-    # lanes count is a gen param poked into the viz tail slot for hero dimming
-    assert "Param lanes(8.0, min=1.0, max=8.0);" in code
-    assert "poke(buf_entropy_gui, lanes, 32, 0);" in code
+    # NO lanes-reveal param — all lanes always shown, dimmed per-lane by on_i
+    assert "Param lanes(" not in code
+    assert "poke(buf_entropy_gui, lanes," not in code
+    for i in (1, 4, 8):
+        assert f"Param on_{i}(1.0, min=0.0, max=1.0);" in code
+    assert "poke(buf_entropy_gui, on_8, 31, 0);" in code    # lane 8 = 4*7+3
 
 
 def test_chaos_sources_and_macros():
