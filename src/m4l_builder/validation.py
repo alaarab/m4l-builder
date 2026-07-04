@@ -333,6 +333,55 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
     content_spans: list[tuple[float, float]] = []
     content_right = 0.0
 
+    # A settings-sidebar / width-collapse can legitimately ``setwidth`` WIDER
+    # than the authored (closed) width to reveal an extra column. The device's
+    # true maximum reachable width is ``width`` or the largest setwidth target;
+    # a control or setwidth into that revealed region is legitimate IFF the
+    # region is actually POPULATED (non-panel content past the closed edge) —
+    # otherwise it is the stale-FULL dead-zone bug (Pressure-688).
+    max_setwidth = width
+    for box in boxes:
+        payload = box.get("box", {})
+        if payload.get("maxclass") != "message":
+            continue
+        parts = (payload.get("text") or "").strip().split()
+        if len(parts) == 2 and parts[0] == "setwidth":
+            try:
+                max_setwidth = max(max_setwidth, float(parts[1]))
+            except ValueError:
+                pass
+    reveal_populated = False
+    if max_setwidth > width + 0.5:
+        for box in boxes:
+            payload = box.get("box", {})
+            if payload.get("presentation") != 1:
+                continue
+            if (payload.get("maxclass") or "") == "panel":
+                continue  # a backdrop alone does not populate the reveal
+            r = payload.get("presentation_rect")
+            if not r or len(r) < 4:
+                continue
+            try:
+                rx = float(r[0])
+            except (TypeError, ValueError):
+                continue
+            if width - 0.5 <= rx < _PARK_X:
+                reveal_populated = True
+                break
+        if not reveal_populated:
+            # A LEFT settings_sidebar reveals by REFLOW (script sendbox ...
+            # presentation_rect moves the whole layout into the widened region at
+            # runtime), so the region is empty at rest yet fills on open — a
+            # legitimate widen, not the stale-FULL dead zone.
+            for box in boxes:
+                payload = box.get("box", {})
+                if payload.get("maxclass") != "message":
+                    continue
+                t = (payload.get("text") or "")
+                if t.startswith("script sendbox") and "presentation_rect" in t:
+                    reveal_populated = True
+                    break
+
     for box in boxes:
         payload = box.get("box", {})
         rect = _onscreen_rect(payload, width, height)
@@ -423,12 +472,14 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
                 target = float(parts[1])
             except ValueError:
                 continue
-            if target > width + 0.5:
+            if target > width + 0.5 and not reveal_populated:
                 issues.append(ValidationIssue(
                     code="setwidth-mismatch",
                     message=(f"'{text}' exceeds the authored device width "
-                             f"{width:g} — a width-collapse FULL wider than the "
-                             f"layout re-creates the dead-zone bug at runtime"),
+                             f"{width:g} with nothing in the revealed region — a "
+                             f"width-collapse FULL wider than the layout "
+                             f"re-creates the dead-zone bug at runtime (populate "
+                             f"the reveal, e.g. a settings_sidebar column)"),
                     severity="error", box_id=payload.get("id")))
 
     # stranded-control: reads the RAW presentation_rect (NOT _onscreen_rect,
@@ -451,12 +502,15 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
             continue
         if x >= _PARK_X or y >= _PARK_X:
             continue  # deliberate parking
-        if x >= width or y >= height:
+        # A control between the closed width and the widest setwidth target is
+        # reachable — it is revealed when the sidebar/collapse expands. Only a
+        # control beyond ANY reveal (or off the bottom) is truly stranded.
+        if x >= max_setwidth or y >= height:
             issues.append(ValidationIssue(
                 code="stranded-control",
                 message=(f"interactive control '{payload.get('id')}' sits at "
-                         f"[{x:g}, {y:g}] — past the {width:g}x{height:g} "
-                         f"device edge but below the x/y>=900 parking band: "
+                         f"[{x:g}, {y:g}] — past the {max_setwidth:g}x{height:g} "
+                         f"reachable edge but below the x/y>=900 parking band: "
                          f"visible-intended yet unreachable in Live; move it "
                          f"on-canvas or park it at >=900"),
                 severity="error", box_id=payload.get("id")))

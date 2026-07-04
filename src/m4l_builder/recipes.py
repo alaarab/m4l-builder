@@ -2157,3 +2157,200 @@ def modulator_slot_component(device, *, accent, text_color=None,
     if source_enum:
         ids["source"] = "slot_source"
     return (sub, ids)
+
+
+def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
+                     left_bar=18, panel_width=64, height=None,
+                     param_name="Settings", label="SETTINGS",
+                     panel_bgcolor=None, bar_bgcolor=None, spine=True,
+                     bg_id="surf_bg", row_pitch=40, content_top=18):
+    """A LEFT collapsible SETTINGS COLUMN behind a drawn ▾ dropdown in a thin
+    left bar — the dnksaus_Rnd_Gen space-saver, FAITHFULLY: the opener sits in a
+    thin bar on the LEFT edge, the settings menu slides out on the LEFT, and the
+    main content (hero + mapping grid) shifts RIGHT to make room while the device
+    widens (``setwidth``).
+
+    A left ``setwidth`` reveal is impossible (Live only grows the RIGHT edge), so
+    — exactly like Rnd_Gen — the column appears by REFLOW: every pre-existing
+    on-canvas box is repositioned ``+panel_width`` when open, the settings column
+    slides in from its parked slot, and the full-bleed background resizes. One
+    automatable ``[Closed, Open]`` enum param (a parked ``live.text`` the drawn
+    :func:`~m4l_builder.engines.settings_bar.settings_bar_js` bar drives + reads)
+    fires the whole batch through one ``thispatcher`` + ``live.thisdevice``; a
+    load-time reset forces the device closed so a saved-open set reopens clean.
+
+    ``sections`` is the settings content, built BY the recipe so it can reflow
+    it: a list of ``(box_id, name, min, max, initial, unitstyle, annotation)`` —
+    each becomes a captioned LCD numbox in the column (``box_id`` lets the caller
+    wire it, e.g. to a gen). Call AFTER the main layout is final, and build that
+    layout with ``Surface(margin=left_bar)`` so it starts just right of the bar.
+
+    Returns a StageResult: ``button`` (parked param) / ``bar`` (jsui) ids, the
+    created ``section_ids``, ``mini_width`` / ``full_width`` and the ``param``.
+    """
+    from .engines.design_system import js_sidecar_name
+    from .engines.settings_bar import settings_bar_js
+    from .parameters import ParameterSpec
+
+    p = id_prefix
+    acc = list(accent)
+    dim = [0.55, 0.58, 0.61, 1.0]
+    h = int(round(height if height is not None else device.height))
+    cw = int(panel_width)
+    lb = int(left_bar)
+    mini = int(round(mini_width))
+    full = mini + cw
+    park = 900
+    pbg = list(panel_bgcolor) if panel_bgcolor else [0.115, 0.115, 0.125, 1.0]
+    bbg = list(bar_bgcolor) if bar_bgcolor else [0.10, 0.10, 0.115, 1.0]
+
+    # ---- 1. capture the existing on-canvas main content (to reflow) -----------
+    bg_seen = False
+    main: list = []                              # (varname, [x,y,w,h])
+    for entry in device.boxes:
+        b = entry["box"]
+        if b.get("presentation") != 1:
+            continue
+        r = b.get("presentation_rect")
+        if not r or len(r) < 4:
+            continue
+        if float(r[0]) >= park:
+            continue                             # already parked/hidden
+        if b.get("id") == bg_id:
+            b["varname"] = bg_id                 # bg resizes (needs a scriptname)
+            bg_seen = True
+            continue
+        vn = b.get("varname")
+        if not vn:
+            vn = f"{p}_m{len(main)}"
+            b["varname"] = vn
+        main.append((vn, [float(v) for v in r[:4]]))
+
+    # ---- 2. the thin LEFT bar: drawn ▾ opener + rotated label ------------------
+    device.add_panel(f"{p}_bar_bg", [0, 0, lb, h], bgcolor=bbg, border=0)
+    bar_code = settings_bar_js(accent=tuple(acc), label=label)
+    bar_fname = js_sidecar_name("settings_bar.js", bar_code)
+    device.register_asset(bar_fname, bar_code, asset_type="TEXT", category="js")
+    device.add_box({"box": {
+        "id": f"{p}_bar", "maxclass": "jsui", "jsui_maxclass": "jsui",
+        "filename": bar_fname, "numinlets": 1, "numoutlets": 1,
+        "outlettype": [""], "parameter_enable": 0, "presentation": 1,
+        "presentation_rect": [0, 0, lb, h], "patching_rect": [40, 40, lb, h]}})
+
+    # ---- 3. the automatable enum param (parked live.text the bar drives) -------
+    btn_id = device.add_live_text(
+        f"{p}_toggle", param_name, [park, park, 1, 1],
+        text_on="Open", text_off="Closed", mode=1,
+        annotation="Show / hide the settings column (slides out on the left).",
+        parameter=ParameterSpec(name=param_name, shortname=param_name,
+                                parameter_type=2, enum=["Closed", "Open"],
+                                initial=[0], initial_enable=True))
+    device.add_line(btn_id, 0, f"{p}_bar", 0)      # param -> bar arrow display
+    device.add_line(f"{p}_bar", 0, btn_id, 0)      # bar click -> param
+
+    # ---- 4. the settings column (authored PARKED; slides in when open) ---------
+    col: list = []                               # (varname, on_rect)
+
+    def _tag(vn):
+        device.boxes[-1]["box"]["varname"] = vn
+
+    def _col(vn, on_rect):
+        _tag(vn)
+        col.append((vn, [float(v) for v in on_rect]))
+
+    device.add_panel(f"{p}_panel", [park, 0, cw, h], bgcolor=pbg, border=0)
+    _col(f"{p}_panel", [lb, 0, cw, h])
+    if spine:
+        device.add_panel(f"{p}_spine", [park + 2, 4, 3, h - 8], bgcolor=acc,
+                         border=0, rounded=1)
+        _col(f"{p}_spine", [lb + 2, 4, 3, h - 8])
+    if label:
+        device.add_comment(f"{p}_hdr", [park + 8, 4, cw - 11, 10], label,
+                           textcolor=dim, fontsize=7.5,
+                           fontname="Ableton Sans Medium")
+        _col(f"{p}_hdr", [lb + 8, 4, cw - 11, 10])
+
+    section_ids = []
+    for i, (bid, name, lo, hi, ini, us, ann) in enumerate(sections):
+        y = content_top + i * row_pitch
+        device.add_comment(f"{bid}_cap", [park + 8, y, cw - 12, 9], name.upper(),
+                           textcolor=dim, fontsize=7.0,
+                           fontname="Ableton Sans Medium")
+        _col(f"{bid}_cap", [lb + 8, y, cw - 12, 9])
+        device.add_number_box(bid, name, [park + 8, y + 11, cw - 12, 17],
+                              min_val=lo, max_val=hi, initial=ini, unitstyle=us,
+                              lcdcolor=acc, annotation=ann)
+        _col(bid, [lb + 8, y + 11, cw - 12, 17])   # varname overridden to bid
+        section_ids.append(bid)
+        if i < len(sections) - 1:
+            device.add_live_line(f"{bid}_div", [park + 8, y + 33, cw - 12, 1],
+                                 linecolor=[0.30, 0.30, 0.33, 1.0])
+            _col(f"{bid}_div", [lb + 8, y + 33, cw - 12, 1])
+
+    # ---- 5. reflow wiring: param -> sel -> closed / open message batches -------
+    thisp, thisdev = f"{p}_this", f"{p}_thisdev"
+    device.add_newobj(thisp, "thispatcher", numinlets=1, numoutlets=1,
+                      outlettype=[""], patching_rect=[760, 1720, 90, 20])
+    device.add_newobj(thisdev, "live.thisdevice", numinlets=1, numoutlets=3,
+                      outlettype=["bang", "", ""], patching_rect=[520, 1600, 90, 20])
+    sel = f"{p}_sel"
+    device.add_newobj(sel, "sel 0 1", numinlets=1, numoutlets=3,
+                      outlettype=["bang", "bang", ""], patching_rect=[700, 1630, 60, 20])
+    device.add_line(btn_id, 0, sel, 0)
+    ctrig, otrig = f"{p}_ctrig", f"{p}_otrig"
+    device.add_newobj(ctrig, "t b", numinlets=1, numoutlets=1,
+                      outlettype=["bang"], patching_rect=[700, 1660, 40, 20])
+    device.add_newobj(otrig, "t b", numinlets=1, numoutlets=1,
+                      outlettype=["bang"], patching_rect=[940, 1660, 40, 20])
+    device.add_line(sel, 0, ctrig, 0)              # value 0 = Closed
+    device.add_line(sel, 1, otrig, 0)              # value 1 = Open
+    # loadbang forces the device CLOSED so a saved-open set reopens with no dead
+    # zone (send 0 to the toggle -> Closed batch fires only if it was Open).
+    device.add_box({"box": {"id": f"{p}_lb0", "maxclass": "message", "text": "0",
+                            "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+                            "patching_rect": [520, 1660, 30, 20]}})
+    device.add_line(thisdev, 0, f"{p}_lb0", 0)
+    device.add_line(f"{p}_lb0", 0, btn_id, 0)
+
+    counter = [0]
+    yy = [1760]
+
+    def _msg(text, x, y, trig, dest):
+        mid = f"{p}_r{counter[0]}"
+        counter[0] += 1
+        device.add_box({"box": {"id": mid, "maxclass": "message", "text": text,
+                                "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+                                "patching_rect": [x, y, 230, 18]}})
+        device.add_line(trig, 0, mid, 0)
+        device.add_line(mid, 0, dest, 0)
+
+    def _pair(vn, closed_rect, open_rect):
+        cr = " ".join(f"{v:g}" for v in closed_rect)
+        orr = " ".join(f"{v:g}" for v in open_rect)
+        _msg(f"script sendbox {vn} presentation_rect {cr}", 700, yy[0], ctrig, thisp)
+        _msg(f"script sendbox {vn} presentation_rect {orr}", 960, yy[0], otrig, thisp)
+        yy[0] += 20
+
+    for vn, r in main:                             # main: closed=orig, open=+cw
+        _pair(vn, r, [r[0] + cw, r[1], r[2], r[3]])
+    for vn, on_r in col:                           # column: closed=parked, open=on
+        _pair(vn, [park + (on_r[0] - lb), on_r[1], on_r[2], on_r[3]], on_r)
+    if bg_seen:                                    # bg: resize with the device
+        _pair(bg_id, [0, 0, mini, h], [0, 0, full, h])
+    _msg(f"setwidth {mini}", 700, yy[0], ctrig, thisdev)
+    _msg(f"setwidth {full}", 960, yy[0], otrig, thisdev)
+
+    device.width = mini
+    return stage_result(
+        {
+            "button": btn_id,
+            "bar": f"{p}_bar",
+            "section_ids": section_ids,
+            "left_bar": lb,
+            "panel_width": cw,
+            "mini_width": mini,
+            "full_width": full,
+        },
+        name="settings_sidebar",
+        params={param_name: device.parameter(param_name)},
+    )
