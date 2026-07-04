@@ -2231,11 +2231,20 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, sections,
     bar_code = settings_bar_js(accent=tuple(acc), label=label)
     bar_fname = js_sidecar_name("settings_bar.js", bar_code)
     device.register_asset(bar_fname, bar_code, asset_type="TEXT", category="js")
+    # border=0 + transparent bordercolor: kill Max's default black 1px jsui frame
+    # (the "dark box around the left separator") — the bar's separation is a plain
+    # grey vertical line, like the dividers elsewhere on the device.
     device.add_box({"box": {
         "id": f"{p}_bar", "maxclass": "jsui", "jsui_maxclass": "jsui",
         "filename": bar_fname, "numinlets": 1, "numoutlets": 1,
         "outlettype": [""], "parameter_enable": 0, "presentation": 1,
+        "border": 0, "bordercolor": [0.0, 0.0, 0.0, 0.0],
         "presentation_rect": [0, 0, lb, h], "patching_rect": [40, 40, lb, h]}})
+    # a grey vertical hairline at the bar's right edge (always visible, full
+    # height — no top/bottom caps), replacing the old black frame. A live.line,
+    # not a panel, so it renders above the backdrop and isn't a "box".
+    device.add_live_line(f"{p}_sep", [lb, 0, 1, h],
+                         linecolor=[0.30, 0.30, 0.32, 1.0])
 
     # ---- 3. the automatable enum param (parked live.text the bar drives) -------
     btn_id = device.add_live_text(

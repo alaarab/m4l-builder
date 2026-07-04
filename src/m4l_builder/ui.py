@@ -970,7 +970,15 @@ def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
 def v8ui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
          numoutlets: int = 0, outlettype: list = None,
          patching_rect: list = None, **kwargs) -> dict:
-    """Create a v8ui display for modern pointer-aware custom UI rendering."""
+    """Create a v8ui display for modern pointer-aware custom UI rendering.
+
+    Like :func:`jsui`, a bare v8ui draws Max's default black 1px BORDER frame at
+    the box edge ON TOP of whatever the JS paints — the "black box around the big
+    UI" (Live-verified on the beta: the hero displays + the settings bar). So we
+    default ``border=0`` + a transparent ``bordercolor`` here; a device that wants
+    a visible frame passes ``border=1`` and a ``bordercolor`` explicitly (kwargs
+    win).
+    """
     box = {
         "id": id,
         "maxclass": "v8ui",
@@ -984,6 +992,8 @@ def v8ui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
             "embed": 0,
             "autowatch": 1,
         },
+        "border": 0,
+        "bordercolor": [0.0, 0.0, 0.0, 0.0],
         "parameter_enable": 0,
         "patching_rect": patching_rect or [700, 1500, rect[2], rect[3]],
         "presentation": 1,
