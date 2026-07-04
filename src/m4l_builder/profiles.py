@@ -136,15 +136,13 @@ class PatcherProfile:
                     "sortmode": 0,
                     "viewmode": 0,
                 },
-                "parameters": {
-                    "parameterbanks": {
-                        "0": {
-                            "index": 0,
-                            "name": "",
-                            "parameters": [],
-                        }
-                    },
-                },
+                # NO parameterbanks stub: Live 12.4.5b's rewritten
+                # param_banks_fromdictionary SEGFAULTS (memmove from 0x0) on a
+                # bank with an empty parameters list whenever a control surface
+                # asks for bank counts on device load. Real Ableton devices
+                # (Map8 et al) omit the key entirely and let Live auto-bank;
+                # explicit banks still emit via _parameter_banks_payload.
+                "parameters": {},
             }
         }
 

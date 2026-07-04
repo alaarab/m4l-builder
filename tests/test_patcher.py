@@ -107,24 +107,15 @@ class TestBuildPatcher:
         result = build_patcher([], [])
         assert "parameters" in result["patcher"]
 
-    def test_parameterbanks_present(self):
+    def test_no_default_parameterbanks_stub(self):
+        # Live 12.4.5b's param_banks_fromdictionary SEGFAULTS on a bank with
+        # an empty parameters list when any control surface reads bank counts
+        # at device load (proven: our devices crashed the beta, Ableton's own
+        # M4L LFO — which omits the key — did not). No banks registered = no
+        # parameterbanks key; Live auto-banks.
         result = build_patcher([], [])
-        assert "parameterbanks" in result["patcher"]["parameters"]
-
-    def test_parameterbanks_has_bank_0(self):
-        result = build_patcher([], [])
-        banks = result["patcher"]["parameters"]["parameterbanks"]
-        assert "0" in banks
-
-    def test_parameterbanks_bank_0_index(self):
-        result = build_patcher([], [])
-        bank = result["patcher"]["parameters"]["parameterbanks"]["0"]
-        assert bank["index"] == 0
-
-    def test_parameterbanks_bank_0_parameters_empty(self):
-        result = build_patcher([], [])
-        bank = result["patcher"]["parameters"]["parameterbanks"]["0"]
-        assert bank["parameters"] == []
+        assert result["patcher"]["parameters"] == {}
+        assert "parameterbanks" not in result["patcher"]["parameters"]
 
     def test_project_has_amxdtype(self):
         result = build_patcher([], [])
