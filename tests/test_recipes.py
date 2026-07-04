@@ -808,8 +808,8 @@ _CONTROLS = [
     {"id": "global_lanes_num", "name": "Lanes", "min": 1.0, "max": 8.0,
      "init": 2.0, "unit": 0, "kind": "num"},
 ]
-# single column -> panel_width = 2*inset(6) + cell_w(40) = 52
-_CW = 52
+# single-column value rows -> default panel_width = 90
+_CW = 90
 
 
 def _sidebar_device(mini=420):
