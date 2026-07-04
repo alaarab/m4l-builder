@@ -10,6 +10,7 @@ Usage:
                     js_code=filter_curve_js(), numinlets=3)
 """
 
+from .chaos_lanes import chaos_lanes_js
 from .compressor_display import compressor_display_js
 from .crossover_display import crossover_display_js
 from .delay_trail import (
@@ -141,6 +142,7 @@ __all__ = [
     "ICON_OVERLAY_INLETS",
     "ICON_OVERLAY_OUTLETS",
     "icon_overlay_js",
+    "chaos_lanes_js",
     "grid_sequencer_display_js",
     "wavetable_editor_js",
     "spectral_vocoder_display_js",

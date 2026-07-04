@@ -23,10 +23,25 @@ def test_poly_chaos_engine_shape():
         assert f"out{4 + i} = vv_{i};" in code
         assert f"Param depth_{i}(100.0, min=0.0, max=100.0);" in code
     assert "fold(offset + bias * 0, 0, 1)" in code
-    # GUI tick pokes [r, phase, value, depth] per voice (polar hero contract)
+    # GUI tick pokes [value, source, depth, windowed] per lane + lanes tail
+    # (the chaos_lanes lane-stack hero contract)
     assert "Buffer buf_entropy_gui;" in code
-    assert "poke(buf_entropy_gui, r_1, 0, 0);" in code
-    assert "poke(buf_entropy_gui, d_4, 15, 0);" in code
+    assert "poke(buf_entropy_gui, v_1, 0, 0);" in code
+    assert "poke(buf_entropy_gui, source_1, 1, 0);" in code
+    assert "poke(buf_entropy_gui, vv_4, 15, 0);" in code
+    assert "poke(buf_entropy_gui, lanes, 16, 0);" in code
+
+
+def test_per_lane_sources():
+    code = poly_chaos_engine(voices=8)
+    # v2: SOURCE is per-lane (the device's whole point); no global source param
+    assert "Param source(" not in code
+    for i in (1, 4, 8):
+        assert f"Param source_{i}(0.0, min=0.0, max=5.0);" in code
+        assert f"source_{i}, ent_s, tame_s);" in code
+    # lanes count is a gen param poked into the viz tail slot for hero dimming
+    assert "Param lanes(8.0, min=1.0, max=8.0);" in code
+    assert "poke(buf_entropy_gui, lanes, 32, 0);" in code
 
 
 def test_chaos_sources_and_macros():
