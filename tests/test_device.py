@@ -1193,13 +1193,12 @@ class TestParameterBanks:
         assert "0" in banks
         assert "1" in banks
 
-    def test_no_banks_uses_default(self):
+    def test_no_banks_omits_parameterbanks(self):
+        # An empty-bank stub crashes Live 12.4.5b's bank parser under any
+        # active control surface — no registered banks means NO key at all.
         d = Device("Test", 400, 170)
         patcher = d.to_patcher()
-        banks = patcher["patcher"]["parameters"]["parameterbanks"]
-        # Default bank from build_patcher
-        assert "0" in banks
-        assert banks["0"]["parameters"] == []
+        assert "parameterbanks" not in patcher["patcher"]["parameters"]
 
     def test_bank_in_json_output(self):
         d = Device("Test", 400, 170)
