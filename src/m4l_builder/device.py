@@ -8,7 +8,9 @@ from typing import Any
 from .amxd import build_device, device_from_amxd, device_to_bytes, device_to_patcher
 from .dsp import stereo_io
 from .engines.design_system import js_sidecar_name
+from .gen_lint import find_function_defs
 from .gen_patcher import build_gendsp, gendsp_support_name
+from .gen_patcher import embed_gendsp as _embed_gendsp_box
 from .graph import BoxRef, GraphContainer
 from .jsui_contract import validate_jsui_contract, validate_v8ui_contract
 from .layout import Column, Columns, Grid, Row
@@ -313,7 +315,7 @@ class Device(GraphContainer):
         signal_src=None,
         gate_src: tuple = None,
         inset: tuple = (0, 0, 0, 0),
-        scope_numinlets: int = 1,
+        scope_numinlets: int = 2,
         scope_numoutlets: int = 1,
         scope_outlettype: list = None,
         scope_patching_rect: list = None,
@@ -1275,6 +1277,529 @@ class Device(GraphContainer):
         self.add_line(setvy_id, 0, id, 1)
         return id
 
+    def add_envelope_editor(
+        self,
+        id: str,
+        rect: list,
+        *,
+        params: tuple = ("Attack", "Decay", "Sustain", "Release"),
+        shortnames: tuple = None,
+        max_attack_ms: float = 2000.0,
+        max_decay_ms: float = 4000.0,
+        max_release_ms: float = 8000.0,
+        initial: tuple = (10.0, 200.0, 0.7, 400.0),
+        unitstyles: tuple = None,
+        accent: str = "0.36, 0.92, 0.96, 1.0",
+        bg: str = "0.05, 0.05, 0.06, 1.0",
+        sustain_frac: float = 0.16,
+        js_filename: str = None,
+        varname: str = None,
+    ) -> str:
+        """Add a DRAGGABLE ADSR envelope editor (jsui) bound to FOUR HIDDEN
+        automatable ``live.dial`` params (dnksaus-catalog kit engine #1 — the
+        Auto Gate / dnkFM envelope-editor look).
+
+        The jsui DRAWS the envelope (accent polyline + under-curve fill + dim
+        grid + square nodes + an A/D/S/R value row) and owns the pointer via
+        the proven jsui ``onclick``/``ondrag`` idiom: dragging a node emits
+        ONLY that node's value(s) — attack peak → attack ms, decay knee →
+        decay ms + sustain, plateau → sustain, release end → release ms. Four
+        1×1 ``live.dial`` objects hidden BEHIND it (``presentation=0``, the
+        :meth:`add_custom_knob` recipe ×4) hold the automatable Live params.
+        Drag a node → its param moves (and records automation); automate a
+        param → the curve redraws WITHOUT re-emitting (no echo). This is
+        :meth:`add_custom_knob` QUADRUPLED onto one graph. Returns the jsui
+        box id; the dials are ``f"{id}_dial0"``..``f"{id}_dial3"``.
+
+        ``params`` are the four Live parameter longnames (attack, decay,
+        sustain, release — in that order); ``shortnames``/``unitstyles``
+        follow the same order (unitstyles default to TIME/TIME/FLOAT/TIME so
+        Live reads ms/ms/float/ms). Ranges: attack ``0..max_attack_ms``,
+        decay ``0..max_decay_ms``, sustain ``0..1``, release
+        ``0..max_release_ms``. ``initial`` seeds BOTH the params and the
+        first paint so the curve is honest on load. ``accent``/``bg`` are
+        RGBA strings; ``sustain_frac`` is the fixed plateau fraction.
+        """
+        from .constants import UNITSTYLE_FLOAT, UNITSTYLE_TIME
+        from .engines.envelope_editor import envelope_editor_js
+
+        if len(params) != 4:
+            raise ValueError("params must name exactly (attack, decay, sustain, release)")
+        if len(initial) != 4:
+            raise ValueError("initial must be (attack_ms, decay_ms, sustain, release_ms)")
+        if unitstyles is None:
+            unitstyles = (UNITSTYLE_TIME, UNITSTYLE_TIME, UNITSTYLE_FLOAT, UNITSTYLE_TIME)
+        if shortnames is None:
+            shortnames = (None, None, None, None)
+        maxes = (max_attack_ms, max_decay_ms, 1.0, max_release_ms)
+
+        # --- FOUR hidden automatable params: live.dials NOT in presentation
+        # (presentation=0) so they never render in the device UI, but stay
+        # registered Live parameters. outlet 0 = the value in DISPLAY units.
+        dial_ids = []
+        for i in range(4):
+            dial_id = f"{id}_dial{i}"
+            self.add_dial(  # type: ignore[attr-defined]
+                dial_id, params[i], [rect[0], rect[1], 30, 30],
+                min_val=0.0, max_val=maxes[i], initial=initial[i],
+                showname=0, shownumber=0, shortname=shortnames[i],
+                presentation=0, unitstyle=unitstyles[i],
+                patching_rect=[40 + 44 * i, 600, 30, 30],
+            )
+            dial_ids.append(dial_id)
+
+        # --- the draggable graph (jsui: ES5 engine, validated on add).
+        self.add_jsui(
+            id, rect,
+            js_code=envelope_editor_js(
+                accent=accent, bg=bg,
+                max_attack_ms=max_attack_ms, max_decay_ms=max_decay_ms,
+                max_release_ms=max_release_ms,
+                init_attack_ms=initial[0], init_decay_ms=initial[1],
+                init_sustain=initial[2], init_release_ms=initial[3],
+                sustain_frac=sustain_frac,
+            ),
+            js_filename=js_filename or f"{id}_envedit.js", content_address=True,
+            numinlets=4, numoutlets=4,
+            outlettype=["float", "float", "float", "float"],
+            varname=varname or id,
+        )
+        # --- 8 wires. Drag path: jsui outlet i -> dial i (records automation).
+        # Draw path: dial i outlet 0 (display units) -> jsui inlet i (msg_float
+        # dispatches on the inlet index and never re-emits, so no echo loop).
+        for i, dial_id in enumerate(dial_ids):
+            self.add_line(id, i, dial_id, 0)
+            self.add_line(dial_id, 0, id, i)
+        return id
+
+    def add_curve_editor(
+        self,
+        id: str,
+        rect: list,
+        *,
+        state_param: str = "Curve",
+        max_points: int = 16,
+        init_points: tuple = ((0.0, 0.0), (1.0, 1.0)),
+        init_tension: float = 0.0,
+        init_grid: int = 4,
+        init_snap: int = 0,
+        accent: str = "0.36, 0.92, 0.96, 1.0",
+        bg: str = "0.05, 0.05, 0.06, 1.0",
+        stored_only: bool = True,
+        js_filename: str = None,
+        varname: str = None,
+    ) -> str:
+        """Add a GENERAL BREAKPOINT CURVE EDITOR (jsui) whose points/tension/
+        grid/snap persist through hidden ``live.dial`` parameter hosts
+        (dnksaus-catalog kit engines #2-#6 — the Multi Shaper core widget).
+
+        The jsui owns the pointer (click empty = add point, drag = move with
+        neighbor-clamped x, double-click = delete, endpoints undeletable) and
+        emits the full ``points x0 y0 ...`` list (normalized 0..1) on ANY
+        edit — that list is the persistence payload. Tension (0..100 cosine
+        blend), grid divisions, and snap arrive as ``set_*`` messages from
+        their own hidden automatable params. See
+        :mod:`m4l_builder.engines.curve_editor` for the full engine contract.
+
+        **Persistence choice (investigated, honest):** a parameter-enabled
+        ``pattr`` blob is the OBVIOUS store and it is a PROVEN TRAP — it
+        accepts the blob but never re-delivers it across track duplication in
+        Live 12.4 (kit pitfalls file, headless-counter proven). The kit's
+        duplication-safe pattern is per-value hidden ``live.*`` parameter
+        hosts (Parametric EQ precedent), which is ALSO exactly how dnksaus
+        ships editor state (their devices carry dozens of
+        ``parameter_invisible: 1`` stored-only scalar params and rebuild the
+        curve display from them at load — never a blob). So: ``1 + 2*max_points``
+        hidden ``live.dial`` hosts (``{id}_count`` + ``{id}_p{k}x/y``, longnames
+        ``"{state_param} Points"`` / ``"{state_param} P{k} X"``…). With
+        ``stored_only=True`` (default) they are marked Stored-Only
+        (``parameter_invisible=1``): saved with the set and restored on
+        load/duplication, but hidden from Live's automation chooser and undo
+        history. Pass ``stored_only=False`` to make every point coordinate a
+        normal automatable param (the exact Parametric-EQ-proven visibility)
+        if live QA ever faults stored-only restore.
+
+        **Save path:** jsui ``points`` list -> ``route points`` ->
+        ``t l l`` -> (right, fires first) ``listfunnel`` -> ``spray`` fanning
+        each coordinate into its dial; (left, fires last) ``zl len -> / 2`` ->
+        the count dial. **Restore path:** Live restores/initializes each param
+        -> the dial outputs -> a ``pak`` (creation args = the initial state, so
+        params that never fire still contribute correct defaults) -> ``prepend
+        set_all`` -> the jsui, which rebuilds the breakpoints without
+        re-emitting; the engine ignores ``set_all`` mid-drag so the echo of our
+        own edits can never fight a live gesture, and the cascade's final fire
+        always carries the complete state regardless of restore order.
+
+        ``init_points`` are normalized ``(x, y)`` pairs — 2..max_points of
+        them, first x MUST be 0.0 and last x MUST be 1.0 (the undeletable
+        endpoints). They seed the param initials AND the pak defaults; the
+        engine's first paint shows the two endpoints until the params fire
+        (immediately, at load). Tension/Grid/Snap params stay normal
+        automatable params (they are musical controls, not state slots).
+        Returns the jsui box id; the hosts are ``f"{id}_count"``,
+        ``f"{id}_p{{k}}x"``/``f"{id}_p{{k}}y"`` (k = 1..max_points),
+        ``f"{id}_tension"``, ``f"{id}_grid"``, ``f"{id}_snap"``.
+        """
+        from .constants import UNITSTYLE_FLOAT, UNITSTYLE_INT, UNITSTYLE_PERCENT
+        from .engines.curve_editor import curve_editor_js
+        from .parameters import PARAM_VIS_STORED_ONLY
+
+        max_points = int(max_points)
+        if not 2 <= max_points <= 32:
+            raise ValueError(f"max_points must be 2..32, got {max_points}")
+        points = [(float(x), float(y)) for x, y in init_points]
+        if not 2 <= len(points) <= max_points:
+            raise ValueError(
+                f"init_points needs 2..{max_points} points, got {len(points)}"
+            )
+        if points[0][0] != 0.0 or points[-1][0] != 1.0:
+            raise ValueError("init_points must start at x=0.0 and end at x=1.0")
+        if any(not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0) for x, y in points):
+            raise ValueError("init_points coordinates must be normalized 0..1")
+
+        vis = PARAM_VIS_STORED_ONLY if stored_only else None
+
+        # --- the editor jsui (ES5 engine, validated on add): 1 inlet / 1 outlet.
+        self.add_jsui(
+            id, rect,
+            js_code=curve_editor_js(
+                accent=accent, bg=bg, max_points=max_points,
+                init_y0=points[0][1], init_y1=points[-1][1],
+                init_tension=init_tension, init_grid=init_grid,
+                init_snap=init_snap,
+            ),
+            js_filename=js_filename or f"{id}_curveedit.js", content_address=True,
+            numinlets=1, numoutlets=1, outlettype=[""],
+            varname=varname or id,
+        )
+
+        # --- hidden STATE hosts: count + per-point X/Y (presentation=0 keeps
+        # them off the face; stored-only keeps them out of the automation UI).
+        count_id = f"{id}_count"
+        self.add_dial(  # type: ignore[attr-defined]
+            count_id, f"{state_param} Points", [rect[0], rect[1], 30, 30],
+            min_val=2.0, max_val=float(max_points), initial=float(len(points)),
+            showname=0, shownumber=0, presentation=0,
+            unitstyle=UNITSTYLE_INT, steps=max_points - 1, invisible=vis,
+            patching_rect=[40, 560, 30, 30],
+        )
+        coord_ids = []
+        for k in range(1, max_points + 1):
+            px, py = points[k - 1] if k <= len(points) else (0.0, 0.0)
+            for axis, val in (("x", px), ("y", py)):
+                coord_id = f"{id}_p{k}{axis}"
+                self.add_dial(  # type: ignore[attr-defined]
+                    coord_id, f"{state_param} P{k} {axis.upper()}",
+                    [rect[0], rect[1], 30, 30],
+                    min_val=0.0, max_val=1.0, initial=val,
+                    showname=0, shownumber=0, presentation=0,
+                    unitstyle=UNITSTYLE_FLOAT, invisible=vis,
+                    patching_rect=[40 + 34 * ((k - 1) % 16),
+                                   640 + (36 if axis == "y" else 0)
+                                   + 90 * ((k - 1) // 16), 30, 30],
+                )
+                coord_ids.append(coord_id)
+
+        # --- automatable CONTROL params: tension / grid / snap.
+        control_specs = (
+            (f"{id}_tension", f"{state_param} Tension", 0.0, 100.0,
+             float(init_tension), UNITSTYLE_PERCENT, None, "set_tension"),
+            (f"{id}_grid", f"{state_param} Grid", 1.0, 32.0,
+             float(init_grid), UNITSTYLE_INT, 32, "set_grid"),
+            (f"{id}_snap", f"{state_param} Snap", 0.0, 1.0,
+             float(bool(init_snap)), UNITSTYLE_INT, 2, "set_snap"),
+        )
+        for i, (cid, longname, vmin, vmax, vinit, ustyle, steps, msg) in enumerate(
+                control_specs):
+            self.add_dial(  # type: ignore[attr-defined]
+                cid, longname, [rect[0], rect[1], 30, 30],
+                min_val=vmin, max_val=vmax, initial=vinit,
+                showname=0, shownumber=0, presentation=0,
+                unitstyle=ustyle, steps=steps,
+                patching_rect=[640 + 44 * i, 560, 30, 30],
+            )
+            prep_id = f"{cid}_prep"
+            self.add_newobj(prep_id, f"prepend {msg}", numinlets=1, numoutlets=1,
+                            outlettype=[""],
+                            patching_rect=[640 + 44 * i, 600, 120, 20])
+            self.add_line(cid, 0, prep_id, 0)
+            self.add_line(prep_id, 0, id, 0)
+
+        # --- SAVE path: points list -> per-coordinate dials + the count dial.
+        # `t l l` fires right-to-left, so the coordinates land FIRST and the
+        # count LAST — every intermediate pak fire is masked by a count that
+        # only grows/shrinks once the coords are already consistent.
+        route_id = f"{id}_route"
+        self.add_newobj(route_id, "route points", numinlets=2, numoutlets=2,
+                        outlettype=["", ""], patching_rect=[40, 460, 90, 20])
+        split_id = f"{id}_split"
+        self.add_newobj(split_id, "t l l", numinlets=1, numoutlets=2,
+                        outlettype=["", ""], patching_rect=[40, 490, 50, 20])
+        len_id = f"{id}_len"
+        self.add_newobj(len_id, "zl len", numinlets=2, numoutlets=2,
+                        outlettype=["", ""], patching_rect=[40, 520, 50, 20])
+        half_id = f"{id}_half"
+        self.add_newobj(half_id, "/ 2", numinlets=2, numoutlets=1,
+                        outlettype=["int"], patching_rect=[100, 520, 32, 20])
+        funnel_id = f"{id}_funnel"
+        # listfunnel emits "index value" pairs (base 0, matching spray's default
+        # offset); outlettype ["list"] is the corpus-measured declaration
+        # (Roulette ships `listfunnel 1` + `spray 12` with exactly this shape).
+        self.add_newobj(funnel_id, "listfunnel", numinlets=1, numoutlets=1,
+                        outlettype=["list"], patching_rect=[160, 520, 70, 20])
+        spray_id = f"{id}_spray"
+        self.add_newobj(spray_id, f"spray {2 * max_points}", numinlets=1,
+                        numoutlets=2 * max_points,
+                        outlettype=[""] * (2 * max_points),
+                        patching_rect=[40, 600, 550, 20])
+        self.add_line(id, 0, route_id, 0)
+        self.add_line(route_id, 0, split_id, 0)
+        self.add_line(split_id, 1, funnel_id, 0)
+        self.add_line(split_id, 0, len_id, 0)
+        self.add_line(len_id, 0, half_id, 0)
+        self.add_line(half_id, 0, count_id, 0)
+        self.add_line(funnel_id, 0, spray_id, 0)
+        for j, coord_id in enumerate(coord_ids):
+            self.add_line(spray_id, j, coord_id, 0)
+
+        # --- RESTORE path: every host output re-fires the pak; its creation
+        # args ARE the initial state, so silent params still contribute.
+        pak_args = [str(len(points))]
+        for k in range(1, max_points + 1):
+            px, py = points[k - 1] if k <= len(points) else (0.0, 0.0)
+            pak_args.append(repr(px))
+            pak_args.append(repr(py))
+        pak_id = f"{id}_pak"
+        self.add_newobj(pak_id, "pak " + " ".join(pak_args),
+                        numinlets=1 + 2 * max_points, numoutlets=1,
+                        outlettype=[""], patching_rect=[40, 740, 550, 20])
+        setall_id = f"{id}_setall"
+        self.add_newobj(setall_id, "prepend set_all", numinlets=1, numoutlets=1,
+                        outlettype=[""], patching_rect=[40, 770, 110, 20])
+        self.add_line(count_id, 0, pak_id, 0)
+        for j, coord_id in enumerate(coord_ids):
+            self.add_line(coord_id, 0, pak_id, j + 1)
+        self.add_line(pak_id, 0, setall_id, 0)
+        self.add_line(setall_id, 0, id, 0)
+        return id
+
+    def add_step_bars(
+        self,
+        id: str,
+        rect: list,
+        *,
+        state_param: str = "Steps",
+        max_steps: int = 16,
+        init_steps: int = 8,
+        init_values: tuple = None,
+        init_value: float = 1.0,
+        reset_value: float = 0.0,
+        init_link: int = 0,
+        steps_rect: list = None,
+        link_rect: list = None,
+        link_labels: tuple = ("Off", "Link"),
+        accent: str = "0.36, 0.92, 0.96, 1.0",
+        bg: str = "0.05, 0.05, 0.06, 1.0",
+        stored_only: bool = True,
+        js_filename: str = None,
+        varname: str = None,
+    ) -> str:
+        """Add a STEP-BAR LANE EDITOR (jsui) whose bar values persist through
+        hidden ``live.dial`` parameter hosts (dnksaus-catalog kit engines
+        #7-#8 — the Auto Gate / Trig Rnd step lane + value-link chip).
+
+        The jsui owns the pointer (click sets the bar under the cursor,
+        drag PAINTS values across every bar the pointer crosses, Cmd/Alt-click
+        resets a bar to ``reset_value``) and emits ``values v0 v1 ...``
+        (normalized 0..1, active steps only) on ANY edit — that list is the
+        persistence payload — plus a ``step i v`` per-bar stream for cheap
+        real-time consumers. See :mod:`m4l_builder.engines.step_bars` for the
+        full engine contract.
+
+        **Persistence:** the exact :meth:`add_curve_editor` recipe (per-value
+        hidden ``live.*`` parameter hosts, NOT a pattr blob — the proven
+        duplication trap): ``1 + max_steps`` hidden ``live.dial`` hosts
+        (``{id}_steps`` count + ``{id}_s{k}`` values, longnames
+        ``"{state_param} N"`` / ``"{state_param} S{k}"``), Stored-Only by
+        default (``stored_only=False`` makes every slot automatable). Save
+        path: jsui ``values`` list -> ``route values`` -> ``t l l`` ->
+        (right, fires first) ``listfunnel`` -> ``spray`` into the value dials;
+        (left, fires last) ``zl len`` -> the count dial (one atom per step, so
+        the length IS the count). Restore path: hosts -> ``pak`` (creation
+        args = the initials, so silent params still contribute) -> ``prepend
+        set_all`` -> the jsui, which rebuilds without re-emitting and ignores
+        the cascade mid-drag.
+
+        **Native automatable params:** ``STEPS`` (``{id}_num``, a
+        ``live.numbox``, int 2..max_steps, longname ``"{state_param} Count"``)
+        drives ``set_steps`` (display re-quantizes, slot values preserved) AND
+        feeds the hidden count host directly — without that sync wire a STEPS
+        change with no bar edit would leave a stale stored count and the
+        reload lane would depend on param-restore order. ``LINK``
+        (``{id}_link``, a ``live.text`` toggle, longname
+        ``"{state_param} Link"``) drives ``set_link`` — the engine only
+        DISPLAYS the link chip (glyph + lane tint); wire the semantic (e.g.
+        ganged lanes) downstream of the same param. Both are parked off the
+        face by default (``presentation=0``); pass ``steps_rect`` /
+        ``link_rect`` to place them visibly. ``set_playhead`` stays unwired —
+        send it straight to the jsui inlet from a future sequencer clock.
+
+        ``init_values`` seeds the leading slots (rest fill with
+        ``init_value``); the initials seed the params, the pak defaults AND
+        the engine's first paint, so the lane is honest before any value
+        arrives. Returns the jsui box id; the hosts are ``f"{id}_steps"`` and
+        ``f"{id}_s{{k}}"`` (k = 1..max_steps).
+        """
+        from .constants import UNITSTYLE_FLOAT, UNITSTYLE_INT
+        from .engines.step_bars import step_bars_js
+        from .parameters import PARAM_VIS_STORED_ONLY, ParameterSpec
+
+        max_steps = int(max_steps)
+        if not 2 <= max_steps <= 32:
+            raise ValueError(f"max_steps must be 2..32, got {max_steps}")
+        init_steps = int(init_steps)
+        if not 2 <= init_steps <= max_steps:
+            raise ValueError(
+                f"init_steps must be 2..{max_steps}, got {init_steps}"
+            )
+        seeds = [float(v) for v in (init_values or ())]
+        if len(seeds) > max_steps:
+            raise ValueError(
+                f"init_values holds {len(seeds)} values, max_steps is {max_steps}"
+            )
+        if any(not 0.0 <= v <= 1.0 for v in seeds):
+            raise ValueError("init_values must be normalized 0..1")
+        if not 0.0 <= float(init_value) <= 1.0:
+            raise ValueError(f"init_value must be 0..1, got {init_value}")
+        slots = seeds + [float(init_value)] * (max_steps - len(seeds))
+
+        vis = PARAM_VIS_STORED_ONLY if stored_only else None
+
+        # --- the editor jsui (ES5 engine, validated on add): 1 inlet / 1 outlet.
+        self.add_jsui(
+            id, rect,
+            js_code=step_bars_js(
+                accent=accent, bg=bg, max_steps=max_steps,
+                init_steps=init_steps, init_values=slots,
+                reset_value=reset_value, init_link=init_link,
+            ),
+            js_filename=js_filename or f"{id}_stepbars.js", content_address=True,
+            numinlets=1, numoutlets=1, outlettype=[""],
+            varname=varname or id,
+        )
+
+        # --- hidden STATE hosts: count + per-step value (presentation=0 keeps
+        # them off the face; stored-only keeps them out of the automation UI).
+        count_id = f"{id}_steps"
+        self.add_dial(  # type: ignore[attr-defined]
+            count_id, f"{state_param} N", [rect[0], rect[1], 30, 30],
+            min_val=2.0, max_val=float(max_steps), initial=float(init_steps),
+            showname=0, shownumber=0, presentation=0,
+            unitstyle=UNITSTYLE_INT, steps=max_steps - 1, invisible=vis,
+            patching_rect=[40, 560, 30, 30],
+        )
+        slot_ids = []
+        for k in range(1, max_steps + 1):
+            slot_id = f"{id}_s{k}"
+            self.add_dial(  # type: ignore[attr-defined]
+                slot_id, f"{state_param} S{k}", [rect[0], rect[1], 30, 30],
+                min_val=0.0, max_val=1.0, initial=slots[k - 1],
+                showname=0, shownumber=0, presentation=0,
+                unitstyle=UNITSTYLE_FLOAT, invisible=vis,
+                patching_rect=[40 + 34 * ((k - 1) % 16),
+                               640 + 90 * ((k - 1) // 16), 30, 30],
+            )
+            slot_ids.append(slot_id)
+
+        # --- native automatable params: STEPS numbox + LINK toggle.
+        num_id = f"{id}_num"
+        num_kwargs = {}
+        if steps_rect is None:
+            steps_rect = [rect[0], rect[1], 40, 15]
+            num_kwargs["presentation"] = 0
+        self.add_number_box(  # type: ignore[attr-defined]
+            num_id, f"{state_param} Count", steps_rect,
+            min_val=2.0, max_val=float(max_steps), initial=float(init_steps),
+            unitstyle=UNITSTYLE_INT,
+            patching_rect=[640, 560, 40, 15], **num_kwargs,
+        )
+        num_prep = f"{num_id}_prep"
+        self.add_newobj(num_prep, "prepend set_steps", numinlets=1,
+                        numoutlets=1, outlettype=[""],
+                        patching_rect=[640, 600, 110, 20])
+        self.add_line(num_id, 0, num_prep, 0)
+        self.add_line(num_prep, 0, id, 0)
+        # the sync wire: STEPS -> count host, so the stored count can never go
+        # stale when the count changes without a bar edit (see docstring).
+        self.add_line(num_id, 0, count_id, 0)
+
+        link_id = f"{id}_link"
+        link_kwargs = {}
+        if link_rect is None:
+            link_rect = [rect[0], rect[1], 40, 15]
+            link_kwargs["presentation"] = 0
+        self.add_live_text(  # type: ignore[attr-defined]
+            link_id, f"{state_param} Link", link_rect,
+            text_off=str(link_labels[0]), text_on=str(link_labels[1]), mode=1,
+            patching_rect=[700, 560, 40, 15],
+            parameter=ParameterSpec(
+                name=f"{state_param} Link", shortname="Link",
+                parameter_type=2, enum=[str(x) for x in link_labels],
+                initial=[int(bool(init_link))], initial_enable=True),
+            **link_kwargs,
+        )
+        link_prep = f"{link_id}_prep"
+        self.add_newobj(link_prep, "prepend set_link", numinlets=1,
+                        numoutlets=1, outlettype=[""],
+                        patching_rect=[700, 600, 100, 20])
+        self.add_line(link_id, 0, link_prep, 0)
+        self.add_line(link_prep, 0, id, 0)
+
+        # --- SAVE path: values list -> per-slot dials + the count dial.
+        # `t l l` fires right-to-left, so the slots land FIRST and the count
+        # LAST; the `step i v` stream falls out route's unmatched outlet.
+        route_id = f"{id}_route"
+        self.add_newobj(route_id, "route values", numinlets=2, numoutlets=2,
+                        outlettype=["", ""], patching_rect=[40, 460, 90, 20])
+        split_id = f"{id}_split"
+        self.add_newobj(split_id, "t l l", numinlets=1, numoutlets=2,
+                        outlettype=["", ""], patching_rect=[40, 490, 50, 20])
+        len_id = f"{id}_len"
+        self.add_newobj(len_id, "zl len", numinlets=2, numoutlets=2,
+                        outlettype=["", ""], patching_rect=[40, 520, 50, 20])
+        funnel_id = f"{id}_funnel"
+        self.add_newobj(funnel_id, "listfunnel", numinlets=1, numoutlets=1,
+                        outlettype=["list"], patching_rect=[160, 520, 70, 20])
+        spray_id = f"{id}_spray"
+        self.add_newobj(spray_id, f"spray {max_steps}", numinlets=1,
+                        numoutlets=max_steps, outlettype=[""] * max_steps,
+                        patching_rect=[40, 600, 550, 20])
+        self.add_line(id, 0, route_id, 0)
+        self.add_line(route_id, 0, split_id, 0)
+        self.add_line(split_id, 1, funnel_id, 0)
+        self.add_line(split_id, 0, len_id, 0)
+        self.add_line(len_id, 0, count_id, 0)
+        self.add_line(funnel_id, 0, spray_id, 0)
+        for j, slot_id in enumerate(slot_ids):
+            self.add_line(spray_id, j, slot_id, 0)
+
+        # --- RESTORE path: every host output re-fires the pak; its creation
+        # args ARE the initial state, so silent params still contribute.
+        pak_args = [str(init_steps)] + [repr(v) for v in slots]
+        pak_id = f"{id}_pak"
+        self.add_newobj(pak_id, "pak " + " ".join(pak_args),
+                        numinlets=1 + max_steps, numoutlets=1,
+                        outlettype=[""], patching_rect=[40, 740, 550, 20])
+        setall_id = f"{id}_setall"
+        self.add_newobj(setall_id, "prepend set_all", numinlets=1, numoutlets=1,
+                        outlettype=[""], patching_rect=[40, 770, 110, 20])
+        self.add_line(count_id, 0, pak_id, 0)
+        for j, slot_id in enumerate(slot_ids):
+            self.add_line(slot_id, 0, pak_id, j + 1)
+        self.add_line(pak_id, 0, setall_id, 0)
+        self.add_line(setall_id, 0, id, 0)
+        return id
+
     def add_glass_panel_bg(
         self,
         id: str,
@@ -1375,7 +1900,22 @@ class Device(GraphContainer):
         the codebox AND the object's inlets/outlets (outlets default to ``signal``).
         Extra ``newobj_kwargs`` pass through to :meth:`add_newobj`. Returns the
         ``gen~`` :class:`~m4l_builder.graph.BoxRef`.
+
+        REFUSES function-bearing gen source: Live's gen compiler SILENCES a
+        codebox loaded from an external ``.gendsp`` when the code defines any
+        depth-0 ``name(args){...}`` function (Live-verified, ZZGenFuncEmbed —
+        the fleet's silent-device trap). Use :meth:`embed_gendsp` for the
+        ``gen_stateful`` function kit; keep this path for fully inlined code.
         """
+        fn_defs = find_function_defs(code)
+        if fn_defs:
+            raise ValueError(
+                f"add_gendsp({stem!r}): gen source defines function(s) "
+                f"{', '.join(fn_defs)} at depth 0. An EXTERNAL .gendsp support "
+                "file SILENCES any codebox that defines a function (Live-verified "
+                "— see gen_patcher.embed_gendsp). Use Device.embed_gendsp(...) "
+                "instead, which embeds the gen patcher inline and compiles fine."
+            )
         content = build_gendsp(
             code, numins, numouts, lint=lint, codebox_h=codebox_h, patcher_h=patcher_h,
         )
@@ -1387,6 +1927,40 @@ class Device(GraphContainer):
             id, f"gen~ {filename[: -len('.gendsp')]}",
             numinlets=max(1, numins), numoutlets=numouts, **newobj_kwargs,
         )
+
+    def embed_gendsp(
+        self,
+        id: str,
+        code: str,
+        numins: int,
+        numouts: int,
+        rect: list,
+        *,
+        lint: bool = True,
+        codebox_h: float = 560.0,
+        patcher_h: float = 660.0,
+        **box_kwargs,
+    ) -> BoxRef:
+        """Turn-key EMBEDDED ``gen~`` core: the gen patcher is serialized INLINE
+        in the ``gen~`` box (the Particle-Reverb structure) instead of shipped as
+        an external ``.gendsp`` support file.
+
+        This is the REQUIRED path for gen source that defines functions
+        (``gen_stateful``'s voice/reverb/filter kits): an embedded codebox MAY
+        define ``name(args){...}`` functions and still compile + pass audio,
+        while the external path :meth:`add_gendsp` takes silences them
+        (Live-verified, ZZGenFuncEmbed — output meter 0.737 embedded vs 0.0
+        external). Same call shape as :meth:`add_gendsp` minus ``stem`` (there
+        is no support file, hence no content-addressed filename). Extra
+        ``box_kwargs`` merge into the box dict (e.g. ``varname``). Returns the
+        ``gen~`` :class:`~m4l_builder.graph.BoxRef`.
+        """
+        box_dict = _embed_gendsp_box(
+            code, numins, numouts, box_id=id, patching_rect=list(rect),
+            lint=lint, codebox_h=codebox_h, patcher_h=patcher_h,
+        )
+        box_dict["box"].update(box_kwargs)
+        return self.add_box(box_dict)
 
     def add_newobj(
         self,
@@ -1752,7 +2326,7 @@ class Device(GraphContainer):
         p = id_prefix
         thisdev = self.add_newobj(
             f"{p}_thisdev", "live.thisdevice", numinlets=1, numoutlets=3,
-            outlettype=["bang", "", ""], patching_rect=[x, y, 90, 20],
+            outlettype=["bang", "int", "int"], patching_rect=[x, y, 90, 20],
         )
         head, head_outlet, defer_id = thisdev, 0, None
         if defer:
@@ -1827,8 +2401,8 @@ class Device(GraphContainer):
                 "patching_rect": rect}})
 
         # --- Plumbing inside the content subpatcher (hidden in patching view) ---
-        content.add_newobj("_fly_this", "thispatcher", numinlets=1, numoutlets=1,
-                           outlettype=[""], patching_rect=[40, 380, 70, 20])
+        content.add_newobj("_fly_this", "thispatcher", numinlets=1, numoutlets=2,
+                           outlettype=["", ""], patching_rect=[40, 380, 70, 20])
         content.add_newobj("_fly_rshow", f"r {show_send}", numinlets=0, numoutlets=1,
                            outlettype=["bang"], patching_rect=[40, 300, 90, 20])
         content.add_newobj("_fly_rhide", f"r {hide_send}", numinlets=0, numoutlets=1,
@@ -1840,7 +2414,7 @@ class Device(GraphContainer):
         content.add_line("_fly_front", 0, "_fly_this", 0)
         content.add_line("_fly_wclose", 0, "_fly_this", 0)
         # floating + resizable, set on load (flags before exec)
-        content.add_newobj("_fly_lb", "loadbang", numinlets=0, numoutlets=1,
+        content.add_newobj("_fly_lb", "loadbang", numinlets=1, numoutlets=1,
                            outlettype=["bang"], patching_rect=[40, 410, 60, 20])
         content.add_newobj("_fly_trig", "t b b", numinlets=1, numoutlets=2,
                            outlettype=["bang", "bang"], patching_rect=[40, 440, 50, 20])
@@ -1921,7 +2495,7 @@ class Device(GraphContainer):
                                initial_enable=True),
                            **bkw)
         self.add_newobj(f"{button_id}_thisdev", "live.thisdevice", numinlets=1,
-                        numoutlets=3, outlettype=["bang", "", ""],
+                        numoutlets=3, outlettype=["bang", "int", "int"],
                         patching_rect=[700, 1500, 90, 20])
         self.add_newobj(f"{button_id}_sel", "sel 0 1", numinlets=1, numoutlets=3,
                         outlettype=["bang", "bang", ""],

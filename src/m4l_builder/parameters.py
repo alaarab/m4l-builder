@@ -96,6 +96,10 @@ class ParameterSpec:
     info: str | None = None             # parameter_info (hover-help body)
     units: str | None = None            # parameter_units printf fmt (with unitstyle=9 Custom)
     steps: int | None = None            # parameter_steps: quantize the range into N discrete steps
+    # parameter_modmode: Live 12 per-param Modulation mode (corpus: Clix v1.3
+    # ships 0/3/4 alongside linknames=1 — the data model behind Live 12's
+    # native Mod mapping). Opt-in: None omits the key (byte-stable fleet).
+    modmode: int | None = None
 
     def __post_init__(self) -> None:
         self.name = _normalize_label(self.name, field_name="name")
@@ -208,6 +212,8 @@ class ParameterSpec:
             valueof["parameter_invisible"] = self.invisible
         if self.linknames is not None:
             valueof["parameter_linknames"] = int(self.linknames)
+        if self.modmode is not None:
+            valueof["parameter_modmode"] = int(self.modmode)
         if self.annotation_name:
             valueof["parameter_annotation_name"] = self.annotation_name
         if self.info:

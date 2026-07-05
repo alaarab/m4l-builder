@@ -96,3 +96,74 @@ def sidechain_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
         "    mgraphics.stroke();\n"
         "}\n"
     )
+
+
+FOLLOWER_CLUSTER_INLETS = 3
+FOLLOWER_CLUSTER_OUTLETS = 0
+
+
+def follower_cluster_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
+                        bar_color="0.45, 0.75, 0.65, 1.0",
+                        threshold_color="0.95, 0.78, 0.25, 0.95",
+                        return_color="0.90, 0.36, 0.60, 1.0",
+                        text_color="0.62, 0.65, 0.70, 1.0"):
+    """Envelope-follower cluster (catalog #47, dnkFM's right panel): the
+    In-level meter with a yellow THRESHOLD line over it plus a RETURN dB
+    readout lane — the whole detector state in one small panel.
+
+    Inlets: 0 = level 0..1 · 1 = threshold 0..1 · 2 = return dB (float,
+    displayed and drawn as a right-side reduction lane, 0..-24 dB).
+    """
+    return f"""// follower_cluster — level + threshold + return dB (catalog #47)
+mgraphics.init();
+mgraphics.relative_coords = 0;
+mgraphics.autofill = 0;
+inlets = 3;
+outlets = 0;
+
+var level = 0.0;
+var thresh = 0.5;
+var ret_db = 0.0;
+
+function msg_float(v) {{
+    if (inlet === 0) level = Math.max(0, Math.min(1, v));
+    else if (inlet === 1) thresh = Math.max(0, Math.min(1, v));
+    else ret_db = v;
+    mgraphics.redraw();
+}}
+
+function msg_int(v) {{ msg_float(v); }}
+
+function paint() {{
+    var w = box.rect[2] - box.rect[0], h = box.rect[3] - box.rect[1];
+    mgraphics.set_source_rgba({bg_color});
+    mgraphics.rectangle(0, 0, w, h);
+    mgraphics.fill();
+    var pad = 2, lane_w = (w - pad * 3) * 0.55;
+    var ph = h - pad * 2 - 10;
+    // IN level bar
+    mgraphics.set_source_rgba({bar_color});
+    var lh = level * ph;
+    mgraphics.rectangle(pad, pad + ph - lh, lane_w, lh);
+    mgraphics.fill();
+    // threshold line across the level lane
+    mgraphics.set_source_rgba({threshold_color});
+    var ty = pad + ph * (1.0 - thresh);
+    mgraphics.rectangle(pad, ty - 1, lane_w, 2);
+    mgraphics.fill();
+    // RETURN reduction lane (0..-24 dB drawn downward from the top)
+    var rx = pad * 2 + lane_w, rw = w - rx - pad;
+    var rh = Math.max(0, Math.min(1, -ret_db / 24.0)) * ph;
+    mgraphics.set_source_rgba({return_color});
+    mgraphics.rectangle(rx, pad, rw, rh);
+    mgraphics.fill();
+    // captions
+    mgraphics.set_source_rgba({text_color});
+    mgraphics.select_font_face("Ableton Sans Medium");
+    mgraphics.set_font_size(6.0);
+    mgraphics.move_to(pad, h - 2);
+    mgraphics.show_text("IN");
+    mgraphics.move_to(rx, h - 2);
+    mgraphics.show_text(ret_db.toFixed(1) + " dB");
+}}
+"""

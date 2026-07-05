@@ -628,9 +628,11 @@ class TestScope:
         result = scope("s-1", [0, 0, 200, 100])
         assert result["box"]["numinlets"] == 2
 
-    def test_numoutlets_is_0(self):
+    def test_numoutlets_is_1(self):
+        # Ableton maxdiff dataset (T35): live.scope~ has one bang outlet
         result = scope("s-1", [0, 0, 200, 100])
-        assert result["box"]["numoutlets"] == 0
+        assert result["box"]["numoutlets"] == 1
+        assert result["box"]["outlettype"] == ["bang"]
 
     def test_calccount_default_is_64(self):
         result = scope("s-1", [0, 0, 200, 100])
@@ -764,9 +766,11 @@ class TestMeter:
         result = meter("m-1", [0, 0, 20, 100])
         assert result["box"]["numinlets"] == 1
 
-    def test_numoutlets_is_1(self):
+    def test_numoutlets_is_2(self):
+        # Ableton maxdiff dataset (T35): live.meter~ outlets are float + int
         result = meter("m-1", [0, 0, 20, 100])
-        assert result["box"]["numoutlets"] == 1
+        assert result["box"]["numoutlets"] == 2
+        assert result["box"]["outlettype"] == ["float", "int"]
 
     def test_orientation_default_is_0(self):
         result = meter("m-1", [0, 0, 20, 100])
@@ -1908,15 +1912,15 @@ class TestLiveDrop:
         result = live_drop("drop-1", [0, 0, 100, 30])
         assert result["box"]["numinlets"] == 1
 
-    def test_numoutlets_is_1(self):
-        # DOC: only the left outlet is documented — it emits the absolute filepath
-        # as one quoted symbol. (The prior 2-outlet 'file-type code' was fabricated.)
+    def test_numoutlets_is_2(self):
+        # Ableton maxdiff known-objects dataset (T35): live.drop has TWO
+        # outlets (the docs describe only the left/filepath one).
         result = live_drop("drop-1", [0, 0, 100, 30])
-        assert result["box"]["numoutlets"] == 1
+        assert result["box"]["numoutlets"] == 2
 
-    def test_outlettype_is_one_string(self):
+    def test_outlettype_two_strings(self):
         result = live_drop("drop-1", [0, 0, 100, 30])
-        assert result["box"]["outlettype"] == [""]
+        assert result["box"]["outlettype"] == ["", ""]
 
     def test_decodemode_set_when_provided(self):
         # disable decode to pass the ORIGINAL file path (e.g. movie for jit.movie)
@@ -3165,7 +3169,8 @@ class TestMatrixctrl:
 
     def test_outlettype(self):
         result = matrixctrl("mc-1", [0, 0, 120, 120])
-        assert result["box"]["outlettype"] == ["", ""]
+        # dataset-verified (T35): matrixctrl outlets are lists
+        assert result["box"]["outlettype"] == ["list", "list"]
 
     def test_rows_default(self):
         result = matrixctrl("mc-1", [0, 0, 120, 120])

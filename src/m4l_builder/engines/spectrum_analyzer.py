@@ -30,7 +30,8 @@ def spectrum_analyzer_js(*,
                          peak_color="0.85, 0.88, 0.92, 0.9",
                          grid_color="0.2, 0.2, 0.22, 0.5",
                          text_color="0.5, 0.5, 0.52, 1.0",
-                         gradient=True):
+                         gradient=True, dual_layer=False,
+                         silhouette_color="0.55, 0.58, 0.62, 0.30"):
     """Return JavaScript source for a spectrum analyzer display (Max jsui).
 
     The JS code renders incoming FFT/band magnitude data as a real-time
@@ -58,6 +59,10 @@ def spectrum_analyzer_js(*,
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     gradient_js = "true" if gradient else "false"
+    # dual_layer (catalog #50, Hologram grey-vs-orange / Para EQ pre-post):
+    # a `ref <dB list>` message stores the INPUT spectrum, drawn as a filled
+    # silhouette UNDER the main layer. Gated so existing devices' generated
+    # js stays byte-identical when off.
 
     # Parse the grid_color to derive a brighter version for the 0dB line
     _gc_parts = [s.strip() for s in grid_color.split(",")]
@@ -106,6 +111,12 @@ def spectrum_analyzer_js(*,
         "var LOG_MAX = Math.log(MAX_FREQ) / Math.LN10;\n"
         "var LOG_RANGE = LOG_MAX - LOG_MIN;\n"
         "\n"
+        + ("" if not dual_layer else
+           "var ref_frame = [];\n"
+           "function ref() {\n"
+           "    ref_frame = arrayfromargs(arguments);\n"
+           "    mgraphics.redraw();\n"
+           "}\n\n") +
         "// --- Input handlers ---\n"
         "function list() {\n"
         "    var args = arrayfromargs(arguments);\n"
@@ -295,6 +306,23 @@ def spectrum_analyzer_js(*,
         "        mgraphics.stroke();\n"
         "    }\n"
         "\n"
+        + ("" if not dual_layer else
+           "    // --- input silhouette (dual layer) ---\n"
+           "    if (ref_frame.length > 1) {\n"
+           "        mgraphics.set_source_rgba(" + silhouette_color + ");\n"
+           "        mgraphics.move_to(plot_x, plot_y + plot_h);\n"
+           "        for (var ri = 0; ri < ref_frame.length; ri++) {\n"
+           "            var rv = ref_frame[ri];\n"
+           "            if (rv != rv || rv === undefined) rv = MIN_DB;\n"
+           "            if (rv < MIN_DB) rv = MIN_DB;\n"
+           "            if (rv > MAX_DB) rv = MAX_DB;\n"
+           "            var rx = plot_x + plot_w * ri / (ref_frame.length - 1);\n"
+           "            mgraphics.line_to(rx, db_to_y(rv, plot_y, plot_h));\n"
+           "        }\n"
+           "        mgraphics.line_to(plot_x + plot_w, plot_y + plot_h);\n"
+           "        mgraphics.close_path();\n"
+           "        mgraphics.fill();\n"
+           "    }\n\n") +
         "    // --- dB labels ---\n"
         "    mgraphics.select_font_face(\"Ableton Sans Medium\");\n"
         "    mgraphics.set_font_size(8);\n"

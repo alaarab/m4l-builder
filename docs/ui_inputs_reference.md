@@ -1,4 +1,6 @@
 # M4L Inputs & UI Reference (mastery loop)
+> **Theme naming note (T37):** examples below cite RUPTURE (a distinct-accent2 palette) for the two-hue mechanics; the shipping fleet standard is **GRAPHITE** with per-device accent overrides — both live in `theme.py PALETTES` and behave identically here.
+
 
 Authoritative catalog of every Max-for-Live control/input + premium-UI rule for the
 m4l-builder kit. Grounded in the **synced Max docs** (LiveMCP `search_docs` /

@@ -183,7 +183,7 @@ def fft_analyzer_dsp(
     if lb_id is None:
         lb_id = f"{id_prefix}_lb"
         device.add_newobj(
-            lb_id, "loadbang", numinlets=0, numoutlets=1, outlettype=["bang"],
+            lb_id, "loadbang", numinlets=1, numoutlets=1, outlettype=["bang"],
             patching_rect=[patch_x + 240, patch_y - 40, 70, 22],
         )
         ids["loadbang"] = lb_id

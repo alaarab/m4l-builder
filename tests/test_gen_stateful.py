@@ -30,7 +30,9 @@ def test_lowpass_12_is_verbatim_rbj_biquad():
     # change()-gated coefficient recompute (CPU discipline) + DF1 history taps
     assert "CHANGE = change(his_cf * his_q);" in code
     assert "twopi / samplerate" in code
-    assert "his_h4 = output;" in code
+    # y-feedback write is denormal-flushed (Q44); his_h1 copies the flushed cell
+    assert "his_h4 = fixdenorm(output);" in code
+    assert "his_h1 = his_h4;" in code
 
 
 def test_allpass_uses_gen_delay_operators():
@@ -38,7 +40,8 @@ def test_allpass_uses_gen_delay_operators():
     assert code.startswith("allpass(x, g, delaySamps, delaySig1, delaySig2)")
     assert "delaySig1.write(x);" in code
     assert "delaySig1.read(delaySamps)" in code
-    assert "delaySig2.write(y);" in code
+    # the feedback line write is denormal-flushed (Q44 silent-tail guard)
+    assert "delaySig2.write(fixdenorm(y));" in code
     assert code.count("{") == code.count("}")
 
 
@@ -55,7 +58,8 @@ def test_rampsmooth_is_a_valid_gen_function():
 def test_ring_delay_emits_data_poke_peek_wrap():
     code = ring_delay("buf_grain", 44100, input="sig", delay="dly", out="wet")
     assert "Data buf_grain(44100);" in code
-    assert "poke(buf_grain, sig, 0, his_widx);" in code
+    # the line write is denormal-flushed (Q44: caller-closed feedback loops)
+    assert "poke(buf_grain, fixdenorm(sig), 0, his_widx);" in code
     assert "wet = peek(buf_grain, wrap(his_widx - (dly), 0, 44100), 0);" in code
     # head advances with wrap
     assert "his_widx = wrap(his_widx + 1, 0, 44100);" in code
@@ -64,14 +68,15 @@ def test_ring_delay_emits_data_poke_peek_wrap():
 def test_ring_delay_custom_index_name():
     code = ring_delay("rb", 1024, index="wp")
     assert "History wp(0);" in code
-    assert "poke(rb, x, 0, wp);" in code
+    assert "poke(rb, fixdenorm(x), 0, wp);" in code
 
 
 def test_diffuse_is_one_multiply_schroeder_allpass():
     code = diffuse_fn()
     assert code.startswith("diffuse(sig, delaySamps, delaySig, coef)")
     assert "delaySig.read(delaySamps)" in code
-    assert "delaySig.write(stage1);" in code
+    # feedback state write is denormal-flushed (Q44)
+    assert "delaySig.write(fixdenorm(stage1));" in code
     assert code.count("{") == code.count("}")
 
 
@@ -137,10 +142,12 @@ def test_modulated_allpass_reverb_grounded_topology():
     assert "allpass(preL, 0.625, 61.014," in code
     assert "1.36255" in code and "0.27" in code
     assert "changeDelayTime = change(his_size);" in code
-    # lowpass-damped feedback tank, both channels
+    # lowpass-damped feedback tank, both channels; the tank write (THE feedback
+    # loop) is denormal-flushed (Q44)
     assert "fbL = lowpass_12(rvbDecay * tankL.read(his_tank)" in code
     assert "fbR = lowpass_12(rvbDecay * tankR.read(his_tank)" in code
-    assert "tankL.write(mainL);" in code and "tankR.write(mainR);" in code
+    assert "tankL.write(fixdenorm(mainL));" in code
+    assert "tankR.write(fixdenorm(mainR));" in code
     # REGRESSION: Live's gen silences a codebox that declares a History AFTER an
     # executable statement — every top-level History must precede the first
     # statement. (A his_apd1-after-his_size= build passed no audio until reordered.)

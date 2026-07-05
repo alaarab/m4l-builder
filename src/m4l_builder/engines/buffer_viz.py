@@ -121,3 +121,153 @@ def _indent(code: str, levels: int) -> str:
     pad = "    " * levels
     return "\n".join(pad + ln if ln.strip() else ln
                      for ln in code.strip().split("\n"))
+
+
+def multi_lane_thumbnail_js(*, key: str, samps: int, lanes: int,
+                            colors: list, poll_ms: int = 50,
+                            bg_color: str = DEFAULT_BG,
+                            line_width: float = 1.2) -> str:
+    """Multi-curve thumbnail (dnksaus Multi Shaper, catalog #20): ALL lanes'
+    curves overlaid in their lane colors in one small square — the
+    "small multiples" summary of a multi-lane device.
+
+    Reads one ``(key, samps, lanes)`` viz buffer (values normalized 0..1 per
+    sample) and polylines every channel. ``colors``: one RGBA list per lane
+    (cycled if short). Deliver the resolved buffer name via ``set_buffers``
+    exactly like every buffer_viz display.
+    """
+    cols = [list(colors[i % len(colors)]) for i in range(lanes)]
+    cols_js = ", ".join(
+        "[" + ", ".join(f"{float(c):.4g}" for c in col[:4]) + "]"
+        for col in cols)
+    draw = f"""
+  var f = frames["{key}"];
+  if (f) {{
+    var pad = 2, pw = w - pad * 2, ph = h - pad * 2;
+    for (var ch = 0; ch < {int(lanes)}; ch++) {{
+      var lane = f[ch];
+      if (!lane) continue;
+      mgraphics.set_source_rgba(TH_COLS[ch]);
+      mgraphics.set_line_width({float(line_width)});
+      for (var i = 0; i < lane.length; i++) {{
+        var px = pad + pw * i / (lane.length - 1);
+        var py = pad + ph * (1.0 - Math.max(0, Math.min(1, lane[i])));
+        if (i === 0) mgraphics.move_to(px, py);
+        else mgraphics.line_to(px, py);
+      }}
+      mgraphics.stroke();
+    }}
+  }}
+"""
+    return buffer_viz_js(
+        draw=draw,
+        buffers=[(key, int(samps), int(lanes))],
+        poll_ms=poll_ms,
+        bg_color=bg_color,
+        extra_globals=f"var TH_COLS = [{cols_js}];\n",
+    )
+
+
+def waveform_layers_js(*, key: str, samps: int, audio_ch: int = 0,
+                       gain_ch: int = None, channels: int = None,
+                       poll_ms: int = 50,
+                       wave_color: str = "0.55, 0.58, 0.62, 1.0",
+                       gain_color: str = "0.90, 0.36, 0.60, 1.0",
+                       head_color: str = "0.05, 0.76, 0.83, 1.0",
+                       bg_color: str = DEFAULT_BG,
+                       playhead: bool = False, ruler: bool = False,
+                       caption: bool = False) -> str:
+    """Layered buffer waveform (catalog #44 + #45 + #46): grey audio
+    history with an optional APPLIED-GAIN polyline over it (Clix pink-over-
+    grey — show what the processor DID), an optional live playhead cursor
+    (``set_playhead 0..1`` messages, Live Stretch), and an optional
+    sample-count ruler + ``set_caption <name…>`` filename line (Random
+    Sample Picker).
+
+    Buffer contract: one ``(key, samps, channels)`` viz buffer —
+    ``audio_ch`` holds -1..1 audio, ``gain_ch`` (if given) holds 0..1 gain.
+    """
+    n_ch = channels if channels is not None else (
+        max(audio_ch, gain_ch if gain_ch is not None else 0) + 1)
+    handlers = """
+function set_playhead(v) {
+    ph = Math.max(0, Math.min(1, v));
+    mgraphics.redraw();
+}
+function set_caption() {
+    cap = Array.prototype.slice.call(arguments).join(" ");
+    mgraphics.redraw();
+}
+"""
+    globs = f"""var ph = -1.0;
+var cap = "";
+var WAVE_C = [{wave_color}];
+var GAIN_C = [{gain_color}];
+var HEAD_C = [{head_color}];
+"""
+    gain_block = "" if gain_ch is None else f"""
+    var g = f[{int(gain_ch)}];
+    if (g) {{
+      mgraphics.set_source_rgba(GAIN_C);
+      mgraphics.set_line_width(1.4);
+      for (var gi = 0; gi < g.length; gi++) {{
+        var gx = pad + pw * gi / (g.length - 1);
+        var gy = pad + phh * (1.0 - Math.max(0, Math.min(1, g[gi])));
+        if (gi === 0) mgraphics.move_to(gx, gy);
+        else mgraphics.line_to(gx, gy);
+      }}
+      mgraphics.stroke();
+    }}"""
+    head_block = "" if not playhead else """
+    if (ph >= 0) {
+      mgraphics.set_source_rgba(HEAD_C);
+      mgraphics.rectangle(pad + pw * ph - 1, pad, 2, phh);
+      mgraphics.fill();
+    }"""
+    ruler_block = "" if not ruler else f"""
+    mgraphics.set_source_rgba(WAVE_C[0], WAVE_C[1], WAVE_C[2], 0.8);
+    mgraphics.select_font_face("Ableton Sans Medium");
+    mgraphics.set_font_size(6.0);
+    var marks = [0, 0.5, 1.0];
+    for (var mi = 0; mi < marks.length; mi++) {{
+      var mx = pad + pw * marks[mi];
+      mgraphics.rectangle(mx - 0.5, pad + phh - 3, 1, 3);
+      mgraphics.fill();
+      var lbl = "" + Math.round(marks[mi] * {int(samps)});
+      mgraphics.move_to(Math.min(mx + 2, w - 24), pad + phh - 5);
+      mgraphics.show_text(lbl);
+    }}"""
+    cap_block = "" if not caption else """
+    if (cap.length) {
+      mgraphics.set_source_rgba(WAVE_C[0], WAVE_C[1], WAVE_C[2], 0.9);
+      mgraphics.select_font_face("Ableton Sans Medium");
+      mgraphics.set_font_size(6.5);
+      mgraphics.move_to(pad + 2, pad + 8);
+      mgraphics.show_text(cap);
+    }"""
+    draw = f"""
+  var f = frames["{key}"];
+  var pad = 1, pw = w - pad * 2, phh = h - pad * 2;
+  if (f) {{
+    var a = f[{int(audio_ch)}];
+    if (a) {{
+      mgraphics.set_source_rgba(WAVE_C[0], WAVE_C[1], WAVE_C[2], 0.55);
+      var mid = pad + phh / 2;
+      for (var i = 0; i < a.length; i++) {{
+        var x = pad + pw * i / (a.length - 1);
+        var v = Math.max(-1, Math.min(1, a[i]));
+        var hh = Math.max(0.5, Math.abs(v) * phh / 2);
+        mgraphics.rectangle(x, mid - hh, Math.max(1, pw / a.length), hh * 2);
+        mgraphics.fill();
+      }}
+    }}{gain_block}{head_block}{ruler_block}{cap_block}
+  }}
+"""
+    return buffer_viz_js(
+        draw=draw,
+        buffers=[(key, int(samps), int(n_ch))],
+        poll_ms=poll_ms,
+        bg_color=bg_color,
+        extra_globals=globs,
+        extra_handlers=handlers,
+    )

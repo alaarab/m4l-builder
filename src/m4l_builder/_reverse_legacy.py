@@ -228,7 +228,7 @@ DEFAULT_AUDIO_IO_BOXES = {
     "obj-plugin": {
         "text": "plugin~",
         "patching_rect": [30, 30, 60, 20],
-        "numinlets": 1,
+        "numinlets": 2,
         "numoutlets": 2,
         "outlettype": ["signal", "signal"],
     },
@@ -236,7 +236,7 @@ DEFAULT_AUDIO_IO_BOXES = {
         "text": "plugout~",
         "patching_rect": [30, 200, 60, 20],
         "numinlets": 2,
-        "numoutlets": 0,
+        "numoutlets": 2,
     },
 }
 

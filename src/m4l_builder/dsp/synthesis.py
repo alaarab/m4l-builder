@@ -333,3 +333,98 @@ def slice_pool(id_prefix: str, buffer_name: str, num_voices: int = 4,
     lines.extend(r_lines)
 
     return (boxes, lines)
+
+
+def poly_voice_template(id_prefix: str, voices: int = 8) -> tuple:
+    """Embedded ``poly~`` voice-allocation instrument core (T36/Q20 — the
+    official poly~/thispoly~/adsr~ lesson as one block).
+
+    The embedded voice patcher is the canonical shape:
+
+    - ``in 1`` receives the ``midinote pitch velocity`` pair the host
+      sends (poly~ target-routes note-ons to free voices)
+    - ``unpack`` splits pitch/velocity; ``mtof`` -> ``cycle~`` is the
+      placeholder oscillator (swap the source, keep the envelope contract)
+    - velocity 0..127 scales to 0..1 and TRIGGERS ``adsr~``; note-off
+      (velocity 0) releases it
+    - ``adsr~``'s status outlet drives ``thispoly~`` mute/busy — the voice
+      frees itself when the release tail ends (the whole point of the
+      lesson: CPU idles at zero for silent voices)
+
+    Host side: wire ``prepend midinote`` -> ``{p}_poly`` inlet 0 from your
+    notein pair, and ``{p}_poly`` outlet 0 to the instrument output stage.
+    """
+    p = id_prefix
+    voice = {
+        "patcher": {
+            "fileversion": 1,
+            "appversion": {"major": 8, "minor": 6, "revision": 2},
+            "rect": [0, 0, 640, 480],
+            "bglocked": 0,
+            "openinpresentation": 0,
+            "boxes": [
+                {"box": {"id": "v_in", "maxclass": "newobj", "text": "in 1",
+                         "numinlets": 0, "numoutlets": 1, "outlettype": [""],
+                         "patching_rect": [30, 30, 40, 20]}},
+                {"box": {"id": "v_unpack", "maxclass": "newobj",
+                         "text": "unpack 0 0",
+                         "numinlets": 1, "numoutlets": 2,
+                         "outlettype": ["int", "int"],
+                         "patching_rect": [30, 70, 80, 20]}},
+                {"box": {"id": "v_mtof", "maxclass": "newobj", "text": "mtof",
+                         "numinlets": 1, "numoutlets": 1, "outlettype": [""],
+                         "patching_rect": [30, 110, 50, 20]}},
+                {"box": {"id": "v_osc", "maxclass": "newobj", "text": "cycle~",
+                         "numinlets": 2, "numoutlets": 1,
+                         "outlettype": ["signal"],
+                         "patching_rect": [30, 150, 60, 20]}},
+                {"box": {"id": "v_velscale", "maxclass": "newobj",
+                         "text": "/ 127.",
+                         "numinlets": 2, "numoutlets": 1,
+                         "outlettype": ["float"],
+                         "patching_rect": [140, 110, 50, 20]}},
+                {"box": {"id": "v_adsr", "maxclass": "newobj",
+                         "text": "adsr~ 5 80 0.7 200",
+                         "numinlets": 5, "numoutlets": 3,
+                         "outlettype": ["signal", "signal", ""],
+                         "patching_rect": [140, 150, 130, 20]}},
+                {"box": {"id": "v_thispoly", "maxclass": "newobj",
+                         "text": "thispoly~",
+                         "numinlets": 1, "numoutlets": 1,
+                         "outlettype": ["int"],
+                         "patching_rect": [290, 190, 70, 20]}},
+                {"box": {"id": "v_vca", "maxclass": "newobj", "text": "*~",
+                         "numinlets": 2, "numoutlets": 1,
+                         "outlettype": ["signal"],
+                         "patching_rect": [30, 200, 40, 20]}},
+                {"box": {"id": "v_out", "maxclass": "newobj", "text": "out~ 1",
+                         "numinlets": 1, "numoutlets": 0,
+                         "patching_rect": [30, 250, 50, 20]}},
+            ],
+            "lines": [
+                {"patchline": {"source": ["v_in", 0], "destination": ["v_unpack", 0]}},
+                {"patchline": {"source": ["v_unpack", 0], "destination": ["v_mtof", 0]}},
+                {"patchline": {"source": ["v_mtof", 0], "destination": ["v_osc", 0]}},
+                {"patchline": {"source": ["v_unpack", 1], "destination": ["v_velscale", 0]}},
+                {"patchline": {"source": ["v_velscale", 0], "destination": ["v_adsr", 0]}},
+                {"patchline": {"source": ["v_osc", 0], "destination": ["v_vca", 0]}},
+                {"patchline": {"source": ["v_adsr", 0], "destination": ["v_vca", 1]}},
+                {"patchline": {"source": ["v_adsr", 2], "destination": ["v_thispoly", 0]}},
+                {"patchline": {"source": ["v_vca", 0], "destination": ["v_out", 0]}},
+            ],
+        }
+    }
+    box = {
+        "box": {
+            "id": f"{p}_poly", "maxclass": "newobj",
+            "text": f"poly~ {p}_voice.maxpat {voices}",
+            "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"],
+            "patching_rect": [30, 30, 160, 20],
+        }
+    }
+    # poly~ cannot embed its patcher inline (Live-verified silent on the
+    # T23b wrapper) — the voice ships as a .maxpat sidecar; register it:
+    # device.register_asset(name, content, asset_type="TEXT", category="js")
+    import json as _json
+    sidecar = (f"{p}_voice.maxpat", _json.dumps(voice, indent="\t"))
+    return ([box], [], sidecar)

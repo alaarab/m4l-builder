@@ -14,6 +14,9 @@ ICON_NAMES = [
     "lowpass", "highpass", "bandpass", "notch",
     "power", "play", "pause", "loop", "bypass", "bell",
     "expand", "collapse",
+    # dnksaus micro-language (catalog #63): dice=randomize, replay=re-roll,
+    # clear=unmap/delete, hamburger=options popover, headphone=listen
+    "dice", "replay", "clear", "hamburger", "headphone",
 ]
 
 _ICONS_JS = r"""
@@ -148,6 +151,60 @@ function draw_icon_collapse(cx, cy, s) {
     mgraphics.rectangle(cx - a, cy - s * 0.1, a * 1.0, a * 1.1);
     mgraphics.fill();
 }
+function draw_icon_dice(cx, cy, s) {
+    var a = s * 0.85, r = Math.max(0.8, s * 0.16);
+    mgraphics.set_line_width(_ico_lw(s) * 0.8);
+    mgraphics.rectangle(cx - a, cy - a, 2 * a, 2 * a);
+    mgraphics.stroke();
+    var d = a * 0.45;
+    var pips = [[-d, -d], [d, -d], [0, 0], [-d, d], [d, d]];
+    for (var i = 0; i < pips.length; i++) {
+        mgraphics.arc(cx + pips[i][0], cy + pips[i][1], r, 0, Math.PI * 2);
+        mgraphics.fill();
+    }
+}
+function draw_icon_replay(cx, cy, s) {
+    mgraphics.set_line_width(_ico_lw(s));
+    var r = s * 0.7;
+    mgraphics.arc(cx, cy, r, -Math.PI * 0.35, Math.PI * 1.15);
+    mgraphics.stroke();
+    var ax = cx + r * Math.cos(-Math.PI * 0.35);
+    var ay = cy + r * Math.sin(-Math.PI * 0.35);
+    mgraphics.move_to(ax - s * 0.28, ay - s * 0.30);
+    mgraphics.line_to(ax + s * 0.24, ay - s * 0.02);
+    mgraphics.line_to(ax - s * 0.30, ay + s * 0.26);
+    mgraphics.close_path();
+    mgraphics.fill();
+}
+function draw_icon_clear(cx, cy, s) {
+    mgraphics.set_line_width(_ico_lw(s));
+    var a = s * 0.55;
+    mgraphics.move_to(cx - a, cy - a);
+    mgraphics.line_to(cx + a, cy + a);
+    mgraphics.move_to(cx + a, cy - a);
+    mgraphics.line_to(cx - a, cy + a);
+    mgraphics.stroke();
+}
+function draw_icon_hamburger(cx, cy, s) {
+    mgraphics.set_line_width(_ico_lw(s));
+    var a = s * 0.75, g = s * 0.5;
+    for (var i = -1; i <= 1; i++) {
+        mgraphics.move_to(cx - a, cy + i * g);
+        mgraphics.line_to(cx + a, cy + i * g);
+    }
+    mgraphics.stroke();
+}
+function draw_icon_headphone(cx, cy, s) {
+    mgraphics.set_line_width(_ico_lw(s));
+    var r = s * 0.72;
+    mgraphics.arc(cx, cy + s * 0.1, r, Math.PI, Math.PI * 2);
+    mgraphics.stroke();
+    var pw = s * 0.30, ph = s * 0.55;
+    mgraphics.rectangle(cx - r - pw * 0.4, cy + s * 0.1, pw, ph);
+    mgraphics.fill();
+    mgraphics.rectangle(cx + r - pw * 0.6, cy + s * 0.1, pw, ph);
+    mgraphics.fill();
+}
 function draw_glyph(name, cx, cy, s) {
     switch (name) {
         case 'sine': return draw_icon_sine(cx, cy, s);
@@ -168,6 +225,11 @@ function draw_glyph(name, cx, cy, s) {
         case 'bypass': return draw_icon_bypass(cx, cy, s);
         case 'expand': return draw_icon_expand(cx, cy, s);
         case 'collapse': return draw_icon_collapse(cx, cy, s);
+        case 'dice': return draw_icon_dice(cx, cy, s);
+        case 'replay': return draw_icon_replay(cx, cy, s);
+        case 'clear': return draw_icon_clear(cx, cy, s);
+        case 'hamburger': return draw_icon_hamburger(cx, cy, s);
+        case 'headphone': return draw_icon_headphone(cx, cy, s);
         default: return draw_icon_bypass(cx, cy, s);
     }
 }

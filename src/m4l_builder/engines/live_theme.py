@@ -53,9 +53,9 @@ def live_colors_bus(specs, *, id_prefix="ltheme", x=20, y=20):
     thisdev, colors = f"{p}_thisdev", f"{p}_colors"
     boxes = [
         newobj(thisdev, "live.thisdevice", numinlets=1, numoutlets=3,
-               outlettype=["bang", "", ""], patching_rect=[x, y, 90, 20]),
+               outlettype=["bang", "int", "int"], patching_rect=[x, y, 90, 20]),
         newobj(colors, "live.colors", numinlets=1, numoutlets=2,
-               outlettype=["", ""], patching_rect=[x, y + 30, 70, 20]),
+               outlettype=["", "bang"], patching_rect=[x, y + 30, 70, 20]),
     ]
     lines = []
     yy = y + 70
@@ -166,7 +166,7 @@ def live_brand_dim(bus, brand_rgba, *, attrs=("activedialcolor",),
         newobj(m_z, zombie_token, numinlets=2, numoutlets=1, maxclass="message",
                patching_rect=[x + 150, y + 210, 140, 18]),
         newobj(col, "live.colors", numinlets=1, numoutlets=2,
-               outlettype=["", ""], patching_rect=[x + 150, y + 240, 70, 20]),
+               outlettype=["", "bang"], patching_rect=[x + 150, y + 240, 70, 20]),
         newobj(rt, f"route {zombie_token}", numinlets=1, numoutlets=2,
                outlettype=["", ""], patching_rect=[x + 150, y + 270, 150, 20]),
     ]
@@ -231,7 +231,7 @@ def live_theme_state_dim(bus, *, attrs=("activedialcolor",),
                                  f"{p}_mzomb", f"{p}_col", f"{p}_rt")
     boxes = [
         newobj(td, "live.thisdevice", numinlets=1, numoutlets=3,
-               outlettype=["bang", "", ""], patching_rect=[x, y, 90, 20]),
+               outlettype=["bang", "int", "int"], patching_rect=[x, y, 90, 20]),
         newobj(sl, "sel 1 0", numinlets=1, numoutlets=3,
                outlettype=["bang", "bang", ""], patching_rect=[x, y + 30, 60, 20]),
         newobj(m_a, active_token, numinlets=2, numoutlets=1, maxclass="message",
@@ -239,7 +239,7 @@ def live_theme_state_dim(bus, *, attrs=("activedialcolor",),
         newobj(m_z, zombie_token, numinlets=2, numoutlets=1, maxclass="message",
                patching_rect=[x + 130, y + 60, 140, 18]),
         newobj(col, "live.colors", numinlets=1, numoutlets=2,
-               outlettype=["", ""], patching_rect=[x, y + 90, 70, 20]),
+               outlettype=["", "bang"], patching_rect=[x, y + 90, 70, 20]),
         newobj(rt, f"route {active_token} {zombie_token}", numinlets=1,
                numoutlets=3, outlettype=["", "", ""], patching_rect=[x, y + 120, 210, 20]),
     ]

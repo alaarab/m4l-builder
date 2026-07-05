@@ -267,3 +267,67 @@ def mc_selector(id_prefix: str, channels: int = 2, count: int = 2) -> tuple:
                patching_rect=[30, 120, 120, 20]),
     ]
     return (boxes, [])
+
+
+def oversampled_wrapper(id_prefix: str, inner_boxes: list, inner_lines: list,
+                        *, up: int = 2, extra_msg_inlets: int = 1) -> tuple:
+    """Wrap an MSP chain in a ``poly~ … 1 up N`` subpatcher (T23b/Q49 —
+    2x-oversample stock-MSP nonlinearities without gen~).
+
+    ``inner_boxes``/``inner_lines`` form the chain; wire it FROM the
+    provided ``{p}_in1`` (``in~ 1``, the upsampled signal) and INTO
+    ``{p}_out1`` (``out~ 1``). Control messages enter the poly~'s inlet 2
+    (an ``in 2`` box, id ``{p}_msgin``) — route them inside the chain.
+    poly~ inlet numbering is shared between ``in~`` and ``in`` (doc-
+    verified), so the host box has ``1 + extra_msg_inlets`` inlets.
+
+    Returns ``([poly_box], [], (sidecar_name, sidecar_json))`` — one host
+    box (id ``{p}_poly``) plus the voice patcher to
+    ``device.register_asset(name, content, asset_type="TEXT",
+    category="js")``. poly~ cannot embed its patcher inline (Live-verified
+    silent), so the voice ships as a ``.maxpat`` next to the device and
+    freeze packs it. The anti-alias filtering is poly~'s own.
+    """
+    p = id_prefix
+    boxes = [
+        {"box": {"id": f"{p}_in1", "maxclass": "newobj", "text": "in~ 1",
+                 "numinlets": 0, "numoutlets": 1, "outlettype": ["signal"],
+                 "patching_rect": [30, 30, 45, 20]}},
+        {"box": {"id": f"{p}_out1", "maxclass": "newobj", "text": "out~ 1",
+                 "numinlets": 1, "numoutlets": 0,
+                 "patching_rect": [30, 400, 50, 20]}},
+    ]
+    for k in range(extra_msg_inlets):
+        boxes.append({"box": {
+            "id": f"{p}_msgin" if k == 0 else f"{p}_msgin{k + 1}",
+            "maxclass": "newobj", "text": f"in {k + 2}",
+            "numinlets": 0, "numoutlets": 1, "outlettype": [""],
+            "patching_rect": [200 + k * 80, 30, 40, 20]}})
+    boxes.extend(inner_boxes)
+    sub = {
+        "patcher": {
+            "fileversion": 1,
+            "appversion": {"major": 8, "minor": 6, "revision": 2},
+            "rect": [0, 0, 640, 480],
+            "bglocked": 0,
+            "openinpresentation": 0,
+            "boxes": boxes,
+            "lines": list(inner_lines),
+        }
+    }
+    host = {
+        "box": {
+            "id": f"{p}_poly", "maxclass": "newobj",
+            "text": f"poly~ {p}_osfx.maxpat 1 up {int(up)}",
+            "numinlets": 1 + extra_msg_inlets, "numoutlets": 1,
+            "outlettype": ["signal"],
+            "patching_rect": [30, 30, 200, 20],
+        }
+    }
+    # poly~ CANNOT embed its patcher inline (Live-verified: an embedded
+    # "patcher" dict is ignored and the object loads dead/silent) — the
+    # voice must be a real .maxpat sidecar next to the device; return it
+    # for the caller to register_asset.
+    import json as _json
+    sidecar = (f"{p}_osfx.maxpat", _json.dumps(sub, indent="\t"))
+    return ([host], [], sidecar)

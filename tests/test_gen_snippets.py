@@ -16,6 +16,7 @@ from m4l_builder.gen_snippets import (
     dynamics_band,
     exciter_harmonics,
     exp_pole,
+    flush,
     grain_window_lookup,
     hardclip_adaa,
     isp_catmull_4x,
@@ -59,6 +60,12 @@ def _gen_to_py(code):
     # can exec it (GenExpr ?: is not Python syntax).
     return re.sub(r"(\w+)\s*=\s*(.+?)\s*\?\s*(.+?)\s*:\s*(.+?);",
                   r"\1 = (\3 if \2 else \4)", code)
+
+
+def test_flush_emits_fixdenorm():
+    # the ONE shared denormal-flush spelling (Q44): flush("y") -> fixdenorm(y)
+    assert flush("y") == "fixdenorm(y)"
+    assert flush("s + c * (x - s)") == "fixdenorm(s + c * (x - s))"
 
 
 def test_ms_encode_text():
@@ -480,10 +487,12 @@ def _run_biquad(x_seq, b0, b1, b2, a1, a2):
 
 
 def test_biquad_df1_matches_kweight_shipped_form():
+    # the kweight recurrence, with BOTH y-feedback state writes denormal-flushed
+    # (Q44) — x taps are input history (no feedback) and stay bare.
     assert biquad_df1("oL", "sb0", "sb1", "sb2", "sa1", "sa2",
                       "kx1L", "kx2L", "ky1L", "ky2L", "s1L") == (
         "s1L = sb0 * oL + sb1 * kx1L + sb2 * kx2L - sa1 * ky1L - sa2 * ky2L;\n"
-        "kx2L = kx1L; kx1L = oL; ky2L = ky1L; ky1L = s1L;"
+        "kx2L = kx1L; kx1L = oL; ky2L = fixdenorm(ky1L); ky1L = fixdenorm(s1L);"
     )
 
 
@@ -660,8 +669,11 @@ def test_one_pole_coeff_matches_minus_2pi_fc_over_fs():
 
 
 def test_one_pole_lp_and_hp_text():
-    assert one_pole_lp("x", "s", "c", "y") == "s = s + c * (x - s);\ny = s;"
-    assert one_pole_hp("x", "s", "c", "y") == "s = s + c * (x - s);\ny = x - s;"
+    # the state write is denormal-flushed (Q44 silent-tail guard)
+    assert one_pole_lp("x", "s", "c", "y") == \
+        "s = fixdenorm(s + c * (x - s));\ny = s;"
+    assert one_pole_hp("x", "s", "c", "y") == \
+        "s = fixdenorm(s + c * (x - s));\ny = x - s;"
 
 
 def _run_one_pole(kind, x_seq, freq, sr=48000.0, init=0.0):
@@ -1610,3 +1622,168 @@ def test_grain_window_lookup_normalized_phase_idiom():
 def test_grain_window_lookup_custom_buffer_and_out():
     snip = grain_window_lookup("ph", buf="buf_hann", chan="0", out="g")
     assert snip == 'g = peek(buf_hann, ph, 0, index="phase", interp="linear");'
+
+
+class TestOs2xWrapper:
+    """T23/Q49: the shared 2x-oversampling wrapper (heat's shipped HQ path)."""
+
+    def test_emits_heats_exact_lines(self):
+        from m4l_builder.gen_snippets import os2x_declares, os2x_post, os2x_pre
+        pre = os2x_pre("inL", "s1L", "s2L", ch="l")
+        assert "s2L = (9.0 * (xl1 + xl2) - (inL + xl3)) * 0.0625;" in pre
+        post = os2x_post("w1L", "w2L", "wetL_raw", "dryL", "inL", ch="l")
+        assert ("wetL_raw = 0.5 * yl4 + 0.28125 * (yl3 + yl5) "
+                "- 0.03125 * (yl1 + yl7);") in post
+        assert "dryL = xl3;" in post          # comb-free aligned dry tap
+        assert "xl3 = xl2; xl2 = xl1; xl1 = inL;" in post
+        decls = os2x_declares("r")
+        assert "History xr3(0.);" in decls and "History yr7(0.);" in decls
+
+    def test_bypass_path_is_plain_sample(self):
+        from m4l_builder.gen_snippets import os2x_post, os2x_pre
+        pre = os2x_pre("x", "a", "b", ch="l")
+        assert pre.startswith("a = x;\nb = 0.;\n")   # os off: byte-exact dry
+        post = os2x_post("wa", "wb", "wet", "dry", "x", ch="l")
+        assert post.startswith("wet = wa;\ndry = x;\n")
+
+
+class TestFracReads:
+    """T25/Q54: the shared fractional-delay read helpers."""
+
+    def test_cubic_read_form(self):
+        from m4l_builder.gen_snippets import frac_read_cubic
+        c = frac_read_cubic("dl", "readpos", "y")
+        assert c == 'y = dl.read(readpos, interp="cubic");\n'
+
+    def test_allpass_read_form(self):
+        from m4l_builder.gen_snippets import frac_read_allpass
+        c = frac_read_allpass("dl", "readpos", "y", prefix="q")
+        assert "History q_h(0.);" in c
+        assert "q_eta = (1.0 - q_f) / (1.0 + q_f);" in c
+        assert 'y = q_x1 + q_eta * (q_x0 - q_h);' in c
+        assert c.strip().endswith("q_h = y;")
+
+
+class TestT29Kernels:
+    """T29 [Q12-Q14]: reverb kernels (structural) + spectral curve (sim)."""
+
+    def test_reverb_kernels_lint_clean(self):
+        from m4l_builder.gen_lint import lint_genexpr
+        from m4l_builder.gen_stateful import (
+            allpass_diffusion_chain,
+            dattorro_plate_tank,
+            fdn_reverb,
+        )
+        apd = "Param g(0.5);\n" + allpass_diffusion_chain("in1", "out1")
+        assert lint_genexpr(apd, 2, 1) == []
+        assert apd.count("Delay apd_d") == 4          # 4 Dattorro stages
+        assert "mstosamps(4.77)" in apd               # 1997 input times
+        fdn = ("Param fb(0.8);\nParam damp_hz(6000.);\nParam size(1.);\n"
+               + fdn_reverb())
+        assert lint_genexpr(fdn, 2, 2) == []
+        # the Hadamard rows carry the +/- sign pattern of H4
+        assert "fdn_lp0 - fdn_lp1 + fdn_lp2 - fdn_lp3" in fdn
+        assert "clamp(fb, 0., 0.98)" in fdn           # never self-oscillates
+        plate = ("Param decay(0.7);\nParam damping(6000.);\n"
+                 + dattorro_plate_tank("in1", "out1", "out2"))
+        assert lint_genexpr(plate, 2, 2) == []
+        # figure-8: each branch consumes the OTHER's tail
+        assert "plate_A_in = plate_diff + plate_fbB" in plate
+        assert "plate_B_in = plate_diff + plate_fbA" in plate
+
+    def test_spectral_curve_simulates(self):
+        from m4l_builder.gen_sim import GenKernel
+        from m4l_builder.gen_snippets import spectral_mag_compressor
+        code = ("Param thresh(-24.);\nParam ratio(4.);\n"
+                "Param atk_ms(1.);\nParam rel_ms(50.);\nParam makeup(0.);\n"
+                + spectral_mag_compressor("in1", "out1"))
+        k = GenKernel(code)
+        # quiet bin passes ~unchanged; hot bin is squeezed by the ratio
+        quiet = k.run([0.001] * 400)["out1"][-1]
+        hot = GenKernel(code).run([1.0] * 4000)["out1"][-1]
+        assert abs(quiet - 0.001) < 1e-4              # below thresh: unity
+        # 0 dBFS vs -24 thresh @ 4:1 -> 18 dB GR -> ~0.126 linear
+        assert 0.10 < hot < 0.16
+
+
+class TestRbjShelves:
+    """T34: runtime RBJ shelf coefficients (rbj_lowshelf / rbj_highshelf)."""
+
+    @staticmethod
+    def _band_gain_db(snippet_fn, freq, gain_db, tone_hz):
+        import math
+
+        from m4l_builder.gen_sim import GenKernel
+        code = (
+            "Param f0(1000.); Param g0(0.);\n"
+            "History x1(0.); History x2(0.); History y1(0.); History y2(0.);\n"
+            + snippet_fn("f0", "0.71", "g0", "cb0", "cb1", "cb2",
+                         "ca1", "ca2")
+            + "\n"
+            + __import__("m4l_builder.gen_snippets",
+                         fromlist=["biquad_df1"]).biquad_df1(
+                "in1", "cb0", "cb1", "cb2", "ca1", "ca2",
+                "x1", "x2", "y1", "y2", "out1")
+        )
+        k = GenKernel(code)
+        sr = 48000
+        n = sr // 4
+        sig = [0.5 * math.sin(2 * math.pi * tone_hz * t / sr)
+               for t in range(n)]
+        out = k.run({"in1": sig}, params={"f0": freq, "g0": gain_db},
+                    samplerate=sr)["out1"]
+        tail_in = sig[n // 2:]
+        tail_out = out[n // 2:]
+        rin = math.sqrt(sum(v * v for v in tail_in) / len(tail_in))
+        rout = math.sqrt(sum(v * v for v in tail_out) / len(tail_out))
+        return 20 * math.log10(rout / rin)
+
+    def test_lowshelf_boosts_lows_leaves_highs(self):
+        from m4l_builder.gen_snippets import rbj_lowshelf
+        low = self._band_gain_db(rbj_lowshelf, 200.0, 12.0, 50.0)
+        high = self._band_gain_db(rbj_lowshelf, 200.0, 12.0, 5000.0)
+        assert 10.5 < low < 12.5
+        assert abs(high) < 0.8
+
+    def test_highshelf_boosts_highs_leaves_lows(self):
+        from m4l_builder.gen_snippets import rbj_highshelf
+        high = self._band_gain_db(rbj_highshelf, 2000.0, 12.0, 10000.0)
+        low = self._band_gain_db(rbj_highshelf, 2000.0, 12.0, 100.0)
+        assert 10.5 < high < 12.5
+        assert abs(low) < 0.8
+
+    def test_zero_gain_is_unity(self):
+        from m4l_builder.gen_snippets import rbj_highshelf, rbj_lowshelf
+        for fn in (rbj_lowshelf, rbj_highshelf):
+            delta = self._band_gain_db(fn, 800.0, 0.0, 1000.0)
+            assert abs(delta) < 0.05
+
+
+class TestT40Macros:
+    """T40 [ideas #8,#9]: schroeder_comb + transient_detector macros."""
+
+    def test_schroeder_comb_structure(self):
+        from m4l_builder.gen_lint import lint_genexpr
+        from m4l_builder.gen_snippets import schroeder_comb
+        code = ("Param fb(0.7); Param dmp(0.3);\n"
+                + schroeder_comb("in1", "out1", "29.7", "fb", "dmp"))
+        assert lint_genexpr(code, 1, 1) == []
+        assert "clamp(fb, 0., 0.98)" in code          # runaway guard
+        assert "scb_lp + clamp(dmp" in code           # damp INSIDE the loop
+
+    def test_transient_detector_spikes_on_attack(self):
+
+        from m4l_builder.gen_sim import GenKernel
+        from m4l_builder.gen_snippets import transient_detector
+        code = transient_detector("in1", "out1") + ""
+        k = GenKernel(code)
+        sr = 48000
+        n = sr // 2
+        # silence, then a step (the attack), then a long sustain (>6 slow
+        # time-constants so the slow envelope fully catches up)
+        sig = [0.0] * (n // 8) + [0.7] * (7 * n // 8)
+        out = k.run({"in1": sig}, samplerate=sr)["out1"]
+        attack_zone = max(out[n // 8:n // 8 + 480])   # 10 ms after the hit
+        sustain_zone = max(out[-480:])                # deep into sustain
+        assert attack_zone > 0.3
+        assert sustain_zone < 0.05

@@ -59,7 +59,7 @@ of legacy modules that are being annotated incrementally.
 
 ## Build Output Paths
 
-Devices are written to the Ableton User Library. On this machine: `/mnt/d/Music/Ableton/User Library/` (Windows D: drive via WSL). On macOS it would be `~/Music/Ableton/User Library/`.
+Devices are written to the Ableton User Library. On this machine (macOS): `~/Music/Ableton/User Library/Presets/...`. (On a WSL box it would be the Windows drive mount, e.g. `/mnt/d/Music/Ableton/User Library/`.)
 
 ## Project Skills
 
@@ -80,7 +80,7 @@ src/m4l_builder/
 ├── patcher.py            # Assembles full JSON patcher structure
 ├── container.py          # Wraps JSON in ampf binary header (32-byte header)
 ├── ui.py                 # 16 UI element creator functions (presentation mode)
-├── dsp.py                # 19 DSP building blocks returning (boxes, lines) tuples
+├── dsp/                  # 117 DSP building blocks returning (boxes, lines) tuples
 ├── objects.py            # newobj() and patchline() low-level factory functions
 ├── constants.py          # UNITSTYLE_* constants, device type codes, defaults
 ├── theme.py              # Theme dataclass + 4 presets (MIDNIGHT, WARM, COOL, LIGHT)
@@ -99,7 +99,7 @@ tests/                    # automated test suite
 
 1. **Device API** (`device.py`): top-level interface; `add_panel`, `add_dial`, `add_newobj`, `add_line`, etc.
 2. **UI layer** (`ui.py`): 16 presentation-mode element constructors
-3. **DSP layer** (`dsp.py`): 19 composable signal-processing blocks
+3. **DSP layer** (`dsp/`): 117 composable signal-processing blocks (io/delay/filters/dynamics/midi/spectral/synthesis/routing/live/…)
 4. **Engines** (`engines/`): JS string generators for jsui canvas visualizations
 5. **Patcher** (`patcher.py`): assembles boxes + lines into the full JSON structure
 6. **Container** (`container.py`): wraps JSON in the ampf binary format
@@ -128,7 +128,7 @@ Device methods are `add_<name>(id, rect, ...)` wrappers around the raw functions
 
 **kwargs passthrough**: any Max attribute can be set directly on any component.
 
-### DSP Building Blocks (19)
+### DSP Building Blocks (117 across dsp/*; counts regenerated 2026-07-05 — see also 61 recipes, 57 gen_snippets, 28 gen_stateful kernels, 39 corpus-measured widgets, 66 engines)
 
 All DSP functions return `(boxes, lines)` tuples, designed for composition.
 Add to a device with `device.add_dsp(boxes, lines)` (convenience) or individually via `device.add_box()` / `device.add_line()`.

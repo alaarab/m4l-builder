@@ -199,3 +199,30 @@ def test_num_outs_autodetected():
 def test_num_outs_counts_assignments_inside_branches():
     k = "if (in1 > 0.) { out1 = 1.; out2 = 2.; } else { out1 = 0.; }"
     assert GenKernel(k).num_outs == 2
+
+
+# ── fixdenorm (Q44 denormal-flush primitive) ─────────────────────────────────
+def test_fixdenorm_is_identity_for_normals_and_zero():
+    out = simulate("out1 = fixdenorm(in1);",
+                   {"in1": [0.0, 1.0, -0.5, 1e-300, -1e-300]}, num_samples=5)["out1"]
+    assert out == [0.0, 1.0, -0.5, 1e-300, -1e-300]
+
+
+def test_fixdenorm_flushes_subnormals_to_zero():
+    sub = 5e-324  # smallest positive subnormal double
+    out = simulate("out1 = fixdenorm(in1);",
+                   {"in1": [sub, -sub]}, num_samples=2)["out1"]
+    assert out == [0.0, 0.0]
+
+
+def test_flushed_one_pole_matches_unflushed_for_normal_signals():
+    # bit-transparency proof: the flushed one-pole recurrence equals the bare
+    # recurrence sample-for-sample on a normal-range signal.
+    from m4l_builder.gen_snippets import one_pole_lp
+    sig = [0.5, -0.25, 1.0, 0.0, 0.125, -1.0, 0.75, 0.0]
+    flushed = ("History s(0.);\n" + one_pole_lp("in1", "s", "0.3", "y")
+               + "\nout1 = y;")
+    bare = ("History s(0.);\ns = s + 0.3 * (in1 - s);\ny = s;\nout1 = y;")
+    a = simulate(flushed, {"in1": sig}, num_samples=len(sig))["out1"]
+    b = simulate(bare, {"in1": sig}, num_samples=len(sig))["out1"]
+    assert a == b

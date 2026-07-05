@@ -68,11 +68,17 @@ def apply_validation_policy(device, policy) -> None:
         return
     if policy is None:
         issues = device.lint(device_type=device.device_type)
-        wiring_issues = [
-            issue for issue in issues if issue.code in WIRING_INTEGRITY_CODES
+        # T26/Q46: the default build gate enforces wiring integrity AND the
+        # LAYOUT error class (setwidth-mismatch — the runtime dead-zone bug).
+        # STYLE errors (sig~ etc.) and layout WARNINGS stay advisory at the
+        # default; opt into them with validate="warn"/"error".
+        blocking = [
+            issue for issue in issues
+            if issue.code in WIRING_INTEGRITY_CODES
+            or issue.code == "setwidth-mismatch"
         ]
-        if wiring_issues:
-            raise BuildValidationError(wiring_issues)
+        if blocking:
+            raise BuildValidationError(blocking)
         return
     if policy not in {"warn", "error"}:
         raise ValueError("validate must be one of None, False, 'warn', or 'error'")

@@ -18,12 +18,17 @@ from __future__ import annotations
 import math
 
 __all__ = [
+    "flush",
     "ms_encode",
     "ms_decode",
     "ms_width",
     "ms_width_equal_power",
     "ms_mode_split",
     "ms_mode_merge",
+    "mono_below",
+    "frac_read_cubic",
+    "frac_read_allpass",
+    "spectral_mag_compressor",
     "drive_blend",
     "tanh_adaa",
     "hardclip_adaa",
@@ -62,6 +67,21 @@ __all__ = [
     "kweight_lufs",
     "grain_window_lookup",
 ]
+
+
+def flush(x: str) -> str:
+    """Denormal-flush a feedback state write: ``fixdenorm(x)`` (gen built-in).
+
+    Feedback-bearing kernels (biquad y-history, one-pole smoother state, reverb
+    tanks, delay feedback) decay exponentially toward 0 on silent input; once
+    the value crosses into the subnormal range the CPU cost of every multiply
+    spikes (the classic denormal-tail CPU blowup). gen~ has no global FTZ knob,
+    so the fix is ``fixdenorm`` at each STATE-WRITE site — bit-transparent for
+    zero and all normal-range values (any golden-value diff means a wrong site
+    was touched). One shared spelling so the whole kit is greppable:
+    ``flush("y")`` -> ``fixdenorm(y)``.
+    """
+    return f"fixdenorm({x})"
 
 
 def ms_encode(left: str, right: str, mid: str, side: str) -> str:
@@ -629,17 +649,20 @@ def biquad_df1(
     sample to ``out`` and shifting the state. Emits::
 
         out = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-        x2 = x1; x1 = x; y2 = y1; y1 = out;
+        x2 = x1; x1 = x; y2 = fixdenorm(y1); y1 = fixdenorm(out);
 
     Cascade two stages for the BS.1770 K-weight (shelf then RLB high-pass), and it
     is the apply-block the cascaded-filter foundation builds on. The caller
     declares ``x1 x2 y1 y2`` as History and supplies the coeffs (e.g. from
     :func:`kweight_coeffs_bs1770`). This is the DF-I apply copy-pasted across the
-    metering plugins; sharing it audits the recurrence once.
+    metering plugins; sharing it audits the recurrence once. Both y-history
+    (feedback) writes are denormal-flushed (:func:`flush`) so a silent tail
+    cannot park subnormals in the recursion; the x taps are pure input history
+    (no feedback) and stay untouched.
     """
     return (
         f"{out} = {b0} * {x} + {b1} * {x1} + {b2} * {x2} - {a1} * {y1} - {a2} * {y2};\n"
-        f"{x2} = {x1}; {x1} = {x}; {y2} = {y1}; {y1} = {out};"
+        f"{x2} = {x1}; {x1} = {x}; {y2} = {flush(y1)}; {y1} = {flush(out)};"
     )
 
 
@@ -663,7 +686,7 @@ def one_pole_coeff(out: str, freq: str) -> str:
 def one_pole_lp(x: str, state: str, coeff: str, out: str) -> str:
     """One-pole low-pass: chase ``x`` into the ``state`` History, expose it. Emits::
 
-        state = state + coeff * (x - state);
+        state = fixdenorm(state + coeff * (x - state));
         out = state;
 
     A first-order (6 dB/oct) low-pass where ``coeff`` (0..1, from
@@ -671,9 +694,11 @@ def one_pole_lp(x: str, state: str, coeff: str, out: str) -> str:
     state. ``state`` is the caller's History cell (the filter memory); ``out`` may
     alias ``state``. This is the smoother/tone-LP recurrence shared across the
     saturation + exciter cores (the LP half; :func:`one_pole_hp` is the complement).
+    The state write is denormal-flushed (:func:`flush`): on silent input the
+    recursion decays exponentially to 0 and would otherwise park a subnormal.
     """
     return (
-        f"{state} = {state} + {coeff} * ({x} - {state});\n"
+        f"{state} = {flush(f'{state} + {coeff} * ({x} - {state})')};\n"
         f"{out} = {state};"
     )
 
@@ -681,7 +706,7 @@ def one_pole_lp(x: str, state: str, coeff: str, out: str) -> str:
 def one_pole_hp(x: str, state: str, coeff: str, out: str) -> str:
     """One-pole high-pass via ``x - lowpass(x)``. Emits::
 
-        state = state + coeff * (x - state);
+        state = fixdenorm(state + coeff * (x - state));
         out = x - state;
 
     The complement of :func:`one_pole_lp` sharing the same one-pole ``state``: the
@@ -690,9 +715,11 @@ def one_pole_hp(x: str, state: str, coeff: str, out: str) -> str:
     ``coeff`` -> 0 the state stays at its init so ``out`` -> ``x`` (all-pass / DC
     retained); at ``coeff`` -> 1 the state tracks ``x`` so ``out`` -> 0. This is the
     pre-saturation low-cut / exciter high-band split shared across the cores.
+    The state write is denormal-flushed (:func:`flush`) — same silent-tail
+    subnormal guard as :func:`one_pole_lp`.
     """
     return (
-        f"{state} = {state} + {coeff} * ({x} - {state});\n"
+        f"{state} = {flush(f'{state} + {coeff} * ({x} - {state})')};\n"
         f"{out} = {x} - {state};"
     )
 
@@ -1499,3 +1526,302 @@ def grain_window_lookup(
     normalization total (stranular's ``totalWin``).
     """
     return f'{out} = peek({buf}, {phase}, {chan}, index="phase", interp="{interp}");'
+
+
+# ITU-R BS.1770-4 Annex 2 4x true-peak oversampler: one 48-tap lowpass
+# decomposed into 4 polyphase branches of 12 taps (the exact coefficient
+# table the standard publishes and libebur128 ships). Catmull-Rom
+# under-reads sharp inter-sample peaks by up to ~0.6 dB vs this filter.
+_BS1770_PHASES = [
+    [0.0017089843750, 0.0109863281250, -0.0196533203125, 0.0332031250000,
+     -0.0594482421875, 0.1373291015625, 0.9721679687500, -0.1022949218750,
+     0.0476074218750, -0.0266113281250, 0.0148925781250, -0.0083007812500],
+    [-0.0291748046875, 0.0292968750000, -0.0517578125000, 0.0891113281250,
+     -0.1665039062500, 0.4650878906250, 0.7797851562500, -0.2003173828125,
+     0.1015625000000, -0.0582275390625, 0.0330810546875, -0.0189208984375],
+    [-0.0189208984375, 0.0330810546875, -0.0582275390625, 0.1015625000000,
+     -0.2003173828125, 0.7797851562500, 0.4650878906250, -0.1665039062500,
+     0.0891113281250, -0.0517578125000, 0.0292968750000, -0.0291748046875],
+    [-0.0083007812500, 0.0148925781250, -0.0266113281250, 0.0476074218750,
+     -0.1022949218750, 0.9721679687500, 0.1373291015625, -0.0594482421875,
+     0.0332031250000, -0.0196533203125, 0.0109863281250, 0.0017089843750],
+]
+
+
+def isp_bs1770_4x(x: str, out: str, *, ch: str = "l") -> str:
+    """4x inter-sample-peak detector for one channel — the REAL BS.1770-4
+    polyphase FIR (4 branches x 12 taps), replacing the Catmull-Rom
+    estimate where standards accuracy matters (true-peak METERING).
+
+    Self-contained: declares + shifts its own 11 History taps (``bp{ch}1``
+    .. ``bp{ch}11``). ``out`` = max |.| of the four interpolated phases AND
+    the on-grid sample itself (a sample-aligned peak must never read lower
+    than a plain peak meter). ~5.5-sample detector group delay — irrelevant
+    for metering. Call once per channel (``ch="l"`` / ``ch="r"``).
+    """
+    taps = [x] + [f"bp{ch}{i}" for i in range(1, 12)]
+    lines = [
+        "".join(f"History bp{ch}{i}(0.); " for i in range(1, 12)).rstrip()
+    ]
+    for p, coefs in enumerate(_BS1770_PHASES):
+        terms = " + ".join(f"{c:.13f} * {t}" for c, t in zip(coefs, taps))
+        lines.append(f"ph{ch}{p} = {terms};")
+    lines.append(
+        f"{out} = max(max(max(abs(ph{ch}0), abs(ph{ch}1)), "
+        f"max(abs(ph{ch}2), abs(ph{ch}3))), abs({x}));"
+    )
+    for i in range(11, 1, -1):
+        lines.append(f"bp{ch}{i} = bp{ch}{i - 1};")
+    lines.append(f"bp{ch}1 = {x};")
+    return "\n".join(lines) + "\n"
+
+
+def os2x_declares(ch: str = "l") -> str:
+    """History taps for :func:`os2x_pre`/:func:`os2x_post` (one channel):
+    3 input taps + the 7-tap halfband decimator ring."""
+    return (
+        f"History x{ch}1(0.); History x{ch}2(0.); History x{ch}3(0.);\n"
+        f"History y{ch}1(0.); History y{ch}2(0.); History y{ch}3(0.); "
+        f"History y{ch}4(0.);\n"
+        f"History y{ch}5(0.); History y{ch}6(0.); History y{ch}7(0.);\n"
+    )
+
+
+def os2x_pre(x: str, s1: str, s2: str, *, os: str = "os",
+             ch: str = "l") -> str:
+    """2x-oversampling INPUT stage (heat's shipped HQ path, extracted).
+
+    Emits the two shaper inputs for one channel: with ``{os} <= 0.5``,
+    ``s1 = x`` (the plain sample — the bypass path is byte-exact); in HQ,
+    ``s1`` is the 2-sample-delayed even sample and ``s2`` the cubic-halfband
+    midpoint ``(9*(x1+x2) - (x+x3)) / 16`` — the 2x stream. Shape BOTH
+    through the nonlinearity, then decimate with :func:`os2x_post`.
+    Requires :func:`os2x_declares` and pairs with the post stage's history
+    shifts (do not shift ``x{ch}*`` yourself).
+    """
+    return (
+        f"{s1} = {x};\n"
+        f"{s2} = 0.;\n"
+        f"if ({os} > 0.5) {{\n"
+        f"    {s1} = x{ch}2;\n"
+        f"    {s2} = (9.0 * (x{ch}1 + x{ch}2) - ({x} + x{ch}3)) * 0.0625;\n"
+        f"}}\n"
+    )
+
+
+def os2x_post(w1: str, w2: str, wet: str, dry: str, x: str, *,
+              os: str = "os", ch: str = "l") -> str:
+    """2x-oversampling OUTPUT stage: 7-tap halfband decimator on the shaped
+    2x stream + the pipeline-aligned dry tap (comb-free parallel mix), then
+    the input history shifts. 3 samples of detector latency in HQ (report
+    ``latency`` mode-aware — the Q43 helper); 0 when off.
+    """
+    return (
+        f"{wet} = {w1};\n"
+        f"{dry} = {x};\n"
+        f"if ({os} > 0.5) {{\n"
+        f"    y{ch}7 = y{ch}5; y{ch}6 = y{ch}4; y{ch}5 = y{ch}3; "
+        f"y{ch}4 = y{ch}2; y{ch}3 = y{ch}1; y{ch}2 = {w1}; y{ch}1 = {w2};\n"
+        f"    {wet} = 0.5 * y{ch}4 + 0.28125 * (y{ch}3 + y{ch}5) "
+        f"- 0.03125 * (y{ch}1 + y{ch}7);\n"
+        f"    {dry} = x{ch}3;\n"
+        f"}}\n"
+        f"x{ch}3 = x{ch}2; x{ch}2 = x{ch}1; x{ch}1 = {x};\n"
+    )
+
+
+def mono_below(left: str, right: str, out_left: str, out_right: str,
+               freq: str, *, prefix: str = "mb") -> str:
+    """Bass-mono primitive (catalog Q51): SUM the band below ``freq`` to
+    mono, keep everything above it stereo — the vinyl-cut / club-system
+    low-end discipline.
+
+    One-pole complementary split per channel (6 dB/oct — phase-benign when
+    the halves recombine), lows mono'd by killing their side component.
+    ``{freq} <= 20.`` bypasses byte-exactly (outs = ins). Declares its own
+    two History poles (``{prefix}_lp_l/r``).
+    """
+    return (
+        f"History {prefix}_lp_l(0.); History {prefix}_lp_r(0.);\n"
+        f"{prefix}_k = 1.0 - exp(-6.2831853 * clamp({freq}, 20., 500.) "
+        "/ samplerate);\n"
+        f"{prefix}_lp_l = {prefix}_lp_l + {prefix}_k * ({left} - {prefix}_lp_l);\n"
+        f"{prefix}_lp_r = {prefix}_lp_r + {prefix}_k * ({right} - {prefix}_lp_r);\n"
+        f"{prefix}_mono = ({prefix}_lp_l + {prefix}_lp_r) * 0.5;\n"
+        f"{out_left} = {left};\n"
+        f"{out_right} = {right};\n"
+        f"if ({freq} > 20.) {{\n"
+        f"    {out_left} = {prefix}_mono + ({left} - {prefix}_lp_l);\n"
+        f"    {out_right} = {prefix}_mono + ({right} - {prefix}_lp_r);\n"
+        f"}}\n"
+    )
+
+
+def frac_read_cubic(delay: str, pos: str, out: str) -> str:
+    """4-point cubic (Catmull-Rom) fractional read on a gen~ ``Delay`` —
+    the canonical smooth-modulation read (T25/Q54; echotide / aurora /
+    drift / motes / shard each hand-rolled a variant).
+
+    ``pos`` is the read position in SAMPLES (float >= 1); emits a single
+    expression using gen~'s built-in cubic interpolation mode.
+    """
+    return f"{out} = {delay}.read({pos}, interp=\"cubic\");\n"
+
+
+def frac_read_allpass(delay: str, pos: str, out: str, *,
+                      prefix: str = "apr") -> str:
+    """First-order ALLPASS fractional read on a gen~ ``Delay`` — flat
+    magnitude at the cost of phase memory: preferred inside FEEDBACK loops
+    (pitch stays true as the delay time modulates; cubic inside feedback
+    accumulates lowpass loss). One History per call site (``{prefix}_h``).
+    """
+    return (
+        f"History {prefix}_h(0.);\n"
+        f"{prefix}_i = floor({pos});\n"
+        f"{prefix}_f = {pos} - {prefix}_i;\n"
+        f"{prefix}_eta = (1.0 - {prefix}_f) / (1.0 + {prefix}_f);\n"
+        f"{prefix}_x0 = {delay}.read({prefix}_i, interp=\"none\");\n"
+        f"{prefix}_x1 = {delay}.read({prefix}_i + 1, interp=\"none\");\n"
+        f"{out} = {prefix}_x1 + {prefix}_eta * ({prefix}_x0 - {prefix}_h);\n"
+        f"{prefix}_h = {out};\n"
+    )
+
+
+def spectral_mag_compressor(mag: str, out_mag: str,
+                            threshold: str = "thresh",
+                            ratio: str = "ratio",
+                            attack_ms: str = "atk_ms",
+                            release_ms: str = "rel_ms",
+                            makeup: str = "makeup",
+                            *, prefix: str = "spec") -> str:
+    """Per-stream spectral magnitude compressor CURVE (plan #7, T29):
+    envelope-follow the bin magnitude in dB, apply a hard-knee downward
+    ratio above threshold, return the gain-scaled magnitude. History-only
+    (gen_sim-testable); inside a ``pfft~`` wrap it with a Data env keyed by
+    bin index — this snippet IS the per-bin math for one stream.
+    """
+    p = prefix
+    return (
+        f"History {p}_env(-120.);\n"
+        f"{p}_db = atodb({mag} + 1e-9);\n"
+        f"{p}_atk = 1.0 - exp(-1.0 / (0.001 * max({attack_ms}, 0.01) "
+        "* samplerate));\n"
+        f"{p}_rel = 1.0 - exp(-1.0 / (0.001 * max({release_ms}, 0.1) "
+        "* samplerate));\n"
+        f"{p}_k = {p}_db > {p}_env ? {p}_atk : {p}_rel;\n"
+        f"{p}_env = {p}_env + ({p}_db - {p}_env) * {p}_k;\n"
+        f"{p}_over = {p}_env - {threshold};\n"
+        f"{p}_gr = {p}_over > 0. ? {p}_over * (1.0 - 1.0 / max({ratio}, 1.))"
+        " : 0.;\n"
+        f"{out_mag} = {mag} * dbtoa({makeup} - {p}_gr);\n"
+    )
+
+
+def rbj_lowshelf(
+    freq: str,
+    q: str,
+    gain_db: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha",
+    a0: str = "a0", sA: str = "sA",
+) -> str:
+    """Runtime RBJ low-shelf biquad coefficients (Audio-EQ-Cookbook,
+    a0-normalised) — the shelf sibling of :func:`rbj_peaking`.
+
+    Boosts/cuts everything BELOW ``freq`` by ``gain_db``; ``q`` shapes the
+    corner (0.71 = classic). ``gain_db == 0`` collapses to unity. Pair with
+    :func:`biquad_df1`. ``A w0 cw alpha a0 sA`` are scratch names (override
+    to instantiate several shelves in one codebox).
+    """
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{sA} = sqrt({A});\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = ({A} + 1.) + ({A} - 1.) * {cw} + 2. * {sA} * {alpha};\n"
+        f"{b0} = ({A} * (({A} + 1.) - ({A} - 1.) * {cw} + 2. * {sA} * {alpha})) / {a0};\n"
+        f"{b1} = (2. * {A} * (({A} - 1.) - ({A} + 1.) * {cw})) / {a0};\n"
+        f"{b2} = ({A} * (({A} + 1.) - ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};\n"
+        f"{a1} = (-2. * (({A} - 1.) + ({A} + 1.) * {cw})) / {a0};\n"
+        f"{a2} = ((({A} + 1.) + ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};"
+    )
+
+
+def rbj_highshelf(
+    freq: str,
+    q: str,
+    gain_db: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha",
+    a0: str = "a0", sA: str = "sA",
+) -> str:
+    """Runtime RBJ high-shelf biquad coefficients (Audio-EQ-Cookbook,
+    a0-normalised) — boosts/cuts everything ABOVE ``freq`` by ``gain_db``.
+
+    Mirror of :func:`rbj_lowshelf`; same scratch-name contract. Pair with
+    :func:`biquad_df1`.
+    """
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{sA} = sqrt({A});\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = ({A} + 1.) - ({A} - 1.) * {cw} + 2. * {sA} * {alpha};\n"
+        f"{b0} = ({A} * (({A} + 1.) + ({A} - 1.) * {cw} + 2. * {sA} * {alpha})) / {a0};\n"
+        f"{b1} = (-2. * {A} * (({A} - 1.) + ({A} + 1.) * {cw})) / {a0};\n"
+        f"{b2} = ({A} * (({A} + 1.) + ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};\n"
+        f"{a1} = (2. * (({A} - 1.) - ({A} + 1.) * {cw})) / {a0};\n"
+        f"{a2} = ((({A} + 1.) - ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};"
+    )
+
+
+def schroeder_comb(x: str, out: str, delay_ms: str, feedback: str,
+                   damp: str = "0.2", *, prefix: str = "scb",
+                   max_ms: float = 100.0) -> str:
+    """Tone-shaped feedback comb (T40/idea #8 — the Schroeder reverb comb
+    with the classic one-pole lowpass in the feedback path).
+
+    ``feedback`` 0..0.98 sets the tail, ``damp`` 0..1 darkens each pass
+    (0 = bright metallic, 1 = fast HF decay). Prime-number ``delay_ms``
+    values in parallel banks stay maximally in-phase-diffuse. Declares its
+    own ``Delay`` and damping ``History`` under ``prefix``.
+    """
+    p = prefix
+    samps = int(max_ms * 48) + 96
+    return (
+        f"Delay {p}_dl({samps});\n"
+        f"History {p}_lp(0.);\n"
+        f"{p}_rd = {p}_dl.read(mstosamps(clamp({delay_ms}, 0.05, "
+        f"{max_ms})), interp=\"linear\");\n"
+        f"{p}_lp = {p}_lp + clamp({damp}, 0., 1.) * ({p}_rd - {p}_lp);\n"
+        f"{p}_dl.write({x} + clamp({feedback}, 0., 0.98) * {p}_lp);\n"
+        f"{out} = {p}_rd;\n"
+    )
+
+
+def transient_detector(x: str, out: str, *, prefix: str = "trd",
+                       fast_ms: float = 1.0, slow_ms: float = 80.0) -> str:
+    """Dual-rate transient detector (T40/idea #9 — the sibilant/ducking
+    idiom extracted): a FAST envelope minus a SLOW envelope of ``|x|``.
+
+    ``out`` is the positive-only difference — it spikes on attacks and
+    sits at ~0 during sustains, ready for ducking/gating/transient
+    shaping. Both envelopes are one-pole followers on the rectified
+    input; declares two ``History`` states under ``prefix``.
+    """
+    p = prefix
+    return (
+        f"History {p}_fe(0.); History {p}_se(0.);\n"
+        f"{p}_r = abs({x});\n"
+        f"{p}_fk = 1.0 - exp(-1.0 / (0.001 * {fast_ms} * samplerate));\n"
+        f"{p}_sk = 1.0 - exp(-1.0 / (0.001 * {slow_ms} * samplerate));\n"
+        f"{p}_fe = {p}_fe + {p}_fk * ({p}_r - {p}_fe);\n"
+        f"{p}_se = {p}_se + {p}_sk * ({p}_r - {p}_se);\n"
+        f"{out} = max({p}_fe - {p}_se, 0.);\n"
+    )

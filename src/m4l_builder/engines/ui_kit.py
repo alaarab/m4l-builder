@@ -372,6 +372,7 @@ def custom_glyph_selector_js(
     bg_top=None,
     bg_bot=None,
     initial=0,
+    vertical=False,
 ) -> str:
     """A compact row of small hand-drawn GLYPH buttons (Rupture's mode-glyphs).
 
@@ -379,6 +380,9 @@ def custom_glyph_selector_js(
     button gets a soft accent backing + accent glyph; the rest are dim. Inlet 0
     receives ``set_index <i>`` (from the hidden ``live.tab``) to redraw; clicking
     a button emits its index on outlet 0.
+
+    ``vertical=True`` stacks the cells top-to-bottom (the dnksaus left
+    icon-rail, catalog #59); output is byte-identical when False.
     """
     from .ui_icons import ui_icons_js
 
@@ -407,8 +411,10 @@ def custom_glyph_selector_js(
         "function onclick(x, y, but, cmd, shift) {\n"
         "    var top = LABEL.length > 0 ? 11 : 0;\n"
         "    if (y < top) { return; }\n"
-        "    var i = Math.floor((x) / (mgraphics.size[0] / N));\n"
-        "    if (i < 0) i = 0; if (i > N - 1) i = N - 1;\n"
+        + ("    var i = Math.floor((y - top) / ((mgraphics.size[1] - top) / N));\n"
+           if vertical else
+           "    var i = Math.floor((x) / (mgraphics.size[0] / N));\n")
+        + "    if (i < 0) i = 0; if (i > N - 1) i = N - 1;\n"
         "    sel = i; outlet(0, i); mgraphics.redraw();\n"
         "}\n"
         "function paint() {\n"
@@ -426,15 +432,22 @@ def custom_glyph_selector_js(
         "        mgraphics.set_source_rgba(DIM[0], DIM[1], DIM[2], 1.0);\n"
         "        mgraphics.move_to(1, 8); mgraphics.show_text(LABEL); top = 11;\n"
         "    }\n"
-        "    var bw = w / N, bh = h - top;\n"
-        "    var s = Math.min(bw, bh) * 0.30;\n"
+        + ("    var bw = w, bh = (h - top) / N;\n"
+           if vertical else
+           "    var bw = w / N, bh = h - top;\n")
+        + "    var s = Math.min(bw, bh) * 0.30;\n"
         "    for (var i = 0; i < N; i++) {\n"
-        "        var cx = bw * i + bw * 0.5;\n"
-        "        var cy = top + bh * 0.5;\n"
-        "        if (i === sel) {\n"
+        + ("        var cx = bw * 0.5;\n"
+           "        var cy = top + bh * i + bh * 0.5;\n"
+           if vertical else
+           "        var cx = bw * i + bw * 0.5;\n"
+           "        var cy = top + bh * 0.5;\n")
+        + "        if (i === sel) {\n"
         "            mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2], 0.16);\n"
-        "            mgraphics.rectangle_rounded(bw * i + 2, top + 2, bw - 4, bh - 4, 4, 4); mgraphics.fill();\n"
-        "            mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2], 1.0);\n"
+        + ("            mgraphics.rectangle_rounded(2, top + bh * i + 2, bw - 4, bh - 4, 4, 4); mgraphics.fill();\n"
+           if vertical else
+           "            mgraphics.rectangle_rounded(bw * i + 2, top + 2, bw - 4, bh - 4, 4, 4); mgraphics.fill();\n")
+        + "            mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2], 1.0);\n"
         "        } else {\n"
         "            mgraphics.set_source_rgba(DIM[0], DIM[1], DIM[2], 0.95);\n"
         "        }\n"

@@ -425,7 +425,6 @@ def meter(id: str, rect: list, *, orientation: int = 0,
           overloadcolor: list = None, **kwargs) -> dict:
     """Create a live.meter~ level meter."""
     extra: dict[str, Any] = {
-        "outlettype": [""],
         "orientation": orientation,
         "patching_rect": patching_rect or [700, 600, rect[2], rect[3]],
     }
@@ -440,7 +439,8 @@ def meter(id: str, rect: list, *, orientation: int = 0,
     extra.update(kwargs)
     return _presentation_box(
         id, "live.meter~", rect,
-        numinlets=1, numoutlets=1,
+        numinlets=1, numoutlets=2,
+        outlettype=["float", "int"],
         **extra,
     )
 
@@ -678,7 +678,8 @@ def scope(id: str, rect: list, *, bgcolor: list = None, linecolor: list = None,
         "id": id,
         "maxclass": "live.scope~",
         "numinlets": 2,
-        "numoutlets": 0,
+        "numoutlets": 1,
+        "outlettype": ["bang"],
         "calccount": calccount,
         "patching_rect": patching_rect or [700, 500, rect[2], rect[3]],
         "presentation": 1,
@@ -1084,8 +1085,8 @@ def live_drop(id: str, rect: list, *, decodemode: int = None, color: list = None
         "id": id,
         "maxclass": "live.drop",
         "numinlets": 1,
-        "numoutlets": 1,
-        "outlettype": [""],
+        "numoutlets": 2,
+        "outlettype": ["", ""],
         "patching_rect": patching_rect or [700, 1700, rect[2], rect[3]],
         "presentation": 1,
         "presentation_rect": rect,
@@ -1644,7 +1645,7 @@ def matrixctrl(id: str, rect: list, *, rows: int = 8, columns: int = 8,
         "maxclass": "matrixctrl",
         "numinlets": 1,
         "numoutlets": 2,
-        "outlettype": ["", ""],
+        "outlettype": ["list", "list"],
         "rows": rows,
         "columns": columns,
         "autosize": autosize,
@@ -1867,8 +1868,11 @@ def waveform(id: str, rect: list, *, buffername: str = None,
     MEASURED from the official M4L corpus (7 instances, 100% consistent). Draws the
     audio in a named ``buffer~`` and (unless ``ignoreclick``) lets the user drag-select
     a region. **5 inlets / 6 outlets** ``["float","float","float","float","list",""]`` —
-    the float outlets emit the selection bounds (start / end, etc.) as you drag, outlet
-    4 a list. ``buffername`` (required) = the ``buffer~`` to display. Colors:
+    doc-verified order: inlets/outlets 0/1 are the DISPLAY window (start ms / length
+    ms), 2/3 the SELECTION bounds (start / end ms), outlet 4 the raw mouse list,
+    5 the link list. ``setmode`` picks the drag gesture (0 display-only, 1 Select,
+    2 Loop, 3 Move/scrub-zoom, 4 Draw); ``outmode`` ("continuous"/"up"/...) sets
+    when selection emits. ``buffername`` (required) = the ``buffer~`` to display. Colors:
     ``waveformcolor`` (the trace), ``selectioncolor`` (the drag-selection highlight),
     ``bgcolor``, ``gridcolor``, ``bordercolor``, ``linecolor``,
     ``labelbgcolor`` / ``labeltextcolor``. Display toggles: ``labels``, ``ruler`` (time

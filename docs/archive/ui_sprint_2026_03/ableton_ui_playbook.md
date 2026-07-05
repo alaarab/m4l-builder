@@ -302,3 +302,30 @@ Do not call a sprint complete unless all of these are true:
 - parameter grouping reflects product tasks
 - in-Live validation confirms fast, precise, and exploratory edits all work
 - the device feels more like one product than a collection of widgets
+
+## Semantic Color Roles (catalog #60 — the dnksaus grammar)
+
+Color is grammar, not decoration. Four hues carry fixed meanings on every
+device (`theme.ROLES` in `theme.py`):
+
+- **remote (orange)** — the hands-on lane: Remote-mode mapping rows, primary
+  macro controls. "This is yours to grab."
+- **mod (teal)** — the computed lane: Mod-mode rows, numeric readouts,
+  meters, engine-driven values.
+- **special (pink)** — armed/exceptional states: capture pills, scale
+  awareness, one-shot actions.
+- **inactive (grey)** — unmapped/bypassed/empty. Never dim the accent to
+  mean "off"; switch to this grey so hue always means function.
+
+Rules: one primary accent per device (corpus P5) chosen from `ACCENTS`;
+the four roles are reserved cross-fleet and never re-tinted per device;
+a row's mode is readable by hue alone before its label is legible.
+
+## Version Strings In The Header (catalog #61)
+
+Every corpus device titles itself `Name vN.N` — versioning is part of the
+face, not the file name. The kit path: `recipes.header_strip(title=...,
+version="1.2")` renders a dim `v1.2` right after the title, inside the
+collapsed-safe left pack. Bump the version whenever a device's param set
+or face changes shape; the string is the user's only in-Live clue that a
+device updated underneath a saved set.

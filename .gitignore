@@ -18,3 +18,8 @@ env/
 site/
 .coverage
 coverage.xml
+
+# large research staging (packs, extracted audio) — local only
+research/amxd_corpus/_staging/
+research/amxd_corpus/_json/
+research/amxd_corpus/studies/

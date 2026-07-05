@@ -268,7 +268,8 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
 
 
 def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
-                    viz_buffer: str = "buf_orbit_gui") -> str:
+                    viz_buffer: str = "buf_orbit_gui",
+                    per_lane_on: bool = False) -> str:
     """The Orbit poly-LFO codebox (lfo-cluster class): ``voices`` LFOs whose
     rates spread from ONE Rate by the cluster fold ``r = fold(offset +
     bias*i, 0, 1)`` -> ``rate * (1 + 3r)`` (the radius->rate polyrhythm), with
@@ -291,12 +292,18 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
     ``4*voices``) for the polar_cluster hero.
     """
     params: list = [("rate", 1.0, 0.02, 8.0), ("bias", 0.13, 0.0, 1.0),
-                    ("offset", 0.0, 0.0, 1.0),
-                    ("lanes", float(voices), 1.0, float(voices))]
+                    ("offset", 0.0, 0.0, 1.0)]
+    if not per_lane_on:
+        # legacy reveal count (v2 shape); per_lane_on replaces it with on_i
+        params.append(("lanes", float(voices), 1.0, float(voices)))
     for i in range(1, voices + 1):
         # depth/umin/umax arrive as 0..100 percents (the slot numboxes read
         # "100 %" like the stock modulators); scaled by 0.01 in the body.
         # shape is PER-LANE (Entropy v2 pattern): each lane its own waveform.
+        if per_lane_on:
+            # per-lane enable (Entropy v5 frame): gates the modulation and
+            # dims the lane's trace via the 4k+3 GUI channel
+            params.append((f"on_{i}", 1.0, 0.0, 1.0))
         params += [(f"shape_{i}", 0.0, 0.0, 5.0),
                    (f"depth_{i}", 100.0, 0.0, 100.0),
                    (f"umin_{i}", 0.0, 0.0, 100.0),
@@ -314,7 +321,8 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
             f"r_{i} = fold(offset + bias * {k}, 0, 1);",
             f"rt_{i} = rate * (1 + 3 * r_{i});",
             f"v_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, shape_{i});",
-            f"d_{i} = depth_{i} * 0.01;",
+            (f"d_{i} = depth_{i} * 0.01 * on_{i};" if per_lane_on
+             else f"d_{i} = depth_{i} * 0.01;"),
             f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
             f"v_{i} * d_{i};",
             f"out{i} = tmin_{i} + (tmax_{i} - tmin_{i}) * "
@@ -325,9 +333,11 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
             f"poke({viz_buffer}, v_{i}, {4 * k}, 0);",
             f"poke({viz_buffer}, shape_{i}, {4 * k + 1}, 0);",
             f"poke({viz_buffer}, d_{i}, {4 * k + 2}, 0);",
-            f"poke({viz_buffer}, vv_{i}, {4 * k + 3}, 0);",
+            (f"poke({viz_buffer}, on_{i}, {4 * k + 3}, 0);" if per_lane_on
+             else f"poke({viz_buffer}, vv_{i}, {4 * k + 3}, 0);"),
         ]
-    pokes.append(f"poke({viz_buffer}, lanes, {4 * voices}, 0);")
+    if not per_lane_on:
+        pokes.append(f"poke({viz_buffer}, lanes, {4 * voices}, 0);")
     body = "\n".join(decls + voice_lines) + "\n" + viz_poke_block(
         "\n".join(pokes), refresh_ms=gui_refresh_ms)
     return compose_gen_code(params=params, functions=[LFO_VOICE_FN], body=body)
@@ -537,7 +547,9 @@ def rampsmooth_fn() -> str:
 # Verbatim from Particle-Reverb_6.0's gen~ codebox — a 2-pole RBJ lowpass biquad
 # with History-smoothed cf/q and a change()-gated coefficient recompute (only
 # recomputes the expensive sin/cos when the smoothed cutoff*q actually moves — the
-# built-in CPU-discipline pattern). DF1 with 4 history taps.
+# built-in CPU-discipline pattern). DF1 with 4 history taps. One deviation from
+# the corpus source: the y-feedback write (his_h4) is denormal-flushed
+# (fixdenorm; his_h1 copies the already-flushed value) — silent-tail guard.
 LOWPASS_12_FN = """lowpass_12(sig, cf, q) {
 	History his_cf(0);
 	History his_q(0);
@@ -571,7 +583,7 @@ LOWPASS_12_FN = """lowpass_12(sig, cf, q) {
 	his_h1 = his_h4;
 	his_h2 = his_h3;
 	his_h3 = sig;
-	his_h4 = output;
+	his_h4 = fixdenorm(output);
 	return output;
 }"""
 
@@ -579,10 +591,13 @@ LOWPASS_12_FN = """lowpass_12(sig, cf, q) {
 # Verbatim from Particle-Reverb_6.0 — a Schroeder/Dattorro allpass diffuser. The
 # two delay lines are gen `Delay` operators passed in (declare e.g.
 # `Delay ap1d1(48000); Delay ap1d2(48000);` then `allpass(x, 0.5, 1234, ap1d1, ap1d2)`).
+# The feedback write (delaySig2 <- y, fed back through -g) is denormal-flushed:
+# fixdenorm is bit-transparent for normal values, and stops silent-tail subnormals
+# from recirculating (the denormal CPU-spike class the 2026-07 audit flagged).
 ALLPASS_FN = """allpass(x, g, delaySamps, delaySig1, delaySig2) {
 	delaySig1.write(x);
 	y = g * x + delaySig1.read(delaySamps) - g * delaySig2.read(delaySamps);
-	delaySig2.write(y);
+	delaySig2.write(fixdenorm(y));
 	return y;
 }"""
 
@@ -590,9 +605,11 @@ ALLPASS_FN = """allpass(x, g, delaySamps, delaySig1, delaySig2) {
 # Verbatim from Particle-Reverb_6.0 — the compact one-multiply Schroeder allpass
 # (a SINGLE gen Delay). Chain N of these (with mutually-prime delay lengths) for a
 # diffusion stage. Declare `Delay d1(maxsize)` and call `diffuse(sig, 142, d1, 0.6)`.
+# The delay write is the feedback state (stage1 reads the line back through *coef),
+# so it is denormal-flushed — bit-transparent for normal values.
 DIFFUSE_FN = """diffuse(sig, delaySamps, delaySig, coef) {
 	stage1 = sig - delaySig.read(delaySamps) * coef;
-	delaySig.write(stage1);
+	delaySig.write(fixdenorm(stage1));
 	stage2 = stage1 * coef + delaySig.read(delaySamps);
 	return stage2;
 }"""
@@ -608,7 +625,8 @@ def diffuse_fn() -> str:
 
 # Verbatim from Particle-Reverb_6.0 — the RBJ 2-pole HIGHPASS twin of lowpass_12
 # (same DF1 + smoothed coeffs + change()-gated recompute). Use for the channel
-# strip HP and any EQ low-cut.
+# strip HP and any EQ low-cut. Same single corpus deviation as lowpass_12: the
+# his_h4 y-feedback write is denormal-flushed (fixdenorm).
 HIGHPASS_12_FN = """highpass_12(sig, cf, q) {
 	History his_cf(0);
 	History his_q(0);
@@ -641,7 +659,7 @@ HIGHPASS_12_FN = """highpass_12(sig, cf, q) {
 	his_h1 = his_h4;
 	his_h2 = his_h3;
 	his_h3 = sig;
-	his_h4 = output;
+	his_h4 = fixdenorm(output);
 	return output;
 }"""
 
@@ -673,11 +691,15 @@ def ring_delay(name: str, size_samps, *, input: str = "x", delay: str = "dsamps"
 
     Returns a run of statements (declarations + per-sample body) grounded in the
     real stranular poke/peek/wrap idiom. ``size_samps`` is the buffer length.
+    The line write is denormal-flushed: when the caller closes a feedback loop
+    around it (``input`` mixing the read-back ``out``), a silent tail would
+    otherwise recirculate subnormals; for a plain (feed-forward) delay the
+    flush is bit-transparent.
     """
     return (
         f"Data {name}({size_samps});\n"
         f"History {index}(0);\n"
-        f"poke({name}, {input}, 0, {index});\n"
+        f"poke({name}, fixdenorm({input}), 0, {index});\n"
         f"{out} = peek({name}, wrap({index} - ({delay}), 0, {size_samps}), 0);\n"
         f"{index} = wrap({index} + 1, 0, {size_samps});"
     )
@@ -794,7 +816,9 @@ def modulated_allpass_reverb(
                 f"main{ch} = allpass(main{ch}, {_MAIN_ALLPASS_GAIN}, his_apd{i + 1}, "
                 f"main{ch}{i}a, main{ch}{i}b);"
             )
-        lines.append(f"tank{ch}.write(main{ch});")
+        # The tank is THE feedback loop (read -> lowpass_12 * decay -> ... ->
+        # write); flush the write so a silent tail cannot recirculate subnormals.
+        lines.append(f"tank{ch}.write(fixdenorm(main{ch}));")
         lines.append(f"{out_sig} = mix({in_sig}, main{ch}, {dry_wet});")
         return "\n".join(lines)
 
@@ -1022,3 +1046,172 @@ def lfo_osc_fn() -> str:
     — Superberry's wavetable LFO with ``qpow`` phase-distortion morph (verbatim).
     MUST be emitted together with ``qpow_fn`` (it calls ``qpow``)."""
     return LFO_OSC_FN
+
+
+# ── T29 reverb kernels (dsp_library_plan #3/#9/#12) ─────────────────────────
+# Dattorro 1997 input-diffusion times (ms) — the canonical pre-stage.
+_DATTORRO_DIFFUSION_MS = [4.77, 3.60, 12.73, 9.30]
+
+
+def allpass_diffusion_chain(x: str, out: str, num_stages: int = 4,
+                            delay_times_ms=None, feedback_coeff: float = 0.5,
+                            *, prefix: str = "apd") -> str:
+    """Schroeder/Dattorro allpass diffusion chain (plan #3) — the reverb
+    pre-stage that smears the input into a dense, colorless cloud.
+
+    Per stage: ``y = -g*x + z`` with ``z`` the delayed ``x + g*y`` (the
+    canonical one-multiplier-per-branch allpass). Defaults to Dattorro's
+    four 1997 input-diffusion times. Delay-based — gen_lint proves shape;
+    behaviour is device-level QA (gen_sim refuses Delay by design).
+    """
+    times = list(delay_times_ms) if delay_times_ms else (
+        _DATTORRO_DIFFUSION_MS * ((num_stages + 3) // 4))[:num_stages]
+    g = float(feedback_coeff)
+    lines = []
+    cur = x
+    for i, t in enumerate(times[:num_stages]):
+        d = f"{prefix}_d{i}"
+        lines.append(f"Delay {d}(9600);")
+        lines += [
+            f"{prefix}_z{i} = {d}.read(mstosamps({t:g}), interp=\"none\");",
+            f"{prefix}_y{i} = -{g:g} * {cur} + {prefix}_z{i};",
+            f"{d}.write({cur} + {g:g} * {prefix}_y{i});",
+        ]
+        cur = f"{prefix}_y{i}"
+    lines.append(f"{out} = {cur};")
+    return "\n".join(lines) + "\n"
+
+
+def fdn_reverb(in_l: str = "in1", in_r: str = "in2", out_l: str = "out1",
+               out_r: str = "out2", fb_amount: str = "fb",
+               damp_freq: str = "damp_hz", size: str = "size",
+               *, prefix: str = "fdn") -> str:
+    """4-line Hadamard FDN reverb (plan #9): four prime-ish delays, the
+    orthonormal H4 feedback matrix (0.5 * ±1 pattern — energy-preserving,
+    so ``{fb_amount}`` alone sets decay), and a one-pole damping lowpass
+    per line. ``{size}`` scales the base times (0.25..4 sane). Stereo out
+    decorrelates as L = d0+d2, R = d1+d3.
+    """
+    base_ms = [29.7, 37.1, 41.1, 43.7]
+    p = prefix
+    lines = [f"History {p}_lp{i}(0.); " for i in range(4)]
+    lines = ["".join(lines).rstrip()]
+    for i in range(4):
+        lines.append(f"Delay {p}_d{i}(96000);")
+    # read the four lines (damped by a one-pole each)
+    lines.append(f"{p}_dampk = 1.0 - exp(-6.2831853 * "
+                 f"clamp({damp_freq}, 200., 18000.) / samplerate);")
+    for i, t in enumerate(base_ms):
+        lines += [
+            f"{p}_r{i} = {p}_d{i}.read(mstosamps({t:g} * "
+            f"clamp({size}, 0.25, 4.)), interp=\"linear\");",
+            f"{p}_lp{i} = {p}_lp{i} + {p}_dampk * ({p}_r{i} - {p}_lp{i});",
+        ]
+    # Hadamard H4 (rows of +/-; 0.5 normalizes -> unitary)
+    lines += [
+        f"{p}_h0 = 0.5 * ({p}_lp0 + {p}_lp1 + {p}_lp2 + {p}_lp3);",
+        f"{p}_h1 = 0.5 * ({p}_lp0 - {p}_lp1 + {p}_lp2 - {p}_lp3);",
+        f"{p}_h2 = 0.5 * ({p}_lp0 + {p}_lp1 - {p}_lp2 - {p}_lp3);",
+        f"{p}_h3 = 0.5 * ({p}_lp0 - {p}_lp1 - {p}_lp2 + {p}_lp3);",
+    ]
+    # write back: input injection (L into even, R into odd lines) + feedback
+    lines.append(f"{p}_g = clamp({fb_amount}, 0., 0.98);")
+    for i in range(4):
+        inj = in_l if i % 2 == 0 else in_r
+        lines.append(f"{p}_d{i}.write({inj} + {p}_g * {p}_h{i});")
+    lines += [
+        f"{out_l} = {p}_lp0 + {p}_lp2;",
+        f"{out_r} = {p}_lp1 + {p}_lp3;",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
+                        decay: str = "decay", damping: str = "damping",
+                        *, prefix: str = "plate") -> str:
+    """The Dattorro 1997 plate tank (plan #12): input diffusion (4
+    allpasses) into the figure-8 loop — per branch a decay-diffusion
+    allpass, a long delay, a damping one-pole, a second allpass and a
+    second delay, each branch feeding the OTHER scaled by ``{decay}``.
+    Output taps follow the paper's cross-tap idea (compacted to 3 per
+    side). ``{decay}`` 0..0.95, ``{damping}`` as a Hz lowpass.
+    """
+    p = prefix
+    head = allpass_diffusion_chain(in_sig, f"{p}_diff", prefix=f"{p}_ind")
+    lines = [head.rstrip()]
+    lines.append(f"History {p}_lpA(0.); History {p}_lpB(0.); "
+                 f"History {p}_fbA(0.); History {p}_fbB(0.);")
+    for name, ap1_t, ap1_g, d1_t, ap2_t, ap2_g, d2_t in (
+            ("A", 22.58, 0.70, 149.62, 60.48, 0.50, 124.99),
+            ("B", 30.51, 0.70, 141.69, 89.24, 0.50, 106.28)):
+        b = f"{p}_{name}"
+        other = f"{p}_fb{'B' if name == 'A' else 'A'}"
+        lines += [
+            f"Delay {b}_ap1(9600); Delay {b}_d1(19200); "
+            f"Delay {b}_ap2(9600); Delay {b}_d2(19200);",
+            # branch input: diffused input + the OTHER branch's tail * decay
+            f"{b}_in = {p}_diff + {other} * clamp({decay}, 0., 0.95);",
+            # decay-diffusion allpass 1
+            f"{b}_z1 = {b}_ap1.read(mstosamps({ap1_t:g}), interp=\"none\");",
+            f"{b}_y1 = -{ap1_g:g} * {b}_in + {b}_z1;",
+            f"{b}_ap1.write({b}_in + {ap1_g:g} * {b}_y1);",
+            # long delay 1 -> damping one-pole
+            f"{b}_t1 = {b}_d1.read(mstosamps({d1_t:g}), interp=\"none\");",
+            f"{b}_d1.write({b}_y1);",
+            f"{p}_dampk = 1.0 - exp(-6.2831853 * "
+            f"clamp({damping}, 500., 18000.) / samplerate);",
+            f"{p}_lp{name} = {p}_lp{name} + {p}_dampk * "
+            f"({b}_t1 - {p}_lp{name});",
+            # allpass 2 -> delay 2 -> becomes this branch's tail
+            f"{b}_z2 = {b}_ap2.read(mstosamps({ap2_t:g}), interp=\"none\");",
+            f"{b}_y2 = -{ap2_g:g} * {p}_lp{name} + {b}_z2;",
+            f"{b}_ap2.write({p}_lp{name} + {ap2_g:g} * {b}_y2);",
+            f"{b}_t2 = {b}_d2.read(mstosamps({d2_t:g}), interp=\"none\");",
+            f"{b}_d2.write({b}_y2);",
+            f"{p}_fb{name} = {b}_t2;",
+        ]
+    # cross taps (paper-style: each ear listens mostly to the OTHER branch)
+    lines += [
+        f"{out_l} = 0.6 * ({p}_B_d1.read(mstosamps(52.7), interp=\"none\") "
+        f"+ {p}_B_d2.read(mstosamps(66.9), interp=\"none\") "
+        f"- {p}_A_ap2.read(mstosamps(29.8), interp=\"none\"));",
+        f"{out_r} = 0.6 * ({p}_A_d1.read(mstosamps(49.6), interp=\"none\") "
+        f"+ {p}_A_d2.read(mstosamps(73.5), interp=\"none\") "
+        f"- {p}_B_ap2.read(mstosamps(27.4), interp=\"none\"));",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def clickless_delay(x: str, out: str, time_ms: str = "time_ms", *,
+                    prefix: str = "cxd", max_ms: float = 2000.0,
+                    xfade_ms: float = 50.0) -> str:
+    """Click-free variable delay (T36/Q19 — the M4L.dl.vdelay~ Building
+    Block as a gen~ kernel).
+
+    Two read taps on one line: the CURRENT tap keeps sounding while a
+    time change fades the NEW tap in over ``xfade_ms`` (equal-power), then
+    the new time becomes current — no zipper/click on automation, no pitch
+    chirp (unlike a slewed single tap). A time change arriving mid-fade is
+    picked up on the next completed fade.
+    """
+    p = prefix
+    samps = int(max_ms * 48) + 96
+    return (
+        f"Delay {p}_dl({samps});\n"
+        f"History {p}_cur(1.); History {p}_tgt(1.); History {p}_xf(1.);\n"
+        f"{p}_dl.write({x});\n"
+        f"{p}_nt = clamp({time_ms}, 0.02, {max_ms});\n"
+        f"if ({p}_nt != {p}_tgt && {p}_xf >= 1.) {{\n"
+        f"    {p}_tgt = {p}_nt;\n"
+        f"    {p}_xf = 0.;\n"
+        f"}}\n"
+        f"{p}_xf = {p}_xf + 1000. / ({xfade_ms} * samplerate);\n"
+        f"{p}_g = {p}_xf > 1. ? 1. : {p}_xf;\n"
+        f"{p}_a = {p}_dl.read(mstosamps({p}_cur), interp=\"linear\");\n"
+        f"{p}_b = {p}_dl.read(mstosamps({p}_tgt), interp=\"linear\");\n"
+        f"{out} = {p}_a * cos({p}_g * 1.5707963) "
+        f"+ {p}_b * sin({p}_g * 1.5707963);\n"
+        f"if ({p}_g >= 1.) {{\n"
+        f"    {p}_cur = {p}_tgt;\n"
+        f"}}\n"
+    )

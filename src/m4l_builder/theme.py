@@ -550,6 +550,32 @@ ACCENTS: dict[str, list[float]] = {
     "motes": [0.62, 0.75, 0.96, 1.0],        # grain blue
 }
 
+# ── Semantic color roles (catalog #60, dnksaus brand audit) ──────────────────
+# The corpus uses COLOR AS GRAMMAR, not decoration: the same four hues carry
+# the same meaning on every dnk device, so a user reads a row's function
+# before reading its label. Keep ONE primary accent per device (corpus P5)
+# and reserve these roles for the mapping/mode grammar:
+#
+#   remote   orange — the hands-on lane: Remote-mode mapping rows, primary
+#            macro controls, "this is yours to grab" (Auto Gate / Clix rows).
+#   mod      teal — the computed lane: Mod-mode rows, numeric readouts,
+#            meters, engine-driven values (matches modulator_slot_component's
+#            Remote/Mod pair — do not re-tint per device).
+#   special  pink — armed / exceptional states: capture pills, scale
+#            awareness, one-shot actions (Bass Lock capture, Chordsaus REC).
+#   inactive grey — unmapped, bypassed, empty: rows and chips waiting for a
+#            target take NO hue (never dim the accent; switch to this grey).
+#
+# remote/mod values are the exact modulator_slot_component defaults so the
+# registry is a zero-visual-delta adoption; special matches the REC-pill
+# family; inactive is the kit-wide dim text grey.
+ROLES: dict[str, list[float]] = {
+    "remote": [0.96, 0.62, 0.20, 1.0],
+    "mod": [0.05, 0.76, 0.83, 1.0],
+    "special": [0.90, 0.25, 0.45, 1.0],
+    "inactive": [0.46, 0.49, 0.55, 1.0],
+}
+
 # Registry of the distinct two-accent palettes for iteration / pick-by-name.
 PALETTES = {
     'rupture': RUPTURE,

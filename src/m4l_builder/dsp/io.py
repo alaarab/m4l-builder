@@ -10,10 +10,10 @@ def stereo_io(plugin_id: str = "obj-plugin", plugout_id: str = "obj-plugout",
     Returns (boxes, lines) with no lines. Caller wires the DSP chain.
     """
     boxes = [
-        newobj(plugin_id, "plugin~", numinlets=1, numoutlets=2,
+        newobj(plugin_id, "plugin~", numinlets=2, numoutlets=2,
                outlettype=["signal", "signal"],
                patching_rect=plugin_rect or [30, 30, 60, 20]),
-        newobj(plugout_id, "plugout~", numinlets=2, numoutlets=0,
+        newobj(plugout_id, "plugout~", numinlets=2, numoutlets=2,
                patching_rect=plugout_rect or [30, 200, 60, 20]),
     ]
     return (boxes, [])

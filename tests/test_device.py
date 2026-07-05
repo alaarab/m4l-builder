@@ -3,6 +3,8 @@
 import json
 import os
 
+import pytest
+
 from m4l_builder.device import (
     AudioEffect,
     Device,
@@ -361,6 +363,45 @@ class TestDevice:
         t1 = {b["box"]["id"]: b["box"] for b in d1.boxes}[r1.id]["text"]
         t2 = {b["box"]["id"]: b["box"] for b in d2.boxes}[r2.id]["text"]
         assert t1 != t2                                       # gen~ ref tracks it
+
+    def test_add_gendsp_refuses_function_defs(self):
+        # the EXTERNAL .gendsp path silences a codebox that defines a function
+        # (Live-verified, ZZGenFuncEmbed) — add_gendsp must trip at build time
+        # and point at the embed path.
+        d = self._make()
+        code = ("mysat(x) { return tanh(x); }\n"
+                "out1 = mysat(in1); out2 = mysat(in2);")
+        with pytest.raises(ValueError) as exc:
+            d.add_gendsp("core", "sat_core", code, 2, 2, [0, 0, 200, 22])
+        msg = str(exc.value)
+        assert "mysat" in msg and "embed_gendsp" in msg
+        # nothing half-registered: no support file, no gen~ box
+        assert not any(n.endswith(".gendsp") for n in d._support_files)
+
+    def test_embed_gendsp_inlines_patcher_and_allows_function_defs(self):
+        # Device.embed_gendsp: same call shape as add_gendsp minus the stem —
+        # the gen patcher is EMBEDDED in the box (no support file), which is the
+        # path where user function defs compile and pass audio.
+        d = self._make()
+        code = ("mysat(x) { return tanh(x); }\n"
+                "out1 = mysat(in1); out2 = mysat(in2);")
+        ref = d.embed_gendsp("core", code, 2, 2, [80, 240, 200, 22])
+        box = {b["box"]["id"]: b["box"] for b in d.boxes}[ref.id]
+        assert box["text"] == "gen~"                       # no external ref
+        assert box["numinlets"] == 2 and box["numoutlets"] == 2
+        assert box["outlettype"] == ["signal", "signal"]
+        assert box["patching_rect"] == [80, 240, 200, 22]
+        sub = box["patcher"]
+        assert sub["classnamespace"] == "dsp.gen"
+        codebox = next(b["box"] for b in sub["boxes"]
+                       if b["box"]["maxclass"] == "codebox")
+        assert "mysat(x) {" in codebox["code"]
+        assert not any(n.endswith(".gendsp") for n in d._support_files)
+
+    def test_embed_gendsp_still_lints_dead_outs(self):
+        d = self._make()
+        with pytest.raises(ValueError):
+            d.embed_gendsp("core", "out1 = in1;", 2, 2, [0, 0, 200, 22])  # out2 dead
 
     def test_add_panel_returns_id(self):
         d = self._make()
@@ -845,10 +886,11 @@ class TestAudioEffect:
         plugout_box = fx.boxes[1]["box"]
         assert plugout_box["numinlets"] == 2
 
-    def test_plugout_tilde_has_zero_outlets(self):
+    def test_plugout_tilde_has_two_outlets(self):
+        # Ableton maxdiff dataset (T35): plugout~ has 2 outlets
         fx = AudioEffect("FX", 400, 170)
         plugout_box = fx.boxes[1]["box"]
-        assert plugout_box["numoutlets"] == 0
+        assert plugout_box["numoutlets"] == 2
 
     def test_to_bytes_magic_bytes(self):
         fx = AudioEffect("FX", 400, 170)

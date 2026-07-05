@@ -93,6 +93,12 @@ _FUNCS = {
     "trunc": math.trunc,
     "fract": lambda x: x - math.floor(x),
     "int": math.trunc,  # gen int() truncates toward zero
+    # denormal guard: gen fixdenorm flushes SUBNORMALS to 0 and passes
+    # everything else (incl. 0/inf/nan) through — bit-exact for normal values.
+    # 2.2250738585072014e-308 is DBL_MIN (the smallest normal double).
+    "fixdenorm": lambda x: 0.0 if (
+        x != 0.0 and math.isfinite(x) and abs(x) < 2.2250738585072014e-308
+    ) else x,
 }
 
 # Tokens that put a kernel outside the supported subset.
