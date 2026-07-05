@@ -18,3 +18,8 @@ env/
 site/
 .coverage
 coverage.xml
+
+# large research staging (packs, extracted audio) — local only
+the reference notes
+the reference notes
+the reference notes

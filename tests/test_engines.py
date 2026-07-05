@@ -8,7 +8,13 @@ from m4l_builder import MIDNIGHT, AudioEffect
 from m4l_builder.engines.ballistics_curve import ballistics_curve_js
 from m4l_builder.engines.crossover_display import (
     CROSSOVER_DISPLAY_INLETS,
+    CROSSOVER_DISPLAY_OUTLETS,
     crossover_display_js,
+)
+from m4l_builder.engines.curve_editor import (
+    CURVE_EDITOR_INLETS,
+    CURVE_EDITOR_OUTLETS,
+    curve_editor_js,
 )
 from m4l_builder.engines.delay_trail import delay_trail_js
 from m4l_builder.engines.design_system import (
@@ -21,6 +27,11 @@ from m4l_builder.engines.energy_history import (
     energy_history_js,
 )
 from m4l_builder.engines.envelope_display import ENVELOPE_INLETS, envelope_display_js
+from m4l_builder.engines.envelope_editor import (
+    ENVELOPE_EDITOR_INLETS,
+    ENVELOPE_EDITOR_OUTLETS,
+    envelope_editor_js,
+)
 from m4l_builder.engines.eq_band_column import (
     EQ_BAND_COLUMN_INLETS,
     EQ_BAND_COLUMN_OUTLETS,
@@ -92,6 +103,11 @@ from m4l_builder.engines.spectrum_analyzer import (
     spectrum_analyzer_dsp,
     spectrum_analyzer_js,
 )
+from m4l_builder.engines.step_bars import (
+    STEP_BARS_INLETS,
+    STEP_BARS_OUTLETS,
+    step_bars_js,
+)
 from m4l_builder.engines.step_grid_display import (
     STEP_GRID_DISPLAY_INLETS,
     STEP_GRID_DISPLAY_OUTLETS,
@@ -126,6 +142,9 @@ ALL_JSUI_FACTORIES = [
     linear_phase_eq_display_js,
     spectrum_analyzer_js,
     envelope_display_js,
+    envelope_editor_js,
+    curve_editor_js,
+    step_bars_js,
     waveform_display_js,
     xy_pad_js,
     piano_roll_js,
@@ -251,9 +270,10 @@ class TestCrossoverDisplayEngine:
         assert isinstance(js, str)
         assert len(js) > 100
 
-    def test_declares_inlets(self):
+    def test_declares_inlets_and_outlets(self):
         js = crossover_display_js()
-        assert "inlets = 3;" in js
+        assert "inlets = 5;" in js       # low Hz, high Hz, MID + SIDE analyzers, mode
+        assert "outlets = 2;" in js      # low/high split, on drag
 
     def test_contains_paint_function(self):
         js = crossover_display_js()
@@ -263,18 +283,283 @@ class TestCrossoverDisplayEngine:
         js = crossover_display_js()
         assert "function msg_float" in js
 
-    def test_contains_band_labels(self):
+    def test_interactive_and_spectrum(self):
         js = crossover_display_js()
-        assert '"LOW"' in js
-        assert '"MID"' in js
-        assert '"HIGH"' in js
+        # draggable splits + live spectrum feed
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function set_analyzer_buffer" in js
+
+    def test_mid_side_two_spectrum_path(self):
+        js = crossover_display_js()
+        # a 2nd analyzer buffer + a mode flag drive the Mid-Side two-spectrum draw
+        assert "function set_analyzer_buffer2" in js
+        assert "function set_mode" in js
+        assert "mags2" in js
+        assert "stereo_mode === 1" in js       # the two-spectrum branch
+        # the SIDE overlay uses its own tint (custom color threads through)
+        js2 = crossover_display_js(side_line="0.11, 0.22, 0.33, 0.44")
+        assert "0.11, 0.22, 0.33, 0.44" in js2
 
     def test_custom_colors_present(self):
         js = crossover_display_js(low_color="0.1, 0.2, 0.3, 0.4")
         assert "0.1, 0.2, 0.3, 0.4" in js
 
-    def test_inlet_count_metadata(self):
-        assert CROSSOVER_DISPLAY_INLETS == 3
+    def test_inlet_outlet_count_metadata(self):
+        assert CROSSOVER_DISPLAY_INLETS == 5
+        assert CROSSOVER_DISPLAY_OUTLETS == 2
+
+
+class TestEnvelopeEditorEngine:
+    def test_returns_string(self):
+        js = envelope_editor_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_inlets_and_outlets(self):
+        js = envelope_editor_js()
+        assert "inlets = 4;" in js       # attack / decay / sustain / release back-sync
+        assert "outlets = 4;" in js      # the same four, emitted on drag
+
+    def test_contains_paint_function(self):
+        js = envelope_editor_js()
+        assert "function paint()" in js
+
+    def test_contains_msg_float_handler(self):
+        js = envelope_editor_js()
+        assert "function msg_float" in js
+
+    def test_interactive_drag_idiom(self):
+        # the proven jsui pointer pair + nearest-node hit test drive the editor
+        js = envelope_editor_js()
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function nearest_node" in js
+
+    def test_set_phase_hook_reserved(self):
+        # future live trigger / progress cursor: the hook exists, stores, draws nothing
+        js = envelope_editor_js()
+        assert "function set_phase(v)" in js
+
+    def test_es5_jsui_contract(self):
+        assert find_jsui_contract_issues(envelope_editor_js()) == []
+
+    def test_custom_colors_present(self):
+        js = envelope_editor_js(accent="0.1, 0.2, 0.3, 0.4", bg="0.9, 0.8, 0.7, 1.0")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+        assert "0.9, 0.8, 0.7, 1.0" in js
+
+    def test_fill_derives_from_accent_by_default(self):
+        # fill_color=None -> the under-curve wash is the accent at low alpha
+        js = envelope_editor_js(accent="0.1, 0.2, 0.3, 1.0")
+        assert "var FILL_COLOR  = [0.1, 0.2, 0.3, 0.13];" in js
+        js2 = envelope_editor_js(fill_color="0.5, 0.5, 0.5, 0.5")
+        assert "var FILL_COLOR  = [0.5, 0.5, 0.5, 0.5];" in js2
+
+    def test_range_template_params(self):
+        js = envelope_editor_js()
+        assert "var MAX_A = 2000.0;" in js
+        assert "var MAX_D = 4000.0;" in js
+        assert "var MAX_R = 8000.0;" in js
+        js2 = envelope_editor_js(max_attack_ms=1234.0, max_decay_ms=555.0,
+                                 max_release_ms=9999.0)
+        assert "var MAX_A = 1234.0;" in js2
+        assert "var MAX_D = 555.0;" in js2
+        assert "var MAX_R = 9999.0;" in js2
+
+    def test_initials_thread_into_first_paint(self):
+        js = envelope_editor_js(init_attack_ms=25.0, init_decay_ms=300.0,
+                                init_sustain=0.5, init_release_ms=750.0)
+        assert "var attack_ms  = 25.0;" in js
+        assert "var decay_ms   = 300.0;" in js
+        assert "var sustain    = 0.5;" in js
+        assert "var release_ms = 750.0;" in js
+
+    def test_value_row_present(self):
+        # the dnksaus value row beneath the plot: A / D / S / R readout cells
+        js = envelope_editor_js()
+        assert "function draw_value_row()" in js
+        assert '["A", "D", "S", "R"]' in js
+        assert "draw_value_row();" in js     # wired into paint()
+
+    def test_inlet_outlet_count_metadata(self):
+        assert ENVELOPE_EDITOR_INLETS == 4
+        assert ENVELOPE_EDITOR_OUTLETS == 4
+
+
+class TestCurveEditorEngine:
+    def test_returns_string(self):
+        js = curve_editor_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_single_inlet_and_outlet(self):
+        js = curve_editor_js()
+        assert "inlets = 1;" in js       # messages only (set_points / set_* )
+        assert "outlets = 1;" in js      # the points list, the persistence payload
+
+    def test_contains_paint_function(self):
+        js = curve_editor_js()
+        assert "function paint()" in js
+
+    def test_interactive_gesture_idiom(self):
+        # onclick adds/grabs, ondrag moves, ondblclick deletes -- plus the
+        # shared nearest-node hit test.
+        js = curve_editor_js()
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function ondblclick" in js
+        assert "function nearest_node" in js
+
+    def test_message_handlers_present(self):
+        js = curve_editor_js()
+        for handler in ("function set_points()", "function set_all()",
+                        "function set_tension(v)", "function set_grid(v)",
+                        "function set_snap(v)", "function set_loop(v)"):
+            assert handler in js
+
+    def test_es5_jsui_contract(self):
+        assert find_jsui_contract_issues(curve_editor_js()) == []
+
+    def test_custom_colors_present(self):
+        js = curve_editor_js(accent="0.1, 0.2, 0.3, 0.4", bg="0.9, 0.8, 0.7, 1.0")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+        assert "0.9, 0.8, 0.7, 1.0" in js
+
+    def test_fill_derives_from_accent_by_default(self):
+        js = curve_editor_js(accent="0.1, 0.2, 0.3, 1.0")
+        assert "var FILL_COLOR  = [0.1, 0.2, 0.3, 0.13];" in js
+        js2 = curve_editor_js(fill_color="0.5, 0.5, 0.5, 0.5")
+        assert "var FILL_COLOR  = [0.5, 0.5, 0.5, 0.5];" in js2
+
+    def test_max_points_and_initials_thread_into_the_js(self):
+        js = curve_editor_js(max_points=8, init_y0=0.25, init_y1=0.75,
+                             init_tension=40.0, init_grid=8, init_snap=1)
+        assert "var MAX_POINTS = 8;" in js
+        assert "var ys = [0.25, 0.75];" in js
+        assert "var tension = 40.0;" in js
+        assert "var grid_n  = 8;" in js
+        assert "var snap_on = 1;" in js
+
+    def test_max_points_range_validated(self):
+        with pytest.raises(ValueError):
+            curve_editor_js(max_points=1)
+        with pytest.raises(ValueError):
+            curve_editor_js(max_points=65)
+
+    def test_value_row_and_readout_present(self):
+        # the Multi Shaper footer ("N pt" / "Curve %" / "Grid" / "Snap") plus
+        # the drag telemetry and the loop-glyph hook, all wired into paint().
+        js = curve_editor_js()
+        assert "function draw_value_row()" in js
+        assert '" pt"' in js
+        assert '"Curve "' in js
+        assert '"Grid "' in js
+        assert "function format_xy()" in js
+        assert "function draw_drag_readout()" in js
+        assert "function draw_loop_glyph()" in js
+        assert "draw_value_row();" in js
+        assert "draw_loop_glyph();" in js
+
+    def test_inlet_outlet_count_metadata(self):
+        assert CURVE_EDITOR_INLETS == 1
+        assert CURVE_EDITOR_OUTLETS == 1
+
+
+class TestStepBarsEngine:
+    def test_returns_string(self):
+        js = step_bars_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_single_inlet_and_outlet(self):
+        js = step_bars_js()
+        assert "inlets = 1;" in js       # messages only (set_steps / set_* )
+        assert "outlets = 1;" in js      # step + values streams share outlet 0
+
+    def test_contains_paint_function(self):
+        js = step_bars_js()
+        assert "function paint()" in js
+
+    def test_interactive_gesture_idiom(self):
+        # onclick sets/starts a paint stroke, ondrag paints across bars; NO
+        # double-click semantics (the brief's explicit exclusion).
+        js = step_bars_js()
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function bar_index" in js
+        assert "function paint_to" in js
+        assert "function ondblclick" not in js
+
+    def test_message_handlers_present(self):
+        js = step_bars_js()
+        for handler in ("function set_steps(n)", "function set_values()",
+                        "function set_all()", "function set_link(v)",
+                        "function set_playhead(v)"):
+            assert handler in js
+
+    def test_es5_jsui_contract(self):
+        assert find_jsui_contract_issues(step_bars_js()) == []
+
+    def test_custom_colors_present(self):
+        js = step_bars_js(accent="0.1, 0.2, 0.3, 0.4", bg="0.9, 0.8, 0.7, 1.0")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+        assert "0.9, 0.8, 0.7, 1.0" in js
+
+    def test_fill_derives_from_accent_by_default(self):
+        js = step_bars_js(accent="0.1, 0.2, 0.3, 1.0")
+        assert "var FILL_COLOR  = [0.1, 0.2, 0.3, 0.13];" in js
+        js2 = step_bars_js(fill_color="0.5, 0.5, 0.5, 0.5")
+        assert "var FILL_COLOR  = [0.5, 0.5, 0.5, 0.5];" in js2
+
+    def test_max_steps_and_initials_thread_into_the_js(self):
+        js = step_bars_js(max_steps=8, init_steps=4,
+                          init_values=(0.25, 0.5), init_value=0.75,
+                          reset_value=0.5, init_link=1)
+        assert "var MAX_STEPS   = 8;" in js
+        # leading slots from init_values, the rest fill with init_value
+        assert "var values = [0.25, 0.5, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75];" in js
+        assert "var num_steps = 4;" in js
+        assert "var RESET_VALUE = 0.5;" in js
+        assert "var link_on  = 1;" in js
+
+    def test_max_steps_and_value_ranges_validated(self):
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=1)
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=33)
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=4, init_steps=5)
+        with pytest.raises(ValueError):
+            step_bars_js(init_steps=1)
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=2, init_values=(0.1, 0.2, 0.3))
+        with pytest.raises(ValueError):
+            step_bars_js(init_values=(0.5, 1.5))
+        with pytest.raises(ValueError):
+            step_bars_js(init_value=1.5)
+        with pytest.raises(ValueError):
+            step_bars_js(reset_value=-0.1)
+
+    def test_value_row_and_readout_present(self):
+        # curve_editor's chrome idiom: footer value row ("N st" / "Link"),
+        # the drag telemetry, the link glyph + tint and the playhead
+        # highlight, all wired into paint().
+        js = step_bars_js()
+        assert "function draw_value_row()" in js
+        assert '" st"' in js
+        assert '"Link"' in js
+        assert "function format_step()" in js
+        assert "function draw_drag_readout()" in js
+        assert "function draw_link_glyph()" in js
+        assert "function draw_playhead()" in js
+        assert "draw_value_row();" in js
+        assert "draw_link_glyph();" in js
+        assert "draw_playhead();" in js
+
+    def test_inlet_outlet_count_metadata(self):
+        assert STEP_BARS_INLETS == 1
+        assert STEP_BARS_OUTLETS == 1
 
 
 class TestFilterCurveEngine:
@@ -1055,7 +1340,10 @@ class TestLinearPhaseEqDisplayEngine:
     def test_excludes_allpass(self):
         js = linear_phase_eq_display_js()
         assert "AllPass" not in js
-        assert "TYPE_ALLPASS" not in js
+        # the shared graph_core include carries a DORMANT `case TYPE_ALLPASS:`
+        # (compares against an undefined constant — never matches); the real
+        # contract is that this EQ never DEFINES or offers the type.
+        assert "var TYPE_ALLPASS" not in js
 
     def test_custom_badge_color(self):
         js = linear_phase_eq_display_js(badge_color="0.1, 0.2, 0.3, 0.4")
@@ -2917,3 +3205,162 @@ class TestIconOverlay:
         assert "function draw_icon_expand(" in js
         with pytest.raises(ValueError):
             icon_overlay_js("nope")
+
+
+class TestUiInteractionFoundations:
+    """T27 [Q5-Q8]: the four UXI foundation mixins (node harness)."""
+
+    def _run(self, extra):
+        import json
+        import subprocess
+
+        from m4l_builder.engines.ui_interaction import ui_interaction_js
+        harness = (
+            "var out = [];\n"
+            "function outlet(o, v) { out.push(v); }\n"
+            + ui_interaction_js() + "\n" + extra
+            + "\nconsole.log(JSON.stringify({out: out, R: R}));"
+        )
+        res = subprocess.run(["node", "-e", harness], capture_output=True,
+                             text=True, check=True)
+        return json.loads(res.stdout.strip())
+
+    def test_hit_test_and_dedup(self):
+        r = self._run("""
+var xs = [10, 50, 90], ys = [20, 20, 20];
+var R = {
+  hit: dn_hit_test(52, 22, xs, ys, 3, 6),
+  miss: dn_hit_test(70, 60, xs, ys, 3, 6),
+  first: dn_emit("a", 0.5),
+  dup: dn_emit("a", 0.5),
+  change: dn_emit("a", 0.75),
+};
+""")
+        assert r["R"]["hit"] == 1 and r["R"]["miss"] == -1
+        assert r["R"]["first"] == 1 and r["R"]["dup"] == 0
+        assert r["R"]["change"] == 1
+        assert r["out"] == [["a", 0.5], ["a", 0.75]]
+
+    def test_coord_transforms_roundtrip(self):
+        r = self._run("""
+var R = {
+  x: dn_norm_to_x(0.25, 100, 200),
+  back: dn_x_to_norm(150, 100, 200),
+  y: dn_norm_to_y(1.0, 10, 100),
+  clamped: dn_x_to_norm(9999, 100, 200),
+};
+""")
+        assert r["R"]["x"] == 150 and r["R"]["back"] == 0.25
+        assert r["R"]["y"] == 10 and r["R"]["clamped"] == 1
+
+    def test_tooltip_edge_flip(self):
+        r = self._run("""
+var R = {
+  normal: tt_place(50, 60, 40, 16, 200, 100),
+  right: tt_place(190, 60, 40, 16, 200, 100),
+  top: tt_place(50, 4, 40, 16, 200, 100),
+};
+""")
+        assert r["R"]["normal"] == [60, 38]      # right of cursor, above
+        assert r["R"]["right"][0] == 140         # flipped left
+        assert r["R"]["top"][1] == 16            # flipped below
+
+    def test_edit_overlay_lifecycle(self):
+        r = self._run("""
+var d1 = eo_is_dblclick(1000);      // first click: no
+var d2 = eo_is_dblclick(1200);      // 200ms later: double
+eo_open(10, 10, "1.5", "Freq", 0, 100);
+eo_keychar(48);                     // '0' -> "1.50"
+eo_keychar(8);                      // backspace -> "1.5"
+eo_keychar(57);                     // '9' -> "1.59"
+var v = eo_commit();
+eo_open(10, 10, "", "Freq", 0, 10);
+eo_keychar(53); eo_keychar(53);     // "55" -> clamps to 10
+var v2 = eo_commit();
+eo_open(10, 10, "x", "Freq", 0, 10);
+var v3 = eo_commit();               // NaN -> null
+var R = {d1: d1, d2: d2, v: v, v2: v2, v3: v3};
+""")
+        assert r["R"]["d1"] == 0 and r["R"]["d2"] == 1
+        assert abs(r["R"]["v"] - 1.59) < 1e-9
+        assert r["R"]["v2"] == 10
+        assert r["R"]["v3"] is None
+
+    def test_modifier_math(self):
+        r = self._run("""
+var R = {
+  fine: md_apply_drag(1.0, 0.0, 1),
+  coarse: md_apply_drag(1.0, 0.0, 0),
+  lockv: md_axis_lock(2, 10),
+  lockh: md_axis_lock(10, 2),
+  nudge: md_nudge(1, 0, 0.01),
+  nudge10: md_nudge(-1, 1, 0.01),
+};
+""")
+        assert abs(r["R"]["fine"] - 0.15) < 1e-9
+        assert r["R"]["coarse"] == 1.0
+        assert r["R"]["lockv"] == 1 and r["R"]["lockh"] == 0
+        assert abs(r["R"]["nudge"] - 0.01) < 1e-9
+        assert abs(r["R"]["nudge10"] + 0.1) < 1e-9
+
+
+class TestUiMotionFoundations:
+    """T28 [Q9,Q10]: tween engine + glow palette (node harness)."""
+
+    def _run(self, extra):
+        import json
+        import subprocess
+
+        from m4l_builder.engines.ui_motion import ui_motion_js
+        harness = (
+            "var out = [];\n"
+            "function outlet(o, v) { out.push(v); }\n"
+            + ui_motion_js() + "\n" + extra
+            + "\nconsole.log(JSON.stringify({R: R}));"
+        )
+        res = subprocess.run(["node", "-e", harness], capture_output=True,
+                             text=True, check=True)
+        return json.loads(res.stdout.strip())
+
+    def test_tween_step_frame_rate_independent(self):
+        r = self._run("""
+// one 100ms step must land where four 25ms steps land (same dt/tau sum)
+var one = tw_step(0, 1, 90, 100);
+var four = 0;
+for (var i = 0; i < 4; i++) four = tw_step(four, 1, 90, 25);
+// convergence + snap-to-target under epsilon
+var snap = tw_step(0.9997, 1, 90, 33);
+var R = {one: one, four: four, snap: snap};
+""")
+        assert abs(r["R"]["one"] - r["R"]["four"]) < 1e-9
+        assert r["R"]["snap"] == 1
+
+    def test_tween_map_and_jump(self):
+        r = self._run("""
+// Task-free path: exercise the map via tw_jump + manual steps
+tw_jump("x", 0.5);
+var got = tw_get("x", -1);
+var missing = tw_get("nope", -1);
+tw_map["x"].target = 1.0;
+tw_map["x"].cur = tw_step(tw_map["x"].cur, tw_map["x"].target, 90, 90);
+var R = {got: got, missing: missing, after: tw_map["x"].cur};
+""")
+        assert r["R"]["got"] == 0.5 and r["R"]["missing"] == -1
+        # one tau covers 1-1/e of the distance
+        assert abs(r["R"]["after"] - (0.5 + 0.5 * (1 - 2.718281828 ** -1))) < 1e-6
+
+    def test_accent_states_and_heatmap(self):
+        r = self._run("""
+var acc = [0.3, 0.8, 0.84];
+var R = {
+  hover: ds_accent_state(acc, "hover")[3],
+  active: ds_accent_state(acc, "active")[3],
+  disabled: ds_accent_state(acc, "disabled")[3],
+  mid: ds_heatmap_lerp(0.5, [0.1, 0.1, 0.1], [0.3, 0.8, 0.84]),
+  clamped: ds_heatmap_lerp(9, [0, 0, 0], [1, 1, 1]),
+};
+""")
+        assert r["R"]["hover"] == 0.9 and r["R"]["active"] == 1.0
+        assert r["R"]["disabled"] == 0.25
+        assert abs(r["R"]["mid"][1] - 0.45) < 1e-9
+        assert r["R"]["clamped"][:3] == [1, 1, 1]

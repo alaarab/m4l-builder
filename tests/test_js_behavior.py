@@ -9,6 +9,8 @@ import os
 
 import pytest
 
+from m4l_builder.engines.curve_editor import curve_editor_js
+from m4l_builder.engines.envelope_editor import envelope_editor_js
 from m4l_builder.engines.eq_curve import eq_curve_js
 from m4l_builder.engines.integrated_lufs import integrated_lufs_js
 from m4l_builder.engines.level_history import level_history_js
@@ -16,6 +18,7 @@ from m4l_builder.engines.level_meter import level_meter_js
 from m4l_builder.engines.linear_phase_eq_display import linear_phase_eq_display_js
 from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
 from m4l_builder.engines.slice_overview import slice_overview_js
+from m4l_builder.engines.step_bars import step_bars_js
 
 from .js_harness import NODE, run_jsui
 
@@ -2145,3 +2148,462 @@ class TestSlicePlayhead:
         """)
         assert abs(result.state["before"] - 0.75) < 1e-6
         assert abs(result.state["after"] - 0.0) < 1e-6
+
+
+class TestEnvelopeEditorGestures:
+    """Drag semantics of the ADSR envelope editor (dnksaus kit engine #1):
+    nearest-node hit test, per-node value emission, range clamps, and the
+    no-echo back-sync rule."""
+
+    SIZE = (280, 96)
+
+    def test_attack_drag_is_monotonic_and_clamps_at_range_edges(self):
+        # Drag the attack peak rightward through its slot, then way past it
+        # (clamp at MAX_A) and way left of the plot (clamp at 0).
+        result = run_jsui(envelope_editor_js(), """
+            var pl = plot_left(), pw = plot_w(), pt = plot_top();
+            onclick(node_x(0), node_y(0), 1, 0, 0, 0, 0, 0);
+            ondrag(pl + 0.10 * pw, pt, 1, 0, 0, 0, 0, 0);
+            ondrag(pl + 0.18 * pw, pt, 1, 0, 0, 0, 0, 0);
+            ondrag(pl + 0.26 * pw, pt, 1, 0, 0, 0, 0, 0);
+            ondrag(pl + 0.90 * pw, pt, 1, 0, 0, 0, 0, 0);
+            ondrag(pl - 60, pt, 1, 0, 0, 0, 0, 0);
+            ondrag(pl - 60, pt, 0, 0, 0, 0, 0, 0);
+            dump({a: attack_ms, target_after: drag_target});
+        """, size=self.SIZE)
+        assert result.outlets, "drag must emit"
+        assert {o[0] for o in result.outlets} == {0}, "ONLY the attack outlet fires"
+        vals = [o[1] for o in result.outlets]
+        assert vals[1] < vals[2] < vals[3], "rightward drag rises monotonically"
+        assert vals[4] == 2000.0                      # clamped at MAX_A
+        assert vals[5] == 0.0                         # clamped at 0
+        assert result.state["a"] == 0.0
+        assert result.state["target_after"] == -1     # button-up releases the node
+
+    def test_sustain_node_vertical_drag_clamps_0_to_1(self):
+        result = run_jsui(envelope_editor_js(), """
+            onclick(node_x(2), node_y(2), 1, 0, 0, 0, 0, 0);
+            var nx = node_x(2);
+            ondrag(nx, env_y(0.25), 1, 0, 0, 0, 0, 0);
+            ondrag(nx, plot_bottom() + 40, 1, 0, 0, 0, 0, 0);
+            ondrag(nx, plot_top() - 40, 1, 0, 0, 0, 0, 0);
+            dump({s: sustain});
+        """, size=self.SIZE)
+        assert {o[0] for o in result.outlets} == {2}, "ONLY the sustain outlet fires"
+        vals = [o[1] for o in result.outlets]
+        assert abs(vals[1] - 0.25) < 1e-6
+        assert vals[2] == 0.0                         # below the plot -> clamp 0
+        assert vals[3] == 1.0                         # above the plot -> clamp 1
+        assert result.state["s"] == 1.0
+
+    def test_decay_knee_drag_emits_decay_and_sustain_only(self):
+        # The knee owns TWO axes: x -> decay ms, y -> sustain. Attack and
+        # release must stay silent for the whole gesture.
+        result = run_jsui(envelope_editor_js(), """
+            onclick(node_x(1), node_y(1), 1, 0, 0, 0, 0, 0);
+            ondrag(ax() + 0.20 * plot_w(), env_y(0.4), 1, 0, 0, 0, 0, 0);
+            dump({d: decay_ms, s: sustain});
+        """, size=self.SIZE)
+        assert {o[0] for o in result.outlets} == {1, 2}
+        assert abs(result.state["s"] - 0.4) < 1e-6
+        last_decay = [o[1] for o in result.outlets if o[0] == 1][-1]
+        assert abs(last_decay - result.state["d"]) < 1e-6
+        assert result.state["d"] > 200.0              # dragged right of the initial
+
+    def test_release_drag_is_monotonic_and_clamps_at_max(self):
+        result = run_jsui(envelope_editor_js(), """
+            onclick(node_x(3), node_y(3), 1, 0, 0, 0, 0, 0);
+            var pb = plot_bottom();
+            ondrag(sx() + 0.10 * plot_w(), pb, 1, 0, 0, 0, 0, 0);
+            ondrag(sx() + 0.25 * plot_w(), pb, 1, 0, 0, 0, 0, 0);
+            ondrag(plot_right() + 100, pb, 1, 0, 0, 0, 0, 0);
+            dump({r: release_ms});
+        """, size=self.SIZE)
+        assert {o[0] for o in result.outlets} == {3}, "ONLY the release outlet fires"
+        vals = [o[1] for o in result.outlets]
+        assert vals[1] < vals[2] < vals[3], "rightward drag rises monotonically"
+        assert vals[3] == 8000.0                      # clamped at MAX_R
+        assert result.state["r"] == 8000.0
+
+    def test_hit_test_targets_nearest_node_and_misses_empty_plot(self):
+        result = run_jsui(envelope_editor_js(), """
+            onclick(node_x(0), node_y(0), 1, 0, 0, 0, 0, 0);
+            var t0 = drag_target;
+            ondrag(node_x(0), node_y(0), 0, 0, 0, 0, 0, 0);
+            onclick(node_x(3), node_y(3), 1, 0, 0, 0, 0, 0);
+            var t3 = drag_target;
+            ondrag(node_x(3), node_y(3), 0, 0, 0, 0, 0, 0);
+            var n_before = __captured.outlets.length;
+            onclick(plot_left() + plot_w() * 0.5, plot_top() + 2, 1, 0, 0, 0, 0, 0);
+            dump({t0: t0, t3: t3, tmiss: drag_target,
+                  missEmitted: __captured.outlets.length - n_before});
+        """, size=self.SIZE)
+        assert result.state["t0"] == 0
+        assert result.state["t3"] == 3
+        assert result.state["tmiss"] == -1            # empty plot: no grab
+        assert result.state["missEmitted"] == 0       # ...and no emission
+
+    def test_back_sync_sets_state_without_re_emitting(self):
+        # The no-echo rule: inbound param values (msg_float on inlets 0-3)
+        # redraw the curve but NEVER fire outlets; over-range values clamp.
+        result = run_jsui(envelope_editor_js(), """
+            inlet = 0; msg_float(500.0);
+            inlet = 1; msg_float(1000.0);
+            inlet = 2; msg_float(0.5);
+            inlet = 3; msg_float(2000.0);
+            inlet = 0; msg_float(99999.0);
+            dump({a: attack_ms, d: decay_ms, s: sustain, r: release_ms});
+        """, size=self.SIZE)
+        assert result.outlets == []
+        assert result.state == {"a": 2000.0, "d": 1000.0, "s": 0.5, "r": 2000.0}
+
+
+def _points_emissions(outlets):
+    """Every captured ``points ...`` list emission -> list of [x0, y0, ...]."""
+    return [o[2:] for o in outlets if len(o) > 1 and o[1] == "points"]
+
+
+class TestCurveEditorGestures:
+    """Gesture + message semantics of the general breakpoint curve editor
+    (dnksaus kit engines #2-#6): click-empty-adds, neighbor-clamped drags,
+    double-click delete with the fresh-point guard, grid snap, the cosine
+    tension blend, and the no-echo rule for set_points / set_all."""
+
+    SIZE = (280, 120)
+
+    def test_click_empty_adds_a_point_and_emits_the_full_list(self):
+        result = run_jsui(curve_editor_js(), """
+            onclick(to_px_x(0.3), to_px_y(0.55), 1, 0, 0, 0, 0, 0);
+            dump({n: xs.length, x1: xs[1], y1: ys[1],
+                  grabbed: drag_target, fresh: just_added});
+        """, size=self.SIZE)
+        assert result.state["n"] == 3
+        assert abs(result.state["x1"] - 0.3) < 0.01     # px round-trip tolerance
+        assert abs(result.state["y1"] - 0.55) < 0.02
+        assert result.state["grabbed"] == 1             # new point is grabbed
+        assert result.state["fresh"] == 1
+        pts = _points_emissions(result.outlets)
+        assert len(pts) == 1, "the add emits exactly one points list"
+        assert len(pts[0]) == 6                         # 3 points -> 6 atoms
+        assert pts[0][0] == 0 and pts[0][4] == 1        # endpoint x are 0 / 1
+
+    def test_click_empty_at_max_points_is_ignored(self):
+        result = run_jsui(curve_editor_js(max_points=3), """
+            onclick(to_px_x(0.3), to_px_y(0.5), 1, 0, 0, 0, 0, 0);   // 3rd point
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);                           // release
+            var before = __captured.outlets.length;
+            onclick(to_px_x(0.7), to_px_y(0.5), 1, 0, 0, 0, 0, 0);   // over max
+            dump({n: xs.length, extra: __captured.outlets.length - before});
+        """, size=self.SIZE)
+        assert result.state["n"] == 3
+        assert result.state["extra"] == 0
+
+    def test_drag_clamps_x_between_neighbors(self):
+        # The generalized FunctionHandler rule: a dragged point can never
+        # cross its neighbors, however far the pointer goes.
+        result = run_jsui(curve_editor_js(), """
+            set_points(0.0, 0.0, 0.5, 0.5, 1.0, 1.0);
+            onclick(to_px_x(0.5), to_px_y(0.5), 1, 0, 0, 0, 0, 0);
+            ondrag(to_px_x(1.0) + 60, to_px_y(0.5), 1, 0, 0, 0, 0, 0);
+            var xr = xs[1];
+            ondrag(to_px_x(0.0) - 60, to_px_y(0.5), 1, 0, 0, 0, 0, 0);
+            var xl = xs[1];
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            dump({xr: xr, xl: xl, n: xs.length});
+        """, size=self.SIZE)
+        assert result.state["n"] == 3
+        assert 0.99 <= result.state["xr"] < 1.0, "clamped strictly left of x=1"
+        assert 0.0 < result.state["xl"] <= 0.011, "clamped strictly right of x=0"
+
+    def test_endpoint_drag_moves_y_only(self):
+        result = run_jsui(curve_editor_js(init_y0=0.0, init_y1=1.0), """
+            onclick(to_px_x(0.0), to_px_y(0.0), 1, 0, 0, 0, 0, 0);
+            ondrag(to_px_x(0.4), to_px_y(0.8), 1, 0, 0, 0, 0, 0);
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            dump({x0: xs[0], y0: ys[0], n: xs.length});
+        """, size=self.SIZE)
+        assert result.state["n"] == 2
+        assert result.state["x0"] == 0.0, "endpoint x stays locked at 0"
+        assert abs(result.state["y0"] - 0.8) < 0.02
+        assert len(_points_emissions(result.outlets)) == 1   # one move, one emit
+
+    def test_double_click_deletes_interior_only_with_fresh_point_guard(self):
+        result = run_jsui(curve_editor_js(), """
+            // add a point, then immediately double-click it (the accidental
+            // double-click-on-empty flow): the fresh-point guard keeps it.
+            onclick(to_px_x(0.5), to_px_y(0.5), 1, 0, 0, 0, 0, 0);
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            onclick(to_px_x(xs[1]), to_px_y(ys[1]), 1, 0, 0, 0, 0, 0);
+            ondblclick(to_px_x(xs[1]), to_px_y(ys[1]), 1, 0, 0, 0, 0, 0);
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            var kept = xs.length;
+            // a LATER double-click on the same (no longer fresh) node deletes.
+            onclick(to_px_x(xs[1]), to_px_y(ys[1]), 1, 0, 0, 0, 0, 0);
+            ondblclick(to_px_x(xs[1]), to_px_y(ys[1]), 1, 0, 0, 0, 0, 0);
+            var afterDelete = xs.length;
+            // endpoints are undeletable.
+            ondblclick(to_px_x(0.0), to_px_y(ys[0]), 1, 0, 0, 0, 0, 0);
+            ondblclick(to_px_x(1.0), to_px_y(ys[1]), 1, 0, 0, 0, 0, 0);
+            dump({kept: kept, afterDelete: afterDelete, ends: xs.length});
+        """, size=self.SIZE)
+        assert result.state["kept"] == 3, "fresh point survives its own dblclick"
+        assert result.state["afterDelete"] == 2, "later dblclick deletes it"
+        assert result.state["ends"] == 2, "endpoints never delete"
+        pts = _points_emissions(result.outlets)
+        assert len(pts[-1]) == 4, "the delete emitted the shrunken list"
+
+    def test_snap_quantizes_added_and_dragged_points(self):
+        result = run_jsui(curve_editor_js(), """
+            set_grid(4);
+            set_snap(1);
+            onclick(to_px_x(0.3), to_px_y(0.55), 1, 0, 0, 0, 0, 0);
+            var ax = xs[1], ay = ys[1];
+            ondrag(to_px_x(0.62), to_px_y(0.88), 1, 0, 0, 0, 0, 0);
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            dump({ax: ax, ay: ay, dx: xs[1], dy: ys[1]});
+        """, size=self.SIZE)
+        assert abs(result.state["ax"] - 0.25) < 1e-6, "added x snaps to grid/4"
+        assert abs(result.state["ay"] - 0.5) < 1e-6, "added y snaps to grid/4"
+        assert abs(result.state["dx"] - 0.5) < 1e-6, "dragged x snaps"
+        assert abs(result.state["dy"] - 1.0) < 1e-6, "dragged y snaps"
+
+    def test_set_points_round_trips_without_re_emitting(self):
+        # The no-echo rule: inbound lists rebuild state, redraw, NEVER emit —
+        # and the sanitizer sorts + forces the endpoint x values.
+        result = run_jsui(curve_editor_js(), """
+            set_points(0.02, 0.2, 1.0, 0.4, 0.5, 0.9);
+            dump({n: xs.length, xs: xs.slice(), ys: ys.slice()});
+        """, size=self.SIZE)
+        assert result.outlets == []
+        assert result.state["n"] == 3
+        assert result.state["xs"] == [0.0, 0.5, 1.0]      # sorted + endpoints forced
+        assert result.state["ys"] == [0.2, 0.9, 0.4]
+
+    def test_set_all_uses_count_and_ignores_stale_slots(self):
+        # The wrapper restore message: count-first fixed-slot layout — stale
+        # coordinates beyond the count must not become points.
+        result = run_jsui(curve_editor_js(), """
+            set_all(3, 0.0, 0.1, 0.5, 0.6, 1.0, 0.9, 0.7, 0.7, 0.8, 0.8);
+            dump({n: xs.length, x1: xs[1], y2: ys[2]});
+        """, size=self.SIZE)
+        assert result.outlets == []
+        assert result.state["n"] == 3
+        assert result.state["x1"] == 0.5
+        assert result.state["y2"] == 0.9
+
+    def test_inbound_lists_ignored_mid_drag(self):
+        # A restore cascade (our own edit echoed through the param hosts)
+        # can never fight a live gesture.
+        result = run_jsui(curve_editor_js(), """
+            set_points(0.0, 0.0, 0.5, 0.5, 1.0, 1.0);
+            onclick(to_px_x(0.5), to_px_y(0.5), 1, 0, 0, 0, 0, 0);
+            set_points(0.0, 1.0, 1.0, 0.0);
+            set_all(2, 0.0, 1.0, 1.0, 0.0);
+            var during = xs.length;
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            set_points(0.0, 1.0, 1.0, 0.0);
+            dump({during: during, after: xs.length});
+        """, size=self.SIZE)
+        assert result.state["during"] == 3, "mid-drag restore is ignored"
+        assert result.state["after"] == 2, "after release it applies"
+
+    def test_tension_blends_linear_to_cosine(self):
+        # The documented interpolation contract on a rising (0,0)->(1,1) line:
+        # k=0 exact linear, k=1 full cosine ease, k=0.5 their midpoint.
+        result = run_jsui(curve_editor_js(), """
+            set_tension(0);    var lin = curve_y_at(0.25);
+            set_tension(100);  var cos_ = curve_y_at(0.25);
+            set_tension(50);   var mid = curve_y_at(0.25);
+            set_tension(100);  var through = curve_y_at(0.5);
+            dump({lin: lin, cos_: cos_, mid: mid, through: through});
+        """, size=self.SIZE)
+        assert result.outlets == []
+        assert abs(result.state["lin"] - 0.25) < 1e-9
+        expected_cos = (1 - __import__("math").cos(__import__("math").pi * 0.25)) / 2
+        assert abs(result.state["cos_"] - expected_cos) < 1e-9
+        assert abs(result.state["mid"] - (0.25 + expected_cos) / 2) < 1e-9
+        assert abs(result.state["through"] - 0.5) < 1e-9, \
+            "the curve passes through segment midpoints of a symmetric line"
+
+    def test_xy_readout_and_flag_messages(self):
+        result = run_jsui(curve_editor_js(), """
+            onclick(to_px_x(0.5), to_px_y(0.5), 1, 0, 0, 0, 0, 0);
+            ondrag(to_px_x(0.59), to_px_y(0.6), 1, 0, 0, 0, 0, 0);
+            var readout = format_xy();
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            set_grid(7.4);  var g1 = grid_n;
+            set_grid(99);   var g2 = grid_n;
+            set_snap(2);    var s = snap_on;
+            set_loop(1);    var l = loop_on;
+            dump({readout: readout, g1: g1, g2: g2, s: s, l: l});
+        """, size=self.SIZE)
+        assert result.state["readout"] == "X 59 Y 60"
+        assert result.state["g1"] == 7
+        assert result.state["g2"] == 64
+        assert result.state["s"] == 1
+        assert result.state["l"] == 1
+
+
+def _values_emissions(outlets):
+    """Every captured ``values ...`` list emission -> list of [v0, v1, ...]."""
+    return [o[2:] for o in outlets if len(o) > 1 and o[1] == "values"]
+
+
+def _step_emissions(outlets):
+    """Every captured ``step i v`` emission -> list of [i, v]."""
+    return [o[2:] for o in outlets if len(o) > 1 and o[1] == "step"]
+
+
+class TestStepBarsGestures:
+    """Gesture + message semantics of the step-bar lane editor (dnksaus kit
+    engines #7-#8): click-sets-bar, interpolated drag-paint across bars,
+    modifier-click reset (no stroke), value-preserving set_steps, and the
+    no-echo / ignored-mid-drag rules for set_values / set_all."""
+
+    SIZE = (280, 120)
+
+    def test_click_sets_the_bar_under_the_cursor(self):
+        result = run_jsui(step_bars_js(), """
+            onclick(bar_center_x(2), to_px_y(0.7), 1, 0, 0, 0, 0, 0);
+            dump({v2: values[2], n: num_steps, painting: dragging});
+        """, size=self.SIZE)
+        assert abs(result.state["v2"] - 0.7) < 0.02
+        assert result.state["n"] == 8
+        assert result.state["painting"] == 1          # a plain click starts a stroke
+        steps = _step_emissions(result.outlets)
+        assert len(steps) == 1 and steps[0][0] == 2
+        vals = _values_emissions(result.outlets)
+        assert len(vals) == 1, "the click emits exactly one values list"
+        assert len(vals[0]) == 8, "the payload carries the ACTIVE steps only"
+        assert abs(vals[0][2] - 0.7) < 0.02
+
+    def test_drag_paint_across_three_bars_writes_three_values(self):
+        # THE signature step-editor gesture: one stroke over bars 0->2 writes
+        # all three, with the skipped middle bar linearly interpolated.
+        result = run_jsui(step_bars_js(), """
+            onclick(bar_center_x(0), to_px_y(0.2), 1, 0, 0, 0, 0, 0);
+            ondrag(bar_center_x(2), to_px_y(0.8), 1, 0, 0, 0, 0, 0);
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            dump({v0: values[0], v1: values[1], v2: values[2], v3: values[3],
+                  readout_gone: drag_step});
+        """, size=self.SIZE)
+        assert abs(result.state["v0"] - 0.2) < 0.02
+        assert abs(result.state["v1"] - 0.5) < 0.03   # lerped midpoint
+        assert abs(result.state["v2"] - 0.8) < 0.02
+        assert result.state["v3"] == 1.0              # untouched default
+        assert result.state["readout_gone"] == -1     # release ends the readout
+        touched = {s[0] for s in _step_emissions(result.outlets)}
+        assert touched == {0, 1, 2}, "every crossed bar got a step emission"
+
+    def test_modifier_click_resets_a_bar_and_starts_no_stroke(self):
+        result = run_jsui(step_bars_js(reset_value=0.0), """
+            set_values(0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9);
+            onclick(bar_center_x(2), to_px_y(0.9), 1, 1, 0, 0, 0, 0);   // cmd
+            var cmd_reset = values[2];
+            onclick(bar_center_x(3), to_px_y(0.9), 1, 0, 0, 0, 1, 0);   // alt
+            var alt_reset = values[3];
+            // the reset started NO paint stroke: a follow-up drag is inert.
+            ondrag(bar_center_x(5), to_px_y(0.1), 1, 0, 0, 0, 1, 0);
+            dump({cmd_reset: cmd_reset, alt_reset: alt_reset, v5: values[5]});
+        """, size=self.SIZE)
+        assert result.state["cmd_reset"] == 0.0
+        assert result.state["alt_reset"] == 0.0
+        assert result.state["v5"] == 0.9, "no stroke after a modifier reset"
+        assert len(_values_emissions(result.outlets)) == 2, \
+            "each reset emitted the persistence payload"
+
+    def test_set_steps_requantizes_and_preserves_slot_values(self):
+        result = run_jsui(step_bars_js(), """
+            set_values(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8);
+            set_steps(4);
+            var shrunk = num_steps;
+            set_steps(8);
+            dump({shrunk: shrunk, n: num_steps, v6: values[6],
+                  lo: (set_steps(1), num_steps), hi: (set_steps(99), num_steps)});
+        """, size=self.SIZE)
+        assert result.outlets == [], "set_steps / set_values never re-emit"
+        assert result.state["shrunk"] == 4
+        assert result.state["n"] == 8
+        assert abs(result.state["v6"] - 0.7) < 1e-9, \
+            "values beyond a shrunken count survive and come back"
+        assert result.state["lo"] == 2
+        assert result.state["hi"] == 16
+
+    def test_set_values_round_trips_and_clamps_without_re_emitting(self):
+        result = run_jsui(step_bars_js(), """
+            set_values(0.25, 0.5, 2.0, -1.0);
+            dump({v0: values[0], v1: values[1], v2: values[2], v3: values[3],
+                  v4: values[4], n: num_steps});
+        """, size=self.SIZE)
+        assert result.outlets == []
+        assert result.state["v0"] == 0.25
+        assert result.state["v1"] == 0.5
+        assert result.state["v2"] == 1.0              # clamped high
+        assert result.state["v3"] == 0.0              # clamped low
+        assert result.state["v4"] == 1.0              # untouched default
+        assert result.state["n"] == 8, "set_values leaves the count alone"
+
+    def test_set_all_uses_count_and_fills_the_slots(self):
+        # The wrapper restore message: count-first fixed-slot layout.
+        result = run_jsui(step_bars_js(max_steps=8), """
+            set_all(3, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8);
+            dump({n: num_steps, v1: values[1], v5: values[5]});
+        """, size=self.SIZE)
+        assert result.outlets == []
+        assert result.state["n"] == 3
+        assert result.state["v1"] == 0.2
+        assert result.state["v5"] == 0.6, "stale slots still restore (fixed array)"
+
+    def test_restores_ignored_mid_drag(self):
+        # A restore cascade (our own edit echoed through the param hosts)
+        # can never fight a live paint stroke.
+        result = run_jsui(step_bars_js(), """
+            onclick(bar_center_x(1), to_px_y(0.6), 1, 0, 0, 0, 0, 0);
+            set_values(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            set_all(4, 0.0, 0.0, 0.0, 0.0);
+            set_steps(4);
+            var during_v = values[1], during_n = num_steps;
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            set_steps(4);
+            dump({during_v: during_v, during_n: during_n, after_n: num_steps});
+        """, size=self.SIZE)
+        assert abs(result.state["during_v"] - 0.6) < 0.02, "mid-drag restore ignored"
+        assert result.state["during_n"] == 8
+        assert result.state["after_n"] == 4, "after release it applies"
+
+    def test_out_of_range_clicks_and_playhead_clamp(self):
+        result = run_jsui(step_bars_js(), """
+            onclick(bar_center_x(0), plot_top() - 1, 1, 0, 0, 0, 0, 0);
+            var hi = values[0];
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            onclick(bar_center_x(1), plot_bottom() + 1, 1, 0, 0, 0, 0, 0);
+            var lo = values[1];
+            ondrag(bar_center_x(7) + 500, to_px_y(0.5), 1, 0, 0, 0, 0, 0);
+            var last = values[7];
+            ondrag(0, 0, 0, 0, 0, 0, 0, 0);
+            set_playhead(3);   var p_ok = playhead;
+            set_playhead(99);  var p_hi = playhead;
+            set_playhead(-1);  var p_off = playhead;
+            var readout = (onclick(bar_center_x(3), to_px_y(0.74), 1, 0, 0, 0, 0, 0),
+                           format_step());
+            dump({hi: hi, lo: lo, last: last,
+                  p_ok: p_ok, p_hi: p_hi, p_off: p_off, readout: readout});
+        """, size=self.SIZE)
+        assert result.state["hi"] == 1.0, "clicks above the plot clamp to 1"
+        assert result.state["lo"] == 0.0, "clicks below the plot clamp to 0"
+        assert abs(result.state["last"] - 0.5) < 0.02, \
+            "painting past the right edge clamps to the last bar"
+        assert result.state["p_ok"] == 3
+        assert result.state["p_hi"] == -1
+        assert result.state["p_off"] == -1
+        assert result.state["readout"] == "S 3 V 74"
+
+    def test_link_flag_is_display_only(self):
+        result = run_jsui(step_bars_js(), """
+            set_link(1);  var on = link_on;
+            set_link(0);  var off = link_on;
+            dump({on: on, off: off});
+        """, size=self.SIZE)
+        assert result.outlets == []
+        assert result.state["on"] == 1
+        assert result.state["off"] == 0

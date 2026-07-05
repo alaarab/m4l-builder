@@ -30,6 +30,7 @@ def goniometer_graticule_js(
     accent="1.0, 0.64, 0.30, 0.85",
     fontname="Ableton Sans Medium",
     fontsize=8.0,
+    fill_bg=True,
 ) -> str:
     """Return v8ui source for a goniometer's reference graticule.
 
@@ -68,11 +69,15 @@ def goniometer_graticule_js(
         "    var r = Math.min(w, h) * 0.5 - 10;\n"
         "    var dr = r * 0.7071;   // 45-degree reach\n"
         "\n"
-        "    // Opaque backdrop (this overlay sits BEHIND a transparent scope~).\n"
-        "    mgraphics.set_source_rgba(BG_CLR[0], BG_CLR[1], BG_CLR[2], BG_CLR[3]);\n"
-        "    mgraphics.rectangle(0, 0, w, h);\n"
-        "    mgraphics.fill();\n"
-        "\n"
+        + ("    // Opaque backdrop (behind-the-scope composition).\n"
+           "    mgraphics.set_source_rgba(BG_CLR[0], BG_CLR[1], BG_CLR[2], BG_CLR[3]);\n"
+           "    mgraphics.rectangle(0, 0, w, h);\n"
+           "    mgraphics.fill();\n"
+           "\n" if fill_bg else
+           "    // fill_bg=False: transparent — js renders ABOVE native scope~ in\n"
+           "    // Live, so only the painted LINES cover the dot cloud (T22).\n"
+           "\n")
+        +
         "    // 45-degree diagonals (L upper-left .. R upper-right Lissajous axes)\n"
         "    mgraphics.set_source_rgba(DIAG_CLR[0], DIAG_CLR[1], DIAG_CLR[2], DIAG_CLR[3]);\n"
         "    mgraphics.set_line_width(1.0);\n"

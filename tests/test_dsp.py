@@ -146,7 +146,7 @@ class TestStereoIO:
         boxes, _ = stereo_io()
         plugin = boxes[0]["box"]
         assert plugin["text"] == "plugin~"
-        assert plugin["numinlets"] == 1
+        assert plugin["numinlets"] == 2
         assert plugin["numoutlets"] == 2
         assert plugin["outlettype"] == ["signal", "signal"]
 
@@ -154,8 +154,10 @@ class TestStereoIO:
         boxes, _ = stereo_io()
         plugout = boxes[1]["box"]
         assert plugout["text"] == "plugout~"
+        # Ableton maxdiff dataset (T35): plugout~ passes its inputs through
+        # to two outlets (device chain continues after the device)
         assert plugout["numinlets"] == 2
-        assert plugout["numoutlets"] == 0
+        assert plugout["numoutlets"] == 2
 
     def test_default_ids(self):
         boxes, _ = stereo_io()
@@ -4757,3 +4759,54 @@ class TestDynamicsWiringIntegrity:
             and ln["patchline"]["destination"] == ["ag_mul", 1]
         ]
         assert len(gain_to_mul) == 1
+
+
+class TestT36OfficialAdopt:
+    """T36 [Q19,Q20]: vdelay~/gizmo~ recipes + poly~ voice template."""
+
+    def test_clickless_delay_lints_and_crossfades(self):
+        from m4l_builder.gen_lint import lint_genexpr, lint_param_order
+        from m4l_builder.gen_stateful import clickless_delay
+        code = ("Param time_ms(250.);\n"
+                + clickless_delay("in1", "out1", max_ms=1000.0))
+        assert lint_genexpr(code, 1, 1) == []
+        assert lint_param_order(code) == []
+        assert "cos(" in code and "sin(" in code      # equal-power law
+        assert 'interp="linear"' in code
+        assert "cxd_cur = cxd_tgt" in code            # fade completion
+
+    def test_pitch_shift_gizmo_structure(self):
+        from m4l_builder.dsp.spectral import pitch_shift_gizmo
+        boxes, lines = pitch_shift_gizmo("ps", fft_size=1024, overlap=4)
+        box = boxes[0]["box"]
+        assert box["text"] == "pfft~ ps_gizmo 1024 4"
+        assert box["numinlets"] == 2      # signal + ratio
+        sub = box["patcher"]
+        ids = {b["box"]["id"]: b["box"] for b in sub["boxes"]}
+        assert ids["ps_gizmo"]["text"] == "gizmo~"
+        wires = {(ln["patchline"]["source"][0], ln["patchline"]["source"][1],
+                  ln["patchline"]["destination"][0])
+                 for ln in sub["lines"]}
+        assert ("ps_fftin", 0, "ps_gizmo") in wires
+        assert ("ps_ratio_in", 0, "ps_gizmo") in wires
+        assert ("ps_gizmo", 0, "ps_fftout") in wires
+
+    def test_poly_voice_template_contract(self):
+        import json
+
+        from m4l_builder.dsp.synthesis import poly_voice_template
+        boxes, _, sidecar = poly_voice_template("pv", voices=6)
+        box = boxes[0]["box"]
+        # the voice is a .maxpat SIDECAR — poly~ cannot embed inline
+        # (Live-verified silent, T23b)
+        assert box["text"] == "poly~ pv_voice.maxpat 6"
+        assert sidecar[0] == "pv_voice.maxpat"
+        sub = json.loads(sidecar[1])["patcher"]
+        ids = {b["box"]["id"]: b["box"] for b in sub["boxes"]}
+        # the lesson's whole point: the release tail frees the voice
+        wires = {(ln["patchline"]["source"][0], ln["patchline"]["source"][1],
+                  ln["patchline"]["destination"][0])
+                 for ln in sub["lines"]}
+        assert ("v_adsr", 2, "v_thispoly") in wires
+        assert ("v_adsr", 0, "v_vca") in wires        # env -> VCA
+        assert ids["v_out"]["text"] == "out~ 1"

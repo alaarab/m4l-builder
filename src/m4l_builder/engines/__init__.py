@@ -13,6 +13,11 @@ Usage:
 from .chaos_lanes import chaos_lanes_js
 from .compressor_display import compressor_display_js
 from .crossover_display import crossover_display_js
+from .curve_editor import (
+    CURVE_EDITOR_INLETS,
+    CURVE_EDITOR_OUTLETS,
+    curve_editor_js,
+)
 from .delay_trail import (
     DELAY_TRAIL_INLETS,
     DELAY_TRAIL_OUTLETS,
@@ -20,6 +25,11 @@ from .delay_trail import (
 )
 from .energy_history import energy_history_inlets, energy_history_js
 from .envelope_display import envelope_display_js
+from .envelope_editor import (
+    ENVELOPE_EDITOR_INLETS,
+    ENVELOPE_EDITOR_OUTLETS,
+    envelope_editor_js,
+)
 from .eq_band_column import eq_band_column_js
 from .eq_curve import eq_curve_js
 from .exciter_curve import (
@@ -72,6 +82,11 @@ from .slice_pattern_display import slice_pattern_display_js
 from .spectral_display import spectral_display_js
 from .spectral_vocoder_display import spectral_vocoder_display_js
 from .spectrum_analyzer import spectrum_analyzer_js
+from .step_bars import (
+    STEP_BARS_INLETS,
+    STEP_BARS_OUTLETS,
+    step_bars_js,
+)
 from .step_grid_display import step_grid_display_js
 from .transfer_curve import (
     TRANSFER_CURVE_INLETS,
@@ -132,6 +147,15 @@ __all__ = [
     "energy_history_inlets",
     "energy_history_js",
     "envelope_display_js",
+    "envelope_editor_js",
+    "ENVELOPE_EDITOR_INLETS",
+    "ENVELOPE_EDITOR_OUTLETS",
+    "curve_editor_js",
+    "CURVE_EDITOR_INLETS",
+    "CURVE_EDITOR_OUTLETS",
+    "step_bars_js",
+    "STEP_BARS_INLETS",
+    "STEP_BARS_OUTLETS",
     "spectrum_analyzer_js",
     "waveform_display_js",
     "xy_pad_js",

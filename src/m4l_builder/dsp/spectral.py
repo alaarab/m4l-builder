@@ -292,3 +292,75 @@ def phase_vocoder_subpatcher() -> dict:
             "lines": sub_lines,
         }
     }
+
+
+def pitch_shift_gizmo_subpatcher(fft_size: int = 2048) -> dict:
+    """pfft~ subpatcher for gizmo~ spectral pitch shift (T36/Q19 — the
+    M4L Building Blocks pitch-shift block).
+
+    fftin~ 1 -> gizmo~ -> fftout~ 1; the transposition RATIO arrives as a
+    float through ``in 2`` into gizmo~ (1.0 = unison, 2.0 = +1 octave).
+    Host it with :func:`pitch_shift_gizmo`.
+    """
+    return {
+        "patcher": {
+            "fileversion": 1,
+            "appversion": {"major": 8, "minor": 6, "revision": 2},
+            "rect": [0, 0, 600, 400],
+            "bglocked": 0,
+            "openinpresentation": 0,
+            "boxes": [
+                {"box": {"id": "ps_fftin", "maxclass": "newobj",
+                         "text": "fftin~ 1",
+                         "numinlets": 0, "numoutlets": 2,
+                         "outlettype": ["signal", "signal"],
+                         "patching_rect": [30, 30, 70, 20]}},
+                {"box": {"id": "ps_ratio_in", "maxclass": "newobj",
+                         "text": "in 2",
+                         "numinlets": 0, "numoutlets": 1,
+                         "outlettype": [""],
+                         "patching_rect": [200, 30, 40, 20]}},
+                {"box": {"id": "ps_gizmo", "maxclass": "newobj",
+                         "text": "gizmo~",
+                         "numinlets": 2, "numoutlets": 2,
+                         "outlettype": ["signal", "signal"],
+                         "patching_rect": [30, 90, 70, 20]}},
+                {"box": {"id": "ps_fftout", "maxclass": "newobj",
+                         "text": "fftout~ 1",
+                         "numinlets": 2, "numoutlets": 0,
+                         "patching_rect": [30, 160, 70, 20]}},
+            ],
+            "lines": [
+                {"patchline": {"source": ["ps_fftin", 0],
+                               "destination": ["ps_gizmo", 0]}},
+                {"patchline": {"source": ["ps_fftin", 1],
+                               "destination": ["ps_gizmo", 1]}},
+                {"patchline": {"source": ["ps_ratio_in", 0],
+                               "destination": ["ps_gizmo", 0]}},
+                {"patchline": {"source": ["ps_gizmo", 0],
+                               "destination": ["ps_fftout", 0]}},
+                {"patchline": {"source": ["ps_gizmo", 1],
+                               "destination": ["ps_fftout", 1]}},
+            ],
+        }
+    }
+
+
+def pitch_shift_gizmo(id_prefix: str, fft_size: int = 2048,
+                      overlap: int = 4) -> tuple:
+    """Host box for the gizmo~ pitch shifter: an embedded ``pfft~``.
+
+    Inlet 0 = signal in; inlet 1 = transposition ratio (float, 1.0 =
+    unison); outlet 0 = shifted signal. Mono — instantiate per channel.
+    """
+    p = id_prefix
+    box = {
+        "box": {
+            "id": f"{p}_pfft", "maxclass": "newobj",
+            "text": f"pfft~ {p}_gizmo {fft_size} {overlap}",
+            "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"],
+            "patching_rect": [30, 30, 180, 20],
+        }
+    }
+    box["box"].update(pitch_shift_gizmo_subpatcher(fft_size))
+    return ([box], [])
