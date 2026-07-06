@@ -271,7 +271,7 @@ def bbd_chorus(
 def deesser(
     xl: str, xr: str, outl: str, outr: str, *, split_hz: str, thresh: str,
     range_db: str, listen: str = "0.", prefix: str = "dess",
-    gr_out: str | None = None,
+    gr_out: str | None = None, env_out: str | None = None,
 ) -> str:
     """Split-band de-esser: duck only the high band when sibilance triggers
     (from Sibilant Surgeon).
@@ -281,8 +281,9 @@ def deesser(
     ``range_db`` (negative = cut) when it crosses ``thresh``, then the bands
     recombine. ``listen`` > 0.5 solos the processed high band so you can hear
     exactly what is being tamed. Stereo-linked detection keeps the image stable.
-    Set ``gr_out`` to tap the applied high-band gain (dB) for a meter. More
-    surgical than a full-band compressor for ess/harshness control.
+    Set ``gr_out`` to tap the applied high-band gain (dB) and ``env_out`` to tap
+    the high-band detector level (dB, for a threshold display). More surgical
+    than a full-band compressor for ess/harshness control.
     """
     p = prefix
     block = (
@@ -306,6 +307,8 @@ def deesser(
     )
     if gr_out is not None:
         block += f"{gr_out} = ({range_db}) * {p}_drv;\n"
+    if env_out is not None:
+        block += f"{env_out} = {p}_env;\n"
     return block
 
 
