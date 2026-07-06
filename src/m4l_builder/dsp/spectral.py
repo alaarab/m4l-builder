@@ -299,7 +299,8 @@ def pitch_shift_gizmo_subpatcher(fft_size: int = 2048) -> dict:
     M4L Building Blocks pitch-shift block).
 
     fftin~ 1 -> gizmo~ -> fftout~ 1; the transposition RATIO arrives as a
-    float through ``in 2`` into gizmo~ (1.0 = unison, 2.0 = +1 octave).
+    float through ``in 2`` into gizmo~'s RIGHT (third) inlet — the pitch
+    scalar (1.0 = unison, 2.0 = +1 octave); left/middle are real/imag.
     Host it with :func:`pitch_shift_gizmo`.
     """
     return {
@@ -320,9 +321,14 @@ def pitch_shift_gizmo_subpatcher(fft_size: int = 2048) -> dict:
                          "numinlets": 0, "numoutlets": 1,
                          "outlettype": [""],
                          "patching_rect": [200, 30, 40, 20]}},
+                {"box": {"id": "ps_ratio_rcv", "maxclass": "newobj",
+                         "text": "r ---{p}_ratio".replace("{p}", "PSNAME"),
+                         "numinlets": 0, "numoutlets": 1,
+                         "outlettype": [""],
+                         "patching_rect": [300, 30, 110, 20]}},
                 {"box": {"id": "ps_gizmo", "maxclass": "newobj",
                          "text": "gizmo~",
-                         "numinlets": 2, "numoutlets": 2,
+                         "numinlets": 3, "numoutlets": 2,
                          "outlettype": ["signal", "signal"],
                          "patching_rect": [30, 90, 70, 20]}},
                 {"box": {"id": "ps_fftout", "maxclass": "newobj",
@@ -336,7 +342,9 @@ def pitch_shift_gizmo_subpatcher(fft_size: int = 2048) -> dict:
                 {"patchline": {"source": ["ps_fftin", 1],
                                "destination": ["ps_gizmo", 1]}},
                 {"patchline": {"source": ["ps_ratio_in", 0],
-                               "destination": ["ps_gizmo", 0]}},
+                               "destination": ["ps_gizmo", 2]}},
+                {"patchline": {"source": ["ps_ratio_rcv", 0],
+                               "destination": ["ps_gizmo", 2]}},
                 {"patchline": {"source": ["ps_gizmo", 0],
                                "destination": ["ps_fftout", 0]}},
                 {"patchline": {"source": ["ps_gizmo", 1],
@@ -350,17 +358,34 @@ def pitch_shift_gizmo(id_prefix: str, fft_size: int = 2048,
                       overlap: int = 4) -> tuple:
     """Host box for the gizmo~ pitch shifter: an embedded ``pfft~``.
 
-    Inlet 0 = signal in; inlet 1 = transposition ratio (float, 1.0 =
-    unison); outlet 0 = shifted signal. Mono — instantiate per channel.
+    Inlet 0 = signal in; outlet 0 = shifted signal. Mono — one per
+    channel. Set the RATIO by sending a float to the ``{p}_ratio_send``
+    box (a ``s ---{p}_ratio`` bus into the subpatcher — floats through
+    pfft~ [in] inlets do NOT reach gizmo~ at runtime; Live-verified,
+    three variants). The pfft~ runs FULL-SPECTRUM (5th arg 1) — gizmo~
+    requires both spectral halves or the shift silently does nothing.
     """
     p = id_prefix
     box = {
         "box": {
             "id": f"{p}_pfft", "maxclass": "newobj",
-            "text": f"pfft~ {p}_gizmo {fft_size} {overlap}",
+            "text": f"pfft~ {p}_gizmo {fft_size} {overlap} 0 1",
             "numinlets": 2, "numoutlets": 1, "outlettype": ["signal"],
             "patching_rect": [30, 30, 180, 20],
         }
     }
-    box["box"].update(pitch_shift_gizmo_subpatcher(fft_size))
-    return ([box], [])
+    sub = pitch_shift_gizmo_subpatcher(fft_size)
+    # bind the ratio receive to this instance (--- scoping)
+    for entry in sub["patcher"]["boxes"]:
+        if entry["box"]["id"] == "ps_ratio_rcv":
+            entry["box"]["text"] = f"r ---{p}_ratio"
+    box["box"].update(sub)
+    send = {
+        "box": {
+            "id": f"{p}_ratio_send", "maxclass": "newobj",
+            "text": f"s ---{p}_ratio",
+            "numinlets": 1, "numoutlets": 0,
+            "patching_rect": [230, 30, 110, 20],
+        }
+    }
+    return ([box, send], [])

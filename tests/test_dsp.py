@@ -4779,7 +4779,7 @@ class TestT36OfficialAdopt:
         from m4l_builder.dsp.spectral import pitch_shift_gizmo
         boxes, lines = pitch_shift_gizmo("ps", fft_size=1024, overlap=4)
         box = boxes[0]["box"]
-        assert box["text"] == "pfft~ ps_gizmo 1024 4"
+        assert box["text"] == "pfft~ ps_gizmo 1024 4 0 1"  # full-spectrum for gizmo~
         assert box["numinlets"] == 2      # signal + ratio
         sub = box["patcher"]
         ids = {b["box"]["id"]: b["box"] for b in sub["boxes"]}
@@ -4789,6 +4789,10 @@ class TestT36OfficialAdopt:
                  for ln in sub["lines"]}
         assert ("ps_fftin", 0, "ps_gizmo") in wires
         assert ("ps_ratio_in", 0, "ps_gizmo") in wires
+        dests = {(ln["patchline"]["source"][0],
+                  tuple(ln["patchline"]["destination"]))
+                 for ln in sub["lines"]}
+        assert ("ps_ratio_in", ("ps_gizmo", 2)) in dests  # RIGHT inlet = ratio
         assert ("ps_gizmo", 0, "ps_fftout") in wires
 
     def test_poly_voice_template_contract(self):
