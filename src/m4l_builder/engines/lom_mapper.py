@@ -29,7 +29,12 @@ Outlet 1 (status route bus): ``mapped 0|1``, ``min <f>``, ``max <f>``,
 
 from __future__ import annotations
 
-DEFAULT_SELF_MAP_GUARD = "Map|Min|Max|Depth|Bipolar"
+# the full mapping-row chip vocabulary (T04-T09 grew RM/Add/Ratio/Source/
+# On after the original guard was written — lane 2 grabbing lane 1's
+# "1 RM" chip was Live-reproduced in the laziness audit): refuse the
+# mapping CONTROLS; other own-device params stay legal targets.
+DEFAULT_SELF_MAP_GUARD = (
+    "Map|Min|Max|Depth|Bipolar|RM|Add|Ratio|Source|On")
 
 
 def lom_mapper_js(*, self_map_guard: str = DEFAULT_SELF_MAP_GUARD,

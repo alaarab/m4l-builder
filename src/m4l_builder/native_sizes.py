@@ -24,6 +24,12 @@ TAB_H = 16               # live.tab row height (16-18)
 TAB_SEG_W = 28           # approx per-segment width → 3 segs ≈ 84
 VSLIDER = (18, 110)      # vertical fader (18 x ~101-120)
 HSLIDER = (64, 15)       # horizontal level slider
+# dnksaus Abl.Map mapping-row grammar (corpus-measured, Rnd_Gen v3.0:
+# 9 rows of 268x16 at 16px pitch = 72 destinations across 8 pages in a
+# 169px face). Use for pixel-faithful mapping tables; the modulator
+# component's dynamic row_h remains the default.
+MAP_ROW = (268, 16)      # one Abl.Map row (w, h)
+MAP_ROW_PITCH = 16       # row-to-row y pitch (rows touch)
 
 # Layout grid (measured).
 KNOB_PITCH = 48          # x-spacing between adjacent knobs in a row (44 + ~4 gap)

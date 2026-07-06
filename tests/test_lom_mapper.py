@@ -13,7 +13,10 @@ def test_lom_mapper_js_contract():
                     "function extunmap("):
         assert handler in js
     assert "outlets = 2" in js
-    assert 'new RegExp("Map|Min|Max|Depth|Bipolar")' in js
+    # guard extended in the laziness audit: lane 2 grabbing lane 1's
+    # "1 RM" chip was Live-reproduced — the row-chip vocabulary is refused
+    assert ('new RegExp("Map|Min|Max|Depth|Bipolar|RM|Add|Ratio|Source|On")'
+            in js)
     assert ".schedule(DEBOUNCE_MS)" in js and "DEBOUNCE_MS = 20" in js
     assert "selected_parameter" in js
     assert "canonical_parent" in js       # self-map guard reads the owner device
