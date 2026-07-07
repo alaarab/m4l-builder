@@ -1800,6 +1800,85 @@ class Device(GraphContainer):
         self.add_line(setall_id, 0, id, 0)
         return id
 
+    def add_arc_knob_cluster(
+        self,
+        id: str,
+        rect: list,
+        knobs: list,
+        *,
+        accent: str = "0.36, 0.87, 0.99",
+        cols: int = 2,
+        radius: float = 14.0,
+        drag_px: float = 90.0,
+        host_park: tuple = (900, 900, 1, 1),
+        js_filename: str = None,
+        varname: str = None,
+    ) -> dict:
+        """Add an interactive ARC-KNOB CLUSTER — a bespoke premium control grid
+        (v8ui) backed by parked ``live.dial`` param hosts, so drag/automation/
+        MIDI-map/preset-recall all behave like native dials while the face shows
+        the custom glowing arc-knobs. See
+        :mod:`m4l_builder.engines.arc_knob_cluster`.
+
+        ``knobs``: list of dicts — ``key`` (the outlet selector + ``set_``
+        suffix + host id suffix), ``label`` (uppercase caption), ``min``,
+        ``max``, optional ``init`` (defaults to ``min``), ``signed`` (leading
+        ``+`` on positive display), ``name`` (Live parameter longname; defaults
+        to ``label`` title-cased) and ``unitstyle`` (host dial unit; defaults to
+        float).
+
+        Wiring per knob: v8ui outlet -> ``route <keys...>`` -> the parked host
+        (single source of truth), and the host -> ``prepend set_<key>`` -> the
+        v8ui for visual sync. Returns ``{key: host_box_id}`` so the caller wires
+        each host outlet to its target (a gen~ param, etc.).
+        """
+        from .constants import UNITSTYLE_FLOAT
+        from .engines.arc_knob_cluster import (
+            ARC_KNOB_CLUSTER_INLETS,
+            ARC_KNOB_CLUSTER_OUTLETS,
+            arc_knob_cluster_js,
+        )
+
+        self.add_v8ui(  # type: ignore[attr-defined]
+            id, rect,
+            js_code=arc_knob_cluster_js(
+                knobs, accent=accent, cols=cols, radius=radius, drag_px=drag_px),
+            js_filename=js_filename or f"{id}_arcknobs.js", content_address=True,
+            numinlets=ARC_KNOB_CLUSTER_INLETS, numoutlets=ARC_KNOB_CLUSTER_OUTLETS,
+            outlettype=[""], background=0, ignoreclick=0,
+            bgcolor=[0.0, 0.0, 0.0, 0.0], varname=varname or id,
+        )
+
+        keys = [k["key"] for k in knobs]
+        route_id = f"{id}_route"
+        self.add_newobj(route_id, "route " + " ".join(keys), numinlets=1,
+                        numoutlets=len(keys) + 1, outlettype=[""] * (len(keys) + 1),
+                        patching_rect=[rect[0], 700, 70 + 40 * len(keys), 20])
+        self.add_line(id, 0, route_id, 0)
+
+        hosts = {}
+        for i, k in enumerate(knobs):
+            key = k["key"]
+            hid = f"{id}_{key}"
+            name = k.get("name") or str(k["label"]).title()
+            self.add_dial(  # type: ignore[attr-defined]
+                hid, name, list(host_park),
+                min_val=float(k["min"]), max_val=float(k["max"]),
+                initial=float(k.get("init", k["min"])),
+                unitstyle=k.get("unitstyle", UNITSTYLE_FLOAT),
+                showname=0, shownumber=0, presentation=0,
+                patching_rect=[900, 300 + i * 34, 30, 30],
+            )
+            self.add_line(route_id, i, hid, 0)             # gesture -> host
+            sync_id = f"{id}_sync_{key}"
+            self.add_newobj(sync_id, f"prepend set_{key}", numinlets=1,
+                            numoutlets=1, outlettype=[""],
+                            patching_rect=[rect[0] + 220, 300 + i * 34, 130, 20])
+            self.add_line(hid, 0, sync_id, 0)              # host -> v8ui sync
+            self.add_line(sync_id, 0, id, 0)
+            hosts[key] = hid
+        return hosts
+
     def add_glass_panel_bg(
         self,
         id: str,
