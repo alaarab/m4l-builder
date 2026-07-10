@@ -111,6 +111,7 @@ def device_to_patcher(device, *, profile=None) -> dict:
         height=device.height,
         device_type=device.device_type,
         latency=int(getattr(device, "latency", 0)),
+        is_mpe=bool(getattr(device, "is_mpe", False)),
         profile=effective_profile,
     )
     patcher["patcher"]["dependency_cache"] = [
