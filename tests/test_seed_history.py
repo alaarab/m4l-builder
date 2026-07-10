@@ -104,3 +104,16 @@ def test_field_sync_keeps_current_honest():
 def test_back_at_tail_and_fwd_at_head_are_inert():
     r = _run("seeds(1, 2, 3, 4, 5); back(); fwd();")
     assert _seed_events(r) == []           # no movement, no emission
+
+
+def test_first_roll_archives_the_original_groove():
+    # the device primes FIELDS (seedp/seedc/...) rather than the ring; the
+    # first DICE press must still let `back` return to the pre-roll state
+    r = _run("""
+        seedp(1); seedc(2); seedg(3); seedm(4); seedv(5);
+        roll(1234, 0);
+        back();
+    """)
+    seeds = _seed_events(r)
+    assert len(seeds) == 2
+    assert seeds[1] == [1, 2, 3, 4, 5]     # back -> the original groove
