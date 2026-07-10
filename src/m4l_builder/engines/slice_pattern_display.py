@@ -21,15 +21,21 @@ Inlets:
     12 -- pitch seed
     13 -- direction mode
     14 -- sync messages: ``set/unset/clear``, ``dirset/dirunset/dirclear``,
-         ``pitchset/pitchunset/pitchclear``, and scene export commands
+         ``pitchset/pitchunset/pitchclear``, scene export commands, and the
+         PLAYBACK clock ``trigger <step>`` (advance the sequencer to <step>)
 
 Outlets:
     0 -- lock events: ``lock``, ``dirlock``, ``pitchlock``, and clear variants
     1 -- scene export events: ``a/b`` slot tags followed by ``set`` messages
+    2 -- PLAYBACK: on ``trigger <step>`` emits
+         ``step <n> <gate> <pitch> <dir> <nHits> <hit0> <hit1> <hit2> <hit3>``
+         where hit0 is the (lock-aware) slice index, hit1..3 the ratchet
+         sub-hit indices (-1 when unused), so the host can trigger exactly what
+         the lane draws (single source of truth for display + audio).
 """
 
 SLICE_PATTERN_DISPLAY_INLETS = 15
-SLICE_PATTERN_DISPLAY_OUTLETS = 2
+SLICE_PATTERN_DISPLAY_OUTLETS = 3
 
 
 def slice_pattern_display_js(
@@ -65,7 +71,7 @@ def slice_pattern_display_js(
         "mgraphics.autofill = 0;\n"
         "\n"
         "inlets = 15;\n"
-        "outlets = 2;\n"
+        "outlets = 3;\n"
         "\n"
         "var step_count = 16;\n"
         "var slice_count = 16;\n"
@@ -78,7 +84,7 @@ def slice_pattern_display_js(
         "var glitch_amount = 0.0;\n"
         "var glitch_seed = 53;\n"
         "var playhead_step = -1;\n"
-        "var arp_amount = 22.0;\n"
+        "var arp_amount = 0.0;\n"    # 0 until the host FEEDS inlet 11 — a nonzero default drew a phantom pitch polyline
         "var pitch_seed = 79;\n"
         "var dir_mode = 0;\n"
         "var locked_steps = {};\n"
@@ -580,6 +586,20 @@ def slice_pattern_display_js(
         "    var argv = arrayfromargs(arguments);\n"
         "    var step;\n"
         "    if (inlet !== 14) return;\n"
+        "    if (messagename === 'trigger' && argv.length >= 1) {\n"
+        "        var vis = Math.max(1, Math.round(step_count));\n"
+        "        var s = Math.round(argv[0]);\n"
+        "        s = ((s % vis) + vis) % vis;\n"
+        "        playhead_step = s;\n"
+        "        var rc = step_ratchet_count(s);\n"
+        "        var h0 = step_index(s);\n"
+        "        var h1 = rc >= 1 ? ratchet_index(s, 0) : -1;\n"
+        "        var h2 = rc >= 2 ? ratchet_index(s, 1) : -1;\n"
+        "        var h3 = rc >= 3 ? ratchet_index(s, 2) : -1;\n"
+        "        outlet(2, 'step', s, step_gate(s), step_pitch(s), step_direction(s), 1 + rc, h0, h1, h2, h3);\n"
+        "        mgraphics.redraw();\n"
+        "        return;\n"
+        "    }\n"
         "    if (messagename === 'clear') {\n"
         "        clear_locks();\n"
         "        mgraphics.redraw();\n"

@@ -1125,9 +1125,9 @@ class TestSlicePatternDisplayEngine:
     def test_declares_expected_io(self):
         js = slice_pattern_display_js()
         assert "inlets = 15;" in js
-        assert "outlets = 2;" in js
+        assert "outlets = 3;" in js          # +playback outlet (trigger -> step)
         assert SLICE_PATTERN_DISPLAY_INLETS == 15
-        assert SLICE_PATTERN_DISPLAY_OUTLETS == 2
+        assert SLICE_PATTERN_DISPLAY_OUTLETS == 3
 
     def test_contains_pattern_helpers(self):
         js = slice_pattern_display_js()
