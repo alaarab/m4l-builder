@@ -92,11 +92,19 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
                 )
             )
         if payload.get("maxclass") == "panel" and payload.get("background") != 1:
+            # Foreground panels ARE legitimate (Live-proven on Shard's group
+            # cards: a later background-layer panel never renders above an
+            # existing full-face background panel, so hand-layout group cards
+            # MUST be background=0, added after the controls they sit under).
+            # Downgraded from error: the covered-controls failure mode is
+            # instantly visible in QA; the warn keeps it on the radar.
             issues.append(
                 ValidationIssue(
                     code="panel-background",
-                    message=f"Panel {box_id} missing background:1",
-                    severity="error",
+                    message=(f"Panel {box_id} is foreground (background=0) — "
+                             "fine for group cards ADDED AFTER their controls; "
+                             "verify nothing renders beneath it"),
+                    severity="warning",
                     box_id=box_id,
                 )
             )
