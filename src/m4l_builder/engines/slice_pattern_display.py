@@ -24,6 +24,17 @@ Inlets:
          ``pitchset/pitchunset/pitchclear``, scene export commands, the
          PLAYBACK clock ``trigger <step>`` (advance the sequencer to <step>),
          and ``dumppattern`` (re-emit the full pattern table)
+    15 -- vary amount (0-100: mutation DEPTH — how far a DICE roll wanders
+          from the current groove; 0 = pure seeds)
+    16 -- vary salt (the DICE brain rolls this; a new salt = a new mutation
+          overlay on the SAME seeds)
+    17 -- drift amount (0-100: per-BAR micro-variation; salted by the form
+          bar + pattern seed so every pass of the form loops identically)
+    18 -- fill amount (0-100: last-quarter fill intensity)
+    19 -- form bar (0-7, from the host's bar clock; drives the drift salt)
+    20 -- fill active (0/1, host-computed "this is the last form bar")
+    21 -- scale mode (0 penta [byte-parity with v5] / 1 minor / 2 major /
+          3 wide octaves+fifths — the melody interval table)
 
 Outlets:
     0 -- lock events: ``lock``, ``dirlock``, ``pitchlock``, and clear variants
@@ -47,7 +58,7 @@ shape dimmed); ``distance 0`` = ROLL (every step -> slice 0 + the host's held
 offset); negative distance = reverse traversal.
 """
 
-SLICE_PATTERN_DISPLAY_INLETS = 15
+SLICE_PATTERN_DISPLAY_INLETS = 22
 SLICE_PATTERN_DISPLAY_OUTLETS = 3
 
 
@@ -83,7 +94,7 @@ def slice_pattern_display_js(
         "mgraphics.relative_coords = 0;\n"
         "mgraphics.autofill = 0;\n"
         "\n"
-        "inlets = 15;\n"
+        "inlets = 22;\n"
         "outlets = 3;\n"
         "\n"
         "var step_count = 16;\n"
@@ -100,6 +111,19 @@ def slice_pattern_display_js(
         "var arp_amount = 0.0;\n"    # 0 until the host FEEDS inlet 11 — a nonzero default drew a phantom pitch polyline
         "var pitch_seed = 79;\n"
         "var dir_mode = 0;\n"
+        "var vary_amount = 0.0;\n"    # all v6 variation state defaults INERT
+        "var vary_salt = 0;\n"
+        "var drift_amount = 0.0;\n"
+        "var fill_amount = 0.0;\n"
+        "var form_bar = 0;\n"
+        "var fill_active = 0;\n"
+        "var scale_mode = 0;\n"
+        "var SCALES = [\n"
+        "    [0.0, 3.0, 7.0, 10.0, 12.0, 15.0, 19.0, 24.0],\n"    # 0: v5 byte-parity
+        "    [0.0, 3.0, 5.0, 7.0, 10.0, 12.0, 15.0, 24.0],\n"     # 1: minor
+        "    [0.0, 4.0, 7.0, 11.0, 12.0, 16.0, 19.0, 24.0],\n"    # 2: major
+        "    [0.0, 7.0, 12.0, 19.0, 24.0, 12.0, 7.0, 19.0],\n"    # 3: wide 8ves+5ths
+        "];\n"
         "var locked_steps = {};\n"
         "var dir_locked_steps = {};\n"
         "var pitch_locked_steps = {};\n"
@@ -311,6 +335,71 @@ def slice_pattern_display_js(
         "    return pseudo(Math.round(glitch_seed), step, 11) % 1000;\n"
         "}\n"
         "\n"
+        # ---- v6 VARIATION LAYER: one mutation primitive, two salt sources.
+        # VARY = static salt (rolled by the DICE brain); DRIFT = salted by the
+        # form bar + pattern seed (same bar of the same phrase = the same
+        # variant on every pass — alive but loopable). Channel values derive
+        # from PERMUTED rolls (x613/x389 bijections) because pseudo()'s second
+        # salts correlate — the shipped chop-tier lesson.
+        "function vary_roll(step) {\n"
+        "    return pseudo(Math.round(vary_salt), step, 29) % 1000;\n"
+        "}\n"
+        "\n"
+        "function drift_roll(step) {\n"
+        "    var bar_seed = Math.round(pattern_seed) + ((Math.round(form_bar) + 1) * 131);\n"
+        "    return pseudo(bar_seed, step, 31) % 1000;\n"
+        "}\n"
+        "\n"
+        "function vary_hit(step) {\n"
+        "    return (vary_amount > 0.01) && (vary_roll(step) < vary_amount * 6.0);\n"
+        "}\n"
+        "\n"
+        "function drift_hit(step) {\n"
+        "    return (drift_amount > 0.01) && (drift_roll(step) < drift_amount * 4.0);\n"
+        "}\n"
+        "\n"
+        "function step_mutated(step) {\n"    # drives the lane tint too
+        "    return (vary_hit(step) || drift_hit(step)) ? 1 : 0;\n"
+        "}\n"
+        "\n"
+        "function mut_index_shift(step) {\n"
+        "    var shift = 0;\n"
+        "    if (vary_hit(step)) {\n"
+        "        var pv = ((vary_roll(step) * 613) + 89) % 1000;\n"
+        "        var sv = 1 + (pv % 5);\n"    # 1..5 slices away
+        "        shift += ((pv % 2) === 1) ? -sv : sv;\n"
+        "    }\n"
+        "    if (drift_hit(step)) {\n"
+        "        var pd = ((drift_roll(step) * 389) + 57) % 1000;\n"
+        "        var sd = 1 + (pd % 3);\n"    # drift wanders gentler: 1..3
+        "        shift += ((pd % 2) === 1) ? -sd : sd;\n"
+        "    }\n"
+        "    return shift;\n"
+        "}\n"
+        "\n"
+        "function mut_gate_flip(step) {\n"    # a small cut of touched steps flips
+        "    if (vary_hit(step) && ((((vary_roll(step) * 613) + 89) % 1000) % 7) === 0) return 1;\n"
+        "    if (drift_hit(step) && ((((drift_roll(step) * 389) + 57) % 1000) % 9) === 0) return 1;\n"
+        "    return 0;\n"
+        "}\n"
+        "\n"
+        "function mut_ratchet_add(step) {\n"
+        "    if (vary_hit(step) && ((((vary_roll(step) * 613) + 89) % 1000) % 11) === 3) return 1;\n"
+        "    if (drift_hit(step) && ((((drift_roll(step) * 389) + 57) % 1000) % 13) === 5) return 1;\n"
+        "    return 0;\n"
+        "}\n"
+        "\n"
+        # FILL: the last quarter of the pattern earns its keep when the host
+        # flags the last form bar. Returns the 0..1 position through the fill
+        # zone, or -1 when the fill is inactive / the step is outside it.
+        "function fill_zone(step) {\n"
+        "    if (fill_active < 1 || fill_amount <= 0.01) return -1;\n"
+        "    var count = Math.max(1, Math.round(step_count));\n"
+        "    var start = count - Math.max(1, Math.floor(count / 4));\n"
+        "    if (step < start) return -1;\n"
+        "    return (step - start) / Math.max(1, (count - 1) - start);\n"
+        "}\n"
+        "\n"
         "function step_chopped(step) {\n"
         "    if (chop_amount <= 0.01) return 0;\n"
         "    return (pseudo(Math.round(chop_seed), step, 19) % 1000) < (chop_amount * 10.0) ? 1 : 0;\n"
@@ -318,13 +407,21 @@ def slice_pattern_display_js(
         "\n"
         "function step_ratchet_count(step) {\n"
         "    var locked = step_locked_ratchet(step);\n"
-        "    if (locked >= 0) return locked;\n"
+        "    if (locked >= 0) return locked;\n"    # locks always win
+        "    var fz = fill_zone(step);\n"
+        "    if (fz >= 0) {\n"
+        "        var fr = pseudo(Math.round(glitch_seed), step, 43) % 1000;\n"
+        "        if (fr < fill_amount * 8.0) return 2 + (fr % 2);\n"    # burst 2-3
+        "    }\n"
         "    var level = step_glitch_level(step);\n"
-        "    if (glitch_amount < 50.0) return 0;\n"
-        "    if (level < (glitch_amount * 2.2)) return 3;\n"
-        "    if (level < (glitch_amount * 5.5)) return 2;\n"
-        "    if (level < (glitch_amount * 9.0)) return 1;\n"
-        "    return 0;\n"
+        "    var r = 0;\n"
+        "    if (glitch_amount >= 50.0) {\n"
+        "        if (level < (glitch_amount * 2.2)) r = 3;\n"
+        "        else if (level < (glitch_amount * 5.5)) r = 2;\n"
+        "        else if (level < (glitch_amount * 9.0)) r = 1;\n"
+        "    }\n"
+        "    if (r === 0 && mut_ratchet_add(step)) r = 1;\n"
+        "    return r;\n"
         "}\n"
         "\n"
         "function ratchet_direction(step) {\n"
@@ -349,7 +446,7 @@ def slice_pattern_display_js(
         "}\n"
         "\n"
         "function step_computed_index(step) {\n"
-        "    return wrap_index(step_base_index(step) + main_glitch_shift(step));\n"
+        "    return wrap_index(step_base_index(step) + main_glitch_shift(step) + mut_index_shift(step));\n"
         "}\n"
         "\n"
         "function step_index(step) {\n"
@@ -376,14 +473,8 @@ def slice_pattern_display_js(
         "}\n"
         "\n"
         "function arp_semitone(idx) {\n"
-        "    if (idx === 0) return 0.0;\n"
-        "    if (idx === 1) return 3.0;\n"
-        "    if (idx === 2) return 7.0;\n"
-        "    if (idx === 3) return 10.0;\n"
-        "    if (idx === 4) return 12.0;\n"
-        "    if (idx === 5) return 15.0;\n"
-        "    if (idx === 6) return 19.0;\n"
-        "    return 24.0;\n"
+        "    var table = SCALES[clamp(Math.round(scale_mode), 0, 3)];\n"
+        "    return table[clamp(Math.round(idx), 0, 7)];\n"
         "}\n"
         "\n"
         "function step_arp(step) {\n"
@@ -393,8 +484,13 @@ def slice_pattern_display_js(
         "\n"
         "function step_pitch(step) {\n"
         "    var locked = step_locked_pitch(step);\n"
-        "    if (locked !== 999) return locked;\n"
-        "    return step_arp(step);\n"
+        "    if (locked !== 999) return locked;\n"    # locks always win
+        "    var p = step_arp(step);\n"
+        "    var fz = fill_zone(step);\n"
+        "    if (fz >= 0) {\n"    # rising ramp across the fill zone, up to +12st
+        "        p = clamp(p + (fz * 12.0 * (clamp(fill_amount, 0.0, 100.0) / 100.0)), -24.0, 24.0);\n"
+        "    }\n"
+        "    return p;\n"
         "}\n"
         "\n"
         "function step_level(step) {\n"
@@ -418,8 +514,14 @@ def slice_pattern_display_js(
         "\n"
         "function step_gate(step) {\n"
         "    var locked = step_locked_gate(step);\n"
-        "    if (locked >= 0) return locked;\n"
-        "    return step_chopped(step) ? 0 : 1;\n"
+        "    if (locked >= 0) return locked;\n"    # locks always win
+        "    var fz = fill_zone(step);\n"
+        "    if (fz >= 0 && (pseudo(Math.round(chop_seed), step, 41) % 1000) < fill_amount * 9.0) {\n"
+        "        return 1;\n"    # fills push through the gaps (and beat mutation)
+        "    }\n"
+        "    var g = step_chopped(step) ? 0 : 1;\n"
+        "    if (mut_gate_flip(step)) g = 1 - g;\n"    # ghost a hit / revive a gap
+        "    return g;\n"
         "}\n"
         "\n"
         "function step_from_point(x) {\n"
@@ -767,6 +869,13 @@ def slice_pattern_display_js(
         "    else if (inlet === 11) arp_amount = clamp(v, 0.0, 100.0);\n"
         "    else if (inlet === 12) pitch_seed = Math.max(0, Math.round(v));\n"
         "    else if (inlet === 13) dir_mode = clamp(Math.round(v), 0, 2);\n"
+        "    else if (inlet === 15) vary_amount = clamp(v, 0.0, 100.0);\n"
+        "    else if (inlet === 16) vary_salt = Math.max(0, Math.round(v));\n"
+        "    else if (inlet === 17) drift_amount = clamp(v, 0.0, 100.0);\n"
+        "    else if (inlet === 18) fill_amount = clamp(v, 0.0, 100.0);\n"
+        "    else if (inlet === 19) form_bar = Math.max(0, Math.round(v));\n"
+        "    else if (inlet === 20) fill_active = (v > 0.5) ? 1 : 0;\n"
+        "    else if (inlet === 21) scale_mode = clamp(Math.round(v), 0, 3);\n"
         "    normalize_locks();\n"
         "    if (inlet !== 10) dump_pattern();\n"
         "    mgraphics.redraw();\n"
@@ -846,6 +955,11 @@ def slice_pattern_display_js(
         "        else mgraphics.set_source_rgba(" + bar_rgb + ", alpha);\n"
         "        mgraphics.rectangle_rounded(cell_x + 1, bar_y, Math.max(1, cell_w - 2), bar_h, 2, 2);\n"
         "        mgraphics.fill();\n"
+        "        if (!chopped && step_mutated(i)) {\n"    # mutated: TINT, not a new ornament
+        "            mgraphics.set_source_rgba(" + glitch_rgb + ", 0.28);\n"
+        "            mgraphics.rectangle_rounded(cell_x + 1, bar_y, Math.max(1, cell_w - 2), bar_h, 2, 2);\n"
+        "            mgraphics.fill();\n"
+        "        }\n"
         "        if (lvl > 1.0) {\n"    # accent: bright cap tick on the bar
         "            mgraphics.set_source_rgba(" + glitch_rgb + ", 0.95);\n"
         "            mgraphics.rectangle_rounded(cell_x + 1, bar_y - 2, Math.max(1, cell_w - 2), 2, 1, 1);\n"

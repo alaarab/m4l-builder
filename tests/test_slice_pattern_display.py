@@ -277,6 +277,146 @@ def test_zero_chop_is_all_full_volume():
     assert r.state["mx"] == 1.0 and r.state["mn"] == 1.0
 
 
+def _snapshot_driver(extra=""):
+    # full derived-pattern snapshot: index/gate/ratchet/pitch per step
+    return """
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(16);
+        inlet = 3; msg_float(2);           // PAT
+        inlet = 5; msg_float(11);
+        inlet = 6; msg_float(40);          // some chop so gates vary
+        inlet = 7; msg_float(37);
+        EXTRA
+        var snap = [], i;
+        for (i = 0; i < 16; i++) {
+            snap.push([step_index(i), step_gate(i),
+                       step_ratchet_count(i), step_pitch(i)]);
+        }
+        dump({snap: snap});
+    """.replace("EXTRA", extra)
+
+
+def test_variation_defaults_are_inert():
+    # v6 back-compat: salts/bar/active alone change NOTHING — the amounts
+    # are the gates. (scale_mode 0 must also be byte-parity — tested below.)
+    base = _run(_snapshot_driver()).state["snap"]
+    armed = _run(_snapshot_driver("""
+        inlet = 16; msg_float(4242);       // vary salt, amount still 0
+        inlet = 19; msg_float(5);          // form bar
+        inlet = 20; msg_float(1);          // fill active, amount still 0
+    """)).state["snap"]
+    assert armed == base
+
+
+def test_vary_mutates_deterministically():
+    base = _run(_snapshot_driver()).state["snap"]
+    a = _run(_snapshot_driver("""
+        inlet = 16; msg_float(4242);
+        inlet = 15; msg_float(45);
+    """)).state["snap"]
+    b = _run(_snapshot_driver("""
+        inlet = 16; msg_float(4242);
+        inlet = 15; msg_float(45);
+    """)).state["snap"]
+    c = _run(_snapshot_driver("""
+        inlet = 16; msg_float(777);
+        inlet = 15; msg_float(45);
+    """)).state["snap"]
+    assert a != base                       # mutation bites
+    assert a == b                          # same salt+amount = same variant
+    assert c != a                          # new salt = new variant
+
+
+def test_vary_touch_count_grows_with_amount():
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(32);
+        inlet = 16; msg_float(4242);
+        var count_at = function (amt) {
+            inlet = 15; msg_float(amt);
+            var n = 0, i;
+            for (i = 0; i < 32; i++) if (step_mutated(i)) n++;
+            return n;
+        };
+        dump({lo: count_at(15), hi: count_at(90)});
+    """)
+    assert 0 < r.state["lo"] <= r.state["hi"]
+
+
+def test_locks_win_over_mutation():
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(16);
+        inlet = 14; messagename = 'set'; anything(2, 9);      // slice lock
+        inlet = 14; messagename = 'gateset'; anything(2, 1);  // gate lock ON
+        inlet = 16; msg_float(4242);
+        inlet = 15; msg_float(100);
+        inlet = 17; msg_float(100);
+        inlet = 19; msg_float(3);
+        dump({idx: step_index(2), gate: step_gate(2)});
+    """)
+    assert r.state["idx"] == 9
+    assert r.state["gate"] == 1
+
+
+def test_drift_loops_per_bar():
+    def bar_snap(bar):
+        return _run(_snapshot_driver("""
+            inlet = 17; msg_float(60);
+            inlet = 19; msg_float(BAR);
+        """.replace("BAR", str(bar)))).state["snap"]
+
+    b3a = bar_snap(3)
+    b5 = bar_snap(5)
+    b3b = bar_snap(3)
+    assert b3a == b3b                      # same bar = the same variant
+    assert b3a != b5                       # different bar = different variant
+
+
+def test_fill_transforms_last_quarter_only():
+    base = _run(_snapshot_driver()).state["snap"]
+    filled = _run(_snapshot_driver("""
+        inlet = 18; msg_float(90);
+        inlet = 20; msg_float(1);
+    """)).state["snap"]
+    assert filled[:12] == base[:12]        # zone = last 4 of 16 only
+    assert filled[12:] != base[12:]
+    inert = _run(_snapshot_driver("""
+        inlet = 18; msg_float(90);
+        inlet = 20; msg_float(0);          // not the last bar -> no fill
+    """)).state["snap"]
+    assert inert == base
+
+
+def test_fill_unmutes_and_ratchets_the_zone():
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(16);
+        inlet = 6; msg_float(100);         // chop everything...
+        inlet = 18; msg_float(100);
+        inlet = 20; msg_float(1);
+        var gates = [], hits = [], i;
+        for (i = 12; i < 16; i++) { gates.push(step_gate(i)); hits.push(step_ratchet_count(i)); }
+        dump({gates: gates, hits: hits});
+    """)
+    assert any(g == 1 for g in r.state["gates"])   # fill punches through
+    assert any(h >= 2 for h in r.state["hits"])    # burst bias
+
+
+def test_scale_zero_is_byte_parity_and_scales_differ():
+    r = _run("""
+        var v5 = [0.0, 3.0, 7.0, 10.0, 12.0, 15.0, 19.0, 24.0];
+        var parity = [], i;
+        for (i = 0; i < 8; i++) parity.push(arp_semitone(i) === v5[i]);
+        inlet = 21; msg_float(2);          // major
+        var major = [], j;
+        for (j = 0; j < 8; j++) major.push(arp_semitone(j));
+        dump({parity: parity, major: major, v5: v5});
+    """)
+    assert all(r.state["parity"])
+    assert r.state["major"] != r.state["v5"]
+
+
 def test_gate_lock_overrides_level():
     # a gate-locked-ON step never mutes even under full chop; locked-OFF -> 0.
     r = _run("""
