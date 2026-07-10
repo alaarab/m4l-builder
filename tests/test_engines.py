@@ -1082,7 +1082,11 @@ class TestSliceOverviewEngine:
         assert "new Buffer(BUFFER_NAME)" in js
         assert "recent_hits" in js
         assert "ACTIVE" in js
-        assert "DROP SAMPLE" in js
+        # honest empty state: centered headline, and it shows whenever real
+        # peeked audio is absent (buffer~ instantiation-bangs flip `loaded`)
+        assert "DROP A LOOP" in js
+        assert "if (!loaded || !waveform_ready) {" in js
+        assert "Math.sin((t0 * 7.0" not in js      # decorative ghost is gone
 
     def test_contains_divider_edit_handlers(self):
         js = slice_overview_js()

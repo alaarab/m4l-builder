@@ -22,8 +22,11 @@ _REQUIRED_SNIPPETS = (
     ("mgraphics.relative_coords = 0", "missing mgraphics.relative_coords bootstrap"),
     ("mgraphics.autofill = 0", "missing mgraphics.autofill bootstrap"),
     ("function paint()", "missing paint() entry point"),
-    ("mgraphics.redraw()", "missing redraw hook"),
 )
+
+# a STATIC display (legend art, fixed diagrams) paints once at creation and
+# never re-renders — the redraw hook is only required for stateful displays.
+_REDRAW_SNIPPET = ("mgraphics.redraw()", "missing redraw hook")
 
 _FORBIDDEN_PATTERNS = (
     (re.compile(r"(?<![\w$])let\s"), "uses ES6 'let'"),
@@ -42,21 +45,26 @@ _FORBIDDEN_PATTERNS = (
 )
 
 
-def _required_snippet_issues(js_code: str) -> list[str]:
+def _required_snippet_issues(js_code: str, *, static: bool = False) -> list[str]:
     """Shared mgraphics bootstrap checks (jsui and v8ui both draw via mgraphics)."""
+    required = _REQUIRED_SNIPPETS if static else _REQUIRED_SNIPPETS + (_REDRAW_SNIPPET,)
     return [
         message
-        for snippet, message in _REQUIRED_SNIPPETS
+        for snippet, message in required
         if snippet not in js_code
     ]
 
 
-def find_jsui_contract_issues(js_code: str) -> list[str]:
-    """Return human-readable contract violations for jsui (ES5) source."""
+def find_jsui_contract_issues(js_code: str, *, static: bool = False) -> list[str]:
+    """Return human-readable contract violations for jsui (ES5) source.
+
+    ``static=True`` waives the redraw-hook requirement for read-only displays
+    that paint once and never change (legend art, fixed diagrams).
+    """
     if not isinstance(js_code, str) or not js_code.strip():
         return ["jsui code must be a non-empty string"]
 
-    issues = _required_snippet_issues(js_code)
+    issues = _required_snippet_issues(js_code, static=static)
     for pattern, message in _FORBIDDEN_PATTERNS:
         if pattern.search(js_code):
             issues.append(message)
@@ -64,15 +72,15 @@ def find_jsui_contract_issues(js_code: str) -> list[str]:
     return issues
 
 
-def validate_jsui_contract(js_code: str) -> str:
+def validate_jsui_contract(js_code: str, *, static: bool = False) -> str:
     """Raise when jsui source violates the shared ES5 contract."""
-    issues = find_jsui_contract_issues(js_code)
+    issues = find_jsui_contract_issues(js_code, static=static)
     if issues:
         raise JsuiContractError("Invalid jsui contract: " + "; ".join(issues))
     return js_code
 
 
-def find_v8ui_contract_issues(js_code: str) -> list[str]:
+def find_v8ui_contract_issues(js_code: str, *, static: bool = False) -> list[str]:
     """Return contract violations for v8ui source.
 
     v8ui shares the mgraphics bootstrap requirement with jsui but runs on the V8
@@ -81,12 +89,12 @@ def find_v8ui_contract_issues(js_code: str) -> list[str]:
     """
     if not isinstance(js_code, str) or not js_code.strip():
         return ["v8ui code must be a non-empty string"]
-    return _required_snippet_issues(js_code)
+    return _required_snippet_issues(js_code, static=static)
 
 
-def validate_v8ui_contract(js_code: str) -> str:
+def validate_v8ui_contract(js_code: str, *, static: bool = False) -> str:
     """Raise when v8ui source omits the mgraphics bootstrap (no ES5 restriction)."""
-    issues = find_v8ui_contract_issues(js_code)
+    issues = find_v8ui_contract_issues(js_code, static=static)
     if issues:
         raise JsuiContractError("Invalid v8ui contract: " + "; ".join(issues))
     return js_code

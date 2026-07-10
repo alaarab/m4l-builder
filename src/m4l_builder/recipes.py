@@ -642,9 +642,12 @@ def tempo_synced_delay(device, id_prefix, time_dial_rect, feedback_dial_rect,
     tapin_id = f"{p}_delay_tapin"
     tapout_id = f"{p}_delay_tapout"
 
+    # [transport] is 2-in/9-out (bar, beat, units, resolution, tempo, timesig
+    # list, state, raw ticks, clock sources) — the maxdiff-validated shape.
     transport_id = device.add_newobj(
-        f"{p}_transport", "transport", numinlets=1, numoutlets=7,
-        outlettype=["int", "", "float", "float", "float", "", "int"],
+        f"{p}_transport", "transport", numinlets=2, numoutlets=9,
+        outlettype=["int", "int", "float", "float", "float", "", "int",
+                    "float", ""],
         patching_rect=[x + 200, y, 70, 20],
     )
 

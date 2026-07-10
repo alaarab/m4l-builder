@@ -195,6 +195,25 @@ class TestJsuiContract:
 
         assert str(box_id) == "raw"
 
+    def test_static_display_waives_only_the_redraw_hook(self):
+        # a read-only legend paints once — no redraw hook needed, but the
+        # mgraphics bootstrap and ES5 rules still apply
+        static_js = (
+            "mgraphics.init();\n"
+            "mgraphics.relative_coords = 0;\n"
+            "mgraphics.autofill = 0;\n"
+            "function paint() { }\n"
+        )
+        assert any("redraw" in i for i in find_jsui_contract_issues(static_js))
+        assert find_jsui_contract_issues(static_js, static=True) == []
+        with pytest.raises(JsuiContractError):
+            validate_jsui_contract("const x = 1;\n" + static_js, static=True)
+
+        device = AudioEffect("test", width=200, height=100)
+        box_id = device.add_jsui("legend", [0, 0, 20, 20],
+                                 js_code=static_js, static=True)
+        assert str(box_id) == "legend"
+
 
 class TestV8uiContract:
     """v8ui runs on V8 (ES6+ allowed); only the mgraphics bootstrap is required."""
