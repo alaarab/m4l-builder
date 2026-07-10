@@ -43,13 +43,14 @@ def test_trigger_emits_step_playback_tuple():
     """)
     s = _steps(r)
     assert len(s) == 1
-    # [2, "step", stepNum, gate, pitch, dir, nHits, h0, h1, h2, h3]
+    # [2, "step", stepNum, gate, pitch, dir, nHits, level, h0, h1, h2, h3]
     o = s[0]
     assert o[2] == 3                       # step number echoed
     assert o[3] in (0, 1)                  # gate
     assert o[5] in (-1, 1)                 # direction
     assert o[6] >= 1                       # nHits >= 1
-    assert 0 <= o[7] < 16                  # main slice index in range
+    assert o[7] in (0.0, 0.45, 1.0, 1.25)  # CHOP volume tier
+    assert 0 <= o[8] < 16                  # main slice index in range
 
 
 def test_trigger_wraps_step_into_range():
@@ -88,7 +89,7 @@ def test_lock_overrides_index_and_triggers_it():
         inlet = 14; messagename = 'set'; anything(2, 5);     // lock step 2 -> slice 5
         inlet = 14; messagename = 'trigger'; anything(2);
     """)
-    assert _steps(r)[0][7] == 5            # h0 == locked slice index
+    assert _steps(r)[0][8] == 5            # h0 == locked slice index
 
 
 def test_pattern_seed_is_deterministic_and_reseeds():
@@ -123,13 +124,14 @@ def test_dumppattern_emits_one_row_per_step():
     """)
     rows = _rows(r)
     assert len(rows) == 8
-    # row: [2, step, gate, pitch, dir, nHits, h0, h1, h2, h3]
+    # row: [2, step, gate, pitch, dir, nHits, level, h0, h1, h2, h3]
     assert [row[1] for row in rows] == list(range(8))
     for row in rows:
         assert row[2] in (0, 1)                    # gate
         assert row[4] in (-1, 1)                   # dir
         assert row[5] >= 1                         # nHits
-        assert 0 <= row[6] < 16                    # h0 in slice range
+        assert row[6] in (0.0, 0.45, 1.0, 1.25)    # CHOP volume tier
+        assert 0 <= row[7] < 16                    # h0 in slice range
 
 
 def test_every_pattern_change_auto_dumps():
@@ -199,7 +201,7 @@ def test_ratchets_emit_sub_hits():
         """.replace("STEP", str(step)))
         o = _steps(r2)[0]
         assert o[6] > 1                    # nHits > 1 on a ratcheted step
-        assert o[8] >= 0                   # at least one ratchet sub-hit index
+        assert o[9] >= 0                   # at least one ratchet sub-hit index
 
 
 def test_locks_survive_slice_count_changes():
@@ -237,3 +239,53 @@ def test_clear_all_requires_shift_cmd():
     """)
     assert r.state["survived"] in (1, True)
     assert r.state["after"] in (0, False)
+
+
+def test_chop_volume_tiers():
+    # CHOP is a volume generator: at a high amount the same seed family
+    # yields mutes (0), ducks (0.45), accents (1.25) AND full steps together,
+    # deterministically per seed.
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(32);
+        inlet = 6; msg_float(60);          // GAPS amount
+        inlet = 7; msg_float(37);          // chop seed
+        var t = {}, i;
+        for (i = 0; i < 32; i++) { var l = step_level(i); t[l] = (t[l] || 0) + 1; }
+        var again = [], j;
+        for (j = 0; j < 32; j++) again.push(step_level(j));
+        var again2 = [], k;
+        for (k = 0; k < 32; k++) again2.push(step_level(k));
+        dump({tiers: t, stable: JSON.stringify(again) === JSON.stringify(again2)});
+    """)
+    tiers = {float(k): v for k, v in r.state["tiers"].items()}
+    assert tiers.get(0.45, 0) > 0          # ducks present
+    assert tiers.get(1.25, 0) > 0          # accents present
+    assert tiers.get(0.0, 0) > 0           # mutes present
+    assert r.state["stable"] in (1, True)  # deterministic per seed
+
+
+def test_zero_chop_is_all_full_volume():
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(16);
+        inlet = 6; msg_float(0);
+        var mx = 1.0, mn = 1.0, i;
+        for (i = 0; i < 16; i++) { var l = step_level(i); if (l > mx) mx = l; if (l < mn) mn = l; }
+        dump({mx: mx, mn: mn});
+    """)
+    assert r.state["mx"] == 1.0 and r.state["mn"] == 1.0
+
+
+def test_gate_lock_overrides_level():
+    # a gate-locked-ON step never mutes even under full chop; locked-OFF -> 0.
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(8);
+        inlet = 6; msg_float(100);
+        inlet = 14; messagename = 'gateset'; anything(2, 1);   // force ON
+        inlet = 14; messagename = 'gateset'; anything(3, 0);   // force OFF
+        dump({on: step_level(2) > 0, off: step_level(3)});
+    """)
+    assert r.state["on"] in (1, True)
+    assert r.state["off"] == 0.0

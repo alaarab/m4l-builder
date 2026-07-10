@@ -4301,10 +4301,13 @@ class TestGroovePlayer:
 class TestSliceVoice:
     """Test slice_voice() builds a play~+line~ one-shot slice player."""
 
-    def test_returns_11_boxes(self):
+    def test_returns_12_boxes(self):
+        # +1: the per-trigger gain stage on the envelope signal (accents/ducks)
         boxes, lines = slice_voice("sv", "slicebuf")
-        assert len(boxes) == 11
+        assert len(boxes) == 12
         assert len(lines) > 0
+        gain = _find_box(boxes, "sv_gain")
+        assert gain["text"] == "*~ 1."
 
     def test_play_object_uses_buffer_and_channels(self):
         boxes, _ = slice_voice("sv", "slicebuf")

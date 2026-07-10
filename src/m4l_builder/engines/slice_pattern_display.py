@@ -32,7 +32,9 @@ Outlets:
          * ``trigger <step>`` replies ``step <n> <gate> <pitch> <dir> <nHits>
            <hit0..hit3>`` (selector-tagged; ad-hoc single-step use).
          * the PATTERN TABLE: one BARE row per step
-           ``<step> <gate> <pitch> <dir> <nHits> <hit0> <hit1> <hit2> <hit3>``
+           ``<step> <gate> <pitch> <dir> <nHits> <level> <hit0..hit3>``
+           (level: 0 muted / 0.45 ducked / 1.0 full / 1.25 accented — the
+           CHOP volume tiers)
            (leading int = coll key), emitted by ``dumppattern`` AND auto-emitted
            after EVERY pattern-affecting change (params, locks, scenes, clears).
            The host stores these in a coll and steps THAT from its clock —
@@ -395,6 +397,25 @@ def slice_pattern_display_js(
         "    return step_arp(step);\n"
         "}\n"
         "\n"
+        "function step_level(step) {\n"
+        "    // CHOP is a VOLUME generator: beyond the hard mutes (gate 0),\n"
+        "    // the same seed family DUCKS some steps and ACCENTS a few —\n"
+        "    // 'chooses which volume envelopes to drop or raise'. Distinct\n"
+        "    // salt so the tier roll is independent of the mute roll; gate\n"
+        "    // locks still override on/off upstream.\n"
+        "    if (step_gate(step) < 1) return 0.0;\n"
+        "    if (chop_amount <= 0.01) return 1.0;\n"
+        "    // permute the MUTE roll (x613 mod 1000 is a bijection) instead of\n"
+        "    // re-salting: pseudo() is a weak quadratic hash, so a second salt\n"
+        "    // correlates with the first and mute-survivors would dodge the\n"
+        "    // duck band entirely. The permutation re-spreads survivors evenly.\n"
+        "    var rm = pseudo(Math.round(chop_seed), step, 19) % 1000;\n"
+        "    var r = (rm * 613 + 89) % 1000;\n"
+        "    if (r < chop_amount * 7.0) return 0.45;\n"
+        "    if (r > 999 - chop_amount * 4.0) return 1.25;\n"
+        "    return 1.0;\n"
+        "}\n"
+        "\n"
         "function step_gate(step) {\n"
         "    var locked = step_locked_gate(step);\n"
         "    if (locked >= 0) return locked;\n"
@@ -592,6 +613,7 @@ def slice_pattern_display_js(
         "    for (i = 0; i < vis; i++) {\n"
         "        var rc = step_ratchet_count(i);\n"
         "        outlet(2, i, step_gate(i), step_pitch(i), Math.round(step_direction(i)), 1 + rc,\n"
+        "               step_level(i),\n"
         "               step_index(i), rc >= 1 ? ratchet_index(i, 0) : -1,\n"
         "               rc >= 2 ? ratchet_index(i, 1) : -1,\n"
         "               rc >= 3 ? ratchet_index(i, 2) : -1);\n"
@@ -616,7 +638,7 @@ def slice_pattern_display_js(
         "        var h1 = rc >= 1 ? ratchet_index(s, 0) : -1;\n"
         "        var h2 = rc >= 2 ? ratchet_index(s, 1) : -1;\n"
         "        var h3 = rc >= 3 ? ratchet_index(s, 2) : -1;\n"
-        "        outlet(2, 'step', s, step_gate(s), step_pitch(s), step_direction(s), 1 + rc, h0, h1, h2, h3);\n"
+        "        outlet(2, 'step', s, step_gate(s), step_pitch(s), step_direction(s), 1 + rc, step_level(s), h0, h1, h2, h3);\n"
         "        mgraphics.redraw();\n"
         "        return;\n"
         "    }\n"
@@ -801,6 +823,8 @@ def slice_pattern_display_js(
         "        var bar_y = cell_y + cell_h - bar_h;\n"
         "        var alpha = chopped ? 0.26 : (0.34 + (norm * 0.58));\n"
         "        if (mode < 0) alpha *= 0.35;\n"    # OFF: the lane dims (clock stopped)
+        "        var lvl = step_level(i);\n"
+        "        if (lvl > 0.0 && lvl < 1.0) alpha *= 0.55;\n"    # ducked: mid alpha
         "        var arp_norm = clamp((step_arp(i) + 24.0) / 48.0, 0.0, 1.0);\n"
         "        var pitch_norm = clamp((step_pitch(i) + 24.0) / 48.0, 0.0, 1.0);\n"
         "        var arp_x = cell_x + (cell_w * 0.5);\n"
@@ -822,6 +846,11 @@ def slice_pattern_display_js(
         "        else mgraphics.set_source_rgba(" + bar_rgb + ", alpha);\n"
         "        mgraphics.rectangle_rounded(cell_x + 1, bar_y, Math.max(1, cell_w - 2), bar_h, 2, 2);\n"
         "        mgraphics.fill();\n"
+        "        if (lvl > 1.0) {\n"    # accent: bright cap tick on the bar
+        "            mgraphics.set_source_rgba(" + glitch_rgb + ", 0.95);\n"
+        "            mgraphics.rectangle_rounded(cell_x + 1, bar_y - 2, Math.max(1, cell_w - 2), 2, 1, 1);\n"
+        "            mgraphics.fill();\n"
+        "        }\n"
         "\n"
         "        if (locked) {\n"
             "            mgraphics.set_source_rgba(" + glitch_rgb + ", 0.94);\n"

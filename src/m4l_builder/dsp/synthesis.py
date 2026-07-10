@@ -218,7 +218,10 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
     No ``sig~`` (lint-banned, and it zeroes gains on load): the position is a
     pure ``line~`` ramp built by the caller (or by the slice engine).
 
-    Audio out: ``{prefix}_vca_l`` / ``{prefix}_vca_r`` outlet 0.
+    Audio out: ``{prefix}_vca_l`` / ``{prefix}_vca_r`` outlet 0. A per-trigger
+    ``{prefix}_gain`` (``*~ 1.``) sits on the envelope signal — send a float to
+    its inlet 1 right before a trigger for per-hit level (accents/ducks);
+    untouched it is a bit-exact unity pass.
     """
     if channels not in (1, 2):
         raise ValueError(f"slice_voice channels must be 1 or 2, got {channels}")
@@ -246,6 +249,11 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
                numinlets=5, numoutlets=4,
                outlettype=["signal", "signal", "", ""],
                patching_rect=[180, 90, 150, 20]),
+        # per-trigger GAIN on the envelope control signal (scales both
+        # channels through the VCAs). Defaults 1. = byte-identical until a
+        # host addresses inlet 1 — the hook for seq accent/duck levels.
+        newobj(f"{p}_gain", "*~ 1.", numinlets=2, numoutlets=1,
+               outlettype=["signal"], patching_rect=[180, 120, 50, 20]),
         newobj(f"{p}_open", "t 1", numinlets=1, numoutlets=1, outlettype=[""],
                patching_rect=[180, 60, 40, 20]),
         newobj(f"{p}_delay", "delay 0", numinlets=2, numoutlets=1,
@@ -274,8 +282,9 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
         patchline(f"{p}_line", 0, f"{p}_play", 0),
         patchline(f"{p}_play", 0, f"{p}_vca_l", 0),
         patchline(f"{p}_play", r_outlet, f"{p}_vca_r", 0),
-        patchline(f"{p}_adsr", 0, f"{p}_vca_l", 1),
-        patchline(f"{p}_adsr", 0, f"{p}_vca_r", 1),
+        patchline(f"{p}_adsr", 0, f"{p}_gain", 0),
+        patchline(f"{p}_gain", 0, f"{p}_vca_l", 1),
+        patchline(f"{p}_gain", 0, f"{p}_vca_r", 1),
         # ramp done -> release the de-click envelope
         patchline(f"{p}_delay", 0, f"{p}_rel", 0),
         patchline(f"{p}_rel", 0, f"{p}_adsr", 0),
