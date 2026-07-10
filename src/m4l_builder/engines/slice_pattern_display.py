@@ -21,17 +21,28 @@ Inlets:
     12 -- pitch seed
     13 -- direction mode
     14 -- sync messages: ``set/unset/clear``, ``dirset/dirunset/dirclear``,
-         ``pitchset/pitchunset/pitchclear``, scene export commands, and the
-         PLAYBACK clock ``trigger <step>`` (advance the sequencer to <step>)
+         ``pitchset/pitchunset/pitchclear``, scene export commands, the
+         PLAYBACK clock ``trigger <step>`` (advance the sequencer to <step>),
+         and ``dumppattern`` (re-emit the full pattern table)
 
 Outlets:
     0 -- lock events: ``lock``, ``dirlock``, ``pitchlock``, and clear variants
     1 -- scene export events: ``a/b`` slot tags followed by ``set`` messages
-    2 -- PLAYBACK: on ``trigger <step>`` emits
-         ``step <n> <gate> <pitch> <dir> <nHits> <hit0> <hit1> <hit2> <hit3>``
-         where hit0 is the (lock-aware) slice index, hit1..3 the ratchet
-         sub-hit indices (-1 when unused), so the host can trigger exactly what
-         the lane draws (single source of truth for display + audio).
+    2 -- PLAYBACK. Two shapes:
+         * ``trigger <step>`` replies ``step <n> <gate> <pitch> <dir> <nHits>
+           <hit0..hit3>`` (selector-tagged; ad-hoc single-step use).
+         * the PATTERN TABLE: one BARE row per step
+           ``<step> <gate> <pitch> <dir> <nHits> <hit0> <hit1> <hit2> <hit3>``
+           (leading int = coll key), emitted by ``dumppattern`` AND auto-emitted
+           after EVERY pattern-affecting change (params, locks, scenes, clears).
+           The host stores these in a coll and steps THAT from its clock —
+           js runs on Max's low-priority thread, so a jsui in the clock path
+           would jitter 5-30 ms under UI load; the coll keeps playback in the
+           scheduler domain while the lane stays the single source of truth.
+
+Special modes: ``mode -1`` = OFF (host clock stopped; the lane draws the RUN
+shape dimmed); ``distance 0`` = ROLL (every step -> slice 0 + the host's held
+offset); negative distance = reverse traversal.
 """
 
 SLICE_PATTERN_DISPLAY_INLETS = 15
@@ -171,26 +182,32 @@ def slice_pattern_display_js(
         "\n"
         "function set_step_lock(step, idx) {\n"
         "    locked_steps[String(step)] = wrap_index(Math.round(idx));\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function clear_locks() {\n"
         "    locked_steps = {};\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function clear_dir_locks() {\n"
         "    dir_locked_steps = {};\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function clear_pitch_locks() {\n"
         "    pitch_locked_steps = {};\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function clear_gate_locks() {\n"
         "    gate_locked_steps = {};\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function clear_ratchet_locks() {\n"
         "    ratchet_locked_steps = {};\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function emit_scene_dump(slot) {\n"
@@ -209,6 +226,7 @@ def slice_pattern_display_js(
         "    if (!is_step_locked(step)) return;\n"
         "    delete locked_steps[String(step)];\n"
         "    outlet(0, 'unlock', step);\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function is_step_dir_locked(step) {\n"
@@ -222,12 +240,14 @@ def slice_pattern_display_js(
         "\n"
         "function set_step_dir_lock(step, direction) {\n"
         "    dir_locked_steps[String(step)] = Math.round(direction) >= 0 ? 1 : -1;\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function set_step_dir_unlock(step) {\n"
         "    if (!is_step_dir_locked(step)) return;\n"
         "    delete dir_locked_steps[String(step)];\n"
         "    outlet(0, 'dirunlock', step);\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function is_step_pitch_locked(step) {\n"
@@ -241,12 +261,14 @@ def slice_pattern_display_js(
         "\n"
         "function set_step_pitch_lock(step, semitone) {\n"
         "    pitch_locked_steps[String(step)] = clamp(Math.round(semitone), -24, 24);\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function set_step_pitch_unlock(step) {\n"
         "    if (!is_step_pitch_locked(step)) return;\n"
         "    delete pitch_locked_steps[String(step)];\n"
         "    outlet(0, 'pitchunlock', step);\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function is_step_gate_locked(step) {\n"
@@ -260,12 +282,14 @@ def slice_pattern_display_js(
         "\n"
         "function set_step_gate_lock(step, gate) {\n"
         "    gate_locked_steps[String(step)] = Math.round(gate) > 0 ? 1 : 0;\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function set_step_gate_unlock(step) {\n"
         "    if (!is_step_gate_locked(step)) return;\n"
         "    delete gate_locked_steps[String(step)];\n"
         "    outlet(0, 'gateunlock', step);\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function is_step_ratchet_locked(step) {\n"
@@ -279,21 +303,23 @@ def slice_pattern_display_js(
         "\n"
         "function set_step_ratchet_lock(step, count) {\n"
         "    ratchet_locked_steps[String(step)] = clamp(Math.round(count), 0, 3);\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function set_step_ratchet_unlock(step) {\n"
         "    if (!is_step_ratchet_locked(step)) return;\n"
         "    delete ratchet_locked_steps[String(step)];\n"
         "    outlet(0, 'ratchetunlock', step);\n"
+        "    dump_pattern();\n"
         "}\n"
         "\n"
         "function step_base_index(step) {\n"
         "    var slices = Math.max(1, Math.round(slice_count));\n"
-        "    var dist = Math.max(1, Math.round(distance));\n"
+        "    var dist = Math.round(distance);\n"    # raw: 0 = ROLL, <0 = REV traversal
         "    var seed = Math.max(0, Math.round(pattern_seed));\n"
         "    var rnd = pseudo(seed, step, 23) % slices;\n"
         "    var base = (step * dist) % slices;\n"
-        "    if (mode === 0) return base;\n"
+        "    if (mode <= 0) return base;\n"    # mode -1 (OFF) draws the RUN shape, dimmed
         "    if (mode === 1) return rnd;\n"
         "    if (mode === 2) {\n"
         "        return ((step * (((seed % 5) + 1) * dist)) + ((step * step) * ((seed % 3) + 1)) + (seed % slices)) % slices;\n"
@@ -582,6 +608,22 @@ def slice_pattern_display_js(
         "    msg_float(v);\n"
         "}\n"
         "\n"
+        "function dump_pattern() {\n"
+        "    var vis = Math.max(1, Math.round(step_count));\n"
+        "    var i;\n"
+        "    for (i = 0; i < vis; i++) {\n"
+        "        var rc = step_ratchet_count(i);\n"
+        "        outlet(2, i, step_gate(i), step_pitch(i), Math.round(step_direction(i)), 1 + rc,\n"
+        "               step_index(i), rc >= 1 ? ratchet_index(i, 0) : -1,\n"
+        "               rc >= 2 ? ratchet_index(i, 1) : -1,\n"
+        "               rc >= 3 ? ratchet_index(i, 2) : -1);\n"
+        "    }\n"
+        "}\n"
+        "\n"
+        "function dumppattern() {\n"
+        "    dump_pattern();\n"
+        "}\n"
+        "\n"
         "function anything() {\n"
         "    var argv = arrayfromargs(arguments);\n"
         "    var step;\n"
@@ -643,6 +685,7 @@ def slice_pattern_display_js(
         "    if (messagename === 'unset' && argv.length >= 1) {\n"
         "        step = Math.max(0, Math.round(argv[0]));\n"
         "        delete locked_steps[String(step)];\n"
+        "        dump_pattern();\n"
         "        mgraphics.redraw();\n"
         "        return;\n"
         "    }\n"
@@ -656,6 +699,7 @@ def slice_pattern_display_js(
         "    if (messagename === 'dirunset' && argv.length >= 1) {\n"
         "        step = Math.max(0, Math.round(argv[0]));\n"
         "        delete dir_locked_steps[String(step)];\n"
+        "        dump_pattern();\n"
         "        mgraphics.redraw();\n"
         "        return;\n"
         "    }\n"
@@ -669,6 +713,7 @@ def slice_pattern_display_js(
         "    if (messagename === 'pitchunset' && argv.length >= 1) {\n"
         "        step = Math.max(0, Math.round(argv[0]));\n"
         "        delete pitch_locked_steps[String(step)];\n"
+        "        dump_pattern();\n"
         "        mgraphics.redraw();\n"
         "        return;\n"
         "    }\n"
@@ -682,6 +727,7 @@ def slice_pattern_display_js(
         "    if (messagename === 'gateunset' && argv.length >= 1) {\n"
         "        step = Math.max(0, Math.round(argv[0]));\n"
         "        delete gate_locked_steps[String(step)];\n"
+        "        dump_pattern();\n"
         "        mgraphics.redraw();\n"
         "        return;\n"
         "    }\n"
@@ -695,6 +741,7 @@ def slice_pattern_display_js(
         "    if (messagename === 'ratchetunset' && argv.length >= 1) {\n"
         "        step = Math.max(0, Math.round(argv[0]));\n"
         "        delete ratchet_locked_steps[String(step)];\n"
+        "        dump_pattern();\n"
         "        mgraphics.redraw();\n"
         "    }\n"
         "}\n"
@@ -702,8 +749,8 @@ def slice_pattern_display_js(
         "function msg_float(v) {\n"
         "    if (inlet === 0) step_count = clamp(Math.round(v), 1, 32);\n"
         "    else if (inlet === 1) slice_count = clamp(Math.round(v), 1, 64);\n"
-        "    else if (inlet === 2) distance = clamp(Math.round(v), 1, 8);\n"
-        "    else if (inlet === 3) mode = clamp(Math.round(v), 0, 3);\n"
+        "    else if (inlet === 2) distance = clamp(Math.round(v), -8, 8);\n"
+        "    else if (inlet === 3) mode = clamp(Math.round(v), -1, 3);\n"
         "    else if (inlet === 4) jump_amount = clamp(v, 0.0, 100.0);\n"
         "    else if (inlet === 5) pattern_seed = Math.max(0, Math.round(v));\n"
         "    else if (inlet === 6) chop_amount = clamp(v, 0.0, 100.0);\n"
@@ -715,6 +762,7 @@ def slice_pattern_display_js(
         "    else if (inlet === 12) pitch_seed = Math.max(0, Math.round(v));\n"
         "    else if (inlet === 13) dir_mode = clamp(Math.round(v), 0, 2);\n"
         "    normalize_locks();\n"
+        "    if (inlet !== 10) dump_pattern();\n"
         "    mgraphics.redraw();\n"
         "}\n"
         "\n"
@@ -744,7 +792,7 @@ def slice_pattern_display_js(
         "        mgraphics.select_font_face('Ableton Sans Medium');\n"
         "        mgraphics.set_font_size(8);\n"
         "        mgraphics.move_to(inner_x, inner_y + 7);\n"
-        "        mgraphics.show_text(MODE_LABELS[mode] + '  ' + visible_steps + ' STEPS');\n"
+        "        mgraphics.show_text((mode < 0 ? 'OFF' : MODE_LABELS[mode]) + '  ' + visible_steps + ' STEPS');\n"
         "        mgraphics.move_to(w - 134, inner_y + 7);\n"
         "        mgraphics.show_text('SEED ' + Math.round(pattern_seed) + '  ARP ' + Math.round(arp_amount));\n"
         "    }\n"
@@ -768,6 +816,7 @@ def slice_pattern_display_js(
         "        var bar_h = 2 + norm * Math.max(4, cell_h - 4);\n"
         "        var bar_y = cell_y + cell_h - bar_h;\n"
         "        var alpha = chopped ? 0.26 : (0.34 + (norm * 0.58));\n"
+        "        if (mode < 0) alpha *= 0.35;\n"    # OFF: the lane dims (clock stopped)
         "        var arp_norm = clamp((step_arp(i) + 24.0) / 48.0, 0.0, 1.0);\n"
         "        var pitch_norm = clamp((step_pitch(i) + 24.0) / 48.0, 0.0, 1.0);\n"
         "        var arp_x = cell_x + (cell_w * 0.5);\n"

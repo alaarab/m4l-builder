@@ -108,6 +108,76 @@ def test_pattern_seed_is_deterministic_and_reseeds():
     assert phrase(11) != phrase(40)        # reseed (PHRASE GEN) -> new phrase
 
 
+def _rows(result):
+    # bare pattern-table rows: outlet 2, leading int key (no 'step' selector)
+    return [o for o in result.outlets
+            if o[0] == 2 and len(o) > 1 and not isinstance(o[1], str)]
+
+
+def test_dumppattern_emits_one_row_per_step():
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(8);
+        __captured.outlets.length = 0;     // drop the auto-dumps from setup
+        dumppattern();
+    """)
+    rows = _rows(r)
+    assert len(rows) == 8
+    # row: [2, step, gate, pitch, dir, nHits, h0, h1, h2, h3]
+    assert [row[1] for row in rows] == list(range(8))
+    for row in rows:
+        assert row[2] in (0, 1)                    # gate
+        assert row[4] in (-1, 1)                   # dir
+        assert row[5] >= 1                         # nHits
+        assert 0 <= row[6] < 16                    # h0 in slice range
+
+
+def test_every_pattern_change_auto_dumps():
+    r = _run("""
+        inlet = 0; msg_float(4);                   // step_count change -> dump
+    """)
+    assert len(_rows(r)) == 4                      # one fresh table
+    r2 = _run("""
+        inlet = 0; msg_float(4);
+        __captured.outlets.length = 0;
+        inlet = 14; messagename = 'set'; anything(1, 5);   // lock -> re-dump
+    """)
+    assert len(_rows(r2)) == 4
+    r3 = _run("""
+        inlet = 0; msg_float(4);
+        __captured.outlets.length = 0;
+        inlet = 10; msg_float(2);                  // PLAYHEAD must NOT dump
+    """)
+    assert _rows(r3) == []
+
+
+def test_roll_and_reverse_distances():
+    # ROLL: distance 0 -> every step resolves to slice 0 (host adds the held
+    # key's offset); REV: distance -1 walks backward through the slices.
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(8);
+        inlet = 3; msg_float(0);                   // RUN
+        inlet = 2; msg_float(0);                   // ROLL
+        var roll = [], i;
+        for (i = 0; i < 8; i++) roll.push(step_index(i));
+        inlet = 2; msg_float(-1);                  // REV traversal
+        var rev = [], j;
+        for (j = 0; j < 8; j++) rev.push(step_index(j));
+        dump({roll: roll, rev: rev});
+    """)
+    assert r.state["roll"] == [0] * 8
+    assert r.state["rev"] == [0, 15, 14, 13, 12, 11, 10, 9]
+
+
+def test_mode_off_is_accepted():
+    r = _run("""
+        inlet = 3; msg_float(-1);
+        dump({m: mode});
+    """)
+    assert r.state["m"] == -1
+
+
 def test_ratchets_emit_sub_hits():
     r = _run("""
         inlet = 1; msg_float(16);
