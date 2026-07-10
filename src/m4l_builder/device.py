@@ -238,15 +238,18 @@ class Device(GraphContainer):
         numoutlets: int = 0,
         validate_contract: bool = True,
         content_address: bool = False,
+        static: bool = False,
         **kwargs,
     ) -> str:
         """Add a jsui with embedded JavaScript code for custom vector graphics.
 
         ``content_address=True`` folds a hash of ``js_code`` into the sidecar
         filename so a JS edit auto-busts Max's by-name sidecar cache (no manual bump).
+        ``static=True`` marks a read-only display (legend art) that paints once —
+        the contract's redraw-hook requirement is waived.
         """
         if validate_contract:
-            validate_jsui_contract(js_code)
+            validate_jsui_contract(js_code, static=static)
         js_filename = js_filename or f"{id}.js"
         if content_address:
             js_filename = js_sidecar_name(js_filename, js_code)
