@@ -1545,7 +1545,7 @@ def euclidean_sequencer_stage(device, id_prefix, rate_rect, *, steps=16, pulses=
 
 
 def sample_drop_target(device, id_prefix, buffer_box_id, drop_rect, *,
-                       settle_ms=600, x=600, y=520,
+                       settle_ms=600, x=600, y=520, param_name=None,
                        textcolor=None, bgcolor=None, bordercolor=None):
     """Add a drag-and-drop audio sample intake over ``drop_rect``.
 
@@ -1580,8 +1580,11 @@ def sample_drop_target(device, id_prefix, buffer_box_id, drop_rect, *,
     """
     p = id_prefix
 
+    # param_name registers the drop as a stored Blob parameter (widget-
+    # hardening spec): the dropped path survives save/reload + duplicate and
+    # re-reports on init, so the buffer refills without user action.
     drop_id = device.add_box(live_drop(
-        f"{p}_drop", drop_rect,
+        f"{p}_drop", drop_rect, param_name=param_name,
         patching_rect=[x, y, 120, 28],
         textcolor=textcolor, bgcolor=bgcolor, bordercolor=bordercolor,
     ))
