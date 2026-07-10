@@ -20,7 +20,8 @@ Named messages (slicer control, inlet 0):
     set_slices <n>          -- grid division count (also re-analyzes)
     set_sensitivity <0-100> -- transient threshold (higher = more slices)
     set_min_spacing <ms>    -- minimum inter-onset spacing
-    set_pitch <semitones>   -- global playback transpose (shortens dur_ms)
+    set_pitch <semitones>   -- stored only; durs emit UNPITCHED (pitch is a
+                               trigger-time dur multiply in the host patch)
     set_editable <0|1>      -- 1 = this instance is the EDITOR (click/drag dividers)
     set_display_bounds <b0 b1 ...> -- adopt edited normalized boundaries (no re-detect)
     set_active_index <n>    -- light up slice n + register a hit (playback feedback)
@@ -386,8 +387,12 @@ def slice_overview_js(
         "}\n"
         "\n"
         "function set_pitch(v) {\n"
+        "    // Pitch is applied at TRIGGER time in the patch (a dur multiply\n"
+        "    // between the coll and the voice pool) — emitted durs stay\n"
+        "    // UNPITCHED. Kept as a no-op so legacy senders stay silent; it\n"
+        "    // must NOT analyze() (that wiped manual slice edits on every\n"
+        "    // pitch move) and must NOT bake the ratio into the coll.\n"
         "    pitch_ratio = Math.pow(2.0, v / 12.0);\n"
-        "    if (loaded) analyze();\n"
         "}\n"
         "\n"
         "function buffer_frames() {\n"
@@ -491,7 +496,7 @@ def slice_overview_js(
         "    for (k = 0; k < n; k++) {\n"
         "        s_ms = slice_boundaries[k] * length_ms;\n"
         "        e_ms = slice_boundaries[k + 1] * length_ms;\n"
-        "        dur = (e_ms - s_ms) / pitch_ratio;\n"
+        "        dur = e_ms - s_ms;\n"            # UNPITCHED: pitch is a trigger-time dur multiply in the patch
         "        if (dur < 0.0) dur = 0.0;\n"
         "        outlet(1, k, s_ms, 0, e_ms, dur);\n"
         "    }\n"

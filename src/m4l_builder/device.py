@@ -2411,7 +2411,7 @@ class Device(GraphContainer):
         if defer:
             defer_id = self.add_newobj(
                 f"{p}_defer", "deferlow", numinlets=1, numoutlets=1,
-                outlettype=["bang"], patching_rect=[x, y + 30, 70, 20],
+                outlettype=[""], patching_rect=[x, y + 30, 70, 20],
             )
             self.add_line(thisdev, 0, defer_id, 0)
             head, head_outlet = defer_id, 0
