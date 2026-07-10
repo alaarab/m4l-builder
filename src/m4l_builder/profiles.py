@@ -65,6 +65,7 @@ class PatcherProfile:
         height: float,
         device_type: str,
         latency: int = 0,
+        is_mpe: bool = False,
     ) -> dict:
         """Build the root patcher payload for a device."""
         if width <= 0 or height <= 0:
@@ -76,7 +77,7 @@ class PatcherProfile:
                 f"device latency must be >= 0 (PDC samples), got {latency}"
             )
         now = _build_timestamp()
-        return {
+        payload = {
             "patcher": {
                 "fileversion": 1,
                 "appversion": self.appversion.copy(),
@@ -145,6 +146,11 @@ class PatcherProfile:
                 "parameters": {},
             }
         }
+        if is_mpe:
+            # Emitted only when set: non-MPE devices stay byte-identical to
+            # pre-flag builds (Ableton's own non-MPE devices omit the key).
+            payload["patcher"]["is_mpe"] = 1
+        return payload
 
     def build_subpatcher_patcher(self, boxes: list, lines: list) -> dict:
         """Build the nested patcher payload for a subpatcher."""

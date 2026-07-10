@@ -58,6 +58,12 @@ class Device(GraphContainer):
         # Defined Latency (samples) reported to Live for plugin delay
         # compensation — the patcher-level "latency" key.
         self.latency = 0
+        # Declare MPE support to Live — the patcher-level "is_mpe" key. When
+        # True, Live delivers per-note MPE data (member-channel notes, bend,
+        # pressure, CC74) to the device instead of folding it to one channel
+        # (patcher.maxref: "a Max for Live device will receive MPE data from
+        # Live"; Granulator III ships is_mpe: 1).
+        self.is_mpe = False
         self.profile = profile or DEFAULT_PATCHER_PROFILE
         self._js_files: dict[Any, Any] = {}
         self._param_banks: dict[Any, Any] = {}

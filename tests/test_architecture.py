@@ -522,3 +522,21 @@ class TestDefinedLatency:
         device.latency = 2048
         patcher = device.to_patcher()
         assert patcher["patcher"]["latency"] == 2048
+
+
+class TestMpeSupport:
+    def test_default_omits_is_mpe(self):
+        # Non-MPE devices must stay byte-identical to pre-flag builds:
+        # Ableton's own non-MPE devices omit the key entirely.
+        device = Device("test", 200, 100)
+        patcher = device.to_patcher()
+        assert "is_mpe" not in patcher["patcher"]
+
+    def test_is_mpe_lands_in_patcher(self):
+        # is_mpe: 1 is the patcher-level MPE declaration Live reads
+        # ("a Max for Live device will receive MPE data from Live");
+        # Granulator III ships exactly this key.
+        device = Device("test", 200, 100, device_type="instrument")
+        device.is_mpe = True
+        patcher = device.to_patcher()
+        assert patcher["patcher"]["is_mpe"] == 1
