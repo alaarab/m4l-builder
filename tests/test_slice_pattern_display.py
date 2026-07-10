@@ -200,3 +200,40 @@ def test_ratchets_emit_sub_hits():
         o = _steps(r2)[0]
         assert o[6] > 1                    # nHits > 1 on a ratcheted step
         assert o[8] >= 0                   # at least one ratchet sub-hit index
+
+
+def test_locks_survive_slice_count_changes():
+    # bigger-bet 2 prerequisite: a SENS tweak (slice count change) must NOT
+    # remap or erase hand-placed locks (the old normalize wrapped them).
+    r = _run("""
+        inlet = 1; msg_float(16);
+        inlet = 0; msg_float(8);
+        inlet = 14; messagename = 'set'; anything(2, 12);   // lock step 2 -> slice 12
+        inlet = 1; msg_float(8);                            // slices shrink to 8
+        inlet = 1; msg_float(16);                           // ...and back
+        dump({idx: locked_steps[String(2)]});
+    """)
+    assert r.state["idx"] == 12                             # verbatim, not wrapped
+
+
+def test_set_negative_unsets_lock():
+    r = _run("""
+        inlet = 0; msg_float(8);
+        inlet = 14; messagename = 'set'; anything(3, 5);
+        inlet = 14; messagename = 'set'; anything(3, -1);   // restore-vocab unset
+        dump({locked: is_step_locked(3)});
+    """)
+    assert r.state["locked"] == 0 or r.state["locked"] is False
+
+
+def test_clear_all_requires_shift_cmd():
+    r = _run("""
+        inlet = 0; msg_float(8);
+        inlet = 14; messagename = 'set'; anything(1, 4);
+        onclick(20, 20, 1, 0, 1, 0, 0, 0);                  // bare shift: NOT clear
+        var survived = is_step_locked(1);
+        onclick(20, 20, 1, 1, 1, 0, 0, 0);                  // shift+cmd: clear
+        dump({survived: survived, after: is_step_locked(1)});
+    """)
+    assert r.state["survived"] in (1, True)
+    assert r.state["after"] in (0, False)
