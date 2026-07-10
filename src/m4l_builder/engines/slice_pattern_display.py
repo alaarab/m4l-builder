@@ -701,7 +701,7 @@ def slice_pattern_display_js(
         "\n"
         "function msg_float(v) {\n"
         "    if (inlet === 0) step_count = clamp(Math.round(v), 1, 32);\n"
-        "    else if (inlet === 1) slice_count = clamp(Math.round(v), 1, 32);\n"
+        "    else if (inlet === 1) slice_count = clamp(Math.round(v), 1, 64);\n"
         "    else if (inlet === 2) distance = clamp(Math.round(v), 1, 8);\n"
         "    else if (inlet === 3) mode = clamp(Math.round(v), 0, 3);\n"
         "    else if (inlet === 4) jump_amount = clamp(v, 0.0, 100.0);\n"
