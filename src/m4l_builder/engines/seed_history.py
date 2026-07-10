@@ -73,6 +73,7 @@ def seed_history_js(*, depth: int = 8) -> str:
         "function seedv(n) { cur[4] = Math.round(n); }\n"
         "\n"
         "function roll(rand, vary) {\n"
+        "    if (ring.length === 0) push_cur();\n"    # archive the ORIGINAL groove
         "    var s = Math.max(1, Math.round(rand));\n"
         "    function draw() { s = lcg_next(s); return s % 32000; }\n"
         "    if (vary > 0.5 && vary < 70.0) {\n"
