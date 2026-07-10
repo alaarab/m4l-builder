@@ -3364,3 +3364,25 @@ var R = {
         assert r["R"]["disabled"] == 0.25
         assert abs(r["R"]["mid"][1] - 0.45) < 1e-9
         assert r["R"]["clamped"][:3] == [1, 1, 1]
+
+
+class TestLiveDropBlobParam:
+    def test_param_name_registers_blob_parameter(self):
+        # widget-hardening spec: parameter_type 4 (Blob), Stored-Only, no
+        # min/max/unit/enum — the dropped path persists in the Live set.
+        from m4l_builder.ui import live_drop
+        box = live_drop("d", [0, 0, 100, 30], param_name="Sample")["box"]
+        assert box["parameter_enable"] == 1
+        vo = box["saved_attribute_attributes"]["valueof"]
+        assert vo["parameter_type"] == 4
+        assert vo["parameter_invisible"] == 1
+        assert vo["parameter_longname"] == "Sample"
+        for absent in ("parameter_mmin", "parameter_mmax",
+                       "parameter_unitstyle", "parameter_enum"):
+            assert absent not in vo
+
+    def test_without_param_name_stays_paramless(self):
+        from m4l_builder.ui import live_drop
+        box = live_drop("d", [0, 0, 100, 30])["box"]
+        assert "parameter_enable" not in box
+        assert "saved_attribute_attributes" not in box

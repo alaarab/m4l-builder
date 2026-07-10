@@ -1054,7 +1054,9 @@ def adsrui(id: str, rect: list, *, attack_domain: list = None,
     return {"box": box}
 
 
-def live_drop(id: str, rect: list, *, decodemode: int = None, color: list = None,
+def live_drop(id: str, rect: list, *, param_name: str = None,
+              invisible: int = 1, shortname: str = None,
+              decodemode: int = None, color: list = None,
               textcolor: list = None, bordercolor: list = None,
               focusbordercolor: list = None, legend: str = None,
               textjustification: int = None, fontname: str = None,
@@ -1080,7 +1082,22 @@ def live_drop(id: str, rect: list, *, decodemode: int = None, color: list = None
     init), ``clear`` clears it, ``bang`` outputs the current path. **Use when** you
     need a sample / IR / file intake (granular source, convolution loader); for a
     numeric/enum value use the matching ``live.*`` control instead.
+
+    ``param_name`` (widget-hardening spec): registers the drop as a REAL stored
+    Live parameter — ``parameter_type=4`` (Blob), no min/max/unit/enum — so the
+    dropped path SURVIVES set save/reload and device duplication and is
+    re-reported on init. Default ``invisible=1`` (Stored-Only: persisted, no
+    automation lane — what a path wants). Caveat: files dragged from encrypted
+    Live-pack browsers can hand a decoded TEMP path that may not exist next
+    session; files from disk/User Library persist cleanly.
     """
+    saved_attrs = None
+    if param_name is not None:
+        spec = _resolve_parameter_spec(
+            param_name, shortname=shortname or "live.drop",
+            parameter_type=4, invisible=invisible,
+        )
+        saved_attrs = {"valueof": spec.to_saved_attributes()["valueof"]}
     box = {
         "id": id,
         "maxclass": "live.drop",
@@ -1091,6 +1108,10 @@ def live_drop(id: str, rect: list, *, decodemode: int = None, color: list = None
         "presentation": 1,
         "presentation_rect": rect,
     }
+    if saved_attrs is not None:
+        box["parameter_enable"] = 1
+        box["saved_attribute_attributes"] = saved_attrs
+        box["varname"] = param_name
     for key, val in (("decodemode", decodemode), ("color", color),
                      ("textcolor", textcolor), ("bordercolor", bordercolor),
                      ("focusbordercolor", focusbordercolor), ("legend", legend),
