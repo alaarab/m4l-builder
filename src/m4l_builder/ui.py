@@ -91,10 +91,15 @@ def _apply_info_view_annotations(box: dict, spec) -> None:
     (setdefault) and raw box dicts (reverse-engineered builds) are untouched.
     """
     title = getattr(spec, "annotation_name", None) or getattr(spec, "name", None)
+    # the hover BODY prefers the richer ParameterSpec.info (multi-line help)
+    # over echoing the title, so a spec that authors `info` gets a real second
+    # line in Live's Info View (hunt #53: body==title everywhere made hover
+    # help label-only).
+    info = getattr(spec, "info", None)
     if title:
         # alphabetical insertion order — the reverse codegen normalises box
         # keys alphabetically, so this keeps reversed rebuilds byte-identical
-        box.setdefault("annotation", str(title))
+        box.setdefault("annotation", str(info or title))
         box.setdefault("annotation_name", str(title))
 
 def _presentation_box(id: str, maxclass: str, rect: list, *,

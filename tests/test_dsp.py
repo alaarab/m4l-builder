@@ -3272,7 +3272,7 @@ class TestBitcrusher:
         b = _find_box(boxes, "bc_degrade")
         assert "8" in b["text"]
 
-    def test_default_rate_reduction_in_text(self):
+    def test_default_rate_ratio_in_text(self):
         boxes, _ = bitcrusher("bc")
         b = _find_box(boxes, "bc_degrade")
         assert "1" in b["text"]
@@ -3282,10 +3282,19 @@ class TestBitcrusher:
         b = _find_box(boxes, "bc_degrade")
         assert "4" in b["text"]
 
-    def test_custom_rate_reduction(self):
-        boxes, _ = bitcrusher("bc", rate_reduction=4)
+    def test_custom_rate_ratio(self):
+        # degrade~ inlet 1 is a 0..1 sampling-rate RATIO (1 = no reduction);
+        # 0.5 = half-rate decimation (factory Max Degrader convention)
+        boxes, _ = bitcrusher("bc", rate_ratio=0.5)
         b = _find_box(boxes, "bc_degrade")
-        assert "4" in b["text"]
+        assert "0.5" in b["text"]
+
+    def test_backwards_rate_reduction_model_rejected(self):
+        # the old >=1 'reduction factor' model was inert (every value >= 1
+        # leaves the sample rate untouched) — now an explicit error
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="RATIO"):
+            bitcrusher("bc", rate_ratio=4)
 
     def test_three_inlets(self):
         boxes, _ = bitcrusher("bc")

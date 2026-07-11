@@ -746,10 +746,21 @@ def modulated_allpass_reverb(
     # executable statement (Particle-Reverb declares every operator up front); a
     # History declared after a statement makes Live's gen compiler silence the whole
     # codebox. So declare every History first, THEN smooth + the change()-gate.
+    # R-channel decorrelation (hunt #60): with identical delays/coefficients and
+    # zero-init state, a mono input produced a bit-identical L/R tail — dual-mono,
+    # zero added width. The R channel's main-allpass taps, tank and pre-diffusion
+    # delays run ~1.9-2.3% long so a mono source opens a true-stereo tail while
+    # the L channel (and the mono character) stays byte-identical to the source
+    # topology. Headroom: max R tap = (150 + 0.27*3500*1.36255) * 1.019 ms
+    # ≈ 1.47 s and tankR = 3500 * 1.023 ms ≈ 3.58 s, inside the 5 s declares.
+    _R_AP_SCALE = 1.019
+    _R_TANK_SCALE = 1.023
     smooth = "\n".join((
         "History his_size(0);",
         *(f"History his_apd{i + 1}(0);" for i in range(len(_MAIN_RATIOS))),
+        *(f"History his_apd{i + 1}R(0);" for i in range(len(_MAIN_RATIOS))),
         "History his_tank(0);",
+        "History his_tankR(0);",
         f"his_size = ({size} - his_size) * 0.001 + his_size;",
         "changeDelayTime = change(his_size);",
         "if (changeDelayTime != 0) {",
@@ -757,21 +768,28 @@ def modulated_allpass_reverb(
         f"\tminSamps = mstosamps({_MIN_AP_MS});",
         *(f"\this_apd{i + 1} = minSamps + {_AP_RATE} * scaledSizeSamps * {r};"
           for i, r in enumerate(_MAIN_RATIOS)),
+        *(f"\this_apd{i + 1}R = his_apd{i + 1} * {_R_AP_SCALE};"
+          for i in range(len(_MAIN_RATIOS))),
         "\this_tank = scaledSizeSamps;",
+        f"\this_tankR = scaledSizeSamps * {_R_TANK_SCALE};",
         "}",
     ))
 
     def channel(ch: str, in_sig: str, out_sig: str) -> str:
+        sfx = "R" if ch == "R" else ""
+        pre_scale = _R_AP_SCALE if ch == "R" else 1.0
         lines = [
-            f"fb{ch} = lowpass_12({decay} * tank{ch}.read(his_tank), {damp_hz}, 0.707);",
+            f"fb{ch} = lowpass_12({decay} * tank{ch}.read(his_tank{sfx}), {damp_hz}, 0.707);",
             f"pre{ch} = {in_sig} + fb{ch};",
         ]
         for i, (g, d) in enumerate(_PRE_ALLPASS):
-            lines.append(f"pre{ch} = allpass(pre{ch}, {g}, {d}, pre{ch}{i}a, pre{ch}{i}b);")
+            lines.append(
+                f"pre{ch} = allpass(pre{ch}, {g}, {d * pre_scale:g}, "
+                f"pre{ch}{i}a, pre{ch}{i}b);")
         lines.append(f"main{ch} = pre{ch};")
         for i in range(len(_MAIN_RATIOS)):
             lines.append(
-                f"main{ch} = allpass(main{ch}, {_MAIN_ALLPASS_GAIN}, his_apd{i + 1}, "
+                f"main{ch} = allpass(main{ch}, {_MAIN_ALLPASS_GAIN}, his_apd{i + 1}{sfx}, "
                 f"main{ch}{i}a, main{ch}{i}b);"
             )
         # The tank is THE feedback loop (read -> lowpass_12 * decay -> ... ->
@@ -1099,9 +1117,9 @@ def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
     lines = [head.rstrip()]
     lines.append(f"History {p}_lpA(0.); History {p}_lpB(0.); "
                  f"History {p}_fbA(0.); History {p}_fbB(0.);")
-    for name, ap1_t, ap1_g, d1_t, ap2_t, ap2_g, d2_t in (
-            ("A", 22.58, 0.70, 149.62, 60.48, 0.50, 124.99),
-            ("B", 30.51, 0.70, 141.69, 89.24, 0.50, 106.28)):
+    for name, ap1_t, ap1_g, d1_t, ap2_t, ap2_g, d2_t, exc_hz in (
+            ("A", 22.58, 0.70, 149.62, 60.48, 0.50, 124.99, 1.0),
+            ("B", 30.51, 0.70, 141.69, 89.24, 0.50, 106.28, 0.87)):
         b = f"{p}_{name}"
         other = f"{p}_fb{'B' if name == 'A' else 'A'}"
         lines += [
@@ -1109,8 +1127,14 @@ def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
             f"Delay {b}_ap2(samplerate); Delay {b}_d2(samplerate);",
             # branch input: diffused input + the OTHER branch's tail * decay
             f"{b}_in = {p}_diff + {other} * clamp({decay}, 0., 0.95);",
-            # decay-diffusion allpass 1
-            f"{b}_z1 = {b}_ap1.read(mstosamps({ap1_t:g}), interp=\"none\");",
+            # decay-diffusion allpass 1, with the paper's EXCURSION: a slow
+            # ~1 Hz LFO wobbles this read by ±16 samples @ 29.761 kHz
+            # (= ±0.5376 ms, samplerate-scaled) — the Dattorro-1997 detail
+            # that breaks the static tank's metallic ring (hunt #64). The
+            # wobble forces a fractional tap -> interp="linear" on this read.
+            f"{b}_exc = mstosamps(0.5376) * sin(6.2831853 * phasor({exc_hz:g}));",
+            f"{b}_z1 = {b}_ap1.read(mstosamps({ap1_t:g}) + {b}_exc, "
+            f"interp=\"linear\");",
             f"{b}_y1 = -{ap1_g:g} * {b}_in + {b}_z1;",
             f"{b}_ap1.write(fixdenorm({b}_in + {ap1_g:g} * {b}_y1));",
             # long delay 1 -> damping one-pole

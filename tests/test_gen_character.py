@@ -150,3 +150,20 @@ def test_bbd_ensemble_is_a_true_six_voice_superset():
     assert "wr = ens_wr - ens_hpr;" in code
     # centre tap is caller-set (4..25 ms), not the fixed 12
     assert "mstosamps(clamp(c, 4., 25.))" in code
+
+
+def test_deesser_detector_is_steeper_than_the_reduction_band():
+    """Hunt #70: the detector must watch a 2nd-order-HP'd band (the high band
+    high-passed AGAIN at the split), not the raw 6 dB/oct high band that leaks
+    presence a full octave below Freq — while REDUCTION still ducks the
+    original complementary high band so the recombined null holds."""
+    code = deesser("in1", "in2", "out1", "out2", split_hz="6500.",
+                   thresh="-30.", range_db="-8.")
+    # second HP stage on the detector side, denormal-flushed like the split
+    assert "dess_dlpl = fixdenorm(dess_dlpl + dess_k * (dess_hil - dess_dlpl));" in code
+    assert "dess_dtl = dess_hil - dess_dlpl;" in code
+    # the level detector reads the STEEP band...
+    assert "dess_lvl = atodb(max(abs(dess_dtl), abs(dess_dtr)) + 1e-9);" in code
+    # ...but gain still applies to the original complementary high band
+    assert "dess_dhl = dess_hil * dess_hg;" in code
+    assert "out1 = 0. > 0.5 ? dess_dhl : dess_lpl + dess_dhl;" in code

@@ -145,9 +145,17 @@ def test_modulated_allpass_reverb_grounded_topology():
     # lowpass-damped feedback tank, both channels; the tank write (THE feedback
     # loop) is denormal-flushed (Q44)
     assert "fbL = lowpass_12(rvbDecay * tankL.read(his_tank)" in code
-    assert "fbR = lowpass_12(rvbDecay * tankR.read(his_tank)" in code
     assert "tankL.write(fixdenorm(mainL));" in code
     assert "tankR.write(fixdenorm(mainR));" in code
+    # hunt #60 — R-channel decorrelation: identical L/R delays made a mono
+    # input produce a bit-identical (dual-mono) tail. R reads its OWN tank +
+    # main-allpass taps (~1.9-2.3% long) and its pre-diffusion delays scale
+    # by 1.019 (44.64 -> 45.4882); L keeps the verbatim source topology.
+    assert "fbR = lowpass_12(rvbDecay * tankR.read(his_tankR)" in code
+    assert "his_tankR = scaledSizeSamps * 1.023;" in code
+    assert "his_apd1R = his_apd1 * 1.019;" in code
+    assert "allpass(mainR, 0.625, his_apd1R," in code
+    assert "allpass(preR, 0.75, 45.4882," in code
     # REGRESSION: Live's gen silences a codebox that declares a History AFTER an
     # executable statement — every top-level History must precede the first
     # statement. (A his_apd1-after-his_size= build passed no audio until reordered.)

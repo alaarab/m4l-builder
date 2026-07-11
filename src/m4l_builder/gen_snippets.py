@@ -490,6 +490,40 @@ def kweight_coeffs_bs1770() -> str:
     )
 
 
+_KWEIGHT_COEFF_NAMES = ("sb0", "sb1", "sb2", "sa1", "sa2",
+                        "hb0", "hb1", "hb2", "ha1", "ha2")
+
+
+def kweight_coeffs_bs1770_cached() -> str:
+    """change()-gated :func:`kweight_coeffs_bs1770` (hunt #57): the 2 ``tan`` +
+    2 ``pow`` + ~20-division coefficient block runs ONLY when ``samplerate``
+    changes (gen~ never hoists samplerate-dependent transcendentals itself);
+    every other sample reads the 10 latched ``History`` cells. The original
+    audited block is emitted VERBATIM inside the gate and the same
+    ``sb0..sa2 / hb0..ha2`` names are defined for the caller, so adopting this
+    is a drop-in, bit-exact swap for meter kernels (ceiling, spectrum
+    analyzer) that recomputed it per sample.
+    """
+    body = "\n".join("\t" + ln for ln in kweight_coeffs_bs1770().splitlines())
+    decls = "\n".join(
+        f"History kwc_{n}(0.);" for n in _KWEIGHT_COEFF_NAMES)
+    latch = "\n".join(
+        f"\tkwc_{n} = {n};" for n in _KWEIGHT_COEFF_NAMES)
+    alias = "\n".join(
+        f"{n} = kwc_{n};" for n in _KWEIGHT_COEFF_NAMES)
+    return (
+        f"{decls}\n"
+        "History kwc_init(0.);\n"
+        "kwc_chg = change(samplerate);\n"
+        "if (kwc_chg != 0 || kwc_init < 0.5) {\n"
+        f"{body}\n"
+        f"{latch}\n"
+        "\tkwc_init = 1.;\n"
+        "}\n"
+        f"{alias}"
+    )
+
+
 def exp_pole(out: str, tau_seconds: str) -> str:
     """One-pole smoothing/ballistics coefficient: ``out = exp(-1/(tau*sr))``. Emits::
 
@@ -505,6 +539,29 @@ def exp_pole(out: str, tau_seconds: str) -> str:
     samplerate-coefficient cache will wrap.
     """
     return f"{out} = exp(-1.0 / ({tau_seconds} * samplerate));"
+
+
+def exp_pole_cached(out: str, tau_seconds: str,
+                    *, deps: tuple = ()) -> str:
+    """change()-gated :func:`exp_pole` (hunt #57): the ``exp`` fires only when
+    ``samplerate`` (always watched) or any expression in ``deps`` changes —
+    e.g. ``deps=("atk_ms",)`` for a Param-driven ballistics pole. Params are
+    block-stepped so a ``change()`` on one is effectively k-rate. Every other
+    sample reads the latched ``History``. Statement-level only (declares
+    ``History {out}_c``); bit-exact vs :func:`exp_pole` for the same inputs.
+    """
+    watches = " + ".join(
+        ["change(samplerate)"] + [f"change({d})" for d in deps])
+    return (
+        f"History {out}_c(0.);\n"
+        f"History {out}_ci(0.);\n"
+        f"{out}_chg = {watches};\n"
+        f"if ({out}_chg != 0 || {out}_ci < 0.5) {{\n"
+        f"\t{out}_c = exp(-1.0 / ({tau_seconds} * samplerate));\n"
+        f"\t{out}_ci = 1.;\n"
+        f"}}\n"
+        f"{out} = {out}_c;"
+    )
 
 
 def tpdf_dither(
@@ -687,6 +744,29 @@ def one_pole_coeff(out: str, freq: str) -> str:
     return f"{out} = 1.0 - exp(-6.28318530717959 * {freq} / samplerate);"
 
 
+def one_pole_coeff_cached(out: str, freq: str,
+                          *, deps: tuple = ()) -> str:
+    """change()-gated :func:`one_pole_coeff` (hunt #57): the ``exp`` fires only
+    when ``samplerate`` (always watched) or any expression in ``deps`` changes
+    — pass the cutoff Param name in ``deps`` when ``freq`` is user-driven.
+    Every other sample reads the latched ``History``. Statement-level only
+    (declares ``History {out}_c``); bit-exact vs :func:`one_pole_coeff` for
+    the same inputs.
+    """
+    watches = " + ".join(
+        ["change(samplerate)"] + [f"change({d})" for d in deps])
+    return (
+        f"History {out}_c(0.);\n"
+        f"History {out}_ci(0.);\n"
+        f"{out}_chg = {watches};\n"
+        f"if ({out}_chg != 0 || {out}_ci < 0.5) {{\n"
+        f"\t{out}_c = 1.0 - exp(-6.28318530717959 * {freq} / samplerate);\n"
+        f"\t{out}_ci = 1.;\n"
+        f"}}\n"
+        f"{out} = {out}_c;"
+    )
+
+
 def one_pole_lp(x: str, state: str, coeff: str, out: str) -> str:
     """One-pole low-pass: chase ``x`` into the ``state`` History, expose it. Emits::
 
@@ -730,7 +810,8 @@ def one_pole_hp(x: str, state: str, coeff: str, out: str) -> str:
 
 def exciter_harmonics(band: str, k: str, even: str, out: str,
                       *, odd: str = "hx_odd", sq: str = "hx_sq",
-                      sq_state: str | None = None) -> str:
+                      sq_state: str | None = None,
+                      odd_state: str | None = None) -> str:
     """Generated harmonic content of a band-limited signal (the exciter core). Emits::
 
         odd = tanh(band * k) / tanh(k);
@@ -757,13 +838,33 @@ def exciter_harmonics(band: str, k: str, even: str, out: str,
     exciter band ``sq_state`` swaps the naive ``band^2`` for the bandlimited mean of
     ``band^2`` (the caller declares ``History {sq_state}(0.);``). ``even == 0`` is a
     perfect null either way.
+
+    Pass ``odd_state`` (a ``History`` cell var name, caller-declared like
+    ``sq_state``) to ANTI-ALIAS the odd generator via :func:`tanh_adaa` — on
+    CLEAR-style settings (``even == 0``) the naive ``tanh`` is the SOLE
+    harmonic source at the highest drive, so AA'ing only the squarer protects
+    the term that contributes nothing there (hunt #12). The ADAA odd is
+    level-matched by the same ``/ tanh(k)`` and adds only the standard
+    0.5-sample odd-path group delay; scratch names derive from ``odd`` so two
+    calls (L/R or LOW/HIGH) in one codebox never collide.
     """
     if sq_state is not None:
         sq_line = square_adaa(band, sq, sq_state)
     else:
         sq_line = f"{sq} = {band} * {band};"
+    if odd_state is not None:
+        odd_lines = (
+            f"{odd}_drv = {band} * {k};\n"
+            + tanh_adaa(
+                f"{odd}_drv", f"{odd}_raw", odd_state,
+                ax=f"{odd}_ax", axp=f"{odd}_axp",
+                fx=f"{odd}_fx", fxp=f"{odd}_fxp", dx=f"{odd}_dx")
+            + f"\n{odd} = {odd}_raw / tanh({k});"
+        )
+    else:
+        odd_lines = f"{odd} = tanh({band} * {k}) / tanh({k});"
     return (
-        f"{odd} = tanh({band} * {k}) / tanh({k});\n"
+        odd_lines + "\n"
         + sq_line + "\n"
         + f"{out} = ({odd} - {band}) + {even} * {sq};"
     )

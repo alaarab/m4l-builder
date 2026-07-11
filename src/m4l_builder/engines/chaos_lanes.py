@@ -40,8 +40,9 @@ def chaos_lanes_js(*, voices: int = 8, accent=(0.72, 0.38, 0.95, 1.0),
                    history: int = 96, poll_ms: int = 33,
                    palette=None) -> str:
     """v8ui source for the lane-stack hero (``frames.entropy``:
-    ``4*voices + 1`` samps, 1 channel). ``palette`` = 6 lane tints by
-    source/shape index (defaults to the chaos SOURCE_COLORS)."""
+    ``4*voices + 1`` samps, 1 channel). ``palette`` = lane tints by
+    source/shape index, CALLER-SIZED (defaults to the 6 chaos
+    SOURCE_COLORS; Orbit passes 11 — 4 LFO + 6 chaos + Draw)."""
     colors = palette or SOURCE_COLORS
     acc = ", ".join(f"{c:g}" for c in accent[:3])
     pal = ",\n    ".join(f"[{r:g}, {g:g}, {b:g}]" for r, g, b in colors)
@@ -55,7 +56,7 @@ if (f && f[0]) {
     hpos = (hpos + 1) % HISTORY;
     var laneH = h / VOICES;
     for (var i = 0; i < VOICES; i++) {
-        var src = Math.max(0, Math.min(5, Math.round(f[0][i * 4 + 1])));
+        var src = Math.max(0, Math.min(PAL.length - 1, Math.round(f[0][i * 4 + 1])));
         var dp = f[0][i * 4 + 2];
         var on = f[0][i * 4 + 3] > 0.5 ? 1 : 0;   // per-lane enable
         var c = PAL[src];

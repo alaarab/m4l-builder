@@ -376,23 +376,35 @@ def deesser(
     (from Sibilant Surgeon).
 
     A one-pole at ``split_hz`` (2k..12k) splits low/high; a fast-attack
-    (0.5 ms) / 80 ms-release detector on the high band applies up to
-    ``range_db`` (negative = cut) when it crosses ``thresh``, then the bands
-    recombine. ``listen`` > 0.5 solos the processed high band so you can hear
-    exactly what is being tamed. Stereo-linked detection keeps the image stable.
-    Set ``gr_out`` to tap the applied high-band gain (dB) and ``env_out`` to tap
-    the high-band detector level (dB, for a threshold display). More surgical
-    than a full-band compressor for ess/harshness control.
+    (0.5 ms) / 80 ms-release detector applies up to ``range_db``
+    (negative = cut) when it crosses ``thresh``, then the bands recombine.
+    The DETECTOR listens to a steeper band than the reduction path: the
+    high band is high-passed AGAIN at the split (12 dB/oct total below
+    ``split_hz``), so presence/upper-mid energy just under the corner no
+    longer false-triggers on vowels (hunt #70 — the raw 6 dB/oct band it
+    used to watch leaked a full octave below Freq). Reduction still ducks
+    the original complementary high band, so the recombined null and the
+    LISTEN solo are unchanged. ``listen`` > 0.5 solos the processed high
+    band so you can hear exactly what is being tamed. Stereo-linked
+    detection keeps the image stable. Set ``gr_out`` to tap the applied
+    high-band gain (dB) and ``env_out`` to tap the detector level (dB, for
+    a threshold display). More surgical than a full-band compressor for
+    ess/harshness control.
     """
     p = prefix
     block = (
         f"History {p}_lpl(0.); History {p}_lpr(0.); History {p}_env(-90.);\n"
+        f"History {p}_dlpl(0.); History {p}_dlpr(0.);\n"
         f"{p}_k = 1.0 - exp(-{TWO_PI} * clamp({split_hz}, 2000., 12000.) / samplerate);\n"
-        f"{p}_lpl = {p}_lpl + {p}_k * ({xl} - {p}_lpl);\n"
-        f"{p}_lpr = {p}_lpr + {p}_k * ({xr} - {p}_lpr);\n"
+        f"{p}_lpl = fixdenorm({p}_lpl + {p}_k * ({xl} - {p}_lpl));\n"
+        f"{p}_lpr = fixdenorm({p}_lpr + {p}_k * ({xr} - {p}_lpr));\n"
         f"{p}_hil = {xl} - {p}_lpl;\n"
         f"{p}_hir = {xr} - {p}_lpr;\n"
-        f"{p}_lvl = atodb(max(abs({p}_hil), abs({p}_hir)) + 1e-9);\n"
+        f"{p}_dlpl = fixdenorm({p}_dlpl + {p}_k * ({p}_hil - {p}_dlpl));\n"
+        f"{p}_dlpr = fixdenorm({p}_dlpr + {p}_k * ({p}_hir - {p}_dlpr));\n"
+        f"{p}_dtl = {p}_hil - {p}_dlpl;\n"
+        f"{p}_dtr = {p}_hir - {p}_dlpr;\n"
+        f"{p}_lvl = atodb(max(abs({p}_dtl), abs({p}_dtr)) + 1e-9);\n"
         f"{p}_ak = 1.0 - exp(-1.0 / (0.0005 * samplerate));\n"
         f"{p}_rk = 1.0 - exp(-1.0 / (0.080 * samplerate));\n"
         f"{p}_env = {p}_lvl > {p}_env ? {p}_env + ({p}_lvl - {p}_env) * {p}_ak"
