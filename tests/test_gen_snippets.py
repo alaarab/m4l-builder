@@ -49,7 +49,10 @@ from m4l_builder.gen_snippets import (
 
 
 def _run(code, **vars):
-    ns = {"tanh": tanh}
+    # fixdenorm is identity for the normal-range single-step values these
+    # exec-based checks use (gen flushes only subnormals); bind it so kernels
+    # whose state writes are flush()-wrapped still exec here.
+    ns = {"tanh": tanh, "fixdenorm": lambda x: x}
     ns.update(vars)
     exec(code, ns)  # GenExpr +,-,*,tanh and numeric literals are valid Python
     return ns
@@ -174,7 +177,7 @@ def test_drive_blend_matches_echotide_shipped_form():
 def test_peak_follower_text():
     assert peak_follower("dpk", "denv", "0.6", "0.9997", "dcoeff") == (
         "dcoeff = dpk > denv ? 0.6 : 0.9997;\n"
-        "denv = dpk + dcoeff * (denv - dpk);"
+        "denv = fixdenorm(dpk + dcoeff * (denv - dpk));"
     )
 
 
@@ -193,7 +196,7 @@ def test_peak_follower_attack_fast_release_slow():
 def test_peak_follower_matches_echotide_wet_env_form():
     assert peak_follower("wpk", "env", "0.6", "0.995", "coeff") == (
         "coeff = wpk > env ? 0.6 : 0.995;\n"
-        "env = wpk + coeff * (env - wpk);"
+        "env = fixdenorm(wpk + coeff * (env - wpk));"
     )
 
 
@@ -1677,6 +1680,8 @@ class TestT29Kernels:
         apd = "Param g(0.5);\n" + allpass_diffusion_chain("in1", "out1")
         assert lint_genexpr(apd, 2, 1) == []
         assert apd.count("Delay apd_d") == 4          # 4 Dattorro stages
+        # the allpass feedback write is denormal-flushed (Q44 silent-tail guard)
+        assert "apd_d0.write(fixdenorm(in1 + 0.5 * apd_y0));" in apd
         assert "mstosamps(4.77)" in apd               # 1997 input times
         fdn = ("Param fb(0.8);\nParam damp_hz(6000.);\nParam size(1.);\n"
                + fdn_reverb())
@@ -1690,6 +1695,13 @@ class TestT29Kernels:
         # figure-8: each branch consumes the OTHER's tail
         assert "plate_A_in = plate_diff + plate_fbB" in plate
         assert "plate_B_in = plate_diff + plate_fbA" in plate
+        # every recirculating state write is denormal-flushed (Q44), incl. the
+        # shared input-diffusion allpass chain (plate_ind_*) — bit-transparent.
+        assert "plate_ind_d0.write(fixdenorm(" in plate
+        assert "plate_A_ap1.write(fixdenorm(" in plate
+        assert "plate_A_ap2.write(fixdenorm(" in plate
+        assert "plate_lpA = fixdenorm(" in plate
+        assert "plate_fbA = fixdenorm(plate_A_t2);" in plate
 
     def test_spectral_curve_simulates(self):
         from m4l_builder.gen_sim import GenKernel

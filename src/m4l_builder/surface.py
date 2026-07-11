@@ -353,6 +353,10 @@ class Surface:
         """A hidden diagnostic/probe param parked at :data:`ns.PARK_RECT`."""
         dial_kwargs.setdefault("showname", 0)
         dial_kwargs.setdefault("shownumber", 0)
+        # PARAM_VIS_HIDDEN (parameter_invisible=2): a continuously DSP-driven
+        # readback dial must stay out of Live automation / MIDI-map / Push and
+        # the undo stack, yet remain API-enumerable for the reader JS.
+        dial_kwargs.setdefault("invisible", 2)
         self.device.add_dial(  # type: ignore[attr-defined]
             id, param_name, list(ns.PARK_RECT), **dial_kwargs)
         return id
