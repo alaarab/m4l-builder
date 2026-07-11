@@ -11,6 +11,7 @@ failure class that ships green.
 from m4l_builder import AudioEffect
 from m4l_builder.gen_character import (
     bbd_chorus,
+    bbd_ensemble,
     console_saturation,
     crosstalk,
     deesser,
@@ -55,6 +56,12 @@ CASES = [
      "mono = (in1 + in2) * 0.5;\n"
      + bbd_chorus("mono", "out1", "out2", rate="0.6", depth="60.",
                   voices="3.", tone="8000.", sweep_out="out3"), 2, 3),
+    ("bbd_ensemble",
+     "mono = (in1 + in2) * 0.5;\n"
+     + bbd_ensemble("mono", "out1", "out2", rate="0.6", depth="60.",
+                    voices="6.", tone="8000.", detune="35.", shimmer="100.",
+                    center_ms="12.", feedback="20.", spread="100.",
+                    locut="90.", sweep_out="out3"), 2, 3),
     ("deesser",
      deesser("in1", "in2", "out1", "out2", split_hz="6500.", thresh="-30.",
              range_db="-8.", gr_out="out3"), 2, 3),
@@ -112,3 +119,30 @@ def test_devices_build_with_character_dsp():
                        numins, numouts, [40, 250, 200, 22])
         blob = dev.to_patcher()
         assert isinstance(blob, dict) and blob.get("patcher")
+
+
+def test_bbd_ensemble_is_a_true_six_voice_superset():
+    code = bbd_ensemble("mono", "wl", "wr", rate="r", depth="d", voices="v",
+                        tone="t", detune="dt", shimmer="sh", center_ms="c",
+                        feedback="fb", spread="sp", locut="lc")
+    # six INDEPENDENT slow phases (per-voice detune skew needs its own
+    # accumulator — a shared phase + offset cannot detune)
+    for i in range(6):
+        assert f"History ens_ph{i}(0.)" in code
+        assert f"ens_ph{i} = wrap(ens_ph{i} + ens_r * (1. + " in code
+    # voice gating for 3..6, never for the always-on pair
+    for i in (2, 3, 4, 5):
+        assert f"ens_g{i} = v > {i + 0.5} ? 1. : 0.;" in code
+    assert "ens_g0" not in code and "ens_g1" not in code
+    # loudness renormalised by ACTIVE count, not fixed
+    assert "ens_norm = 0.9 / sqrt(ens_act);" in code
+    # feedback re-enters the SAME saturated stage, capped safe (90 * .007)
+    assert "ens_mono = tanh((mono) * 0.6 + ens_fb * ens_fbamt);" in code
+    assert "clamp(fb, 0., 90.) * 0.007" in code
+    # shimmer exposes the fast rank amplitude; 100 = classic bbd_chorus
+    assert "mstosamps(0.9) * ens_dpt * clamp(sh, 0., 100.) * 0.01" in code
+    # the wet-only low cut: HP applied to ens_wl/ens_wr AFTER the pan sum
+    assert "wl = ens_wl - ens_hpl;" in code
+    assert "wr = ens_wr - ens_hpr;" in code
+    # centre tap is caller-set (4..25 ms), not the fixed 12
+    assert "mstosamps(clamp(c, 4., 25.))" in code

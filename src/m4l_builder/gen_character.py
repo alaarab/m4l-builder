@@ -33,6 +33,7 @@ __all__ = [
     "tape_hysteresis",
     "leslie_rotor",
     "bbd_chorus",
+    "bbd_ensemble",
     "deesser",
     "console_saturation",
     "crosstalk",
@@ -265,6 +266,98 @@ def bbd_chorus(
     )
     if sweep_out is not None:
         block += f"{sweep_out} = ({p}_p1 - {p}_base) * 1000. / samplerate;\n"
+    return block
+
+
+def bbd_ensemble(
+    mono: str, outl: str, outr: str, *, rate: str, depth: str, voices: str,
+    tone: str, detune: str, shimmer: str, center_ms: str, feedback: str,
+    spread: str, locut: str, prefix: str = "ens",
+    sweep_out: str | None = None,
+) -> str:
+    """True multi-voice BBD ensemble, 2..6 voices (the bbd_chorus superset).
+
+    One soft ``tanh`` BBD input stage (with ``feedback`` regeneration, capped
+    safe and re-saturated through the same stage) feeds one delay line read by
+    up to SIX voices. Each voice carries its OWN slow-rank phase accumulator
+    running at ``rate`` skewed by a fixed per-voice ratio scaled by ``detune``
+    (0..100 -> up to ~±17% rate variance: the non-periodic string-machine
+    wash), plus the shared fast shimmer rank (~9.7x ``rate``) whose amplitude
+    is ``shimmer`` (0..100; 100 = the classic bbd_chorus voicing). ``center_ms``
+    (4..25) is the BBD centre tap — short is metallic/flangey, long is wide
+    tape wobble. ``voices`` (2..6) gates voices in fixed order; loudness is
+    re-normalised per count. ``tone`` (2k..16k) is the per-voice BBD darkness
+    one-pole. Voices sit on a fixed pan layout scaled by ``spread`` (0..100;
+    0 = mono wet). ``locut`` (20..500 Hz) high-passes the WET only, keeping
+    the low end dry and mono. Caller does the dry/wet crossfade.
+    Set ``sweep_out`` to tap voice-1 sweep (ms). Self-contained state.
+    """
+    p = prefix
+    ks = (0.0, 0.21, -0.17, 0.34, -0.29, 0.12)      # per-voice rate skew
+    pans = (-1.0, 1.0, -0.55, 0.55, -0.2, 0.2)      # fixed stereo layout
+    head = (
+        f"Delay {p}_ens(9600);\n"
+        f"History {p}_phf(0.); History {p}_fb(0.);\n"
+        + "".join(f"History {p}_ph{i}(0.); History {p}_b{i}(0.);\n"
+                  for i in range(6))
+        + f"History {p}_hpl(0.); History {p}_hpr(0.);\n"
+        f"{p}_fbamt = clamp({feedback}, 0., 90.) * 0.007;\n"
+        f"{p}_mono = tanh(({mono}) * 0.6 + {p}_fb * {p}_fbamt);\n"
+        f"{p}_ens.write({p}_mono);\n"
+        f"{p}_r = clamp({rate}, 0.05, 8.);\n"
+        f"{p}_dt = clamp({detune}, 0., 100.) * 0.005;\n"
+        f"{p}_phf = wrap({p}_phf + {p}_r * 9.7 / samplerate, 0., 1.);\n"
+        f"{p}_dpt = clamp({depth}, 0., 100.) * 0.01;\n"
+        f"{p}_base = mstosamps(clamp({center_ms}, 4., 25.));\n"
+        f"{p}_sws = mstosamps(4.5) * {p}_dpt;\n"
+        f"{p}_swf = mstosamps(0.9) * {p}_dpt"
+        f" * clamp({shimmer}, 0., 100.) * 0.01;\n"
+        f"{p}_tk = 1.0 - exp(-{TWO_PI} * clamp({tone}, 2000., 16000.)"
+        f" / samplerate);\n"
+        f"{p}_spr = clamp({spread}, 0., 100.) * 0.01;\n"
+    )
+    voices_blk = ""
+    for i in range(6):
+        off = i / 6.0
+        voices_blk += (
+            f"{p}_ph{i} = wrap({p}_ph{i} + {p}_r * (1. + {ks[i]} * {p}_dt)"
+            f" / samplerate, 0., 1.);\n"
+            f"{p}_p{i} = {p}_base + {p}_sws * sin({TWO_PI} * ({p}_ph{i}"
+            f" + {off:.5f})) + {p}_swf * sin({TWO_PI} * ({p}_phf"
+            f" + {off:.5f}));\n"
+            + frac_read_cubic(f"{p}_ens", f"{p}_p{i}", f"{p}_v{i}")
+            + f"{p}_b{i} = {p}_b{i} + {p}_tk * ({p}_v{i} - {p}_b{i});\n"
+        )
+        if i >= 2:
+            voices_blk += f"{p}_g{i} = {voices} > {i + 0.5} ? 1. : 0.;\n"
+    mix_terms_l, mix_terms_r, act_terms = [], [], ["2."]
+    for i in range(6):
+        gate = "1." if i < 2 else f"{p}_g{i}"
+        if i >= 2:
+            act_terms.append(f"{p}_g{i}")
+        voices_blk += (
+            f"{p}_pn{i} = {pans[i]} * {p}_spr;\n"
+            f"{p}_gl{i} = cos(({p}_pn{i} + 1.) * 0.7853982);\n"
+            f"{p}_gr{i} = sin(({p}_pn{i} + 1.) * 0.7853982);\n"
+        )
+        mix_terms_l.append(f"{gate} * {p}_b{i} * {p}_gl{i}")
+        mix_terms_r.append(f"{gate} * {p}_b{i} * {p}_gr{i}")
+    tail = (
+        f"{p}_act = " + " + ".join(act_terms) + ";\n"
+        f"{p}_norm = 0.9 / sqrt({p}_act);\n"
+        f"{p}_wl = (" + " + ".join(mix_terms_l) + f") * {p}_norm;\n"
+        f"{p}_wr = (" + " + ".join(mix_terms_r) + f") * {p}_norm;\n"
+        f"{p}_fb = ({p}_wl + {p}_wr) * 0.5;\n"
+        f"{p}_hk = 1.0 - exp(-{TWO_PI} * clamp({locut}, 20., 500.)"
+        f" / samplerate);\n"
+        f"{p}_hpl = {p}_hpl + {p}_hk * ({p}_wl - {p}_hpl);\n"
+        f"{p}_hpr = {p}_hpr + {p}_hk * ({p}_wr - {p}_hpr);\n"
+        f"{outl} = {p}_wl - {p}_hpl;\n"
+        f"{outr} = {p}_wr - {p}_hpr;\n"
+    )
+    block = head + voices_blk + tail
+    if sweep_out is not None:
+        block += f"{sweep_out} = ({p}_p0 - {p}_base) * 1000. / samplerate;\n"
     return block
 
 
