@@ -115,11 +115,12 @@ def test_ms_width_matches_echotide_shipped_form():
 
 
 def test_stereo_correlation_matches_echotide_shipped_form():
-    # The snippet reproduces the exact inline form Echotide ships (out5 from out1/out2).
+    # Echotide's inline form, plus the fleet-standard fixdenorm flush on the
+    # three running-average states (they decay to subnormals on silence).
     assert stereo_correlation("out1", "out2", "out5") == (
-        "cc_lr = cc_lr + (out1 * out2 - cc_lr) * 0.002;\n"
-        "cc_ll = cc_ll + (out1 * out1 - cc_ll) * 0.002;\n"
-        "cc_rr = cc_rr + (out2 * out2 - cc_rr) * 0.002;\n"
+        "cc_lr = fixdenorm(cc_lr + (out1 * out2 - cc_lr) * 0.002);\n"
+        "cc_ll = fixdenorm(cc_ll + (out1 * out1 - cc_ll) * 0.002);\n"
+        "cc_rr = fixdenorm(cc_rr + (out2 * out2 - cc_rr) * 0.002);\n"
         "out5 = clamp(cc_lr / (sqrt(cc_ll * cc_rr) + 0.000001), -1., 1.);"
     )
 
