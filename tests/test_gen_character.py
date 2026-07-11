@@ -130,16 +130,25 @@ def test_bbd_ensemble_is_a_true_six_voice_superset():
     for i in range(6):
         assert f"History ens_ph{i}(0.)" in code
         assert f"ens_ph{i} = wrap(ens_ph{i} + ens_r * (1. + " in code
-    # voice gating for 3..6, never for the always-on pair
+    # voice gating for 3..6, never for the always-on pair. hunt #51: the
+    # gates FADE (~15 ms one-pole from a 0/1 target) instead of stepping —
+    # a Voices change used to click (instant voice + a discrete 1.66/sqrt
+    # normalization jump); the mix applies sqrt(gate) (equal-power) and act
+    # sums the SMOOTHED gates.
     for i in (2, 3, 4, 5):
-        assert f"ens_g{i} = v > {i + 0.5} ? 1. : 0.;" in code
+        assert f"ens_gt{i} = v > {i + 0.5} ? 1. : 0.;" in code
+        assert f"ens_g{i} = ens_g{i} + (ens_gt{i} - ens_g{i}) * ens_gvk;" in code
+        assert f"sqrt(ens_g{i}) * ens_b{i}" in code
     assert "ens_g0" not in code and "ens_g1" not in code
     # loudness renormalised by ACTIVE count, not fixed
     # wet makeup folded into the norm: the 0.6-gain tanh stage + stereo
     # fold left the wet ~5.5 dB under dry (insert ducked the level)
     assert "ens_norm = 1.66 / sqrt(ens_act);" in code
-    # inactive voices skip their WORK entirely (gated if, state holds)
-    assert "if (ens_g5 > 0.5) {" in code
+    # a fading voice keeps its WORK alive; only fully-faded voices skip
+    assert "if (ens_g5 > 0.001) {" in code
+    # hunt #27: base/sweep/pan control values are slewed (~25 ms, snap-on-init)
+    assert "ens_base_sm = ens_base_sm < 0. ? ens_base_t" in code
+    assert "ens_spr = ens_spr_sm;" in code
     # feedback re-enters the SAME saturated stage, capped safe (90 * .007)
     assert "ens_mono = tanh((mono) * 0.6 + ens_fb * ens_fbamt);" in code
     assert "clamp(fb, 0., 90.) * 0.007" in code

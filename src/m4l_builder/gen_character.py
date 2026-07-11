@@ -308,13 +308,40 @@ def bbd_ensemble(
         f"{p}_dt = clamp({detune}, 0., 100.) * 0.005;\n"
         f"{p}_phf = wrap({p}_phf + {p}_r * 9.7 / samplerate, 0., 1.);\n"
         f"{p}_dpt = clamp({depth}, 0., 100.) * 0.01;\n"
-        f"{p}_base = mstosamps(clamp({center_ms}, 4., 25.));\n"
-        f"{p}_sws = mstosamps(4.5) * {p}_dpt;\n"
-        f"{p}_swf = mstosamps(0.9) * {p}_dpt"
+        # hunt #27: base/sweep/pan control values are SLEWED (~25 ms one-pole,
+        # first-sample snap via the -1 sentinel so load lands exactly on the
+        # caller's defaults at any samplerate) — raw block-stepped Params
+        # zippered the delay-read position and pan gains on the hero depth
+        # drag and on CENTER/SPREAD automation.
+        + f"History {p}_base_sm(-1.); History {p}_sws_sm(-1.);\n"
+        f"History {p}_swf_sm(-1.); History {p}_spr_sm(-1.);\n"
+        f"{p}_slk = 1.0 - exp(-1.0 / (0.025 * samplerate));\n"
+        f"{p}_base_t = mstosamps(clamp({center_ms}, 4., 25.));\n"
+        f"{p}_base_sm = {p}_base_sm < 0. ? {p}_base_t"
+        f" : {p}_base_sm + ({p}_base_t - {p}_base_sm) * {p}_slk;\n"
+        f"{p}_sws_t = mstosamps(4.5) * {p}_dpt;\n"
+        f"{p}_sws_sm = {p}_sws_sm < 0. ? {p}_sws_t"
+        f" : {p}_sws_sm + ({p}_sws_t - {p}_sws_sm) * {p}_slk;\n"
+        f"{p}_swf_t = mstosamps(0.9) * {p}_dpt"
         f" * clamp({shimmer}, 0., 100.) * 0.01;\n"
+        f"{p}_swf_sm = {p}_swf_sm < 0. ? {p}_swf_t"
+        f" : {p}_swf_sm + ({p}_swf_t - {p}_swf_sm) * {p}_slk;\n"
+        f"{p}_base = {p}_base_sm;\n"
+        f"{p}_sws = {p}_sws_sm;\n"
+        f"{p}_swf = {p}_swf_sm;\n"
         f"{p}_tk = 1.0 - exp(-{TWO_PI} * clamp({tone}, 2000., 16000.)"
         f" / samplerate);\n"
-        f"{p}_spr = clamp({spread}, 0., 100.) * 0.01;\n"
+        f"{p}_spr_t = clamp({spread}, 0., 100.) * 0.01;\n"
+        f"{p}_spr_sm = {p}_spr_sm < 0. ? {p}_spr_t"
+        f" : {p}_spr_sm + ({p}_spr_t - {p}_spr_sm) * {p}_slk;\n"
+        f"{p}_spr = {p}_spr_sm;\n"
+        # hunt #51: voice gates FADE (~15 ms one-pole) instead of stepping 0/1
+        # — a Voices change used to click (instant new voice + a discrete
+        # 1.66/sqrt(act) normalization jump). Work runs whenever a voice is
+        # audibly fading (> 0.001), the hard skip only when fully faded out;
+        # act/normalization derive from the SMOOTHED gate sum, and the mix
+        # applies sqrt(gate) for an equal-power fade.
+        + f"{p}_gvk = 1.0 - exp(-1.0 / (0.015 * samplerate));\n"
     )
     voices_blk = ""
     for i in range(6):
@@ -331,14 +358,19 @@ def bbd_ensemble(
         if i >= 2:
             # gate the voice's WORK, not just its mix level: an inactive
             # voice skips its sweep + cubic read + tone pole entirely (its
-            # History state simply holds until re-enabled)
-            voices_blk += (f"{p}_g{i} = {voices} > {i + 0.5} ? 1. : 0.;\n"
-                           + f"if ({p}_g{i} > 0.5) {{\n" + body_i + "}\n")
+            # History state simply holds until re-enabled); the smoothed
+            # gate keeps the work alive through the whole fade
+            voices_blk += (
+                f"History {p}_g{i}(0.);\n"
+                f"{p}_gt{i} = {voices} > {i + 0.5} ? 1. : 0.;\n"
+                f"{p}_g{i} = {p}_g{i} + ({p}_gt{i} - {p}_g{i}) * {p}_gvk;\n"
+                f"{p}_g{i} = fixdenorm({p}_g{i});\n"
+                + f"if ({p}_g{i} > 0.001) {{\n" + body_i + "}\n")
         else:
             voices_blk += body_i
     mix_terms_l, mix_terms_r, act_terms = [], [], ["2."]
     for i in range(6):
-        gate = "1." if i < 2 else f"{p}_g{i}"
+        gate = "1." if i < 2 else f"sqrt({p}_g{i})"
         if i >= 2:
             act_terms.append(f"{p}_g{i}")
         voices_blk += (
