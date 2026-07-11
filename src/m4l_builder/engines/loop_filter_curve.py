@@ -78,7 +78,8 @@ def loop_filter_curve_js(
         reset_damp_pct = damp_pct
     if reset_tone_pct is None:
         reset_tone_pct = tone_pct
-    return _JS_TEMPLATE.substitute(
+    from .design_system import design_system_js
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         reset_damp_pct=reset_damp_pct,
         reset_tone_pct=reset_tone_pct,
         bg_color=bg_color,
@@ -288,9 +289,12 @@ function apply_drag(x, y) {
     mgraphics.redraw();
 }
 
-function start_drag(x, y) { if (!INTERACTIVE) return; dragging = 1; apply_drag(x, y); }
+// hunt #52: hover hand + grab cursors so the draggable curve reads as one
+function start_drag(x, y) { if (!INTERACTIVE) return; dragging = 1; ds_set_cursor(DS_CUR_GRAB); apply_drag(x, y); }
 function drag_to(x, y) { if (dragging) apply_drag(x, y); }
-function end_drag() { if (dragging) { dragging = 0; mgraphics.redraw(); } }
+function end_drag() { if (dragging) { dragging = 0; ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); } }
+function onidle(x, y) { if (INTERACTIVE) ds_set_cursor(DS_CUR_HAND); }
+function onidleout() { ds_set_cursor(DS_CUR_ARROW); }
 
 // Double-click resets DAMP + TONE to their defaults (consistency with the other
 // interactive displays). Emits on outlet 0 (no-echo).
