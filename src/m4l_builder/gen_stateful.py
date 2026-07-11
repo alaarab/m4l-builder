@@ -1105,8 +1105,8 @@ def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
         b = f"{p}_{name}"
         other = f"{p}_fb{'B' if name == 'A' else 'A'}"
         lines += [
-            f"Delay {b}_ap1(9600); Delay {b}_d1(19200); "
-            f"Delay {b}_ap2(9600); Delay {b}_d2(19200);",
+            f"Delay {b}_ap1(samplerate); Delay {b}_d1(samplerate); "
+            f"Delay {b}_ap2(samplerate); Delay {b}_d2(samplerate);",
             # branch input: diffused input + the OTHER branch's tail * decay
             f"{b}_in = {p}_diff + {other} * clamp({decay}, 0., 0.95);",
             # decay-diffusion allpass 1
