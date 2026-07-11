@@ -334,6 +334,7 @@ class Device(GraphContainer):
         overlay_patching_rect: list = None,
         overlay_behind: bool = False,
         overlay_bgcolor: list = None,
+        overlay_content_address: bool = False,
         varname: str = None,
         validate_contract: bool = True,
     ) -> tuple:
@@ -375,8 +376,9 @@ class Device(GraphContainer):
                 compiled box's presentation rect). ``scope_numinlets`` sets the
                 compiled box's inlet count — e.g. ``2`` for a ``scope~`` X-Y
                 goniometer fed ``signal_src=[(x, 0), (y, 0)]``.
-            overlay_js, overlay_filename: the v8ui's code + cached filename (bump
-                the filename on any JS change — Max caches by name).
+            overlay_js, overlay_filename: the v8ui's code + cached filename.
+                Pass ``overlay_content_address=True`` to fold a content hash
+                into the filename (auto cache-bust; retires manual ``_vN`` bumps).
             inset: ``(left, top, right, bottom)`` px to shrink the compiled rect
                 inside the overlay so the C++ fill aligns with the overlay's plot.
             overlay_behind: put the v8ui BEHIND the compiled object (for ``scope~``).
@@ -409,6 +411,7 @@ class Device(GraphContainer):
                 rect,
                 js_code=overlay_js,
                 js_filename=overlay_filename,
+                content_address=overlay_content_address,
                 numinlets=overlay_inlets,
                 numoutlets=overlay_outlets,
                 outlettype=overlay_outlettype if overlay_outlettype is not None else [""] * overlay_outlets,
