@@ -344,7 +344,7 @@ def bbd_ensemble(
         mix_terms_r.append(f"{gate} * {p}_b{i} * {p}_gr{i}")
     tail = (
         f"{p}_act = " + " + ".join(act_terms) + ";\n"
-        f"{p}_norm = 0.9 / sqrt({p}_act);\n"
+        f"{p}_norm = 1.66 / sqrt({p}_act);\n"
         f"{p}_wl = (" + " + ".join(mix_terms_l) + f") * {p}_norm;\n"
         f"{p}_wr = (" + " + ".join(mix_terms_r) + f") * {p}_norm;\n"
         f"{p}_fb = ({p}_wl + {p}_wr) * 0.5;\n"
