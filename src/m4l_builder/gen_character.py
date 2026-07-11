@@ -256,9 +256,9 @@ def bbd_chorus(
         + frac_read_cubic(f"{p}_ens", f"{p}_p2", f"{p}_v2")
         + frac_read_cubic(f"{p}_ens", f"{p}_p3", f"{p}_v3")
         + f"{p}_tk = 1.0 - exp(-{TWO_PI} * clamp({tone}, 2000., 16000.) / samplerate);\n"
-        f"{p}_b1 = {p}_b1 + {p}_tk * ({p}_v1 - {p}_b1);\n"
-        f"{p}_b2 = {p}_b2 + {p}_tk * ({p}_v2 - {p}_b2);\n"
-        f"{p}_b3 = {p}_b3 + {p}_tk * ({p}_v3 - {p}_b3);\n"
+        f"{p}_b1 = fixdenorm({p}_b1 + {p}_tk * ({p}_v1 - {p}_b1));\n"
+        f"{p}_b2 = fixdenorm({p}_b2 + {p}_tk * ({p}_v2 - {p}_b2));\n"
+        f"{p}_b3 = fixdenorm({p}_b3 + {p}_tk * ({p}_v3 - {p}_b3));\n"
         f"{p}_g2 = {voices} > 2.5 ? 1. : 0.;\n"
         f"{p}_norm = 0.85 / (1. + 0.5 * {p}_g2);\n"
         f"{outl} = ({p}_b1 + 0.5 * {p}_g2 * {p}_b2) * {p}_norm;\n"
@@ -326,7 +326,7 @@ def bbd_ensemble(
             f" + {off:.5f})) + {p}_swf * sin({TWO_PI} * ({p}_phf"
             f" + {off:.5f}));\n"
             + frac_read_cubic(f"{p}_ens", f"{p}_p{i}", f"{p}_v{i}")
-            + f"{p}_b{i} = {p}_b{i} + {p}_tk * ({p}_v{i} - {p}_b{i});\n"
+            + f"{p}_b{i} = fixdenorm({p}_b{i} + {p}_tk * ({p}_v{i} - {p}_b{i}));\n"
         )
         if i >= 2:
             # gate the voice's WORK, not just its mix level: an inactive
@@ -353,11 +353,11 @@ def bbd_ensemble(
         f"{p}_norm = 1.66 / sqrt({p}_act);\n"
         f"{p}_wl = (" + " + ".join(mix_terms_l) + f") * {p}_norm;\n"
         f"{p}_wr = (" + " + ".join(mix_terms_r) + f") * {p}_norm;\n"
-        f"{p}_fb = ({p}_wl + {p}_wr) * 0.5;\n"
+        f"{p}_fb = fixdenorm(({p}_wl + {p}_wr) * 0.5);\n"
         f"{p}_hk = 1.0 - exp(-{TWO_PI} * clamp({locut}, 20., 500.)"
         f" / samplerate);\n"
-        f"{p}_hpl = {p}_hpl + {p}_hk * ({p}_wl - {p}_hpl);\n"
-        f"{p}_hpr = {p}_hpr + {p}_hk * ({p}_wr - {p}_hpr);\n"
+        f"{p}_hpl = fixdenorm({p}_hpl + {p}_hk * ({p}_wl - {p}_hpl));\n"
+        f"{p}_hpr = fixdenorm({p}_hpr + {p}_hk * ({p}_wr - {p}_hpr));\n"
         f"{outl} = {p}_wl - {p}_hpl;\n"
         f"{outr} = {p}_wr - {p}_hpr;\n"
     )
