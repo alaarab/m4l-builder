@@ -2050,7 +2050,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
         textcolor=tx, bgcolor=[0.0, 0.0, 0.0, 0.0], border=0, rounded=0,
         textjustification=0, ignoreclick=1))
     # 0..100 ranges so unitstyle=5 reads "100 %" like the stock modulators
-    # (consumers scale by 0.01 — poly_lfo_engine does it inside gen)
+    # (consumers scale by 0.01 — poly_mod_engine does it inside gen)
     for nid, pname, nx, nw, init in (("slot_depth", "#1 Depth", DEP_X, 32, 100.0),
                                      ("slot_umin", "#1 Min", MIN_X, 28, 0.0),
                                      ("slot_umax", "#1 Max", MAX_X, 28, 100.0)):
