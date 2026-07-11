@@ -1910,12 +1910,19 @@ class TestW5cFilesSpawner:
         # palette chips are NON-param textbuttons; messages carry full names
         assert boxes["dp_b0"]["maxclass"] == "textbutton"
         assert boxes["dp_m1"]["text"] == "spawn EQ Eight"
-        # the load-time name registration chains every addname in ONE message
-        assert boxes["dp_names"]["text"] == "addname Reverb, addname EQ Eight"
+        # load-time name registration: one addname message PER name, fired by
+        # a trigger (comma-chained authored message text does not survive load)
+        assert boxes["dp_n0"]["text"] == "addname Reverb"
+        assert boxes["dp_n1"]["text"] == "addname EQ Eight"
+        assert boxes["dp_nt"]["text"] == "t b b"
+        # chips carry Info View annotations
+        assert boxes["dp_b0"]["annotation_name"] == "Reverb"
+        assert "Insert Live's native Reverb" in boxes["dp_b0"]["annotation"]
         lines = {(ln["patchline"]["source"][0],
                   ln["patchline"]["destination"][0]) for ln in d.lines}
         assert ("dp_b0", "dp_m0") in lines and ("dp_m0", "dp_js") in lines
-        assert ("dp_td", "dp_names") in lines
+        assert ("dp_td", "dp_nt") in lines
+        assert ("dp_nt", "dp_n0") in lines and ("dp_n0", "dp_js") in lines
         assert ("dp_js", "dp_status") in lines
         assert {"ctl_in", "status_out"} <= set(res.ports)
         js = [a for a in d.assets()
