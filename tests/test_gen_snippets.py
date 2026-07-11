@@ -1800,3 +1800,97 @@ class TestT40Macros:
         sustain_zone = max(out[-480:])                # deep into sustain
         assert attack_zone > 0.3
         assert sustain_zone < 0.05
+
+
+# --- Improvement-hunt W-K: cached coeffs, exciter odd ADAA, plate excursion --
+
+
+class TestHuntWK:
+    def test_exp_pole_cached_gates_the_same_formula(self):
+        from m4l_builder.gen_snippets import exp_pole, exp_pole_cached
+        plain = exp_pole("rel", "0.8")
+        cached = exp_pole_cached("rel", "0.8")
+        # the exact formula the plain emitter uses sits inside the gate,
+        # latched into a History; every other sample reads the cache
+        assert "exp(-1.0 / (0.8 * samplerate))" in plain
+        assert "rel_c = exp(-1.0 / (0.8 * samplerate));" in cached
+        assert "rel_chg = change(samplerate);" in cached
+        assert "History rel_c(0.);" in cached
+        assert cached.rstrip().endswith("rel = rel_c;")
+
+    def test_exp_pole_cached_watches_param_deps(self):
+        from m4l_builder.gen_snippets import exp_pole_cached
+        code = exp_pole_cached("atk", "atk_ms * 0.001", deps=("atk_ms",))
+        assert "atk_chg = change(samplerate) + change(atk_ms);" in code
+
+    def test_one_pole_coeff_cached_gates_the_same_formula(self):
+        from m4l_builder.gen_snippets import one_pole_coeff, one_pole_coeff_cached
+        plain = one_pole_coeff("hc", "cut_hz")
+        cached = one_pole_coeff_cached("hc", "cut_hz", deps=("cut_hz",))
+        assert "1.0 - exp(-6.28318530717959 * cut_hz / samplerate)" in plain
+        assert "hc_c = 1.0 - exp(-6.28318530717959 * cut_hz / samplerate);" in cached
+        assert "hc_chg = change(samplerate) + change(cut_hz);" in cached
+
+    def test_kweight_cached_wraps_the_verbatim_block(self):
+        from m4l_builder.gen_snippets import kweight_coeffs_bs1770, kweight_coeffs_bs1770_cached
+        plain = kweight_coeffs_bs1770()
+        cached = kweight_coeffs_bs1770_cached()
+        # every audited line of the uncached block appears (indented) in the
+        # gate, all 10 coefficients latch into Histories and alias back out
+        for ln in plain.splitlines():
+            assert ln.strip() in cached
+        for n in ("sb0", "sb1", "sb2", "sa1", "sa2",
+                  "hb0", "hb1", "hb2", "ha1", "ha2"):
+            assert f"History kwc_{n}(0.);" in cached
+            assert f"kwc_{n} = {n};" in cached
+            assert f"{n} = kwc_{n};" in cached
+        assert "kwc_chg = change(samplerate);" in cached
+
+    def test_exciter_harmonics_default_is_unchanged(self):
+        from m4l_builder.gen_snippets import exciter_harmonics
+        assert exciter_harmonics("b", "k", "e", "h") == (
+            "hx_odd = tanh(b * k) / tanh(k);\n"
+            "hx_sq = b * b;\n"
+            "h = (hx_odd - b) + e * hx_sq;"
+        )
+
+    def test_exciter_harmonics_odd_state_routes_tanh_adaa(self):
+        from m4l_builder.gen_snippets import exciter_harmonics
+        code = exciter_harmonics("hp_l", "khi", "even", "hh_l",
+                                 odd="hodd_l", sq="hsq_l",
+                                 sq_state="hsq_st_l", odd_state="hodd_st_l")
+        # ADAA drive + antiderivative + the same /tanh(k) level match; scratch
+        # names derive from the odd name so L/R calls in one codebox coexist
+        assert "hodd_l_drv = hp_l * khi;" in code
+        assert "hodd_st_l = hodd_l_drv;" in code           # xprev state update
+        assert "hodd_l = hodd_l_raw / tanh(khi);" in code
+        assert "hodd_l_ax = abs(hodd_l_drv);" in code
+        assert "tanh(hp_l * khi)" not in code              # naive tanh replaced
+
+    def test_exciter_harmonics_odd_adaa_matches_naive_for_slow_signals(self):
+        # for a CONSTANT band value the ADAA mean-of-tanh equals tanh exactly
+        # (after the first sample primes xprev), so the odd path is level-true
+        import math as _m
+
+        from m4l_builder.gen_sim import simulate
+        from m4l_builder.gen_snippets import exciter_harmonics
+        code = ("Param k(4.);\nParam even(0.);\nHistory ost(0.);\n"
+                + exciter_harmonics("in1", "k", "even", "hx",
+                                    odd_state="ost")
+                + "\nout1 = hx;")
+        band = 0.5
+        r = simulate(code, {"in1": [band] * 8}, num_samples=8)
+        expect = _m.tanh(band * 4.0) / _m.tanh(4.0) - band
+        assert abs(r["out1"][-1] - expect) < 1e-9
+
+    def test_dattorro_tank_has_the_1997_excursion(self):
+        from m4l_builder.gen_stateful import dattorro_plate_tank
+        code = dattorro_plate_tank("in1", "out1", "out2")
+        # both branches wobble their FIRST decay-diffusion allpass read by a
+        # paper-scale +/-0.5376 ms (16 samples @ 29.761 kHz) at ~1 Hz, which
+        # forces linear interp on that read; all other tank reads stay "none"
+        assert 'plate_A_exc = mstosamps(0.5376) * sin(6.2831853 * phasor(1));' in code
+        assert 'plate_B_exc = mstosamps(0.5376) * sin(6.2831853 * phasor(0.87));' in code
+        assert ('plate_A_z1 = plate_A_ap1.read(mstosamps(22.58) + plate_A_exc, '
+                'interp="linear");') in code
+        assert 'plate_A_t1 = plate_A_d1.read(mstosamps(149.62), interp="none");' in code

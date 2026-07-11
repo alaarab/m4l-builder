@@ -328,22 +328,31 @@ def lookahead_envelope_follower(id_prefix: str, lookahead_ms: float = 5) -> tupl
 
 
 def bitcrusher(id_prefix: str, bits: int = 8,
-               rate_reduction: int = 1) -> tuple:
+               rate_ratio: float = 1.0) -> tuple:
     """Bit depth and sample rate reduction.
 
-    Uses degrade~ for combined bit/rate reduction: inlet 1 = sr factor,
-    inlet 2 = bit depth.
+    Uses degrade~ for combined bit/rate reduction: inlet 1 is a 0..1
+    SAMPLING-RATE RATIO — ``1.0`` = full rate (no reduction), LOWER =
+    more decimation (``0.5`` = half rate). Inlet 2 = bit depth.
+
+    Direction verified against Cycling '74's factory "Max Degrader"
+    (its Resamp% dial passes through ``/ 100.`` into inlet 1, i.e.
+    0.01..1.0). The old ``rate_reduction >= 1`` model was BACKWARDS:
+    every value >= 1 leaves the sample rate untouched, so "SR grit"
+    controls scaled 1..N were silently inert (improvement-hunt #39/#49).
 
     Wire audio into {prefix}_degrade inlet 0.
     Output from {prefix}_degrade outlet 0.
     """
     if bits < 1 or bits > 32:
         raise ValueError(f"bitcrusher bits must be 1-32, got {bits}")
-    if rate_reduction < 1:
-        raise ValueError(f"bitcrusher rate_reduction must be >= 1, got {rate_reduction}")
+    if not 0.0 < rate_ratio <= 1.0:
+        raise ValueError(
+            f"bitcrusher rate_ratio must be in (0, 1] — degrade~ inlet 1 is a "
+            f"sampling-rate RATIO (1.0 = no reduction), got {rate_ratio}")
     p = id_prefix
     boxes = [
-        newobj(f"{p}_degrade", f"degrade~ {rate_reduction} {bits}",
+        newobj(f"{p}_degrade", f"degrade~ {rate_ratio:g} {bits}",
                numinlets=3, numoutlets=1, outlettype=["signal"],
                patching_rect=[30, 120, 120, 20]),
     ]

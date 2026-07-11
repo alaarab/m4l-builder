@@ -1055,9 +1055,9 @@ def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
     lines = [head.rstrip()]
     lines.append(f"History {p}_lpA(0.); History {p}_lpB(0.); "
                  f"History {p}_fbA(0.); History {p}_fbB(0.);")
-    for name, ap1_t, ap1_g, d1_t, ap2_t, ap2_g, d2_t in (
-            ("A", 22.58, 0.70, 149.62, 60.48, 0.50, 124.99),
-            ("B", 30.51, 0.70, 141.69, 89.24, 0.50, 106.28)):
+    for name, ap1_t, ap1_g, d1_t, ap2_t, ap2_g, d2_t, exc_hz in (
+            ("A", 22.58, 0.70, 149.62, 60.48, 0.50, 124.99, 1.0),
+            ("B", 30.51, 0.70, 141.69, 89.24, 0.50, 106.28, 0.87)):
         b = f"{p}_{name}"
         other = f"{p}_fb{'B' if name == 'A' else 'A'}"
         lines += [
@@ -1065,8 +1065,14 @@ def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
             f"Delay {b}_ap2(samplerate); Delay {b}_d2(samplerate);",
             # branch input: diffused input + the OTHER branch's tail * decay
             f"{b}_in = {p}_diff + {other} * clamp({decay}, 0., 0.95);",
-            # decay-diffusion allpass 1
-            f"{b}_z1 = {b}_ap1.read(mstosamps({ap1_t:g}), interp=\"none\");",
+            # decay-diffusion allpass 1, with the paper's EXCURSION: a slow
+            # ~1 Hz LFO wobbles this read by ±16 samples @ 29.761 kHz
+            # (= ±0.5376 ms, samplerate-scaled) — the Dattorro-1997 detail
+            # that breaks the static tank's metallic ring (hunt #64). The
+            # wobble forces a fractional tap -> interp="linear" on this read.
+            f"{b}_exc = mstosamps(0.5376) * sin(6.2831853 * phasor({exc_hz:g}));",
+            f"{b}_z1 = {b}_ap1.read(mstosamps({ap1_t:g}) + {b}_exc, "
+            f"interp=\"linear\");",
             f"{b}_y1 = -{ap1_g:g} * {b}_in + {b}_z1;",
             f"{b}_ap1.write(fixdenorm({b}_in + {ap1_g:g} * {b}_y1));",
             # long delay 1 -> damping one-pole
