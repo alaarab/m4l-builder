@@ -132,14 +132,12 @@ from m4l_builder.engines.wavetable_editor import (
     wavetable_editor_js,
 )
 from m4l_builder.engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS, xy_pad_js
-from m4l_builder.jsui_contract import find_jsui_contract_issues
+from m4l_builder.jsui_contract import find_jsui_contract_issues, find_v8ui_contract_issues
 
 ALL_JSUI_FACTORIES = [
     crossover_display_js,
     filter_curve_js,
     eq_band_column_js,
-    eq_curve_js,
-    linear_phase_eq_display_js,
     spectrum_analyzer_js,
     envelope_display_js,
     envelope_editor_js,
@@ -161,13 +159,6 @@ ALL_JSUI_FACTORIES = [
     spectral_vocoder_display_js,
     slice_overview_js,
     slice_pattern_display_js,
-    transfer_curve_js,
-    ballistics_curve_js,
-    level_history_js,
-    delay_trail_js,
-    loop_filter_curve_js,
-    waveshape_curve_js,
-    level_meter_js,
     lambda: icon_overlay_js("expand"),
     lambda: icon_overlay_js("collapse"),
     lambda: energy_history_js([
@@ -230,6 +221,27 @@ function paint() {}
 def test_all_engine_outputs_follow_shared_jsui_contract(factory):
     assert find_jsui_contract_issues(factory()) == []
 
+# POINTER-EVENT engines: hosted in v8ui boxes in every shipping device
+# (verified per-device) — pointer handlers never fire in a classic jsui,
+# so these are held to the v8ui contract and must NEVER be add_jsui'd.
+V8UI_FACTORIES = [
+    eq_curve_js,
+    linear_phase_eq_display_js,
+    transfer_curve_js,
+    ballistics_curve_js,
+    level_history_js,
+    delay_trail_js,
+    loop_filter_curve_js,
+    waveshape_curve_js,
+    level_meter_js,
+]
+
+
+@pytest.mark.parametrize("factory", V8UI_FACTORIES)
+def test_pointer_engines_follow_v8ui_contract(factory):
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues as v8
+    assert v8(factory()) == []
+
 
 def test_exciter_curve_reflects_delta_listen_state():
     # set_listen <0-3> draws a DELTA ALL/HIGH/LOW badge so the hero shows which
@@ -240,7 +252,7 @@ def test_exciter_curve_reflects_delta_listen_state():
     assert "listen = clamp(Math.round(v), 0, 3)" in js
     for badge in ("DELTA ALL", "DELTA HIGH", "DELTA LOW"):
         assert badge in js
-    assert find_jsui_contract_issues(js) == []
+    assert find_v8ui_contract_issues(js) == []
 
 
 def test_exciter_curve_draws_live_fft_spectrum():
@@ -261,7 +273,9 @@ def test_exciter_curve_draws_live_fft_spectrum():
     # custom fill/line colors are substitutable (kept dim by default).
     js2 = exciter_curve_js(spec_line_color="1.0, 0.0, 0.0, 1.0")
     assert "var SPEC_LINE_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
-    assert find_jsui_contract_issues(js) == []
+    # exciter_curve is a POINTER-EVENT engine hosted in a v8ui (Sheen) —
+    # hold it to the v8ui contract, not the classic-jsui one.
+    assert find_v8ui_contract_issues(js) == []
 
 
 class TestCrossoverDisplayEngine:
@@ -1516,7 +1530,7 @@ class TestFftAnalyzer:
         from m4l_builder.engines.fft_analyzer import fft_analyzer_dsp
 
         device = AudioEffect("FFT Test", width=200, height=120, theme=MIDNIGHT)
-        device.add_jsui("graph", [0, 0, 100, 100], js_code=eq_curve_js(),
+        device.add_v8ui("graph", [0, 0, 100, 100], js_code=eq_curve_js(),
                         numinlets=EQ_CURVE_INLETS, numoutlets=0)
         device.add_newobj("src", "plugin~", numinlets=1, numoutlets=2,
                           outlettype=["signal", "signal"])
@@ -1938,7 +1952,7 @@ class TestDeviceJsuiIntegration:
     def test_build_with_eq_engine_code(self):
         """Build a device using actual EQ curve engine code."""
         d = AudioEffect("Test EQ", 400, 200)
-        d.add_jsui("eq", [10, 10, 300, 120],
+        d.add_v8ui("eq", [10, 10, 300, 120],
                    js_code=eq_curve_js(), numinlets=3, numoutlets=4)
         with tempfile.TemporaryDirectory() as tmpdir:
             amxd_path = os.path.join(tmpdir, "TestEQ.amxd")
@@ -1953,7 +1967,7 @@ class TestDeviceJsuiIntegration:
 
     def test_spectrum_dsp_can_target_nonzero_inlet(self):
         d = AudioEffect("Test EQ", 400, 200)
-        d.add_jsui("eq", [10, 10, 300, 120],
+        d.add_v8ui("eq", [10, 10, 300, 120],
                    js_code=eq_curve_js(), numinlets=3, numoutlets=4)
         spectrum_analyzer_dsp(
             d,
@@ -1979,7 +1993,10 @@ class TestDeviceJsuiIntegration:
 
     def test_spectrum_dsp_supports_custom_resolution(self):
         d = AudioEffect("Test EQ", 400, 200)
-        d.add_jsui("eq", [10, 10, 300, 120],
+        # eq_curve is a POINTER-EVENT engine: real devices host it in a v8ui
+        # (parametric_eq et al) — a classic jsui would never deliver its
+        # onpointer* gestures, and the jsui contract now rejects that combo.
+        d.add_v8ui("eq", [10, 10, 300, 120],
                    js_code=eq_curve_js(), numinlets=3, numoutlets=4)
         spectrum_analyzer_dsp(
             d,
@@ -3391,3 +3408,30 @@ class TestLiveDropBlobParam:
         box = live_drop("d", [0, 0, 100, 30])["box"]
         assert "parameter_enable" not in box
         assert "saved_attribute_attributes" not in box
+
+
+def test_jsui_contract_rejects_v8ui_pointer_events():
+    # v8ui pointer handlers never fire inside a classic jsui — a control
+    # wired to onpointerdown ships looking fine and ignores every click
+    # (the settings_bar dead-opener bug). The contract flags all three.
+    from m4l_builder.jsui_contract import find_jsui_contract_issues
+    base = ("mgraphics.init();\nmgraphics.relative_coords = 0;\n"
+            "mgraphics.autofill = 0;\nfunction paint() {}\n"
+            "function msg_int(v) { mgraphics.redraw(); }\n")
+    for handler in ("onpointerdown", "onpointerup", "onpointermove"):
+        bad = base + "function " + handler + "(pe) {}\n"
+        issues = find_jsui_contract_issues(bad)
+        assert any("pointer" in i for i in issues), handler
+    assert find_jsui_contract_issues(base + "function onclick(x, y) {}\n") == []
+
+
+def test_settings_bar_click_toggles_and_reports():
+    # Functional proof of the opener: onclick flips the state and emits it
+    # from outlet 0 (the parked-param drive). Runs the REAL bar js in the
+    # Node harness — the layer the dead-opener bug lived in.
+    from m4l_builder.engines.settings_bar import settings_bar_js
+    from tests.js_harness import run_jsui
+    driver = "onclick(5, 5);\nonclick(5, 5);\nonclick(5, 5);\n"
+    res = run_jsui(settings_bar_js(accent=(1, 0.5, 0.2, 1)), driver,
+                   size=(18, 168))
+    assert res.outlets == [[0, 1], [0, 0], [0, 1]]

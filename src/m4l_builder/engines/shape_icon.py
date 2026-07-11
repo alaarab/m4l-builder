@@ -136,13 +136,13 @@ function msg_float(v) { msg_int(Math.round(v)); }
 function list() { msg_int(Math.round(arguments[0])); }
 
 // click cycles to the next shape -> out to the parked menu (which sets the param)
-function onpointerdown() { idx = (idx + 1) %% NCOUNT; outlet(0, idx); mgraphics.redraw(); }
+function onclick(x, y) { idx = (idx + 1) %% NCOUNT; outlet(0, idx); mgraphics.redraw(); }
 function bang() { mgraphics.redraw(); }
 """
 
 
 def shape_icon_js(*, shapes, accent=(0.72, 0.38, 0.95, 1.0)) -> str:
-    """Return v8ui JS for a clickable shape glyph over ``shapes`` (enum order).
+    """Return classic-jsui JS for a clickable shape glyph over ``shapes`` (enum order).
 
     Each name in ``shapes`` must be one of :data:`GLYPHS`. Pair with a parked
     ``live.menu`` of the same enum: menu outlet -> icon inlet (display),

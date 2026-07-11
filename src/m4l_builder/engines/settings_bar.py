@@ -1,4 +1,4 @@
-"""settings_bar — the dnksaus_Rnd_Gen LEFT sidebar opener (v8ui).
+"""settings_bar — the dnksaus_Rnd_Gen LEFT sidebar opener (classic jsui).
 
 A thin vertical bar that lives on the device's left edge and holds the
 collapsible-settings DROPDOWN affordance: a drawn accent triangle at the top
@@ -68,8 +68,11 @@ function list() { msg_int(Math.round(arguments[0])); }
 function bang() { mgraphics.redraw(); }
 
 // click anywhere on the bar toggles -> out to the parked param (which fires
-// the reflow + setwidth and echoes back here to set the arrow direction)
-function onpointerdown() {
+// the reflow + setwidth and echoes back here to set the arrow direction).
+// NB: this box is a CLASSIC jsui — its mouse event is onclick(x, y, ...);
+// v8ui pointer events NEVER fire here (shipped that way once: every
+// sidebar opener was silently dead to the mouse while param-driven QA passed).
+function onclick(x, y) {
     isopen = isopen ? 0 : 1;
     outlet(0, isopen);
     mgraphics.redraw();
@@ -79,7 +82,7 @@ function onpointerdown() {
 
 def settings_bar_js(*, accent=(0.72, 0.38, 0.95, 1.0),
                     label: str = "SETTINGS") -> str:
-    """Return v8ui JS for the left-edge settings-dropdown bar.
+    """Return classic-jsui JS for the left-edge settings-dropdown bar.
 
     Pair with a parked ``live.text`` enum param (``[Closed, Open]``): param
     outlet -> bar inlet 0 (arrow display sync), bar outlet 0 -> param inlet
