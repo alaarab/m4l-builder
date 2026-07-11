@@ -4625,37 +4625,73 @@ function policyidx(v) { policy = Math.max(0, Math.min(2, v | 0)); }
 
 function dupesflag(v) { dupes = v ? 1 : 0; }
 
-function selectedDeviceIndex() {
+/* hunt #13 (rack-aware): the selected device's path inside an Audio Effect
+   Rack ends in a CHAIN-relative segment (... devices N chains K devices M).
+   The old bare-index regex returned M and drove delete_device/insert_device
+   on the TOP-LEVEL track, so Remove deleted a DIFFERENT device (data loss)
+   and Left/Right mis-placed. selectedDeviceRef() returns the device's REAL
+   container path + index; Remove deletes from that container, Left/Right
+   insert into it (chain inserts fall back to end-of-track with an honest
+   status if the LOM refuses). */
+function selectedDeviceRef() {
     var dev = new LiveAPI(null, "live_set view selected_track view selected_device");
-    if (!dev || dev.id == 0) return -1;
-    var m = ("" + dev.path).replace(/"/g, "").match(/devices (\\d+)$/);
-    return m ? parseInt(m[1], 10) : -1;
+    if (!dev || dev.id == 0) return null;
+    var path = ("" + dev.path).replace(/"/g, "");
+    var m = path.match(/^(.*) devices (\\d+)$/);
+    if (!m) return null;
+    return { container: m[1], index: parseInt(m[2], 10),
+             nested: / chains \\d+$/.test(m[1]) };
+}
+
+function classOnContainer(apiPath, name) {
+    var c = new LiveAPI(null, apiPath);
+    if (!c || c.id == 0) return false;
+    var n = parseInt(c.getcount("devices"), 10) || 0;
+    for (var i = 0; i < n; i++) {
+        var d = new LiveAPI(null, apiPath + " devices " + i);
+        var cls = ("" + d.get("class_display_name")).replace(/"/g, "");
+        if (cls === name) return true;
+        /* rack devices: walk every chain so DUP sees nested copies too */
+        var cn = parseInt(d.getcount("chains"), 10) || 0;
+        for (var k = 0; k < cn; k++) {
+            if (classOnContainer(apiPath + " devices " + i + " chains " + k,
+                                 name)) return true;
+        }
+    }
+    return false;
 }
 
 function onTrack(track, name) {
-    var n = parseInt(track.getcount("devices"), 10) || 0;
-    for (var i = 0; i < n; i++) {
-        var d = new LiveAPI(null,
-            "live_set view selected_track devices " + i);
-        var cls = ("" + d.get("class_display_name")).replace(/"/g, "");
-        if (cls === name) return true;
-    }
-    return false;
+    return classOnContainer("live_set view selected_track", name);
 }
 
 function doSpawn(name) {
     var track = new LiveAPI(null, "live_set view selected_track");
     if (!track || track.id == 0) { status("no track"); return; }
     if (!dupes && onTrack(track, name)) { status(name + " already here"); return; }
-    var idx = -1;
-    if (policy !== 2) {
-        var sel = selectedDeviceIndex();
-        if (sel >= 0) idx = sel + (policy === 1 ? 1 : 0);
+    var ref = (policy !== 2) ? selectedDeviceRef() : null;
+    if (ref && ref.index >= 0) {
+        var idx = ref.index + (policy === 1 ? 1 : 0);
+        if (ref.nested) {
+            /* chain-relative insert next to the nested selection */
+            try {
+                var chain = new LiveAPI(null, ref.container);
+                chain.call("insert_device", name, idx);
+                status("+ " + name);
+                return;
+            } catch (e) { /* chain refused - fall through to track-last */ }
+            try { track.call("insert_device", name); }
+            catch (e2) { status("failed: " + name); return; }
+            status("+ " + name + " (rack: placed last)");
+            return;
+        }
+        try { track.call("insert_device", name, idx); }
+        catch (e3) { status("failed: " + name); return; }
+        status("+ " + name);
+        return;
     }
-    try {
-        if (idx >= 0) track.call("insert_device", name, idx);
-        else track.call("insert_device", name);
-    } catch (e) { status("failed: " + name); return; }
+    try { track.call("insert_device", name); }
+    catch (e4) { status("failed: " + name); return; }
     status("+ " + name);
 }
 
@@ -4672,10 +4708,13 @@ function spawnrandom() {
 }
 
 function removedevice() {
-    var sel = selectedDeviceIndex();
-    if (sel < 0) { status("none selected"); return; }
-    var track = new LiveAPI(null, "live_set view selected_track");
-    try { track.call("delete_device", sel); status("removed"); }
+    var ref = selectedDeviceRef();
+    if (!ref || ref.index < 0) { status("none selected"); return; }
+    /* delete from the device's REAL container (track OR rack chain) - the
+       old top-level delete_device with a chain-relative index destroyed a
+       different device entirely */
+    var container = new LiveAPI(null, ref.container);
+    try { container.call("delete_device", ref.index); status("removed"); }
     catch (e) { status("remove failed"); }
 }
 
