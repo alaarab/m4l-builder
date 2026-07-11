@@ -346,7 +346,12 @@ GRANULAR_VOICE_FN = """granular_vp(maxVoice, buf_win, data_param, delaySigR, del
 					if (i % 2 == 1) {
 						output = peek(data_freeze, p + (pCout * (1 + peek(data_param, i, 3))), 0) * winVal;
 					} else {
-						output = -peek(data_freeze, p + (pCout * (1 + peek(data_param, i, 3))), 1) * winVal;
+						// hunt #59: even grains read POSITIVE — the old hard-invert made
+						// overlapping opposite-polarity grains partially cancel in a MONO
+						// fold at every width (ch4+ch5 == 2 for any spread), comb-colouring
+						// tonal mono sources; stereo scatter already comes from the even/odd
+						// L/R source split + the random per-grain ch4/ch5 gains.
+						output = peek(data_freeze, p + (pCout * (1 + peek(data_param, i, 3))), 1) * winVal;
 					}
 					outR += output * peek(data_param, i, 4);
 					outL += output * peek(data_param, i, 5);
@@ -371,7 +376,8 @@ GRANULAR_VOICE_FN = """granular_vp(maxVoice, buf_win, data_param, delaySigR, del
 					if (i % 2 == 1) {
 						output = delaySigR.read(p - pCout * peek(data_param, i, 3)) * winVal;
 					} else {
-						output = -delaySigL.read(p - pCout * peek(data_param, i, 3)) * winVal;
+						// hunt #59: positive read (see the freeze branch above)
+						output = delaySigL.read(p - pCout * peek(data_param, i, 3)) * winVal;
 					}
 					outR += output * peek(data_param, i, 4);
 					outL += output * peek(data_param, i, 5);

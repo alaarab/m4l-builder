@@ -2165,6 +2165,29 @@ def modulator_slot_component(device, *, accent, text_color=None,
         "numoutlets": 1, "outlettype": [""],
         "patching_rect": [240, 340, 25, 25],
         "comment": "modulate signal (0..1 relative)"}})
+    # ---- lane enable release (hunt #61) --------------------------------------
+    # `enable 0|1` from the parent (the lane On toggle): OFF routes `id 0`
+    # through the sink GATE's data inlet — the same cross-detach machinery the
+    # R/M mode switch uses — so the ACTIVE sink releases its target instead of
+    # a Remote-mode lane pinning it at the window Min forever; ON re-bangs
+    # zl.reg to re-emit the stored id down the current path (mapping restored,
+    # nothing forgotten). Mode-aware for free: the gate always points at the
+    # currently-selected sink.
+    sub.add_newobj("slot_en_route", "route enable", numinlets=1, numoutlets=2,
+                   outlettype=["", ""], patching_rect=[520, 340, 90, 20])
+    sub.add_newobj("slot_en_sel", "sel 0 1", numinlets=1, numoutlets=3,
+                   outlettype=["bang", "bang", ""],
+                   patching_rect=[520, 365, 60, 20])
+    sub.add_box({"box": {
+        "id": "slot_en_id0", "maxclass": "message", "text": "id 0",
+        "numinlets": 2, "numoutlets": 1, "outlettype": [""],
+        "patching_rect": [520, 390, 40, 20]}})
+    sub.add_line("slot_in", 0, "slot_en_route", 0)
+    sub.add_line("slot_en_route", 0, "slot_en_sel", 0)
+    sub.add_line("slot_en_sel", 0, "slot_en_id0", 0)
+    sub.add_line("slot_en_id0", 0, "slot_sink_gate", 1)
+    sub.add_line("slot_en_sel", 1, "slot_sink_reg", 0)
+
     # ---- status route bus ----------------------------------------------------
     sub.add_newobj("slot_route",
                    "route mapped min max pname dname path flash announce",
