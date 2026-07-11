@@ -15,7 +15,8 @@ Verified gen signatures (Codebox form): ``poke(data, value, channel, index)``,
 from __future__ import annotations
 
 __all__ = [
-    "viz_declares", "viz_poke_block", "poly_lfo_engine", "freeze_capture_block",
+    "viz_declares", "viz_poke_block", "poly_lfo_engine", "poly_mod_engine",
+    "freeze_capture_block",
     "rampsmooth_fn", "ring_delay", "lowpass_12_fn", "highpass_12_fn",
     "allpass_fn", "diffuse_fn", "granular_voice_fn", "compose_gen_code",
     "variable_sigmoid_fn", "modulated_allpass_reverb",
@@ -341,6 +342,76 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
     body = "\n".join(decls + voice_lines) + "\n" + viz_poke_block(
         "\n".join(pokes), refresh_ms=gui_refresh_ms)
     return compose_gen_code(params=params, functions=[LFO_VOICE_FN], body=body)
+
+
+def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
+                    viz_buffer: str = "buf_orbit_gui") -> str:
+    """The MERGED Orbit modulator codebox (#76: Orbit + Entropy in one).
+
+    Per-lane ``source_{i}`` 0..9 unifies both families on the shared cluster
+    spine (rates spread from ONE Rate by the bias/offset fold; per-slot
+    Depth/Min/Max/Bipolar windows; per-lane ``on_i`` gates; outs = REMOTE
+    natives then MODULATE raws; GUI pokes ``[value, source, depth, on]``):
+
+      0..3  LFO family    — Sine / Tri / Saw / Square (``lfo_voice``)
+      4..9  chaos family  — Drift / S&H / Drunk / Logistic / Lorenz / Burst
+                            (``chaos_voice``; ENTROPY = wildness, TAME =
+                            freeze-and-calm). LFO lanes ignore both globals —
+                            they are deterministic by design.
+
+    BOTH generators run for every lane and the active one is selected from
+    the results — gen ternaries evaluate eagerly, and keeping both families'
+    state advancing means switching a lane's source picks up mid-flow
+    instead of restarting from zero. Each family keeps its own Data blocks
+    (``data_ph/sh/dr`` vs ``data_phc/st/out``), so there is no state clash.
+    """
+    params: list = [("rate", 1.0, 0.02, 16.0), ("bias", 0.13, 0.0, 1.0),
+                    ("offset", 0.0, 0.0, 1.0),
+                    ("entropy", 50.0, 0.0, 100.0), ("tame", 0.0, 0.0, 100.0)]
+    for i in range(1, voices + 1):
+        params += [(f"source_{i}", 0.0, 0.0, 9.0),
+                   (f"on_{i}", 1.0, 0.0, 1.0),
+                   (f"depth_{i}", 100.0, 0.0, 100.0),
+                   (f"umin_{i}", 0.0, 0.0, 100.0),
+                   (f"umax_{i}", 100.0, 0.0, 100.0),
+                   (f"bipolar_{i}", 0.0, 0.0, 1.0),
+                   (f"tmin_{i}", 0.0), (f"tmax_{i}", 1.0)]
+    decls = [f"Data data_ph({voices});", f"Data data_sh({voices});",
+             f"Data data_dr({voices}, 2);",
+             f"Data data_phc({voices});", f"Data data_st({voices}, 6);",
+             f"Data data_out({voices}, 3);",
+             viz_declares(viz_buffer)]
+    setup = ["ent_s = entropy * 0.01;", "tame_s = tame * 0.01;"]
+    voice_lines = []
+    pokes = []
+    for i in range(1, voices + 1):
+        k = i - 1
+        voice_lines += [
+            f"r_{i} = fold(offset + bias * {k}, 0, 1);",
+            f"rt_{i} = rate * (1 + 3 * r_{i});",
+            f"vl_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, "
+            f"clamp(source_{i}, 0., 3.));",
+            f"vc_{i} = chaos_voice(data_phc, data_st, data_out, {k}, rt_{i}, "
+            f"clamp(source_{i} - 4., 0., 5.), ent_s, tame_s);",
+            f"v_{i} = source_{i} < 3.5 ? vl_{i} : vc_{i};",
+            f"d_{i} = depth_{i} * 0.01 * on_{i};",
+            f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
+            f"v_{i} * d_{i};",
+            f"out{i} = tmin_{i} + (tmax_{i} - tmin_{i}) * "
+            f"(umin_{i} * 0.01 + (umax_{i} - umin_{i}) * 0.01 * vv_{i});",
+            f"out{voices + i} = vv_{i};",
+        ]
+        pokes += [
+            f"poke({viz_buffer}, v_{i}, {4 * k}, 0);",
+            f"poke({viz_buffer}, source_{i}, {4 * k + 1}, 0);",
+            f"poke({viz_buffer}, d_{i}, {4 * k + 2}, 0);",
+            f"poke({viz_buffer}, on_{i}, {4 * k + 3}, 0);",
+        ]
+    body = "\n".join(decls + setup + voice_lines) + "\n" + viz_poke_block(
+        "\n".join(pokes), refresh_ms=gui_refresh_ms)
+    return compose_gen_code(params=params,
+                            functions=[LFO_VOICE_FN, CHAOS_VOICE_FN],
+                            body=body)
 
 
 # Verbatim from Particle-Reverb_6.0 — the granular voice scatter (scheduler +
