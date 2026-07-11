@@ -266,7 +266,7 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
                 f"phd_{i} = wrap(peek(data_phd, {k}, 0) + rt_{i}"
                 f" / samplerate, 0., 1.);",
                 f"poke(data_phd, phd_{i}, {k}, 0);",
-                f"v_{i} = sample(buf_odraw, phd_{i}, {k});",
+                f"v_{i} = sample(buf_odraw, phd_{i} * (dim(buf_odraw) - 1), {k});",
                 "}",
             ]
         else:
@@ -1033,7 +1033,7 @@ def allpass_diffusion_chain(x: str, out: str, num_stages: int = 4,
         lines += [
             f"{prefix}_z{i} = {d}.read(mstosamps({t:g}), interp=\"none\");",
             f"{prefix}_y{i} = -{g:g} * {cur} + {prefix}_z{i};",
-            f"{d}.write({cur} + {g:g} * {prefix}_y{i});",
+            f"{d}.write(fixdenorm({cur} + {g:g} * {prefix}_y{i}));",
         ]
         cur = f"{prefix}_y{i}"
     lines.append(f"{out} = {cur};")
@@ -1112,21 +1112,21 @@ def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
             # decay-diffusion allpass 1
             f"{b}_z1 = {b}_ap1.read(mstosamps({ap1_t:g}), interp=\"none\");",
             f"{b}_y1 = -{ap1_g:g} * {b}_in + {b}_z1;",
-            f"{b}_ap1.write({b}_in + {ap1_g:g} * {b}_y1);",
+            f"{b}_ap1.write(fixdenorm({b}_in + {ap1_g:g} * {b}_y1));",
             # long delay 1 -> damping one-pole
             f"{b}_t1 = {b}_d1.read(mstosamps({d1_t:g}), interp=\"none\");",
             f"{b}_d1.write({b}_y1);",
             f"{p}_dampk = 1.0 - exp(-6.2831853 * "
             f"clamp({damping}, 500., 18000.) / samplerate);",
-            f"{p}_lp{name} = {p}_lp{name} + {p}_dampk * "
-            f"({b}_t1 - {p}_lp{name});",
+            f"{p}_lp{name} = fixdenorm({p}_lp{name} + {p}_dampk * "
+            f"({b}_t1 - {p}_lp{name}));",
             # allpass 2 -> delay 2 -> becomes this branch's tail
             f"{b}_z2 = {b}_ap2.read(mstosamps({ap2_t:g}), interp=\"none\");",
             f"{b}_y2 = -{ap2_g:g} * {p}_lp{name} + {b}_z2;",
-            f"{b}_ap2.write({p}_lp{name} + {ap2_g:g} * {b}_y2);",
+            f"{b}_ap2.write(fixdenorm({p}_lp{name} + {ap2_g:g} * {b}_y2));",
             f"{b}_t2 = {b}_d2.read(mstosamps({d2_t:g}), interp=\"none\");",
             f"{b}_d2.write({b}_y2);",
-            f"{p}_fb{name} = {b}_t2;",
+            f"{p}_fb{name} = fixdenorm({b}_t2);",
         ]
     # cross taps (paper-style: each ear listens mostly to the OTHER branch)
     lines += [

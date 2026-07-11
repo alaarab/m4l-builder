@@ -62,3 +62,18 @@ def test_chaos_voice_sources_and_macros():
     assert "x != x" in code
     assert "clamp(lx + dx * dt, -60, 60)" in code
     assert "dt = min(0.012, rte * 6 / samplerate);" in code
+
+
+def test_draw_source_reads_the_full_wavetable():
+    # ORBIT DRAW (#78): the DRAW branch advances a phase wrapped to [0,1), but
+    # gen sample() indexes in SAMPLES — so the read MUST scale by the table
+    # length (dim), else it only interpolates frames 0..1 of the 128-frame
+    # table (a near-DC drone, not the drawn wave). dim() is the GenExpr
+    # buffer-length operator (Cycling '74); buf_odraw is 128 frames.
+    code = poly_mod_engine(voices=8, draw_buffer="orbit_draw_x")
+    assert lint_genexpr(code, 1, 16) == []
+    assert 'Buffer buf_odraw("orbit_draw_x");' in code
+    assert "v_1 = sample(buf_odraw, phd_1 * (dim(buf_odraw) - 1), 0);" in code
+    assert "v_8 = sample(buf_odraw, phd_8 * (dim(buf_odraw) - 1), 7);" in code
+    # the near-DC bug form (unscaled 0..1 phase into a samples-mode read) is gone
+    assert "sample(buf_odraw, phd_1, 0)" not in code

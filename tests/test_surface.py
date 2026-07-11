@@ -137,6 +137,10 @@ class TestCellGeometry:
         s = Surface(d, accent="pressure")
         s.probe("grp", "GRProbe", min_val=0, max_val=60, initial=0)
         assert _box(d, "grp")["presentation_rect"] == ns.PARK_RECT
+        # DSP-driven probe dials must be Parameter-Visibility HIDDEN (2): parked
+        # AND kept out of Live automation / MIDI-map / Push and the undo stack.
+        vo = _box(d, "grp")["saved_attribute_attributes"]["valueof"]
+        assert vo["parameter_invisible"] == 2
 
 
 class TestThemeBus:
