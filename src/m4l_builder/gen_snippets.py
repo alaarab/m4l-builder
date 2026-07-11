@@ -259,9 +259,9 @@ def stereo_correlation(
     e.g. sampled by ``snapshot~`` into a readout/meter. Drives the stereo-image
     readouts on the width-shaping flagships (Echotide, Aurora)."""
     return (
-        f"{lr} = {lr} + ({left} * {right} - {lr}) * {coef};\n"
-        f"{ll} = {ll} + ({left} * {left} - {ll}) * {coef};\n"
-        f"{rr} = {rr} + ({right} * {right} - {rr}) * {coef};\n"
+        f"{lr} = fixdenorm({lr} + ({left} * {right} - {lr}) * {coef});\n"
+        f"{ll} = fixdenorm({ll} + ({left} * {left} - {ll}) * {coef});\n"
+        f"{rr} = fixdenorm({rr} + ({right} * {right} - {rr}) * {coef});\n"
         f"{out} = clamp({lr} / (sqrt({ll} * {rr}) + 0.000001), -1., 1.);"
     )
 
