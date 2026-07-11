@@ -37,3 +37,28 @@ def test_keeps_the_shared_uplink_and_viz_contract():
     # [value, source, depth, on] GUI frames — the chaos_lanes hero contract
     assert "poke(buf_orbit_gui, source_1, 1, 0);" in code
     assert "poke(buf_orbit_gui, on_8, 31, 0);" in code
+
+
+def test_chaos_voice_sources_and_macros():
+    # chaos_voice_fn body (shared with the retired poly_chaos_engine) — the
+    # six sources' signatures, the chaos-threshold rho map, TAME, and guards.
+    code = poly_mod_engine(voices=4)
+    assert "tgt = noise() * 0.5 + 0.5;" in code                    # drift target
+    assert "v = 0.5 + (n - 0.5) * (0.2 + 0.8 * ent);" in code      # S&H width by entropy
+    assert "v += noise() * (0.03 + 0.35 * ent);" in code           # drunk step by entropy
+    assert "r = 3.2 + 0.7995 * ent;" in code                       # logistic r map
+    # rho spans the chaos threshold (24.74): default entropy is CHAOTIC
+    # (14+14*ent parked Lorenz at a fixed point below ent~0.77)
+    assert "rho = 22 + 7 * ent;" in code
+    assert "if (noise() * 0.5 + 0.5 < 0.15 + 0.85 * ent) v = 1;" in code  # burst odds
+    # TAME: rate calm, math calm, latch-and-crossfade, growing slew
+    assert "rte = rt * (1 - tame) * (1 - tame);" in code
+    assert "r = r - tame * max(0, r - 3.4);" in code
+    assert "rho = rho - tame * max(0, rho - 10);" in code
+    assert "if (tame > 0.02 && tprev <= 0.02) poke(data_out, v, idx, 1);" in code
+    assert "tc = tame * tame * (3 - 2 * tame);" in code
+    assert "sm += (vm - sm) * (1 - tc * 0.9995);" in code
+    # stability guards: NaN reseed + state clamps
+    assert "x != x" in code
+    assert "clamp(lx + dx * dt, -60, 60)" in code
+    assert "dt = min(0.012, rte * 6 / samplerate);" in code

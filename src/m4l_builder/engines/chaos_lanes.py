@@ -7,7 +7,7 @@ brightness by depth, and dimmed to a whisper when the lane is beyond the
 revealed count — so a Lorenz lane visibly writhes while an S&H lane steps,
 which a polar ring can't show. Frame layout ``[value, source, depth, windowed]``
 per lane plus the revealed-lane count at slot ``4*voices``
-(:func:`gen_stateful.poly_chaos_engine` pokes exactly this).
+(:func:`gen_stateful.poly_mod_engine` pokes exactly this).
 """
 
 from __future__ import annotations

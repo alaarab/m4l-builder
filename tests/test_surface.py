@@ -260,3 +260,13 @@ class TestBrandDimHelper:
         fan = {ln["patchline"]["destination"][0] for ln in d.lines
                if ln["patchline"]["source"][0] == "brandacc_rx"}
         assert fan == {"a", "b"}
+
+
+def test_surface_reserve_advances_width():
+    device = AudioEffect("Reserve Test", width=1, height=168)
+    surf = Surface(device, accent=ACCENTS["strip"])
+    x0 = surf.reserve(344)
+    x1 = surf.reserve(50)
+    assert x1 == x0 + 344 + surf.gap
+    width = surf.finalize()
+    assert width == x1 + 50 + surf.margin
