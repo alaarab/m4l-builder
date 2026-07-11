@@ -1653,9 +1653,10 @@ class TestMultislider:
         result = multislider("ms-1", [0, 0, 100, 50], setminmax=[-1.0, 1.0])
         assert result["box"]["setminmax"] == [-1.0, 1.0]
 
-    def test_numinlets_is_2(self):
+    def test_numinlets_is_1(self):
+        # maxdiff dataset: multislider is 1-in/2-out
         result = multislider("ms-1", [0, 0, 100, 50])
-        assert result["box"]["numinlets"] == 2
+        assert result["box"]["numinlets"] == 1
 
     def test_numoutlets_is_2(self):
         result = multislider("ms-1", [0, 0, 100, 50])
@@ -2709,8 +2710,9 @@ class TestKslider:
         assert result["box"]["numoutlets"] == 2
 
     def test_outlettype(self):
+        # maxdiff dataset: kslider emits pitch/velocity ints
         result = kslider("ks-1", [0, 0, 300, 50])
-        assert result["box"]["outlettype"] == ["", ""]
+        assert result["box"]["outlettype"] == ["int", "int"]
 
     def test_range_default(self):
         result = kslider("ks-1", [0, 0, 300, 50])
@@ -3015,9 +3017,10 @@ class TestRadiogroup:
         assert result["box"]["numoutlets"] == 1
 
     def test_outlettype(self):
-        # radiogroup emits the selected button INDEX as an int.
+        # radiogroup emits the selected index, but its declared outlettype in
+        # the maxdiff dataset is the untyped [""].
         result = radiogroup("rg-1", [0, 0, 80, 80])
-        assert result["box"]["outlettype"] == ["int"]
+        assert result["box"]["outlettype"] == [""]
 
     def test_mode_passthrough(self):
         result = radiogroup("rg-1", [0, 0, 80, 80], mode=1)
@@ -3327,8 +3330,9 @@ class TestNslider:
         assert result["box"]["numoutlets"] == 2
 
     def test_outlettype(self):
+        # maxdiff dataset: nslider emits pitch/velocity ints
         result = nslider("ns-1", [0, 0, 100, 120])
-        assert result["box"]["outlettype"] == ["", ""]
+        assert result["box"]["outlettype"] == ["int", "int"]
 
     def test_staffs_not_set_by_default(self):
         result = nslider("ns-1", [0, 0, 100, 120])

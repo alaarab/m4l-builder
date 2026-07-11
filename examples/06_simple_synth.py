@@ -21,13 +21,15 @@ def build() -> str:
     device = Instrument("Simple Synth", width=220, height=150, theme=SYNTHWAVE)
     device.add_panel("bg", [0, 0, 220, 150])
 
-    device.add_newobj("notein", "notein", numinlets=1, numoutlets=3, outlettype=["", "", ""])
+    device.add_newobj("notein", "notein", numinlets=1, numoutlets=3,
+                      outlettype=["int", "int", "int"])
     device.add_newobj("mtof", "mtof", numinlets=1, numoutlets=1, outlettype=[""])
     device.add_newobj("osc", "cycle~", numinlets=2, numoutlets=1, outlettype=["signal"])
     device.add_newobj("env", "adsr~ 10 80 0.6 300", numinlets=5, numoutlets=1,
                       outlettype=["signal"])
     device.add_newobj("amp", "*~", numinlets=2, numoutlets=1, outlettype=["signal"])
-    device.add_newobj("out", "plugout~", numinlets=2, numoutlets=0)
+    device.add_newobj("out", "plugout~", numinlets=2, numoutlets=2,
+                      outlettype=["signal", "signal"])
 
     device.add_line("notein", 0, "mtof", 0)   # pitch -> mtof -> osc frequency
     device.add_line("mtof", 0, "osc", 0)

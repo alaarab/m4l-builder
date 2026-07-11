@@ -77,7 +77,8 @@ def _build_instrument(path):
     )
     device.add_newobj("osc", "cycle~ 220", numinlets=2, numoutlets=1, outlettype=["signal"])
     device.add_newobj("amp", "*~ 0.1", numinlets=2, numoutlets=1, outlettype=["signal"])
-    device.add_newobj("plugout", "plugout~", numinlets=2, numoutlets=0)
+    device.add_newobj("plugout", "plugout~", numinlets=2, numoutlets=2,
+                      outlettype=["signal", "signal"])
     device.add_line("osc", 0, "amp", 0)
     device.add_line("amp", 0, "plugout", 0)
     device.add_line("amp", 0, "plugout", 1)
@@ -88,7 +89,7 @@ def _build_midi_effect(path):
     device = MidiEffect("Smoke MIDI", width=180, height=100)
     device.add_panel("bg", [0, 0, 180, 100], bgcolor=[0.12, 0.12, 0.12, 1.0])
     device.add_toggle("enable", "Enable", [10, 10, 60, 20])
-    device.add_newobj("notein", "notein", numinlets=0, numoutlets=3, outlettype=["int", "int", "int"])
+    device.add_newobj("notein", "notein", numinlets=1, numoutlets=3, outlettype=["int", "int", "int"])
     device.add_newobj("noteout", "noteout", numinlets=3, numoutlets=0)
     device.add_line("notein", 0, "noteout", 0)
     device.add_line("notein", 1, "noteout", 1)

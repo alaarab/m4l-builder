@@ -11,7 +11,7 @@ def notein(id_prefix: str, channel: int = 0) -> tuple:
     text = f"notein {channel}" if channel else "notein"
     boxes = [
         newobj(f"{id_prefix}_notein", text, numinlets=1, numoutlets=3,
-               outlettype=["", "", ""]),
+               outlettype=["int", "int", "int"]),
     ]
     return (boxes, [])
 
@@ -408,8 +408,11 @@ def midi_clock_out(id_prefix: str) -> tuple:
     """
     p = id_prefix
     boxes = [
+        # transport is 2-in/9-out; tempo is outlet 4 (maxdiff-validated shape).
         newobj(f"{p}_transport", "transport",
-               numinlets=1, numoutlets=2, outlettype=["", ""],
+               numinlets=2, numoutlets=9,
+               outlettype=["int", "int", "float", "float", "float", "", "int",
+                           "float", ""],
                patching_rect=[30, 30, 80, 20]),
         newobj(f"{p}_tempo", "/ 2.5",
                numinlets=2, numoutlets=1, outlettype=[""],
@@ -425,7 +428,7 @@ def midi_clock_out(id_prefix: str) -> tuple:
                patching_rect=[30, 190, 60, 20]),
     ]
     lines = [
-        patchline(f"{p}_transport", 0, f"{p}_tempo", 0),
+        patchline(f"{p}_transport", 4, f"{p}_tempo", 0),
         patchline(f"{p}_tempo", 0, f"{p}_metro", 1),
         patchline(f"{p}_metro", 0, f"{p}_clockbyte", 0),
         patchline(f"{p}_clockbyte", 0, f"{p}_midiout", 0),

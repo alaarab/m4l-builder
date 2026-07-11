@@ -2011,17 +2011,21 @@ def _match_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | 
 
 
 def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> dict | None:
+    poll_id = f"{prefix}_poll"
     transport_id = f"{prefix}_transport"
     bpm_id = f"{prefix}_bpm"
     rate_id = f"{prefix}_rate"
     osc_id = f"{prefix}_osc"
+    poll = boxes_by_id.get(poll_id)
     transport = boxes_by_id.get(transport_id)
     bpm = boxes_by_id.get(bpm_id)
     rate = boxes_by_id.get(rate_id)
     osc = boxes_by_id.get(osc_id)
-    if not all((transport, bpm, rate, osc)):
+    if not all((poll, transport, bpm, rate, osc)):
         return None
 
+    if poll.get("text") != "metro 100 @active 1":
+        return None
     if transport.get("text") != "transport" or bpm.get("text") != "f":
         return None
 
@@ -2039,7 +2043,8 @@ def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) 
         return None
 
     required_lines = [
-        _line_key(transport_id, 0, bpm_id, 0),
+        _line_key(poll_id, 0, transport_id, 0),
+        _line_key(transport_id, 4, bpm_id, 0),
         _line_key(bpm_id, 0, rate_id, 0),
         _line_key(rate_id, 0, osc_id, 0),
     ]
@@ -2048,7 +2053,8 @@ def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) 
 
     helper = None
     if (
-        _rect_matches(transport, [30, 60, 70, 20])
+        _rect_matches(poll, [30, 30, 110, 20])
+        and _rect_matches(transport, [30, 60, 70, 20])
         and _rect_matches(bpm, [30, 90, 30, 20])
         and _rect_matches(rate, [30, 120, 160, 20])
         and _rect_matches(osc, [30, 160, 60, 20])
@@ -2067,7 +2073,7 @@ def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) 
     return _pattern_match(
         kind="transport_lfo",
         prefix=prefix,
-        box_ids=[transport_id, bpm_id, rate_id, osc_id],
+        box_ids=[poll_id, transport_id, bpm_id, rate_id, osc_id],
         line_keys=required_lines,
         params={
             "division": division,

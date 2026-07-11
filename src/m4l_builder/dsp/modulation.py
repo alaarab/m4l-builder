@@ -119,8 +119,8 @@ def param_smooth(id_prefix: str, smooth_ms: float = 20) -> tuple:
     boxes = [
         newobj(f"{p}_pack", f"pack f {smooth_ms}", numinlets=2, numoutlets=1,
                outlettype=[""], patching_rect=[30, 120, 80, 20]),
-        newobj(f"{p}_line", "line~", numinlets=2, numoutlets=1,
-               outlettype=["signal"], patching_rect=[30, 150, 40, 20]),
+        newobj(f"{p}_line", "line~", numinlets=2, numoutlets=2,
+               outlettype=["signal", "bang"], patching_rect=[30, 150, 40, 20]),
     ]
     lines = [
         patchline(f"{p}_pack", 0, f"{p}_line", 0),
@@ -173,13 +173,19 @@ def transport_lfo(id_prefix: str, division: str = '1/4',
     div_beats = division_map[division]
     p = id_prefix
 
-    # transport -> bpm float -> rate Hz
+    # poll -> transport -> tempo (outlet 4) -> rate Hz. transport is
+    # 2-in/9-out (bar, beat, units, resolution, tempo, timesig, state, raw
+    # ticks, clock source) and only reports when banged, so a metro polls it.
     boxes = [
-        newobj(f"{p}_transport", "transport", numinlets=1, numoutlets=4,
-               outlettype=["", "", "", ""],
+        newobj(f"{p}_poll", "metro 100 @active 1", numinlets=2, numoutlets=1,
+               outlettype=["bang"],
+               patching_rect=[30, 30, 110, 20]),
+        newobj(f"{p}_transport", "transport", numinlets=2, numoutlets=9,
+               outlettype=["int", "int", "float", "float", "float", "", "int",
+                           "float", ""],
                patching_rect=[30, 60, 70, 20]),
         newobj(f"{p}_bpm", "f", numinlets=2, numoutlets=1,
-               outlettype=[""],
+               outlettype=["float"],
                patching_rect=[30, 90, 30, 20]),
         # rate Hz = bpm / (60 * div_beats)
         newobj(f"{p}_rate", f"expr $f1 / (60.0 * {div_beats})",
@@ -187,14 +193,15 @@ def transport_lfo(id_prefix: str, division: str = '1/4',
                patching_rect=[30, 120, 160, 20]),
     ]
     lines = [
-        patchline(f"{p}_transport", 0, f"{p}_bpm", 0),
+        patchline(f"{p}_poll", 0, f"{p}_transport", 0),
+        patchline(f"{p}_transport", 4, f"{p}_bpm", 0),
         patchline(f"{p}_bpm", 0, f"{p}_rate", 0),
     ]
 
     osc_map = {
-        'sine':   ("cycle~", 2, 2, ["signal", "signal"]),
+        'sine':   ("cycle~", 2, 1, ["signal"]),
         'saw':    ("phasor~", 2, 1, ["signal"]),
-        'square': ("rect~", 2, 1, ["signal"]),
+        'square': ("rect~", 3, 1, ["signal"]),
     }
     osc_text, osc_inlets, osc_outlets, osc_types = osc_map[shape]
     boxes.append(newobj(f"{p}_osc", osc_text,

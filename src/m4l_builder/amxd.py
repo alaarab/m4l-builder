@@ -77,6 +77,18 @@ def apply_validation_policy(device, policy) -> None:
             if issue.code in WIRING_INTEGRITY_CODES
             or issue.code == "setwidth-mismatch"
         ]
+        # Dataset-backed declaration check (the queued fleet-audit kit item):
+        # every emitted box's numinlets/numoutlets/outlettype must match
+        # Ableton's measured maxdiff dataset. Caught in the wild twice
+        # (transport 1-in/7-out recipe; mpeparse outlettype) — both shipped
+        # as wrong declarations before this gate existed.
+        from .box_lint import lint_boxes
+        from .validation import ValidationIssue
+        blocking += [
+            ValidationIssue(code="box-declaration-mismatch", message=msg,
+                            severity="error")
+            for msg in lint_boxes(device.boxes)
+        ]
         if blocking:
             raise BuildValidationError(blocking)
         return

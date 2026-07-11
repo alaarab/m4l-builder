@@ -524,6 +524,31 @@ class TestDefinedLatency:
         assert patcher["patcher"]["latency"] == 2048
 
 
+class TestBoxDeclarationGate:
+    def test_default_build_rejects_dataset_mismatch(self):
+        # The queued fleet-audit kit item: a box whose declared I/O shape
+        # contradicts Ableton's measured maxdiff dataset must FAIL the build
+        # (the transport recipe and mpeparse both shipped mis-declared
+        # before this gate).
+        import pytest
+
+        from m4l_builder.validation import BuildValidationError
+        device = Device("test", 200, 100)
+        device.add_newobj("bad_t", "transport", numinlets=1, numoutlets=7,
+                          outlettype=[""] * 7,
+                          patching_rect=[10, 10, 80, 20])
+        with pytest.raises(BuildValidationError, match="transport"):
+            device.to_bytes()
+
+    def test_default_build_accepts_dataset_match(self):
+        device = Device("test", 200, 100)
+        device.add_newobj("good_t", "transport", numinlets=2, numoutlets=9,
+                          outlettype=["int", "int", "float", "float",
+                                      "float", "", "int", "float", ""],
+                          patching_rect=[10, 10, 80, 20])
+        assert len(device.to_bytes()) > 0
+
+
 class TestMpeSupport:
     def test_default_omits_is_mpe(self):
         # Non-MPE devices must stay byte-identical to pre-flag builds:

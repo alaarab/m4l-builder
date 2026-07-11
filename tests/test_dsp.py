@@ -1391,7 +1391,8 @@ class TestParamSmooth:
         boxes, _ = param_smooth("sm")
         line = _find_box(boxes, "sm_line")
         assert line["text"] == "line~"
-        assert line["outlettype"] == ["signal"]
+        # maxdiff dataset: line~ is 2-out (ramp signal + done bang)
+        assert line["outlettype"] == ["signal", "bang"]
 
     def test_pack_feeds_line(self):
         _, lines = param_smooth("sm")
@@ -1817,10 +1818,10 @@ class TestNoiseSource:
 class TestTempoSync:
     """Test tempo_sync() reads Live transport and computes time values."""
 
-    def test_returns_4_boxes_3_lines(self):
+    def test_returns_5_boxes_4_lines(self):
         boxes, lines = tempo_sync("ts")
-        assert len(boxes) == 4
-        assert len(lines) == 3
+        assert len(boxes) == 5
+        assert len(lines) == 4
 
     def test_has_transport_object(self):
         boxes, _ = tempo_sync("ts")
@@ -1852,9 +1853,10 @@ class TestTempoSync:
         assert "0.5" in rate["text"]
 
     def test_transport_feeds_bpm(self):
+        # tempo is transport outlet 4 (2-in/9-out maxdiff-validated shape)
         _, lines = tempo_sync("ts")
         assert any(
-            l["patchline"]["source"] == ["ts_transport", 0]
+            l["patchline"]["source"] == ["ts_transport", 4]
             and l["patchline"]["destination"] == ["ts_bpm", 0]
             for l in lines
         )

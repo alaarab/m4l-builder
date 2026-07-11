@@ -240,8 +240,8 @@ def enable_livemcp_bridge(
         ids["thisdevice"],
         "live.thisdevice",
         numinlets=1,
-        numoutlets=2,
-        outlettype=["bang", ""],
+        numoutlets=3,
+        outlettype=["bang", "int", "int"],
         patching_rect=[30, bridge_y, 90, 20],
         varname=ids["thisdevice"],
     )

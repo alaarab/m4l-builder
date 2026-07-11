@@ -417,7 +417,7 @@ class TestSnapshotHelpers:
         device.add_newobj("send_a", "s clock_bus", numinlets=1, numoutlets=0, patching_rect=[20, 20, 60, 20])
         device.add_newobj("recv_a", "r clock_bus", numinlets=0, numoutlets=1, patching_rect=[110, 20, 60, 20])
         device.add_newobj("recv_b", "receive clock_bus", numinlets=0, numoutlets=1, patching_rect=[200, 20, 90, 20])
-        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[20, 70, 77, 20])
+        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[20, 70, 77, 20])
         device.add_newobj("path", "live.path live_set", numinlets=2, numoutlets=2, patching_rect=[120, 70, 90, 20])
         device.add_newobj("observer", "live.observer", numinlets=2, numoutlets=2, patching_rect=[240, 70, 80, 20])
         device.add_newobj("route", "route id", numinlets=1, numoutlets=2, patching_rect=[120, 100, 60, 20])
@@ -838,7 +838,7 @@ class TestSnapshotHelpers:
         device.add_newobj("route", "route mode", numinlets=1, numoutlets=2, patching_rect=[20, 20, 80, 20])
         device.add_newobj("trigger", "t i i", numinlets=1, numoutlets=2, patching_rect=[120, 20, 40, 20])
         device.add_newobj("prepend", "prepend value", numinlets=1, numoutlets=1, patching_rect=[180, 20, 80, 20])
-        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[20, 50, 90, 20])
+        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[20, 50, 90, 20])
         device.add_newobj("send_a", "s shell_bus", numinlets=1, numoutlets=0, patching_rect=[120, 50, 70, 20])
         device.add_newobj("recv_a", "r shell_bus", numinlets=0, numoutlets=1, patching_rect=[210, 50, 70, 20])
         device.add_line("route", 0, "trigger", 0)
@@ -1483,7 +1483,7 @@ class TestSnapshotHelpers:
                 "presentation_rect": rect,
                 "presentation": 1,
                 "numinlets": 1,
-                "numoutlets": 1 if maxclass != "comment" else 0,
+                "numoutlets": 2 if maxclass == "live.dial" else (1 if maxclass != "comment" else 0),
             }
             if text is not None:
                 box["text"] = text
@@ -2306,7 +2306,7 @@ class TestGeneratedPython:
         device.add_newobj("route", "route mode", numinlets=1, numoutlets=2, patching_rect=[20, 20, 80, 20])
         device.add_newobj("trigger", "t i i", numinlets=1, numoutlets=2, patching_rect=[120, 20, 40, 20])
         device.add_newobj("prepend", "prepend value", numinlets=1, numoutlets=1, patching_rect=[180, 20, 80, 20])
-        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[20, 50, 90, 20])
+        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[20, 50, 90, 20])
         device.add_newobj("send_a", "s shell_bus", numinlets=1, numoutlets=0, patching_rect=[120, 50, 70, 20])
         device.add_newobj("recv_a", "r shell_bus", numinlets=0, numoutlets=1, patching_rect=[210, 50, 70, 20])
         device.add_line("route", 0, "trigger", 0)
@@ -2356,7 +2356,7 @@ class TestGeneratedPython:
         device.add_newobj("route", "route mode", numinlets=1, numoutlets=2, patching_rect=[20, 20, 80, 20])
         device.add_newobj("trigger", "t i i", numinlets=1, numoutlets=2, patching_rect=[120, 20, 40, 20])
         device.add_newobj("prepend", "prepend value", numinlets=1, numoutlets=1, patching_rect=[180, 20, 80, 20])
-        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[20, 50, 90, 20])
+        device.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[20, 50, 90, 20])
         device.add_newobj("send_a", "s shell_bus", numinlets=1, numoutlets=0, patching_rect=[120, 50, 70, 20])
         device.add_newobj("recv_a", "r shell_bus", numinlets=0, numoutlets=1, patching_rect=[210, 50, 70, 20])
         device.add_line("route", 0, "trigger", 0)
@@ -2650,7 +2650,7 @@ class TestGeneratedPython:
                 "presentation_rect": rect,
                 "presentation": 1,
                 "numinlets": 1,
-                "numoutlets": 1 if maxclass != "comment" else 0,
+                "numoutlets": 2 if maxclass == "live.dial" else (1 if maxclass != "comment" else 0),
             }
             if text is not None:
                 box["text"] = text

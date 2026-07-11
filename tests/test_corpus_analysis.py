@@ -413,7 +413,7 @@ class TestCorpusAnalysis:
                 "presentation_rect": rect,
                 "presentation": 1,
                 "numinlets": 1,
-                "numoutlets": 1 if maxclass != "comment" else 0,
+                "numoutlets": 2 if maxclass == "live.dial" else (1 if maxclass != "comment" else 0),
             }
             if text is not None:
                 box["text"] = text
@@ -711,7 +711,7 @@ class TestCorpusAnalysis:
                 unitstyle=8,
                 annotation_name=f"Macro {index+1} — outputs CC {index+1}",
             )
-            expr.add_newobj(f"int_{index+1}", "int", numinlets=2, numoutlets=1, outlettype=[""], patching_rect=[20 + index * 50, 200, 30, 20])
+            expr.add_newobj(f"int_{index+1}", "int", numinlets=2, numoutlets=1, outlettype=["int"], patching_rect=[20 + index * 50, 200, 30, 20])
         expr.add_newobj(f"ctlout_{index+1}", f"ctlout {index+1} 1", numinlets=3, numoutlets=0, outlettype=[], patching_rect=[20 + index * 50, 230, 60, 20])
         expr.add_line(f"macro_{index+1}", 0, f"int_{index+1}", 0)
         expr.add_line(f"int_{index+1}", 0, f"ctlout_{index+1}", 0)
@@ -943,7 +943,7 @@ class TestCorpusAnalysis:
             rich.add_newobj("trigger", "t i i", numinlets=1, numoutlets=2, patching_rect=[120, 60, 40, 20])
             rich.add_newobj("prepend", "prepend value", numinlets=1, numoutlets=1, patching_rect=[120, 90, 80, 20])
             rich.add_newobj("gate", "gate 2", numinlets=2, numoutlets=2, patching_rect=[180, 60, 50, 20])
-            rich.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[20, 120, 90, 20])
+            rich.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[20, 120, 90, 20])
             rich.add_line("route", 0, "trigger", 0)
             rich.add_line("trigger", 0, "gate", 0)
             rich.build(str(tmp_path / name))
@@ -980,7 +980,7 @@ class TestCorpusAnalysis:
             rich.add_newobj("trigger", "t i i", numinlets=1, numoutlets=2, patching_rect=[120, 60, 40, 20])
             rich.add_newobj("prepend", "prepend value", numinlets=1, numoutlets=1, patching_rect=[120, 90, 80, 20])
             rich.add_newobj("gate", "gate 2", numinlets=2, numoutlets=2, patching_rect=[180, 60, 50, 20])
-            rich.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[20, 120, 90, 20])
+            rich.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[20, 120, 90, 20])
             rich.add_line("route", 0, "trigger", 0)
             rich.add_line("trigger", 0, "gate", 0)
             rich.build(str(tmp_path / name))
@@ -1011,7 +1011,7 @@ class TestCorpusAnalysis:
         first.add_newobj("selector", "sel 0 1", numinlets=1, numoutlets=3, patching_rect=[120, 20, 60, 20])
         first.add_newobj("trigger", "t i i", numinlets=1, numoutlets=2, patching_rect=[200, 20, 40, 20])
         first.add_newobj("prepend", "prepend value", numinlets=1, numoutlets=1, patching_rect=[20, 50, 80, 20])
-        first.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[120, 50, 90, 20])
+        first.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[120, 50, 90, 20])
         first.add_newobj("send_a", "s rich_bus", numinlets=1, numoutlets=0, patching_rect=[20, 60, 60, 20])
         first.add_newobj("recv_a", "r rich_bus", numinlets=0, numoutlets=1, patching_rect=[100, 60, 60, 20])
         first.add_line("route", 0, "selector", 0)
@@ -1033,7 +1033,7 @@ class TestCorpusAnalysis:
         second.add_newobj("selector", "sel 0 1", numinlets=1, numoutlets=3, patching_rect=[120, 20, 60, 20])
         second.add_newobj("trigger", "t i i", numinlets=1, numoutlets=2, patching_rect=[200, 20, 40, 20])
         second.add_newobj("prepend", "prepend value", numinlets=1, numoutlets=1, patching_rect=[20, 50, 80, 20])
-        second.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=2, patching_rect=[120, 50, 90, 20])
+        second.add_newobj("device", "live.thisdevice", numinlets=1, numoutlets=3, outlettype=["bang", "int", "int"], patching_rect=[120, 50, 90, 20])
         second.add_newobj("loadbang", "loadbang", numinlets=1, numoutlets=1, patching_rect=[20, 60, 60, 20])
         second.add_line("route", 0, "selector", 0)
         second.add_line("selector", 0, "trigger", 0)
