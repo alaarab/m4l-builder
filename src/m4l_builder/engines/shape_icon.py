@@ -15,7 +15,7 @@ from __future__ import annotations
 # Every glyph the fleet's two modulators need, drawn inline at ~12px.
 GLYPHS = (
     "sine", "tri", "saw", "square", "sh", "drift",
-    "drunk", "logistic", "lorenz", "burst",
+    "drunk", "logistic", "lorenz", "burst", "draw",
 )
 
 SHAPE_ICON_INLETS = 1
@@ -103,6 +103,16 @@ function drawGlyph(name, cx, cy, s) {
         mgraphics.line_to(cx + s * 0.15, cy + s * 0.5);
         mgraphics.line_to(cx + s, cy + s * 0.5);
         mgraphics.stroke();
+    } else if (name === "draw") {
+        // a hand-drawn squiggle + pen nib: the user-wave source
+        mgraphics.move_to(cx - s, cy + s * 0.4);
+        mgraphics.line_to(cx - s * 0.5, cy - s * 0.6);
+        mgraphics.line_to(cx - s * 0.1, cy + s * 0.2);
+        mgraphics.line_to(cx + s * 0.3, cy - s * 0.4);
+        mgraphics.line_to(cx + s * 0.7, cy + s * 0.5);
+        mgraphics.stroke();
+        mgraphics.arc(cx + s * 0.75, cy - s * 0.55, 1.2, 0, 6.2832);
+        mgraphics.fill();
     }
 }
 """

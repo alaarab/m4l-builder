@@ -345,7 +345,8 @@ def poly_lfo_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
 
 
 def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
-                    viz_buffer: str = "buf_orbit_gui") -> str:
+                    viz_buffer: str = "buf_orbit_gui",
+                    draw_buffer: str | None = None) -> str:
     """The MERGED Orbit modulator codebox (#76: Orbit + Entropy in one).
 
     Per-lane ``source_{i}`` 0..9 unifies both families on the shared cluster
@@ -359,6 +360,11 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
                             freeze-and-calm). LFO lanes ignore both globals —
                             they are deterministic by design.
 
+    ``draw_buffer`` (a named 128-frame, ``voices``-channel ``buffer~``)
+    adds source 10 = DRAW: the lane samples its own hand-drawn wavetable
+    channel at the lane clock (the Multi Shaper function-editor feeds it
+    from the message domain via ``peek~``).
+
     BOTH generators run for every lane and the active one is selected from
     the results — gen ternaries evaluate eagerly, and keeping both families'
     state advancing means switching a lane's source picks up mid-flow
@@ -369,7 +375,8 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
                     ("offset", 0.0, 0.0, 1.0),
                     ("entropy", 50.0, 0.0, 100.0), ("tame", 0.0, 0.0, 100.0)]
     for i in range(1, voices + 1):
-        params += [(f"source_{i}", 0.0, 0.0, 9.0),
+        src_max = 10.0 if draw_buffer else 9.0
+        params += [(f"source_{i}", 0.0, 0.0, src_max),
                    (f"on_{i}", 1.0, 0.0, 1.0),
                    (f"depth_{i}", 100.0, 0.0, 100.0),
                    (f"umin_{i}", 0.0, 0.0, 100.0),
@@ -381,6 +388,9 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
              f"Data data_phc({voices});", f"Data data_st({voices}, 6);",
              f"Data data_out({voices}, 3);",
              viz_declares(viz_buffer)]
+    if draw_buffer:
+        decls += [f'Buffer buf_odraw("{draw_buffer}");',
+                  f"Data data_phd({voices});"]
     setup = ["ent_s = entropy * 0.01;", "tame_s = tame * 0.01;"]
     voice_lines = []
     pokes = []
@@ -393,7 +403,21 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
             f"clamp(source_{i}, 0., 3.));",
             f"vc_{i} = chaos_voice(data_phc, data_st, data_out, {k}, rt_{i}, "
             f"clamp(source_{i} - 4., 0., 5.), ent_s, tame_s);",
-            f"v_{i} = source_{i} < 3.5 ? vl_{i} : vc_{i};",
+        ]
+        if draw_buffer:
+            voice_lines += [
+                f"phd_{i} = wrap(peek(data_phd, {k}, 0) + rt_{i}"
+                f" / samplerate, 0., 1.);",
+                f"poke(data_phd, phd_{i}, {k}, 0);",
+                f"vd_{i} = sample(buf_odraw, phd_{i}, {k});",
+                f"v_{i} = source_{i} < 3.5 ? vl_{i} : (source_{i} < 9.5 ?"
+                f" vc_{i} : vd_{i});",
+            ]
+        else:
+            voice_lines += [
+                f"v_{i} = source_{i} < 3.5 ? vl_{i} : vc_{i};",
+            ]
+        voice_lines += [
             f"d_{i} = depth_{i} * 0.01 * on_{i};",
             f"vv_{i} = bipolar_{i} > 0.5 ? 0.5 + d_{i} * (v_{i} - 0.5) : "
             f"v_{i} * d_{i};",
