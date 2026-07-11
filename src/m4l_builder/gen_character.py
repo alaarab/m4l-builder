@@ -175,8 +175,11 @@ def leslie_rotor(
         f"{p}_xlp = {p}_xlp + {p}_xk * ({mono} - {p}_xlp);\n"
         f"{p}_drum_in = {p}_xlp;\n"
         f"{p}_horn_in = {mono} - {p}_xlp;\n"
-        f"{p}_ht = {speed} > 0.5 ? 6.7 : 0.8;\n"
-        f"{p}_dt = {speed} > 0.5 ? 5.7 : 0.66;\n"
+        # hunt #66: 2=STOP coasts both rotors to ~0 through the same
+        # inertia poles (the signature Leslie brake); 0=SLOW/1=FAST are
+        # unchanged so existing sets do not remap.
+        f"{p}_ht = {speed} > 1.5 ? 0.02 : ({speed} > 0.5 ? 6.7 : 0.8);\n"
+        f"{p}_dt = {speed} > 1.5 ? 0.02 : ({speed} > 0.5 ? 5.7 : 0.66);\n"
         f"{p}_hk = 1.0 - exp(-1.0 / (1.0 * samplerate));\n"
         f"{p}_dk = 1.0 - exp(-1.0 / (4.0 * samplerate));\n"
         f"{p}_hrate = {p}_hrate + {p}_hk * ({p}_ht - {p}_hrate);\n"
