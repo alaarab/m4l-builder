@@ -49,7 +49,8 @@ def crossover_display_js(
     mode it overlays two: the MID as the brighter ``spec_fill`` and the SIDE as a
     dimmer, tinted ``side_fill`` + ``side_line`` curve.
     """
-    return _JS_TEMPLATE.substitute(
+    from .design_system import design_system_js
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         grid_color=grid_color,
         text_color=text_color,
@@ -322,8 +323,24 @@ function paint() {
 }
 
 // ---- interaction ---------------------------------------------------------
-function apply_drag(x) {
-    var f = x_to_freq(x);
+// hunt #52: hover hand + grab cursors, hover state for a marker-width bump,
+// Shift = FINE drag (1/8 rate — precious on this 268px log axis).
+var hovering = 0;
+var fine_anchor_x = -1, fine_anchor_f = 0;
+
+function apply_drag(x, shift) {
+    var ex = x;
+    if (shift) {
+        if (fine_anchor_x < 0) {
+            fine_anchor_x = x;
+            fine_anchor_f = drag_target === 0 ? freq_to_x(low_xover)
+                                              : freq_to_x(high_xover);
+        }
+        ex = fine_anchor_f + (x - fine_anchor_x) * 0.125;
+    } else {
+        fine_anchor_x = -1;
+    }
+    var f = x_to_freq(ex);
     if (drag_target === 0) {
         low_xover = clamp_low(f);
         outlet(0, low_xover);
@@ -336,18 +353,34 @@ function apply_drag(x) {
 
 function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {
     drag_target = -1;
+    fine_anchor_x = -1;
     var xl = freq_to_x(low_xover);
     var xh = freq_to_x(high_xover);
     if (Math.abs(x - xl) <= HANDLE_HIT) drag_target = 0;
     else if (Math.abs(x - xh) <= HANDLE_HIT) drag_target = 1;
     else drag_target = (Math.abs(x - xl) < Math.abs(x - xh)) ? 0 : 1;
-    apply_drag(x);
+    ds_set_cursor(DS_CUR_GRAB);
+    apply_drag(x, shift);
 }
 
 function ondrag(x, y, but, cmd, shift, capslock, option, ctrl) {
-    if (but === 0) { drag_target = -1; return; }
+    if (but === 0) {
+        drag_target = -1; fine_anchor_x = -1;
+        ds_set_cursor(DS_CUR_ARROW);
+        return;
+    }
     if (drag_target < 0) return;
-    apply_drag(x);
+    apply_drag(x, shift);
+}
+
+function onidle(x, y) {
+    if (!hovering) { hovering = 1; mgraphics.redraw(); }
+    ds_set_cursor(DS_CUR_HAND);
+}
+function onidleout() {
+    hovering = 0;
+    ds_set_cursor(DS_CUR_ARROW);
+    mgraphics.redraw();
 }
 
 // ---- param back-sync (inlets 0/1/2) --------------------------------------

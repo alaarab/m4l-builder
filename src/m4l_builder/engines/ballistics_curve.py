@@ -84,7 +84,8 @@ def ballistics_curve_js(
         reset_attack_ms = attack_ms
     if reset_release_ms is None:
         reset_release_ms = release_ms
-    return _JS_TEMPLATE.substitute(
+    from .design_system import design_system_js
+    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
         reset_attack_ms=reset_attack_ms,
         reset_release_ms=reset_release_ms,
         bg_color=bg_color,
@@ -355,12 +356,16 @@ function apply_drag(x) {
 
 function start_drag(x) {
     if (!INTERACTIVE) return;
+    ds_set_cursor(DS_CUR_GRAB);
     dragging = 1;
     drag_zone = (x < plot_l() + plot_w() * 0.5) ? 0 : 1;
     apply_drag(x);
 }
 function drag_to(x) { if (dragging) apply_drag(x); }
-function end_drag() { if (dragging) { dragging = 0; mgraphics.redraw(); } }
+function end_drag() { if (dragging) { dragging = 0; ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); } }
+// hunt #52: hover hand + grab cursors (drag affordance parity)
+function onidle(x, y) { if (INTERACTIVE) ds_set_cursor(DS_CUR_HAND); }
+function onidleout() { ds_set_cursor(DS_CUR_ARROW); }
 
 // Double-click resets BOTH attack + release to their defaults (consistency with
 // the transfer/level-history displays). Emits on outlet 0 (no-echo).
