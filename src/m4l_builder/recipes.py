@@ -740,7 +740,7 @@ def midi_note_gate(device, id_prefix, x=30, y=30):
     # stripnote passes pitch/velocity only when velocity > 0
     stripnote_id = device.add_newobj(
         f"{p}_stripnote", "stripnote", numinlets=2, numoutlets=2,
-        outlettype=["", ""], patching_rect=[x, y + 30, 60, 20],
+        outlettype=["int", "int"], patching_rect=[x, y + 30, 60, 20],
     )
 
     kslider_id = device.add_kslider(

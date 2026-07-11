@@ -70,12 +70,14 @@ def _live_path_pair(
         numoutlets=2,
         outlettype=["", ""],
     )
+    # live.object is 2-in/1-out (maxdiff dataset): left inlet takes
+    # call/get/set/id messages, right inlet binds an id silently.
     object_numinlets, object_numoutlets, object_outlettype, object_kwargs = _split_newobj_kwargs(
         object_rect or [30, 150, obj_width, 20],
         object_attrs,
-        numinlets=1,
-        numoutlets=2,
-        outlettype=["", ""],
+        numinlets=2,
+        numoutlets=1,
+        outlettype=[""],
     )
     boxes = [
         _maybe_strip_default_newobj_style(
@@ -219,9 +221,9 @@ def live_parameter_probe(
         object_numinlets, object_numoutlets, object_outlettype, object_kwargs = _split_newobj_kwargs(
             object_rect or [30, 120, 80, 20],
             object_attrs,
-            numinlets=1,
-            numoutlets=2,
-            outlettype=["", ""],
+            numinlets=2,
+            numoutlets=1,
+            outlettype=[""],
         )
         object_box = _maybe_strip_default_newobj_style(
             newobj(
@@ -474,12 +476,14 @@ def live_observer(
     if bind_via_message:
         observer_text = "live.observer"
         default_observer_rect = observer_rect or [30, 210, 120, 20]
+    # live.observer is 2-in/2-out (maxdiff dataset), matching the
+    # via_object=False branch above.
     observer_numinlets, observer_numoutlets, observer_outlettype, observer_kwargs = _split_newobj_kwargs(
         default_observer_rect,
         observer_attrs,
-        numinlets=1,
-        numoutlets=1,
-        outlettype=[""],
+        numinlets=2,
+        numoutlets=2,
+        outlettype=["", ""],
     )
     boxes.append(
         _maybe_strip_default_newobj_style(

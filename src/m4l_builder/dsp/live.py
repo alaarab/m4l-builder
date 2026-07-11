@@ -18,13 +18,17 @@ def tempo_sync(id_prefix: str, division: float = 1.0) -> tuple:
     """
     p = id_prefix
     boxes = [
-        # transport outputs tempo, time signature, etc. as a list
-        newobj(f"{p}_transport", "transport", numinlets=1, numoutlets=4,
-               outlettype=["", "", "", ""],
+        # transport only reports when banged: poll it so tempo changes track
+        newobj(f"{p}_poll", "metro 100 @active 1", numinlets=2, numoutlets=1,
+               outlettype=["bang"],
+               patching_rect=[30, 60, 110, 20]),
+        # transport is 2-in/9-out; tempo is outlet 4 (maxdiff-validated shape)
+        newobj(f"{p}_transport", "transport", numinlets=2, numoutlets=9,
+               outlettype=["int", "int", "float", "float", "float", "", "int",
+                           "float", ""],
                patching_rect=[30, 90, 70, 20]),
-        # unpack the transport output: tempo is outlet 0 (float)
         newobj(f"{p}_bpm", "f", numinlets=2, numoutlets=1,
-               outlettype=[""],
+               outlettype=["float"],
                patching_rect=[30, 120, 30, 20]),
         # Compute delay ms: expr 60000.0 / $f1 * division
         newobj(f"{p}_delay", f"expr 60000.0 / $f1 * {division}",
@@ -36,8 +40,9 @@ def tempo_sync(id_prefix: str, division: float = 1.0) -> tuple:
                patching_rect=[30, 180, 160, 20]),
     ]
     lines = [
-        # transport outlet 0 (tempo) -> bpm float box
-        patchline(f"{p}_transport", 0, f"{p}_bpm", 0),
+        patchline(f"{p}_poll", 0, f"{p}_transport", 0),
+        # transport outlet 4 (tempo) -> bpm float box
+        patchline(f"{p}_transport", 4, f"{p}_bpm", 0),
         # bpm -> delay expr and rate expr
         patchline(f"{p}_bpm", 0, f"{p}_delay", 0),
         patchline(f"{p}_bpm", 0, f"{p}_rate", 0),
