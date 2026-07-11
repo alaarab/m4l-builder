@@ -5,9 +5,10 @@ A compact, Pro-Q-style 3-band crossover the graph *is* the device:
     ``buffer~``; the display polls it with a Task and rebins log-x),
   - two vertical crossover splits you DRAG on the graph. Each drag outlets the
     new Hz to a real ``live.dial`` (``low_xover`` / ``high_xover``) so Live
-    records automation exactly like moving a knob,
-  - a small HEADPHONE icon inside each band (low/mid/high) — click to solo that
-    band (Listen); click again to return to SUM.
+    records automation exactly like moving a knob.
+
+The graph drives ONLY the two crossover splits (2 outlets, both crossover Hz);
+per-band Solo (Listen) lives in the separate "S" buttons below the graph.
 
 Inlets (5):
     0 -- low crossover Hz   (param back-sync -> redraw the low split)

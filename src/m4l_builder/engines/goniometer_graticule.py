@@ -1,14 +1,15 @@
-"""Transparent graticule overlay for a compiled ``scope~`` X-Y goniometer.
+"""Opaque backdrop graticule for a compiled ``scope~`` X-Y goniometer.
 
 A goniometer plots the stereo signal as a Lissajous figure: a compiled ``scope~``
 in X-Y mode renders the dense dot cloud in native C++ (Side on X, Mid on Y, so a
-MONO signal collapses to a vertical line — the pro convention). This v8ui sits
-transparently ON TOP and draws only the reference graticule: the bounding circle,
-the centre cross, the two 45° diagonals, and the L / R / M / S labels. No fill, so
-the live dot cloud shows through.
+MONO signal collapses to a vertical line — the pro convention). Native ``scope~``
+always renders ABOVE js in Live, so this v8ui instead paints an opaque backdrop
+that sits BEHIND an inset ``scope~``: the bounding circle, the centre cross, the
+two 45° diagonals, and the L / R / M / S labels. The scope~ composites on top, so
+the graticule ring reads around the live dot cloud.
 
-Pair with ``Device.add_compiled_display(..., overlay_js=...)`` (compiled box added
-first → behind; this overlay second → in front).
+Pair with ``Device.add_compiled_display(..., overlay_js=...)`` (this backdrop is
+larger and reads behind; the compiled ``scope~`` sits inset on top, in front).
 
 Inlets:
     0 -- bang (redraw); display-only, no data.
