@@ -42,6 +42,13 @@ _FORBIDDEN_PATTERNS = (
     (re.compile(r"\bmodule\.exports\b"), "uses module.exports"),
     (re.compile(r"(?<![\w$])import\s"), "uses ESM import syntax"),
     (re.compile(r"(?<![\w$])export\s"), "uses ESM export syntax"),
+    # v8ui pointer-event handlers NEVER fire in a classic jsui (its mouse
+    # events are onclick/ondrag/onidle/onidleout) — a control wired to
+    # onpointerdown ships looking fine and is silently dead to the mouse
+    # (the settings_bar bug: every sidebar opener ignored clicks in Live).
+    (re.compile(r"\bonpointer(?:down|up|move)\b"),
+     "uses v8ui pointer events — classic jsui mouse events are "
+     "onclick/ondrag/onidle (or build the box with add_v8ui)"),
 )
 
 

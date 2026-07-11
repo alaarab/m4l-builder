@@ -822,6 +822,23 @@ def _sidebar_device(mini=420):
 
 
 class TestSettingsSidebar:
+    def test_bar_click_handler_is_classic_jsui(self):
+        # The bar box is a CLASSIC jsui: its mouse event is onclick(x, y).
+        # v8ui's onpointerdown never fires in a jsui — the sidebar shipped
+        # that way once and every opener was dead to the mouse while
+        # param-driven QA kept passing.
+        device = _sidebar_device()
+        settings_sidebar(device, "set", mini_width=420, accent=[1, 0.7, 0],
+                         controls=_CONTROLS, left_bar=18)
+        bar_assets = [a for a in device.assets()
+                      if a.filename.startswith("settings_bar_")]
+        assert len(bar_assets) == 1
+        code = bar_assets[0].content
+        if isinstance(code, bytes):
+            code = code.decode("utf8")
+        assert "function onclick(" in code
+        assert "onpointerdown" not in code
+
     def test_left_bar_and_parked_param(self):
         device = _sidebar_device()
         res = settings_sidebar(device, "set", mini_width=420, accent=[1, 0.7, 0],

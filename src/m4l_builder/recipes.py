@@ -1994,7 +1994,10 @@ def modulator_slot_component(device, *, accent, text_color=None,
                                     linknames=1)))
     if icon:
         from .engines.shape_icon import shape_icon_js
-        ic_code = shape_icon_js(shapes=list(source_glyphs), accent=acc)
+        from .jsui_contract import validate_jsui_contract as _vjc
+        # classic-jsui box: the contract rejects v8ui pointer handlers (the
+        # dead-click class — the shape icon shipped unclickable once).
+        ic_code = _vjc(shape_icon_js(shapes=list(source_glyphs), accent=acc))
         ic_fname = js_sidecar_name("shape_icon.js", ic_code)
         device.register_asset(ic_fname, ic_code, asset_type="TEXT",
                               category="js")
@@ -2438,6 +2441,7 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
     """
     from .engines.design_system import js_sidecar_name
     from .engines.settings_bar import settings_bar_js
+    from .jsui_contract import validate_jsui_contract
     from .parameters import ParameterSpec
 
     p = id_prefix
@@ -2493,7 +2497,11 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
 
     # ---- 2. the thin LEFT bar: drawn ▾ opener + rotated label ------------------
     device.add_panel(f"{p}_bar_bg", [0, 0, lb, h], bgcolor=bbg, border=0)
-    bar_code = settings_bar_js(accent=tuple(acc), label=label)
+    # the bar is a CLASSIC jsui box — hold its code to the jsui contract
+    # (this is the gate that catches v8ui pointer-event handlers, which a
+    # jsui silently never fires: the dead-opener bug).
+    bar_code = validate_jsui_contract(settings_bar_js(accent=tuple(acc),
+                                                      label=label))
     bar_fname = js_sidecar_name("settings_bar.js", bar_code)
     device.register_asset(bar_fname, bar_code, asset_type="TEXT", category="js")
     # border=0 + transparent bordercolor: kill Max's default black 1px jsui frame
