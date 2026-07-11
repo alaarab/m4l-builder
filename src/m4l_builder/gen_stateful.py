@@ -153,7 +153,7 @@ CHAOS_VOICE_FN = """chaos_voice(data_ph, data_st, data_out, idx, rt, src, ent, t
 			lz = 18 + 2 * idx;
 		}
 		dt = min(0.012, rte * 6 / samplerate);
-		rho = 14 + 14 * ent;
+		rho = 22 + 7 * ent;
 		rho = rho - tame * max(0, rho - 10);
 		dx = 10 * (ly - lx);
 		dy = lx * (rho - lz) - ly;
@@ -207,7 +207,7 @@ def poly_chaos_engine(*, voices: int = 4, gui_refresh_ms: float = 40.0,
 
     Global macros on gen inlet 0 (the device identity):
       ``entropy`` 0..100 %% — each source's wildness axis (drift slew, S&H
-                  width, drunk step, logistic r 3.2→3.9995, lorenz rho 14→28,
+                  width, drunk step, logistic r 3.2→3.9995, lorenz rho 22→29,
                   burst probability)
       ``tame``    0..100 %% — the bring-it-in gesture: motion freezes at the
                   CAUGHT value (latch-and-crossfade), the math calms
@@ -365,11 +365,12 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
     channel at the lane clock (the Multi Shaper function-editor feeds it
     from the message domain via ``peek~``).
 
-    BOTH generators run for every lane and the active one is selected from
-    the results — gen ternaries evaluate eagerly, and keeping both families'
-    state advancing means switching a lane's source picks up mid-flow
-    instead of restarting from zero. Each family keeps its own Data blocks
-    (``data_ph/sh/dr`` vs ``data_phc/st/out``), so there is no state clash.
+    ONLY the selected family computes per lane (codebox ``if/else`` — gen
+    ternaries evaluate eagerly, so gating needs real branches): 8 lanes of
+    one voice fn each instead of three. An unselected family's state holds
+    and resumes on switch. (A flat default-entropy Lorenz once framed this
+    gating — that was sub-critical rho physics, since rescaled.) Each family
+    keeps its own Data blocks, so there is no state clash.
     """
     params: list = [("rate", 1.0, 0.02, 16.0), ("bias", 0.13, 0.0, 1.0),
                     ("offset", 0.0, 0.0, 1.0),
@@ -399,23 +400,33 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
         voice_lines += [
             f"r_{i} = fold(offset + bias * {k}, 0, 1);",
             f"rt_{i} = rate * (1 + 3 * r_{i});",
-            f"vl_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, "
-            f"clamp(source_{i}, 0., 3.));",
-            f"vc_{i} = chaos_voice(data_phc, data_st, data_out, {k}, rt_{i}, "
-            f"clamp(source_{i} - 4., 0., 5.), ent_s, tame_s);",
         ]
         if draw_buffer:
             voice_lines += [
+                f"v_{i} = 0.;",
+                f"if (source_{i} < 3.5) {{",
+                f"v_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, "
+                f"clamp(source_{i}, 0., 3.));",
+                f"}} else if (source_{i} < 9.5) {{",
+                f"v_{i} = chaos_voice(data_phc, data_st, data_out, {k}, "
+                f"rt_{i}, clamp(source_{i} - 4., 0., 5.), ent_s, tame_s);",
+                "} else {",
                 f"phd_{i} = wrap(peek(data_phd, {k}, 0) + rt_{i}"
                 f" / samplerate, 0., 1.);",
                 f"poke(data_phd, phd_{i}, {k}, 0);",
-                f"vd_{i} = sample(buf_odraw, phd_{i}, {k});",
-                f"v_{i} = source_{i} < 3.5 ? vl_{i} : (source_{i} < 9.5 ?"
-                f" vc_{i} : vd_{i});",
+                f"v_{i} = sample(buf_odraw, phd_{i}, {k});",
+                "}",
             ]
         else:
             voice_lines += [
-                f"v_{i} = source_{i} < 3.5 ? vl_{i} : vc_{i};",
+                f"v_{i} = 0.;",
+                f"if (source_{i} < 3.5) {{",
+                f"v_{i} = lfo_voice(data_ph, data_sh, data_dr, {k}, rt_{i}, "
+                f"clamp(source_{i}, 0., 3.));",
+                "} else {",
+                f"v_{i} = chaos_voice(data_phc, data_st, data_out, {k}, "
+                f"rt_{i}, clamp(source_{i} - 4., 0., 5.), ent_s, tame_s);",
+                "}",
             ]
         voice_lines += [
             f"d_{i} = depth_{i} * 0.01 * on_{i};",
