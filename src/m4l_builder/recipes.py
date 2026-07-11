@@ -4676,7 +4676,7 @@ def device_palette(device, id_prefix, *, names, rect, columns=3,
     re-inserting a class already on the track).
 
     The name list is registered into the js at load time (live.thisdevice →
-    one comma-chained ``addname`` message), so ``spawnrandom`` knows the
+    trigger → one ``addname`` message PER name), so ``spawnrandom`` knows the
     palette without re-parsing the UI.
     """
     from .engines.design_system import js_sidecar_name
@@ -4704,6 +4704,9 @@ def device_palette(device, id_prefix, *, names, rect, columns=3,
             f"{p}_b{i}", brect, name, mode=0, fontsize=fontsize,
             bgcolor=[0.16, 0.17, 0.20, 1.0], bgoncolor=acc,
             textcolor=[0.78, 0.79, 0.82, 1.0],
+            annotation_name=name,
+            annotation=f"Insert Live's native {name} on the selected track "
+                       "(placement follows the position policy).",
             patching_rect=[900 + (i % 8) * 130, 3630 + (i // 8) * 60,
                            110, 20]))
         device.add_box({"box": {
@@ -4715,17 +4718,28 @@ def device_palette(device, id_prefix, *, names, rect, columns=3,
         device.add_line(f"{p}_b{i}", 0, f"{p}_m{i}", 0)
         device.add_line(f"{p}_m{i}", 0, js, 0)
 
-    # register the palette into the js for spawnrandom (comma-chained message)
-    chain = ", ".join(f"addname {n}" for n in names)
-    device.add_box({"box": {
-        "id": f"{p}_names", "maxclass": "message", "text": chain,
-        "numinlets": 2, "numoutlets": 1, "outlettype": [""],
-        "patching_rect": [900, 3570, 220, 20]}})
+    # register the palette into the js for spawnrandom. ONE message per name,
+    # sequenced by a trigger — comma-chained message text does NOT survive an
+    # authored-JSON load (the Orbit DRAW lesson: chrome batches go invisible /
+    # escaped commas load as literal tokens), so the old single comma-joined
+    # addname chain silently registered NOTHING.
+    nt = device.add_newobj(f"{p}_nt", "t " + " ".join(["b"] * len(names)),
+                           numinlets=1, numoutlets=len(names),
+                           outlettype=["bang"] * len(names),
+                           patching_rect=[900, 3570, 220, 20])
+    for i, name in enumerate(names):
+        device.add_box({"box": {
+            "id": f"{p}_n{i}", "maxclass": "message",
+            "text": f"addname {name}", "numinlets": 2, "numoutlets": 1,
+            "outlettype": [""],
+            "patching_rect": [900 + (i % 8) * 130,
+                              3600 + (i // 8) * 60, 110, 20]}})
+        device.add_line(nt, i, f"{p}_n{i}", 0)
+        device.add_line(f"{p}_n{i}", 0, js, 0)
     td = device.add_newobj(f"{p}_td", "live.thisdevice", numinlets=1,
                            numoutlets=3, outlettype=["bang", "int", "int"],
                            patching_rect=[900, 3540, 90, 20])
-    device.add_line(td, 0, f"{p}_names", 0)
-    device.add_line(f"{p}_names", 0, js, 0)
+    device.add_line(td, 0, nt, 0)
 
     if policy_tab is not None:
         pol = device.add_newobj(f"{p}_pol", "prepend policyidx",
