@@ -12,11 +12,14 @@ def test_composes_clean_for_eight_lanes():
 def test_per_lane_source_selects_between_both_families():
     code = poly_mod_engine(voices=8)
     for i in range(1, 9):
-        # both families run (state keeps advancing) and the result selects
-        assert f"vl_{i} = lfo_voice(data_ph, data_sh, data_dr, {i - 1}," in code
-        assert (f"vc_{i} = chaos_voice(data_phc, data_st, data_out, {i - 1},"
+        # ONLY the selected family computes (real if/else — gen ternaries
+        # are eager); the other family's state holds and resumes on switch
+        assert f"if (source_{i} < 3.5) {{" in code
+        assert (f"v_{i} = lfo_voice(data_ph, data_sh, data_dr, {i - 1},"
                 in code)
-        assert f"v_{i} = source_{i} < 3.5 ? vl_{i} : vc_{i};" in code
+        assert (f"v_{i} = chaos_voice(data_phc, data_st, data_out, {i - 1},"
+                in code)
+        assert f"vl_{i}" not in code and f"vc_{i}" not in code
         # source spans the 10-entry union menu
         assert f"Param source_{i}(0.0, min=0.0, max=9.0);" in code
     # the two families keep SEPARATE state blocks (no Data clash)

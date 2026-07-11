@@ -138,6 +138,8 @@ def test_bbd_ensemble_is_a_true_six_voice_superset():
     # wet makeup folded into the norm: the 0.6-gain tanh stage + stereo
     # fold left the wet ~5.5 dB under dry (insert ducked the level)
     assert "ens_norm = 1.66 / sqrt(ens_act);" in code
+    # inactive voices skip their WORK entirely (gated if, state holds)
+    assert "if (ens_g5 > 0.5) {" in code
     # feedback re-enters the SAME saturated stage, capped safe (90 * .007)
     assert "ens_mono = tanh((mono) * 0.6 + ens_fb * ens_fbamt);" in code
     assert "clamp(fb, 0., 90.) * 0.007" in code

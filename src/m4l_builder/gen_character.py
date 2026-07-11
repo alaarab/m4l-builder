@@ -319,7 +319,7 @@ def bbd_ensemble(
     voices_blk = ""
     for i in range(6):
         off = i / 6.0
-        voices_blk += (
+        body_i = (
             f"{p}_ph{i} = wrap({p}_ph{i} + {p}_r * (1. + {ks[i]} * {p}_dt)"
             f" / samplerate, 0., 1.);\n"
             f"{p}_p{i} = {p}_base + {p}_sws * sin({TWO_PI} * ({p}_ph{i}"
@@ -329,7 +329,13 @@ def bbd_ensemble(
             + f"{p}_b{i} = {p}_b{i} + {p}_tk * ({p}_v{i} - {p}_b{i});\n"
         )
         if i >= 2:
-            voices_blk += f"{p}_g{i} = {voices} > {i + 0.5} ? 1. : 0.;\n"
+            # gate the voice's WORK, not just its mix level: an inactive
+            # voice skips its sweep + cubic read + tone pole entirely (its
+            # History state simply holds until re-enabled)
+            voices_blk += (f"{p}_g{i} = {voices} > {i + 0.5} ? 1. : 0.;\n"
+                           + f"if ({p}_g{i} > 0.5) {{\n" + body_i + "}\n")
+        else:
+            voices_blk += body_i
     mix_terms_l, mix_terms_r, act_terms = [], [], ["2."]
     for i in range(6):
         gate = "1." if i < 2 else f"{p}_g{i}"

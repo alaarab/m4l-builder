@@ -56,7 +56,9 @@ def test_chaos_sources_and_macros():
     assert "v = 0.5 + (n - 0.5) * (0.2 + 0.8 * ent);" in code      # S&H width by entropy
     assert "v += noise() * (0.03 + 0.35 * ent);" in code           # drunk step by entropy
     assert "r = 3.2 + 0.7995 * ent;" in code                       # logistic r map
-    assert "rho = 14 + 14 * ent;" in code                          # lorenz rho map
+    # rho spans the chaos threshold (24.74): default entropy is CHAOTIC
+    # (14+14*ent parked Lorenz at a fixed point below ent~0.77)
+    assert "rho = 22 + 7 * ent;" in code
     assert "if (noise() * 0.5 + 0.5 < 0.15 + 0.85 * ent) v = 1;" in code  # burst odds
     # TAME: rate calm, math calm, latch-and-crossfade, growing slew
     assert "rte = rt * (1 - tame) * (1 - tame);" in code
