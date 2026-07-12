@@ -4312,20 +4312,27 @@ class TestGroovePlayer:
 class TestSliceVoice:
     """Test slice_voice() builds a play~+line~ one-shot slice player."""
 
-    def test_returns_12_boxes(self):
+    def test_returns_14_boxes(self):
         # +1: the per-trigger gain stage on the envelope signal (accents/ducks)
+        # +2 (hunt #102): loadbang + Buffer-rebind message for the gen~ reader
         boxes, lines = slice_voice("sv", "slicebuf")
-        assert len(boxes) == 12
+        assert len(boxes) == 14
+        bufmsg = _find_box(boxes, "sv_bufmsg")
+        assert bufmsg["text"] == "sbuf slicebuf"
         assert len(lines) > 0
         gain = _find_box(boxes, "sv_gain")
         assert gain["text"] == "*~ 1."
 
     def test_play_object_uses_buffer_and_channels(self):
+        # hunt #102: the read head is the gen~ Hermite reader; the box arg
+        # binds the (possibly ---scoped) buffer per instance.
         boxes, _ = slice_voice("sv", "slicebuf")
         play = _find_box(boxes, "sv_play")
-        assert play["text"] == "play~ slicebuf 2"
+        assert play["text"].startswith("gen~ slice_reader2_")
         assert play["numinlets"] == 1
         assert play["numoutlets"] == 2
+        # the buffer binds via the load-time message (box args do NOT rebind)
+        assert _find_box(boxes, "sv_bufmsg")["text"] == "sbuf slicebuf"
 
     def test_position_is_a_line_ramp_no_sig(self):
         # float->signal is a line~ ramp, never sig~ (lint-banned, zeroes on load).
@@ -4343,7 +4350,9 @@ class TestSliceVoice:
 
     def test_mono_channel_routes_both_vcas(self):
         boxes, lines = slice_voice("sv", "buf", channels=1)
-        assert _find_box(boxes, "sv_play")["text"] == "play~ buf 1"
+        play = _find_box(boxes, "sv_play")
+        assert play["text"].startswith("gen~ slice_reader1_")
+        assert _find_box(boxes, "sv_bufmsg")["text"] == "sbuf buf"
         # both VCAs read play outlet 0 when mono
         srcs = [(ln["patchline"]["source"], ln["patchline"]["destination"])
                 for ln in lines]
@@ -4375,8 +4384,12 @@ class TestSlicePool:
 
     def test_voice_count_matches(self):
         boxes, _ = slice_pool("sp", "buf", num_voices=3)
-        play_voices = sum(1 for b in boxes if b["box"]["text"] == "play~ buf 2")
+        play_voices = sum(1 for b in boxes
+                          if b["box"]["text"].startswith("gen~ slice_reader2_"))
         assert play_voices == 3
+        bufmsgs = sum(1 for b in boxes
+                      if b["box"].get("text") == "sbuf buf")
+        assert bufmsgs == 3
 
     def test_stereo_sum_outputs(self):
         boxes, _ = slice_pool("sp", "buf", num_voices=4)

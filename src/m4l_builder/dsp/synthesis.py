@@ -1,7 +1,64 @@
 """Oscillators and sound sources."""
 
+from ..gen_patcher import build_gendsp, gendsp_support_name
 from ..objects import newobj, patchline
 from ._common import _signal_sum_chain
+
+
+def slice_reader_gendsp(channels: int = 2) -> tuple:
+    """``(filename, content)`` of the shared Hermite slice reader (hunt #102).
+
+    ``play~`` interpolates LINEARLY only (no ``@interp``; that is ``groove~``),
+    so pitched slice playback (shard's dur' = dur * 2^(-semi/12) ramp trick)
+    aliases. This gen~ core reads the same ``line~`` ms ramp but resamples
+    with a 4-tap Catmull-Rom (cubic Hermite) kernel — markedly less aliasing
+    on moderate upward shifts. (Cubic does NOT anti-alias extreme shifts —
+    4x/16x still fold; that needs the deferred oversampled reader.)
+
+    The gen ``Buffer`` is declared under the dummy name ``sbuf`` and re-bound
+    per instance by a load-time MESSAGE ``sbuf <buffer_name>`` into the gen~
+    (emitted by :func:`slice_voice`: ``{p}_lb -> {p}_bufmsg -> {p}_play``).
+    Message-box text is a ``---``-resolving context, so instance-scoped
+    buffers work. (Live-verified: a gen~ BOX ARGUMENT after the patcher name
+    does NOT rebind the Buffer — the probe stayed silent until the message
+    form; a name inside gen code would not ---resolve either.)
+
+    ``msfactor`` (ms -> buffer-frame factor = buffer_samplerate / 1000,
+    default 44.1) matches ``play~``'s buffer-rate ms addressing: drive it
+    from ``info~`` outlet 0 on sample load (``* 0.001`` -> ``prepend
+    msfactor`` -> each voice's ``{p}_play`` inlet 0), as shard does.
+
+    Callers MUST register the file: ``device.add_support_file(*
+    slice_reader_gendsp(channels))`` — the name is content-addressed, so
+    voice boxes and the file can never desync.
+    """
+    if channels not in (1, 2):
+        raise ValueError(f"slice_reader channels must be 1 or 2, got {channels}")
+    reads = []
+    for ch in range(channels):
+        reads.append(
+            f"y0_{ch} = peek(sbuf, i0, {ch});\n"
+            f"y1_{ch} = peek(sbuf, i1, {ch});\n"
+            f"y2_{ch} = peek(sbuf, i2, {ch});\n"
+            f"y3_{ch} = peek(sbuf, i3, {ch});\n"
+            f"c1_{ch} = 0.5 * (y2_{ch} - y0_{ch});\n"
+            f"c2_{ch} = y0_{ch} - 2.5 * y1_{ch} + 2. * y2_{ch} - 0.5 * y3_{ch};\n"
+            f"c3_{ch} = 0.5 * (y3_{ch} - y0_{ch}) + 1.5 * (y1_{ch} - y2_{ch});\n"
+            f"out{ch + 1} = ((c3_{ch} * f + c2_{ch}) * f + c1_{ch}) * f + y1_{ch};"
+        )
+    code = (
+        'Buffer sbuf("sbuf");\n'
+        "Param msfactor(44.1);\n"
+        "n = dim(sbuf);\n"
+        "p = clamp(in1 * msfactor, 0., max(n - 1., 0.));\n"
+        "i1 = floor(p);\n"
+        "f = p - i1;\n"
+        "i0 = max(i1 - 1., 0.);\n"
+        "i2 = min(i1 + 1., max(n - 1., 0.));\n"
+        "i3 = min(i1 + 2., max(n - 1., 0.));\n"
+        + "\n".join(reads) + "\n")
+    filename = gendsp_support_name(f"slice_reader{channels}", code)
+    return filename, build_gendsp(code, 1, channels)
 
 
 def noise_source(id_prefix: str, color: str = "white") -> tuple:
@@ -206,14 +263,19 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
                 declick_release_ms: float = 5.0) -> tuple:
     """One-shot buffer-subregion player with a de-click envelope.
 
-    A ``play~`` read-head driven by a ``line~`` position ramp (the ramp *is*
-    the playback). Trigger one slice by sending a 4-float list
-    ``start_ms 0 end_ms dur_ms`` to ``{prefix}_unpack`` inlet 0 -- the same
-    shape ``line~`` consumes: jump to start_ms in 0 ms, then ramp to end_ms
-    over dur_ms (dur_ms = the slice length in ms gives natural-rate playback;
-    a shorter dur pitches the slice up). The list also opens a ``live.adsr~``
-    de-click VCA (attack on trigger, release after dur_ms via ``{prefix}_delay``)
-    so ``play~``'s read-position jumps don't click.
+    A gen~ HERMITE read-head (:func:`slice_reader_gendsp`; ``play~`` is
+    linear-only and aliases on pitched playback — hunt #102) driven by a
+    ``line~`` position ramp (the ramp *is* the playback). Trigger one slice
+    by sending a 4-float list ``start_ms 0 end_ms dur_ms`` to
+    ``{prefix}_unpack`` inlet 0 -- the same shape ``line~`` consumes: jump to
+    start_ms in 0 ms, then ramp to end_ms over dur_ms (dur_ms = the slice
+    length in ms gives natural-rate playback; a shorter dur pitches the slice
+    up). The list also opens a ``live.adsr~`` de-click VCA (attack on
+    trigger, release after dur_ms via ``{prefix}_delay``) so read-position
+    jumps don't click. The CALLER must register the reader support file
+    (``device.add_support_file(*slice_reader_gendsp(channels))``) and should
+    drive ``msfactor`` (buffer samplerate / 1000) into ``{prefix}_play``
+    inlet 0 on sample load so ms addressing matches the buffer's rate.
 
     No ``sig~`` (lint-banned, and it zeroes gains on load): the position is a
     pure ``line~`` ramp built by the caller (or by the slice engine).
@@ -228,6 +290,10 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
     p = id_prefix
     r_outlet = 1 if channels >= 2 else 0
     play_outlettype = ["signal"] * channels
+    # hunt #102: the read head is a gen~ Hermite reader, not play~ (linear-
+    # only) — see slice_reader_gendsp. The box arg binds the (possibly
+    # ---scoped) buffer; the caller registers the content-addressed .gendsp.
+    reader_stem = slice_reader_gendsp(channels)[0][:-len(".gendsp")]
     boxes = [
         newobj(f"{p}_unpack", "unpack 0. 0. 0. 0.",
                numinlets=1, numoutlets=4,
@@ -241,9 +307,17 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
                patching_rect=[30, 90, 90, 20]),
         newobj(f"{p}_line", "line~", numinlets=2, numoutlets=2,
                outlettype=["signal", "bang"], patching_rect=[30, 120, 50, 20]),
-        newobj(f"{p}_play", f"play~ {buffer_name} {channels}",
+        newobj(f"{p}_play", f"gen~ {reader_stem}",
                numinlets=1, numoutlets=channels, outlettype=play_outlettype,
-               patching_rect=[30, 150, 120, 20]),
+               patching_rect=[30, 150, 200, 20]),
+        # load-time Buffer rebind: message text ---resolves; a gen~ box arg
+        # does NOT rebind (Live-verified silent).
+        newobj(f"{p}_lb", "loadbang", numinlets=1, numoutlets=1,
+               outlettype=["bang"], patching_rect=[240, 120, 60, 20]),
+        {"box": {"id": f"{p}_bufmsg", "maxclass": "message",
+                 "text": f"sbuf {buffer_name}", "numinlets": 2,
+                 "numoutlets": 1, "outlettype": [""],
+                 "patching_rect": [240, 150, 140, 20]}},
         newobj(f"{p}_adsr",
                f"live.adsr~ {declick_attack_ms} 0 1 {declick_release_ms}",
                numinlets=5, numoutlets=4,
@@ -279,6 +353,8 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
         patchline(f"{p}_tr", 1, f"{p}_open", 0),
         patchline(f"{p}_tr", 2, f"{p}_delay", 0),
         patchline(f"{p}_open", 0, f"{p}_adsr", 0),
+        patchline(f"{p}_lb", 0, f"{p}_bufmsg", 0),
+        patchline(f"{p}_bufmsg", 0, f"{p}_play", 0),
         patchline(f"{p}_line", 0, f"{p}_play", 0),
         patchline(f"{p}_play", 0, f"{p}_vca_l", 0),
         patchline(f"{p}_play", r_outlet, f"{p}_vca_r", 0),
