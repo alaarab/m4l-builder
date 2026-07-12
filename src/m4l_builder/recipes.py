@@ -5393,3 +5393,51 @@ def buffer_viewport(device, id_prefix, buffer_name, *, rect,
             "disp_len_in": device.box(f"{p}_wave").inlet(1),
         },
     )
+
+
+def meter_feed(device, id_prefix, target_id, *, sources, held_ms=None,
+               selector="levels", target_inlet=0, patch_x=40, patch_y=290):
+    """The ``pak -> prepend levels -> display`` meter/history feed (hunt #98).
+
+    Every level meter and GR/level history in the fleet hand-wired the same
+    glue: per-channel capture, a ``pak``, a ``prepend levels``, and a line
+    into the display. This recipe owns that shape so the channel order and
+    the held-peak capture policy can't be mis-wired per device.
+
+    ``sources`` is a list of ``(box_id, outlet)`` per pak slot, or ``None``
+    to leave a slot at the pak's ``0.`` default (loudness_meter's fixed-zero
+    GR slot). ``held_ms`` wraps each source in ``peakamp~ <held_ms>`` — the
+    HELD max since the last report; a ``snapshot~`` reads one instant and
+    under-reads every transient between frames (the #48/#101 class). Pass
+    ``None`` when the sources are already control-rate floats.
+
+    Returns ``{"holds": [per-source peakamp~ ids], "pak": id,
+    "prepend": id}`` — wire extra consumers (dB readouts) off ``holds``.
+    """
+    n = len(sources)
+    pak_id = f"{id_prefix}_pak"
+    pp_id = f"{id_prefix}_prepend"
+    holds = []
+    device.add_newobj(pak_id, "pak " + " ".join(["0."] * n),
+                      numinlets=n, numoutlets=1, outlettype=[""],
+                      patching_rect=[patch_x, patch_y + 60, 120, 20])
+    device.add_newobj(pp_id, f"prepend {selector}", numinlets=1, numoutlets=1,
+                      outlettype=[""],
+                      patching_rect=[patch_x, patch_y + 90, 110, 20])
+    for i, src in enumerate(sources):
+        if src is None:
+            continue
+        src_id, src_out = src
+        if held_ms is not None:
+            hold_id = f"{id_prefix}_hold{i}"
+            device.add_newobj(hold_id, f"peakamp~ {held_ms}", numinlets=1,
+                              numoutlets=1, outlettype=["float"],
+                              patching_rect=[patch_x + i * 90, patch_y, 80, 20])
+            device.add_line(src_id, src_out, hold_id, 0)
+            device.add_line(hold_id, 0, pak_id, i)
+            holds.append(hold_id)
+        else:
+            device.add_line(src_id, src_out, pak_id, i)
+    device.add_line(pak_id, 0, pp_id, 0)
+    device.add_line(pp_id, 0, target_id, target_inlet)
+    return {"holds": holds, "pak": pak_id, "prepend": pp_id}
