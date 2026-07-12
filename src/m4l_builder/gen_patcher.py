@@ -23,9 +23,14 @@ import re
 
 from .gen_lint import lint_genexpr
 
-__all__ = ["build_gendsp", "embed_gendsp", "gendsp_support_name"]
+__all__ = ["build_gendsp", "embed_gendsp", "gendsp_support_name",
+           "hoist_declarations"]
 
-_STATE_DECL = ("History ", "Delay ", "Data ")
+# hunt #29: ALL gen decl kinds hoist — a mid-code Param can silently kill the
+# codebox exactly like a mid-code History (gen_lint's HOIST ALL PARAMS note);
+# the fleet's ad-hoc device _hoist copies covered Param/Buffer while this
+# central pass covered only state decls, so the central protection was weaker.
+_STATE_DECL = ("History ", "Delay ", "Data ", "Param ", "Buffer ", "Const ")
 # A gen function def opens as ``name(args){`` (NO ``function`` keyword) on one line.
 _FUNC_DEF = re.compile(r"^\w+\s*\([^)]*\)\s*\{")
 
@@ -34,25 +39,29 @@ def _is_stmt(stripped: str) -> bool:
     """A depth-0 line that is an executable statement (not a decl/function/comment)."""
     if not stripped or stripped.startswith(_STATE_DECL):
         return False
-    if stripped.startswith(("Param ", "Buffer ", "Const ", "//", "/*", "*")):
+    if stripped.startswith(("//", "/*", "*")):
         return False
     if stripped.startswith("function ") or _FUNC_DEF.match(stripped):
         return False
     return True
 
 
-def _hoist_history(code: str) -> str:
-    """Hoist top-level History/Delay/Data decls above the first statement.
+def hoist_declarations(code: str) -> str:
+    """Hoist top-level gen declarations above the first statement (hunt #29).
 
-    gen REQUIRES every state declaration to precede the first executable statement.
+    gen REQUIRES every declaration to precede the first executable statement.
     Splicing two-or-more self-contained stateful kernels (e.g. two ``tilt_shelf``
     blocks, an FDN's delay lines) interleaves a later kernel's ``History`` AFTER an
     earlier kernel's body, which SILENCES the whole codebox — Live-CONFIRMED: Tilt,
     Aurora, Mono Maker and Snap all shipped silent (output meter 0.0) from exactly
-    this. This moves every **depth-0** ``History``/``Delay``/``Data`` line to just
-    before the first depth-0 statement.
+    this; a mid-code ``Param`` kills it the same way (the Dynamic-EQ A/B case in
+    gen_lint). This moves every **depth-0** ``History``/``Delay``/``Data``/
+    ``Param``/``Buffer``/``Const`` line to just before the first depth-0
+    statement — the single central pass that replaced ~10 per-device ``_hoist``
+    copies (which were NOT depth-aware and would wrongly globalize in-function
+    state).
 
-    SAFE: a true NO-OP unless a violation actually exists (a state decl after the
+    SAFE: a true NO-OP unless a violation actually exists (a decl after the
     first statement), so correct codeboxes are byte-identical; never touches decls
     inside function bodies (brace depth > 0).
     """
@@ -146,7 +155,7 @@ def build_gendsp(
     overridable so an existing plugin can reproduce its exact prior bytes (e.g.
     pressure historically shipped 540/640).
     """
-    code = _hoist_history(code)  # state decls before first statement, or the codebox silences
+    code = hoist_declarations(code)  # decls before first statement, or the codebox silences
     if lint:
         issues = lint_genexpr(code, numins, numouts)
         if issues:

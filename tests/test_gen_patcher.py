@@ -178,21 +178,21 @@ def test_build_gendsp_hoists_interleaved_history():
 
 
 def test_hoist_history_is_noop_when_correct():
-    from m4l_builder.gen_patcher import _hoist_history
+    from m4l_builder.gen_patcher import hoist_declarations
     code = ("Param a(0.);\nHistory k1(0.);\nHistory k2(0.);\n"
             "x = in1 * a;\nout1 = x + k1 + k2;")
-    assert _hoist_history(code) == code                      # byte-identical no-op
+    assert hoist_declarations(code) == code                      # byte-identical no-op
 
 
 def test_hoist_history_keeps_state_inside_functions():
-    from m4l_builder.gen_patcher import _hoist_history
+    from m4l_builder.gen_patcher import hoist_declarations
     # History inside a gen function body (depth>0) must NOT be hoisted out, and the
     # function must stay above the hoisted top-level decl.
     code = ("osc(f){\n\tHistory h(0.);\n\treturn cycle(f) + h;\n}\n"
             "y = osc(220);\n"
             "History g(0.);\n"      # depth-0 violation -> hoist THIS one only
             "out1 = y + g;\n")
-    out = _hoist_history(code)
+    out = hoist_declarations(code)
     assert out.split("\n")[0] == "osc(f){"                   # function still first
     assert "\tHistory h(0.);" in out                         # inner History untouched
     assert _state_all_before_first_stmt(out)                 # top-level decl hoisted
