@@ -331,3 +331,59 @@ def oversampled_wrapper(id_prefix: str, inner_boxes: list, inner_lines: list,
     import json as _json
     sidecar = (f"{p}_osfx.maxpat", _json.dumps(sub, indent="\t"))
     return ([host], [], sidecar)
+
+
+def mutable_subpatch_host(id_prefix: str, inner_boxes: list, inner_lines: list,
+                          *, nins: int = 1, nouts: int = 1) -> tuple:
+    """Host an MSP chain in a HOST-RATE ``poly~ … 1`` voice so its DSP can be
+    truly MUTED (hunt #58/#63 — the real pfft~ CPU gate).
+
+    Feeding a pfft~ silence does NOT stop its FFT (measured: Parametric EQ V2
+    analyzer ON 9.7% vs silence-fed 'off' 11.6% — no delta); only poly~'s
+    ``mute`` reclaims the cycles. Wire the chain FROM ``{p}_in1..{p}_inN``
+    (``in~ k``) INTO ``{p}_out1..{p}_outN`` (``out~ k``). The returned host
+    box (id ``{p}_poly``) accepts ``mute 1 <flag>`` messages on its LEFT
+    inlet (poly~ control messages are consumed by poly~ itself, never the
+    voice): flag 1 = DSP off (outputs 0s), flag 0 = running. A just-unmuted
+    pfft~ needs one frame to refill — the accepted re-arm transient.
+
+    Same sidecar contract as :func:`oversampled_wrapper`: poly~ cannot embed
+    its patcher inline (Live-verified silent), so register the returned
+    ``(name, json)`` via ``device.register_asset(..., category="js")``.
+    """
+    p = id_prefix
+    boxes = []
+    for k in range(1, nins + 1):
+        boxes.append({"box": {
+            "id": f"{p}_in{k}", "maxclass": "newobj", "text": f"in~ {k}",
+            "numinlets": 0, "numoutlets": 1, "outlettype": ["signal"],
+            "patching_rect": [30 + (k - 1) * 70, 30, 45, 20]}})
+    for k in range(1, nouts + 1):
+        boxes.append({"box": {
+            "id": f"{p}_out{k}", "maxclass": "newobj", "text": f"out~ {k}",
+            "numinlets": 1, "numoutlets": 0,
+            "patching_rect": [30 + (k - 1) * 70, 400, 50, 20]}})
+    boxes.extend(inner_boxes)
+    sub = {
+        "patcher": {
+            "fileversion": 1,
+            "appversion": {"major": 8, "minor": 6, "revision": 2},
+            "rect": [0, 0, 640, 480],
+            "bglocked": 0,
+            "openinpresentation": 0,
+            "boxes": boxes,
+            "lines": list(inner_lines),
+        }
+    }
+    host = {
+        "box": {
+            "id": f"{p}_poly", "maxclass": "newobj",
+            "text": f"poly~ {p}_mfx.maxpat 1",
+            "numinlets": max(nins, 1), "numoutlets": nouts,
+            "outlettype": ["signal"] * nouts,
+            "patching_rect": [30, 30, 200, 20],
+        }
+    }
+    import json as _json
+    sidecar = (f"{p}_mfx.maxpat", _json.dumps(sub, indent="\t"))
+    return ([host], [], sidecar)
