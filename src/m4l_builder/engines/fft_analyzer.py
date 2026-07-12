@@ -129,6 +129,7 @@ def fft_analyzer_dsp(
     announce_selector: str = "set_analyzer_buffer",
     loadbang_id: str | None = None,
     gate_src: tuple | None = None,
+    mutable: bool = False,
     patch_x: int = 80,
     patch_y: int = 560,
 ) -> dict[str, str]:
@@ -149,6 +150,14 @@ def fft_analyzer_dsp(
     ``pfft~``, so the FFT processes silence when the analyzer is off (the CPU
     gate). Default ``None`` keeps existing devices byte-identical. Returns the
     created object ids.
+
+    ``mutable=True`` hosts the ``pfft~`` inside a ``poly~ 1`` voice
+    (``mutable_subpatch_host``) under the SAME box id, so the device can send
+    ``mute 1 <flag>`` to that id to truly stop the FFT — feeding a pfft~
+    silence does NOT reclaim its CPU (Live-measured: analyzer ON 9.7% vs
+    silence-fed 11.6%, no real delta); only poly~ mute does. All source/gate
+    wiring is unchanged. The returned ids gain ``"mute_host"`` (== the pfft
+    id) as the mute-message target.
     """
     bins = fft_size // 2
     # Per-instance-unique buffer via ``---`` device scoping (the viz-bus-proven
@@ -209,11 +218,35 @@ def fft_analyzer_dsp(
     device.add_line(lb_id, 0, bufsize_id, 0)
     device.add_line(bufsize_id, 0, buf_id, 0)
 
-    device.add_newobj(
-        pfft_id, f"pfft~ {stem} {fft_size} {overlap}",
-        numinlets=1, numoutlets=1, outlettype=["signal"],
-        patching_rect=[patch_x, patch_y, 220, 22],
-    )
+    if mutable:
+        from ..dsp.routing import mutable_subpatch_host
+
+        _mut = f"{id_prefix}_mut"
+        _inner = [{"box": {
+            "id": f"{_mut}_krn", "maxclass": "newobj",
+            "text": f"pfft~ {stem} {fft_size} {overlap}",
+            "numinlets": 1, "numoutlets": 1, "outlettype": ["signal"],
+            "patching_rect": [30.0, 100.0, 220.0, 22.0],
+        }}]
+        _wires = [
+            {"patchline": {"source": [f"{_mut}_in1", 0],
+                           "destination": [f"{_mut}_krn", 0]}},
+            {"patchline": {"source": [f"{_mut}_krn", 0],
+                           "destination": [f"{_mut}_out1", 0]}},
+        ]
+        _host, _, _sidecar = mutable_subpatch_host(_mut, _inner, _wires,
+                                                   nins=1, nouts=1)
+        device.add_support_file(_sidecar[0], _sidecar[1], file_type="JSON")
+        _host[0]["box"]["id"] = pfft_id
+        _host[0]["box"]["patching_rect"] = [patch_x, patch_y, 220, 22]
+        device.add_box(_host[0])
+        ids["mute_host"] = pfft_id
+    else:
+        device.add_newobj(
+            pfft_id, f"pfft~ {stem} {fft_size} {overlap}",
+            numinlets=1, numoutlets=1, outlettype=["signal"],
+            patching_rect=[patch_x, patch_y, 220, 22],
+        )
     if gate_src is not None:
         gate_id = f"{id_prefix}_gate"
         device.add_newobj(
