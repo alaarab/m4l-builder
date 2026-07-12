@@ -134,6 +134,7 @@ from .synthesis import (
     noise_source,
     poly_voices,
     slice_pool,
+    slice_reader_gendsp,
     slice_voice,
     wavetable_osc,
 )
@@ -235,6 +236,7 @@ __all__ = [
     "sidechain_routing",
     "signal_divide",
     "slice_pool",
+    "slice_reader_gendsp",
     "slice_voice",
     "spectral_crossover",
     "spectral_crossover_subpatcher",
