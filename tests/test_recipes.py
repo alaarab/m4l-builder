@@ -2291,3 +2291,67 @@ class TestT33BufferViewport:
         assert ("z_zt", 0, "z_fe", 0) in lines   # left bang -> end store
         assert ("z_fs", 0, "z_len", 1) in lines  # start = cold expr inlet
         assert ("z_fe", 0, "z_len", 0) in lines  # end = hot expr inlet
+
+
+class TestMeterFeed:
+    """pak -> 'prepend levels' meter/history glue (hunt #98): the recipe owns
+    channel order + the held-peak capture policy so devices can't mis-wire."""
+
+    def _make(self):
+        device = AudioEffect("MeterProof", width=200, height=100)
+        device.add_newobj("src", "gen~", numinlets=2, numoutlets=2,
+                          outlettype=["signal", "signal"],
+                          patching_rect=[10, 10, 60, 20])
+        device.add_newobj("disp", "jsui", numinlets=2, numoutlets=1,
+                          outlettype=[""], patching_rect=[10, 60, 60, 20])
+        return device
+
+    def _boxes_lines(self, device):
+        boxes = {b["box"]["id"]: b["box"] for b in device.boxes}
+        lines = {(c["patchline"]["source"][0], c["patchline"]["source"][1],
+                  c["patchline"]["destination"][0],
+                  c["patchline"]["destination"][1])
+                 for c in device.lines}
+        return boxes, lines
+
+    def test_held_variant_wraps_each_source_in_peakamp(self):
+        from m4l_builder.recipes import meter_feed
+        device = self._make()
+        ids = meter_feed(device, "lvl", "disp",
+                         sources=[("src", 0), ("src", 1)], held_ms=50)
+        boxes, lines = self._boxes_lines(device)
+        assert boxes["lvl_hold0"]["text"] == "peakamp~ 50"
+        assert boxes["lvl_hold1"]["text"] == "peakamp~ 50"
+        assert boxes["lvl_pak"]["text"] == "pak 0. 0."
+        assert boxes["lvl_prepend"]["text"] == "prepend levels"
+        assert ("src", 0, "lvl_hold0", 0) in lines
+        assert ("src", 1, "lvl_hold1", 0) in lines
+        assert ("lvl_hold0", 0, "lvl_pak", 0) in lines
+        assert ("lvl_hold1", 0, "lvl_pak", 1) in lines
+        assert ("lvl_pak", 0, "lvl_prepend", 0) in lines
+        assert ("lvl_prepend", 0, "disp", 0) in lines
+        assert ids["holds"] == ["lvl_hold0", "lvl_hold1"]
+        assert ids["pak"] == "lvl_pak" and ids["prepend"] == "lvl_prepend"
+
+    def test_control_variant_wires_sources_straight_to_pak(self):
+        from m4l_builder.recipes import meter_feed
+        device = self._make()
+        ids = meter_feed(device, "hist", "disp",
+                         sources=[("src", 0), ("src", 1)])
+        boxes, lines = self._boxes_lines(device)
+        assert "hist_hold0" not in boxes                  # no peakamp~ stage
+        assert ("src", 0, "hist_pak", 0) in lines
+        assert ("src", 1, "hist_pak", 1) in lines
+        assert ids["holds"] == []
+
+    def test_none_slot_stays_at_pak_default(self):
+        from m4l_builder.recipes import meter_feed
+        device = self._make()
+        meter_feed(device, "m", "disp", sources=[("src", 0), None],
+                   target_inlet=1)
+        boxes, lines = self._boxes_lines(device)
+        assert boxes["m_pak"]["text"] == "pak 0. 0."      # slot 1 keeps 0.
+        assert ("src", 0, "m_pak", 0) in lines
+        assert not any(dst == "m_pak" and inlet == 1
+                       for (_, _, dst, inlet) in lines)
+        assert ("m_prepend", 0, "disp", 1) in lines       # target_inlet honored
