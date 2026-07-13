@@ -44,13 +44,50 @@ def slice_reader_gendsp(channels: int = 2) -> tuple:
             f"c1_{ch} = 0.5 * (y2_{ch} - y0_{ch});\n"
             f"c2_{ch} = y0_{ch} - 2.5 * y1_{ch} + 2. * y2_{ch} - 0.5 * y3_{ch};\n"
             f"c3_{ch} = 0.5 * (y3_{ch} - y0_{ch}) + 1.5 * (y1_{ch} - y2_{ch});\n"
-            f"out{ch + 1} = ((c3_{ch} * f + c2_{ch}) * f + c1_{ch}) * f + y1_{ch};"
+            f"out{ch + 1} = (((c3_{ch} * f + c2_{ch}) * f + c1_{ch}) * f + y1_{ch})"
+            f" * outg;"
         )
+    # PITCH ENVELOPE (the VR Super-Slicer graft): a per-hit exponential pitch
+    # sweep, computed as a rate-ratio ACCUMULATOR on top of the incoming ms
+    # ramp. On retrigger (host `trig` counter bump OR a >8 ms ramp jump — the
+    # line~ set is instantaneous, normal playback moves ~0.02 ms/sample) the
+    # accumulator adopts the ramp position and the envelope resets to 1; each
+    # sample then advances by the RAMP's delta scaled by 2^(penva*env/12),
+    # with env decaying exponentially (penvd ms). `bound` (the slice end, ms)
+    # clamps the read so pitched-UP sweeps can't bleed into the next slice —
+    # once pinned at the edge the voice fades out fast (mute *= .995/sample).
+    # penva == 0 reads the raw ramp DIRECTLY (bit-exact bypass, no drift).
     code = (
         'Buffer sbuf("sbuf");\n'
         "Param msfactor(44.1);\n"
+        "Param penva(0.);\n"
+        "Param penvd(60.);\n"
+        "Param trig(0.);\n"
+        "Param bound(-1.);\n"
+        "History posh(0.); History envh(0.); History previn(0.);\n"
+        "History prevtrig(0.); History starth(0.); History muteh(1.);\n"
         "n = dim(sbuf);\n"
-        "p = clamp(in1 * msfactor, 0., max(n - 1., 0.));\n"
+        "mspos = in1;\n"
+        "rt = (trig != prevtrig) || (abs(mspos - previn) > 8.);\n"
+        "posh = rt ? mspos : posh;\n"
+        "starth = rt ? mspos : starth;\n"
+        "envh = rt ? 1. : envh;\n"
+        "muteh = rt ? 1. : muteh;\n"
+        "delta = rt ? 0. : mspos - previn;\n"
+        "ratio = pow(2., penva * envh / 12.);\n"
+        "np = posh + delta * ratio;\n"
+        "blo = min(starth, bound);\n"
+        "bhi = max(starth, bound);\n"
+        "oob = (bound >= 0.) && (np < blo || np > bhi);\n"
+        "np = (bound >= 0.) ? clamp(np, blo, bhi) : np;\n"
+        "muteh = oob ? muteh * 0.995 : muteh;\n"
+        "envh = envh * exp(-1. / (max(penvd, 1.) * samplerate * 0.001));\n"
+        "posh = np;\n"
+        "previn = mspos;\n"
+        "prevtrig = trig;\n"
+        "readpos = penva == 0. ? mspos : np;\n"
+        "outg = penva == 0. ? 1. : muteh;\n"
+        "p = clamp(readpos * msfactor, 0., max(n - 1., 0.));\n"
         "i1 = floor(p);\n"
         "f = p - i1;\n"
         "i0 = max(i1 - 1., 0.);\n"
@@ -338,6 +375,17 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
                outlettype=["signal"], patching_rect=[30, 190, 50, 20]),
         newobj(f"{p}_vca_r", "*~", numinlets=2, numoutlets=1,
                outlettype=["signal"], patching_rect=[100, 190, 50, 20]),
+        # pitch-envelope retrigger + slice bound (see slice_reader_gendsp):
+        # each trigger bumps a counter into the reader's `trig` param (resets
+        # the per-hit sweep) and the slice END rides ahead as `bound` so a
+        # pitched-up read can't run past the slice. Inert while penva == 0.
+        newobj(f"{p}_trigc", "counter", numinlets=5, numoutlets=4,
+               outlettype=["int", "", "", "int"],
+               patching_rect=[240, 60, 80, 20]),
+        newobj(f"{p}_trigpp", "prepend trig", numinlets=1, numoutlets=1,
+               outlettype=[""], patching_rect=[240, 90, 80, 20]),
+        newobj(f"{p}_boundpp", "prepend bound", numinlets=1, numoutlets=1,
+               outlettype=[""], patching_rect=[330, 60, 90, 20]),
     ]
     lines = [
         # rebuild the start/0/end/dur list, start (outlet 0) is the hot trigger
@@ -364,6 +412,13 @@ def slice_voice(id_prefix: str, buffer_name: str, *, channels: int = 2,
         # ramp done -> release the de-click envelope
         patchline(f"{p}_delay", 0, f"{p}_rel", 0),
         patchline(f"{p}_rel", 0, f"{p}_adsr", 0),
+        # pitch-env: bound (slice end) lands first (unpack fires right->left),
+        # then the trigger bang bumps the counter into the reader's trig param.
+        patchline(f"{p}_unpack", 2, f"{p}_boundpp", 0),
+        patchline(f"{p}_boundpp", 0, f"{p}_play", 0),
+        patchline(f"{p}_tr", 1, f"{p}_trigc", 0),
+        patchline(f"{p}_trigc", 0, f"{p}_trigpp", 0),
+        patchline(f"{p}_trigpp", 0, f"{p}_play", 0),
     ]
     return (boxes, lines)
 

@@ -4312,11 +4312,16 @@ class TestGroovePlayer:
 class TestSliceVoice:
     """Test slice_voice() builds a play~+line~ one-shot slice player."""
 
-    def test_returns_14_boxes(self):
+    def test_returns_17_boxes(self):
         # +1: the per-trigger gain stage on the envelope signal (accents/ducks)
         # +2 (hunt #102): loadbang + Buffer-rebind message for the gen~ reader
+        # +3 (pitch env): trig counter + prepend trig + prepend bound feed the
+        #    reader's per-hit sweep (inert while penva == 0)
         boxes, lines = slice_voice("sv", "slicebuf")
-        assert len(boxes) == 14
+        assert len(boxes) == 17
+        assert _find_box(boxes, "sv_trigc")["text"] == "counter"
+        assert _find_box(boxes, "sv_trigpp")["text"] == "prepend trig"
+        assert _find_box(boxes, "sv_boundpp")["text"] == "prepend bound"
         bufmsg = _find_box(boxes, "sv_bufmsg")
         assert bufmsg["text"] == "sbuf slicebuf"
         assert len(lines) > 0
