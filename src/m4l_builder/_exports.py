@@ -239,6 +239,7 @@ DSP_EXPORTS = [
     "noteout",
     "ctlin",
     "ctlout",
+    "sysex_out",
     "velocity_curve",
     "transpose",
     "midi_thru",

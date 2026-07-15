@@ -14,6 +14,9 @@ from m4l_builder.dsp import (
     bank_select_in,
     bitcrusher,
     buffer_load,
+    cc_mapper_lane,
+    cc_mapper_lane_mpe_lines,
+    cc_mapper_lane_ui_lines,
     chord,
     coll_store,
     comb_resonator,
@@ -61,6 +64,7 @@ from m4l_builder.dsp import (
     midi_learn_chain,
     midi_thru,
     modwheel_in,
+    mpe_io_chain,
     morphing_lfo,
     ms_encode_decode,
     multiband_compressor,
@@ -102,6 +106,7 @@ from m4l_builder.dsp import (
     spectrum_band_extract,
     stereo_io,
     stft_phase_vocoder,
+    sysex_out,
     tempo_sync,
     tilt_eq,
     transport_lfo,
@@ -2218,6 +2223,49 @@ class TestCtlout:
         assert boxes[0]["box"]["numoutlets"] == 0
 
 
+class TestSysexOut:
+    def test_returns_sxformat_and_midiout(self):
+        boxes, lines = sysex_out("sx", [0x00, 0x20, 0x32, 0x28, 0x7F, 0x10, 0x20])
+        assert len(boxes) == 2
+        assert len(lines) == 1
+        assert _box_texts(boxes) == [
+            "sxformat 240 0 32 50 40 127 16 32 247",
+            "midiout",
+        ]
+
+    def test_auto_framing_can_be_disabled(self):
+        boxes, _ = sysex_out(
+            "sx",
+            [0xF0, 0x43, 0x10, 0xF7],
+            auto_framing=False,
+        )
+        assert _box_texts(boxes)[0] == "sxformat 240 67 16 247"
+
+    def test_dynamic_bytes_use_sxformat_expressions(self):
+        boxes, _ = sysex_out(
+            "sx",
+            [0x43, 0x10, 0x12, 0x11, 0x00],
+            dynamic=(3, 4),
+        )
+        assert _box_texts(boxes)[0] == "sxformat 240 67 16 / is $i1 / / is $i2 / 0 247"
+        assert boxes[0]["box"]["numinlets"] == 2
+
+    def test_sxformat_wired_to_midiout(self):
+        _, lines = sysex_out("sx", [0x7F])
+        assert lines[0]["patchline"] == {
+            "source": ["sx_sxformat", 0],
+            "destination": ["sx_midiout", 0],
+        }
+
+    def test_rejects_empty_data(self):
+        with pytest.raises(ValueError, match="must not be empty"):
+            sysex_out("sx", [])
+
+    def test_rejects_dynamic_on_framing_bytes(self):
+        with pytest.raises(ValueError, match="0xF0 start or 0xF7 end"):
+            sysex_out("sx", [0x43, 0x10], dynamic=(0,))
+
+
 class TestVelocityCurve:
     def test_linear_returns_clip_only(self):
         boxes, lines = velocity_curve("vc")
@@ -3072,6 +3120,74 @@ class TestXfadeMatrix:
         assert "myxf_wt_0" in ids
         assert "myxf_mul_0" in ids
         assert "myxf_sum" in ids
+
+
+class TestCcMapperLane:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = cc_mapper_lane("cc1", py=2000)
+        assert len(boxes) == 6
+        assert len(lines) == 5
+
+    def test_has_route_and_pak(self):
+        boxes, _ = cc_mapper_lane("cc1")
+        ids = _box_ids(boxes)
+        assert "cc1_route" in ids
+        assert "cc1_pak" in ids
+
+    def test_active_is_message_box(self):
+        boxes, _ = cc_mapper_lane("cc1")
+        active = _find_box(boxes, "cc1_active")
+        assert active["maxclass"] == "message"
+        assert active["text"] == "active $1"
+
+    def test_route_to_trig_connection(self):
+        _, lines = cc_mapper_lane("cc1")
+        assert {"source": ["cc1_route", 0], "destination": ["cc1_trig", 0]} in [
+            line["patchline"] for line in lines
+        ]
+
+    def test_ui_lines_connect_ctrl_and_value(self):
+        lines = cc_mapper_lane_ui_lines("cc1", "cc1_ctrl", "cc1_value")
+        assert len(lines) == 6
+        assert lines[0]["patchline"]["source"] == ["cc1_ctrl", 0]
+        assert lines[-1]["patchline"]["destination"] == ["cc1_add", 0]
+
+    def test_mpe_lines_connect_cc_stream(self):
+        lines = cc_mapper_lane_mpe_lines("cc1", "mpe_mpeparse", "mpe_midiformat")
+        assert len(lines) == 3
+        assert lines[0]["patchline"]["source"] == ["mpe_mpeparse", 2]
+        assert lines[0]["patchline"]["destination"] == ["cc1_route", 0]
+
+
+class TestMpeIoChain:
+    def test_returns_boxes_and_lines(self):
+        boxes, lines = mpe_io_chain("mpe")
+        assert len(boxes) == 8
+        assert len(lines) == 28  # 6 core + 6 midiformat inlets + 16 gate channels
+
+    def test_has_mpeparse_and_midiformat(self):
+        boxes, _ = mpe_io_chain("mpe")
+        ids = _box_ids(boxes)
+        assert "mpe_mpeparse" in ids
+        assert "mpe_midiformat" in ids
+
+    def test_hires_attribute(self):
+        boxes, _ = mpe_io_chain("mpe", hires=True)
+        texts = _box_texts(boxes)
+        assert "mpeparse @hires 1" in texts
+        assert "midiformat @hires 1" in texts
+
+    def test_midiin_to_mpeparse_connection(self):
+        _, lines = mpe_io_chain("mpe")
+        assert {"source": ["mpe_midiin", 0], "destination": ["mpe_mpeparse", 0]} in [
+            line["patchline"] for line in lines
+        ]
+
+    def test_mpeformat_to_midiout_connection(self):
+        _, lines = mpe_io_chain("mpe")
+        assert {"source": ["mpe_mpeformat", 0], "destination": ["mpe_midiout", 0]} in [
+            line["patchline"] for line in lines
+        ]
 
 
 class TestMidiLearnChain:

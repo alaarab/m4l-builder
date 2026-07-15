@@ -20,6 +20,31 @@ def newobj(id: str, text: str, *, numinlets: int, numoutlets: int,
     return {"box": box}
 
 
+def message(
+    id: str,
+    text: str,
+    *,
+    numinlets: int = 2,
+    numoutlets: int = 1,
+    outlettype: list = None,
+    patching_rect: list = None,
+    **kwargs,
+) -> dict:
+    """Create a Max message box dict with a "box" key."""
+    box = {
+        "id": id,
+        "maxclass": "message",
+        "text": text,
+        "numinlets": numinlets,
+        "numoutlets": numoutlets,
+        "patching_rect": patching_rect or [0, 0, 50, 22],
+    }
+    if outlettype is not None:
+        box["outlettype"] = outlettype
+    box.update(kwargs)
+    return {"box": box}
+
+
 def patchline(source_id: str, source_outlet: int, dest_id: str, dest_inlet: int, **kwargs) -> dict:
     """Create a patchline connection dict with a "patchline" key."""
     patchline_dict = {
