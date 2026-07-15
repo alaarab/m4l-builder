@@ -49,7 +49,7 @@ from ..jsui_contract import (
 from ..layout import Column, Columns, Grid, Row, inset_rect
 from ..modules import ModuleSpec, module_from_block, mount_module
 from ..notes import NoteEvent, notes_dict
-from ..objects import newobj, patchline
+from ..objects import message, newobj, patchline
 from ..parameters import (
     LIVE_NATIVE_INT_MAX,
     LIVE_NATIVE_INT_MIN,
@@ -145,6 +145,7 @@ __all__ = [
     "device_to_frozen_bytes",
     "freeze_amxd_file",
     "newobj",
+    "message",
     "patchline",
     "AUDIO_EFFECT",
     "INSTRUMENT",
