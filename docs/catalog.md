@@ -63,6 +63,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `midi_clock_out` | Send MIDI clock (24 ppqn) synced to Live transport. |
 | `midi_learn_chain` | MIDI learn chain: captures next incoming CC and routes it to a named send. |
 | `midi_thru` | Raw MIDI byte passthrough (midiin -> midiout). |
+| `sysex_out` | Send MIDI system exclusive via sxformat -> midiout. |
 | `midi_tool_io` | Create the live.miditool.in / live.miditool.out pair for a MIDI Tool. |
 | `modwheel_in` | Receive MIDI mod wheel (CC 1), output 0-127. |
 | `morphing_lfo` | LFO blending between sine, triangle, square, and saw shapes. |

@@ -1,6 +1,10 @@
 """MIDI processing."""
 
-from ..objects import newobj, patchline
+from ..objects import message, newobj, patchline
+
+# mpeparse / midiformat CC stream indices (MPE-aware MIDI effect devices).
+MPE_CC_OUTLET = 2
+MIDIFORMAT_CC_INLET = 2
 
 
 def notein(id_prefix: str, channel: int = 0) -> tuple:
@@ -50,6 +54,84 @@ def ctlout(id_prefix: str, cc: int = 1, channel: int = 1) -> tuple:
                numinlets=3, numoutlets=0),
     ]
     return (boxes, [])
+
+
+_SYSEX_START = 0xF0
+_SYSEX_END = 0xF7
+
+
+def _framed_sysex_bytes(data, *, auto_framing: bool) -> list:
+    """Normalize SysEx bytes and optionally add 0xF0 / 0xF7 framing."""
+    if not data:
+        raise ValueError("sysex data must not be empty")
+    out = [int(b) & 0xFF for b in data]
+    if any(b < 0 or b > 255 for b in out):
+        raise ValueError("sysex bytes must be 0-255")
+    if auto_framing:
+        if out[0] != _SYSEX_START:
+            out.insert(0, _SYSEX_START)
+        if out[-1] != _SYSEX_END:
+            out.append(_SYSEX_END)
+    elif out[0] != _SYSEX_START or out[-1] != _SYSEX_END:
+        raise ValueError(
+            "sysex message must start with 240 (0xF0) and end with 247 (0xF7); "
+            "use auto_framing=True or add framing bytes explicitly",
+        )
+    return out
+
+
+def _sxformat_text(data: list, dynamic=None) -> tuple:
+    """Build sxformat object text and inlet count from framed bytes."""
+    dynamic = tuple(dynamic or ())
+    n = len(data)
+    for idx in dynamic:
+        if idx < 0 or idx >= n:
+            raise ValueError(f"dynamic index {idx} out of range for {n} sysex bytes")
+        if idx == 0 or idx == n - 1:
+            raise ValueError(
+                "dynamic indices must not target the 0xF0 start or 0xF7 end byte",
+            )
+    if len(set(dynamic)) != len(dynamic):
+        raise ValueError("dynamic indices must be unique")
+
+    dynamic_map = {idx: slot + 1 for slot, idx in enumerate(dynamic)}
+    parts = []
+    for i, byte in enumerate(data):
+        if i in dynamic_map:
+            parts.append(f"/ is $i{dynamic_map[i]} /")
+        else:
+            parts.append(str(byte))
+    return "sxformat " + " ".join(parts), max(len(dynamic), 1)
+
+
+def sysex_out(id_prefix: str, data, *, dynamic=None, auto_framing: bool = True) -> tuple:
+    """Send MIDI system exclusive via sxformat -> midiout.
+
+    ``data`` is the SysEx byte payload in decimal (0-255). When ``auto_framing``
+    is true (default), 0xF0 (240) and 0xF7 (247) are added if missing.
+
+    ``dynamic`` lists 0-based byte indices (in the framed message) replaced by
+    sxformat ``/ is $iN /`` expressions. Wire values to ``{prefix}_sxformat``
+    inlets 0..N-1; bang inlet 0 to send.
+
+    Returns (boxes, lines) with ``{prefix}_sxformat`` -> ``{prefix}_midiout``.
+    """
+    framed = _framed_sysex_bytes(data, auto_framing=auto_framing)
+    sx_text, numinlets = _sxformat_text(framed, dynamic)
+    boxes = [
+        newobj(
+            f"{id_prefix}_sxformat", sx_text,
+            numinlets=numinlets, numoutlets=1, outlettype=["int"],
+        ),
+        newobj(
+            f"{id_prefix}_midiout", "midiout",
+            numinlets=1, numoutlets=0,
+        ),
+    ]
+    lines = [
+        patchline(f"{id_prefix}_sxformat", 0, f"{id_prefix}_midiout", 0),
+    ]
+    return (boxes, lines)
 
 
 def velocity_curve(id_prefix: str, curve: str = "linear") -> tuple:
@@ -475,6 +557,153 @@ def midi_clock_in(id_prefix: str) -> tuple:
         patchline(f"{p}_timer", 0, f"{p}_bpm", 0),
         patchline(f"{p}_bpm", 0, f"{p}_bpm_scale", 0),
     ]
+    return (boxes, lines)
+
+
+def cc_mapper_lane(id_prefix: str, *, py: int = 0) -> tuple:
+    """DSP for one MIDI CC mapper lane (route / learn / emit).
+
+    Wire the lane UI with :func:`cc_mapper_lane_ui_lines` and connect to an
+    MPE I/O chain via :func:`cc_mapper_lane_mpe_lines`.
+
+    Objects use ``{prefix}_route``, ``{prefix}_pak``, etc. ``{prefix}_route``
+    inlet 0 receives incoming CC; outlet 1 passes matched CC through.
+    ``{prefix}_pak`` outlet 0 emits ``[controller, value]`` for midiformat.
+    """
+    p = id_prefix
+    boxes = [
+        newobj(
+            f"{p}_route", "route",
+            numinlets=2, numoutlets=2, outlettype=["", ""],
+            patching_rect=[py + 60, py, 78, 22],
+        ),
+        newobj(
+            f"{p}_gte", ">= 0",
+            numinlets=2, numoutlets=1, outlettype=["int"],
+            patching_rect=[py, py + 45, 33, 22],
+        ),
+        message(
+            f"{p}_active", "active $1",
+            patching_rect=[py + 30, py + 75, 57, 22],
+        ),
+        newobj(
+            f"{p}_trig", "trigger b i",
+            numinlets=1, numoutlets=2, outlettype=["bang", "int"],
+            patching_rect=[py + 120, py + 30, 59, 22],
+        ),
+        newobj(
+            f"{p}_add", "+ 0.",
+            numinlets=2, numoutlets=1, outlettype=["float"],
+            patching_rect=[py + 30, py + 105, 29.5, 22],
+        ),
+        newobj(
+            f"{p}_pak", "pak 0 0.",
+            numinlets=2, numoutlets=1,
+            patching_rect=[py - 20, py + 135, 51, 22],
+        ),
+    ]
+    lines = [
+        patchline(f"{p}_gte", 0, f"{p}_active", 0),
+        patchline(f"{p}_route", 0, f"{p}_trig", 0),
+        patchline(f"{p}_trig", 0, f"{p}_add", 0),
+        patchline(f"{p}_trig", 1, f"{p}_add", 1),
+        patchline(f"{p}_add", 0, f"{p}_pak", 1),
+    ]
+    return (boxes, lines)
+
+
+def cc_mapper_lane_ui_lines(id_prefix: str, ctrl_id: str, value_id: str) -> list:
+    """Patchlines from lane UI controls into :func:`cc_mapper_lane`."""
+    p = id_prefix
+    return [
+        patchline(ctrl_id, 0, f"{p}_gte", 0),
+        patchline(f"{p}_gte", 0, f"{p}_active", 0),
+        patchline(f"{p}_active", 0, value_id, 0),
+        patchline(ctrl_id, 0, f"{p}_route", 1),
+        patchline(ctrl_id, 0, f"{p}_pak", 0),
+        patchline(value_id, 0, f"{p}_add", 0),
+    ]
+
+
+def cc_mapper_lane_mpe_lines(
+    id_prefix: str,
+    mpeparse_id: str,
+    midiformat_id: str,
+    *,
+    cc_outlet: int = MPE_CC_OUTLET,
+    cc_inlet: int = MIDIFORMAT_CC_INLET,
+) -> list:
+    """Patchlines from a CC lane into an :func:`mpe_io_chain`."""
+    p = id_prefix
+    return [
+        patchline(mpeparse_id, cc_outlet, f"{p}_route", 0),
+        patchline(f"{p}_pak", 0, midiformat_id, cc_inlet),
+        patchline(f"{p}_route", 1, midiformat_id, cc_inlet),
+    ]
+
+
+def mpe_io_chain(id_prefix: str = "mpe", *, hires: bool = True) -> tuple:
+    """MPE MIDI I/O: midiin → mpeparse → gate/mpeformat → midiout.
+
+  ``{prefix}_mpeparse`` outlet :data:`MPE_CC_OUTLET` carries the CC stream.
+  ``{prefix}_midiformat`` inlet :data:`MIDIFORMAT_CC_INLET` accepts CC output.
+    """
+    p = id_prefix
+    hires_attr = " @hires 1" if hires else ""
+    boxes = [
+        newobj(
+            f"{p}_midiin", "midiin",
+            numinlets=1, numoutlets=1, outlettype=["int"],
+            patching_rect=[172.5, 15, 40, 22],
+        ),
+        newobj(
+            f"{p}_mpeparse", f"mpeparse{hires_attr}",
+            numinlets=1, numoutlets=10,
+            patching_rect=[172.5, 45, 164.5, 22],
+        ),
+        newobj(
+            f"{p}_midiformat", f"midiformat{hires_attr}",
+            numinlets=7, numoutlets=2, outlettype=["int", ""],
+            patching_rect=[172.5, 195, 116, 22],
+        ),
+        newobj(
+            f"{p}_midiout", "midiout",
+            numinlets=1, numoutlets=0,
+            patching_rect=[14.5, 360, 47, 22],
+        ),
+        newobj(
+            f"{p}_gate", "gate 16 1",
+            numinlets=2, numoutlets=16,
+            patching_rect=[15, 300, 176.5, 22],
+        ),
+        newobj(
+            f"{p}_mpeformat", "mpeformat",
+            numinlets=16, numoutlets=2, outlettype=["int", "mpeevent"],
+            patching_rect=[14.5, 330, 177, 22],
+        ),
+        newobj(
+            f"{p}_member_if", "if $i1 == -1 then 0 else $i1",
+            numinlets=1, numoutlets=1, outlettype=["int"],
+            patching_rect=[15, 240, 147, 22],
+        ),
+        newobj(
+            f"{p}_member_inc", "+ 1",
+            numinlets=2, numoutlets=1, outlettype=["int"],
+            patching_rect=[15, 270, 29.5, 22],
+        ),
+    ]
+    lines = [
+        patchline(f"{p}_midiin", 0, f"{p}_mpeparse", 0),
+        patchline(f"{p}_mpeparse", 6, f"{p}_member_if", 0),
+        patchline(f"{p}_member_if", 0, f"{p}_member_inc", 0),
+        patchline(f"{p}_member_inc", 0, f"{p}_gate", 0),
+        patchline(f"{p}_midiformat", 0, f"{p}_gate", 1),
+        patchline(f"{p}_mpeformat", 0, f"{p}_midiout", 0),
+    ]
+    for inlet in range(6):
+        lines.append(patchline(f"{p}_mpeparse", inlet, f"{p}_midiformat", inlet))
+    for channel in range(16):
+        lines.append(patchline(f"{p}_gate", channel, f"{p}_mpeformat", channel))
     return (boxes, lines)
 
 

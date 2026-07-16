@@ -1,7 +1,7 @@
-"""Tests for objects.py — newobj() and patchline() factory functions."""
+"""Tests for objects.py — newobj(), message(), and patchline() factory functions."""
 
 
-from m4l_builder.objects import newobj, patchline
+from m4l_builder.objects import message, newobj, patchline
 
 
 class TestNewobj:
@@ -84,6 +84,44 @@ class TestNewobj:
         result = newobj("obj-1", "plugin~", numinlets=1, numoutlets=2,
                         outlettype=["signal", "signal"])
         assert result["box"]["outlettype"] == ["signal", "signal"]
+
+
+class TestMessage:
+    """Test message() box factory."""
+
+    def test_returns_dict_with_box_key(self):
+        result = message("msg-1", "bang")
+        assert "box" in result
+
+    def test_maxclass_is_message(self):
+        result = message("msg-1", "bang")
+        assert result["box"]["maxclass"] == "message"
+
+    def test_default_inlets_outlets(self):
+        result = message("msg-1", "bang")
+        assert result["box"]["numinlets"] == 2
+        assert result["box"]["numoutlets"] == 1
+
+    def test_default_patching_rect(self):
+        result = message("msg-1", "bang")
+        assert result["box"]["patching_rect"] == [0, 0, 50, 22]
+
+    def test_text_and_id_set(self):
+        result = message("msg-99", "active $1")
+        assert result["box"]["id"] == "msg-99"
+        assert result["box"]["text"] == "active $1"
+
+    def test_outlettype_included_when_provided(self):
+        result = message("msg-1", "bang", outlettype=[""])
+        assert result["box"]["outlettype"] == [""]
+
+    def test_outlettype_omitted_when_none(self):
+        result = message("msg-1", "bang", outlettype=None)
+        assert "outlettype" not in result["box"]
+
+    def test_extra_kwargs_merged_into_box(self):
+        result = message("msg-1", "bang", presentation=1)
+        assert result["box"]["presentation"] == 1
 
 
 class TestPatchline:

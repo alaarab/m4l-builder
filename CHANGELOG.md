@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- `sysex_out` recipe: send MIDI system exclusive messages via `sxformat` -> `midiout`,
+  with optional auto 0xF0/0xF7 framing and per-byte dynamic inlets.
+
 ## [0.8.0] - 2026-06-22
 
 ### Added
