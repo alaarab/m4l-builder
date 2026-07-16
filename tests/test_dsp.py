@@ -2265,6 +2265,18 @@ class TestSysexOut:
         with pytest.raises(ValueError, match="0xF0 start or 0xF7 end"):
             sysex_out("sx", [0x43, 0x10], dynamic=(0,))
 
+    def test_rejects_out_of_range_bytes(self):
+        # regression: `& 0xFF` used to silently wrap 256 -> 0 and -1 -> 255
+        with pytest.raises(ValueError, match="0-255"):
+            sysex_out("sx", [0x43, 256])
+        with pytest.raises(ValueError, match="0-255"):
+            sysex_out("sx", [-1, 0x43])
+
+    def test_rejects_high_bit_body_bytes(self):
+        # only the F0/F7 framing may exceed 7 bits in a SysEx message
+        with pytest.raises(ValueError, match="7-bit"):
+            sysex_out("sx", [0x43, 0x80, 0x10])
+
 
 class TestVelocityCurve:
     def test_linear_returns_clip_only(self):
@@ -3148,9 +3160,14 @@ class TestCcMapperLane:
 
     def test_ui_lines_connect_ctrl_and_value(self):
         lines = cc_mapper_lane_ui_lines("cc1", "cc1_ctrl", "cc1_value")
-        assert len(lines) == 6
+        assert len(lines) == 5
         assert lines[0]["patchline"]["source"] == ["cc1_ctrl", 0]
         assert lines[-1]["patchline"]["destination"] == ["cc1_add", 0]
+        # the gte -> active line is lane-internal (cc_mapper_lane owns it) --
+        # emitting it here too made a duplicate patchline
+        assert {"source": ["cc1_gte", 0], "destination": ["cc1_active", 0]} not in [
+            line["patchline"] for line in lines
+        ]
 
     def test_mpe_lines_connect_cc_stream(self):
         lines = cc_mapper_lane_mpe_lines("cc1", "mpe_mpeparse", "mpe_midiformat")
@@ -3188,6 +3205,23 @@ class TestMpeIoChain:
         assert {"source": ["mpe_mpeformat", 0], "destination": ["mpe_midiout", 0]} in [
             line["patchline"] for line in lines
         ]
+
+
+class TestMidiSysexMpeDeviceBuild:
+    def test_blocks_survive_a_real_device_build(self, tmp_path):
+        # unit tests above validate dicts; only a device build runs the
+        # box_lint / graph gates over these boxes
+        from m4l_builder import MidiEffect
+
+        fx = MidiEffect("Sysex MPE Smoke", 220, 100)
+        fx.add_dsp(*mpe_io_chain("mpe"))
+        fx.add_dsp(*cc_mapper_lane("cc1", px=40, py=600))
+        fx.add_dsp(*sysex_out("sx", [0x43, 0x10, 0x00], dynamic=(3,)))
+        for line in cc_mapper_lane_mpe_lines("cc1", "mpe_mpeparse", "mpe_midiformat"):
+            fx.lines.append(line)
+        out = tmp_path / "Sysex MPE Smoke.amxd"
+        fx.build(str(out))
+        assert out.stat().st_size > 0
 
 
 class TestMidiLearnChain:

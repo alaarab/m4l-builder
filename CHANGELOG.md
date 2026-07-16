@@ -6,6 +6,15 @@
 
 - `sysex_out` recipe: send MIDI system exclusive messages via `sxformat` -> `midiout`,
   with optional auto 0xF0/0xF7 framing and per-byte dynamic inlets.
+- `cc_mapper_lane` (+ `_ui_lines` / `_mpe_lines` wiring helpers) and `mpe_io_chain`:
+  building blocks for MPE-aware MIDI CC mapper devices.
+- `message()` object factory (message-box counterpart to `newobj()`).
+
+### Fixed
+
+- `sysex_out` byte validation: out-of-range values used to wrap silently
+  (`256 -> 0`, `-1 -> 255`); they now raise, and body bytes are checked to be
+  7-bit (only the 0xF0/0xF7 framing may exceed 127).
 
 ## [0.8.0] - 2026-06-22
 

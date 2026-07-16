@@ -64,7 +64,7 @@ def _framed_sysex_bytes(data, *, auto_framing: bool) -> list:
     """Normalize SysEx bytes and optionally add 0xF0 / 0xF7 framing."""
     if not data:
         raise ValueError("sysex data must not be empty")
-    out = [int(b) & 0xFF for b in data]
+    out = [int(b) for b in data]
     if any(b < 0 or b > 255 for b in out):
         raise ValueError("sysex bytes must be 0-255")
     if auto_framing:
@@ -76,6 +76,12 @@ def _framed_sysex_bytes(data, *, auto_framing: bool) -> list:
         raise ValueError(
             "sysex message must start with 240 (0xF0) and end with 247 (0xF7); "
             "use auto_framing=True or add framing bytes explicitly",
+        )
+    body = out[1:-1]
+    if any(b > 0x7F for b in body):
+        raise ValueError(
+            "sysex body bytes must be 7-bit (0-127); only the 0xF0/0xF7 "
+            "framing bytes may exceed 127",
         )
     return out
 
@@ -110,9 +116,12 @@ def sysex_out(id_prefix: str, data, *, dynamic=None, auto_framing: bool = True) 
     ``data`` is the SysEx byte payload in decimal (0-255). When ``auto_framing``
     is true (default), 0xF0 (240) and 0xF7 (247) are added if missing.
 
-    ``dynamic`` lists 0-based byte indices (in the framed message) replaced by
-    sxformat ``/ is $iN /`` expressions. Wire values to ``{prefix}_sxformat``
-    inlets 0..N-1; bang inlet 0 to send.
+    ``dynamic`` lists 0-based byte indices **in the framed message** (index 0
+    is the 0xF0 byte even when auto-framing added it) replaced by sxformat
+    ``/ is $iN /`` expressions — e.g. ``data=[0x43, 0x10, 0x00]`` frames to
+    ``[0xF0, 0x43, 0x10, 0x00, 0xF7]``, so ``dynamic=(3,)`` targets the
+    ``0x00``. Wire values to ``{prefix}_sxformat`` inlets 0..N-1; bang inlet
+    0 to send.
 
     Returns (boxes, lines) with ``{prefix}_sxformat`` -> ``{prefix}_midiout``.
     """
@@ -560,7 +569,7 @@ def midi_clock_in(id_prefix: str) -> tuple:
     return (boxes, lines)
 
 
-def cc_mapper_lane(id_prefix: str, *, py: int = 0) -> tuple:
+def cc_mapper_lane(id_prefix: str, *, px: int = 0, py: int = 0) -> tuple:
     """DSP for one MIDI CC mapper lane (route / learn / emit).
 
     Wire the lane UI with :func:`cc_mapper_lane_ui_lines` and connect to an
@@ -575,31 +584,31 @@ def cc_mapper_lane(id_prefix: str, *, py: int = 0) -> tuple:
         newobj(
             f"{p}_route", "route",
             numinlets=2, numoutlets=2, outlettype=["", ""],
-            patching_rect=[py + 60, py, 78, 22],
+            patching_rect=[px + 60, py, 78, 22],
         ),
         newobj(
             f"{p}_gte", ">= 0",
             numinlets=2, numoutlets=1, outlettype=["int"],
-            patching_rect=[py, py + 45, 33, 22],
+            patching_rect=[px, py + 45, 33, 22],
         ),
         message(
             f"{p}_active", "active $1",
-            patching_rect=[py + 30, py + 75, 57, 22],
+            patching_rect=[px + 30, py + 75, 57, 22],
         ),
         newobj(
             f"{p}_trig", "trigger b i",
             numinlets=1, numoutlets=2, outlettype=["bang", "int"],
-            patching_rect=[py + 120, py + 30, 59, 22],
+            patching_rect=[px + 120, py + 30, 59, 22],
         ),
         newobj(
             f"{p}_add", "+ 0.",
             numinlets=2, numoutlets=1, outlettype=["float"],
-            patching_rect=[py + 30, py + 105, 29.5, 22],
+            patching_rect=[px + 30, py + 105, 29.5, 22],
         ),
         newobj(
             f"{p}_pak", "pak 0 0.",
             numinlets=2, numoutlets=1,
-            patching_rect=[py - 20, py + 135, 51, 22],
+            patching_rect=[px, py + 135, 51, 22],
         ),
     ]
     lines = [
@@ -617,7 +626,6 @@ def cc_mapper_lane_ui_lines(id_prefix: str, ctrl_id: str, value_id: str) -> list
     p = id_prefix
     return [
         patchline(ctrl_id, 0, f"{p}_gte", 0),
-        patchline(f"{p}_gte", 0, f"{p}_active", 0),
         patchline(f"{p}_active", 0, value_id, 0),
         patchline(ctrl_id, 0, f"{p}_route", 1),
         patchline(ctrl_id, 0, f"{p}_pak", 0),
@@ -645,8 +653,8 @@ def cc_mapper_lane_mpe_lines(
 def mpe_io_chain(id_prefix: str = "mpe", *, hires: bool = True) -> tuple:
     """MPE MIDI I/O: midiin → mpeparse → gate/mpeformat → midiout.
 
-  ``{prefix}_mpeparse`` outlet :data:`MPE_CC_OUTLET` carries the CC stream.
-  ``{prefix}_midiformat`` inlet :data:`MIDIFORMAT_CC_INLET` accepts CC output.
+    ``{prefix}_mpeparse`` outlet :data:`MPE_CC_OUTLET` carries the CC stream.
+    ``{prefix}_midiformat`` inlet :data:`MIDIFORMAT_CC_INLET` accepts CC output.
     """
     p = id_prefix
     hires_attr = " @hires 1" if hires else ""
@@ -659,6 +667,7 @@ def mpe_io_chain(id_prefix: str = "mpe", *, hires: bool = True) -> tuple:
         newobj(
             f"{p}_mpeparse", f"mpeparse{hires_attr}",
             numinlets=1, numoutlets=10,
+            outlettype=["", "", "", "", "int", "", "int", "int", "int", ""],
             patching_rect=[172.5, 45, 164.5, 22],
         ),
         newobj(

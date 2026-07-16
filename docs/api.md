@@ -234,6 +234,8 @@ All functions return `(boxes, lines)` tuples unless noted. Add with `device.add_
 `notein(id_prefix, channel=0)`, `noteout(id_prefix, channel=0)` -- MIDI note I/O (0 = omni)
 `ctlin(id_prefix, cc=None, channel=0)`, `ctlout(id_prefix, cc=1, channel=1)` -- MIDI CC I/O
 `sysex_out(id_prefix, data, *, dynamic=None, auto_framing=True)` -- SysEx via sxformat -> midiout
+`cc_mapper_lane(id_prefix, *, px=0, py=0)` -- One MIDI CC mapper lane (route / learn / emit); wire UI with `cc_mapper_lane_ui_lines`, MPE I/O with `cc_mapper_lane_mpe_lines`
+`mpe_io_chain(id_prefix="mpe", *, hires=True)` -- MPE MIDI I/O: midiin -> mpeparse -> gate/mpeformat -> midiout
 `velocity_curve(id_prefix, curve="linear")` -- Velocity mapping. Curves: "linear", "exponential", "logarithmic", "scurve"
 `transpose(id_prefix, semitones=0)` -- MIDI transpose
 `midi_thru(id_prefix)` -- Pass-through MIDI pipe
