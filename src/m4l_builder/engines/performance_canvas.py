@@ -156,6 +156,12 @@ var g_attack = 2.0;        // global envelope (mirrors the real params)
 var g_decay = 300.0;       // ms
 var g_sustain = 100.0;     // %
 var g_release = 5.0;       // ms
+var g_atk_curve = 0.0;     // -1..1: <0 punchy (convex), >0 soft (concave)
+var g_rel_curve = 0.0;     // -1..1: curve of the release tail
+var g_lfo_depth = 0.0;     // % tremolo depth (0 = off)
+var g_lfo_period = 250.0;  // ms per cycle (host-resolved: synced or free)
+var g_lfo_shape = 0;       // 0 sine / 1 tri / 2 saw / 3 sqr
+var hv_page = 0;           // hit-view sub-tab: 0 = ENV, 1 = LFO
 var shape_ovr = {};        // per-slice pins: {k: [a_ms, d_ms, s_pct, r_ms]}
 var drag_shape = 0;        // 1 = attack, 2 = decay/sustain, 3 = release
 var shape_dirty = 0;       // audition once on release after a shape drag
@@ -563,12 +569,33 @@ function shape_pack_sr(s, r) {
     return Math.round(clamp(s, 0.0, 100.0) * 10) * 2001 + Math.round(clamp(r, 1.0, 2000.0));
 }
 
+function lfo_mod_at(t_ms) {
+    // per-hit tremolo: phase 0 at the hit (full volume), dips by depth
+    if (g_lfo_depth <= 0.5) return 1.0;
+    var ph = (t_ms / Math.max(1.0, g_lfo_period)) % 1.0;
+    var w;
+    if (g_lfo_shape === 1) w = 1.0 - Math.abs(ph * 2.0 - 1.0);
+    else if (g_lfo_shape === 2) w = ph;
+    else if (g_lfo_shape === 3) w = ph >= 0.5 ? 1.0 : 0.0;
+    else w = 0.5 - 0.5 * Math.cos(ph * 6.2832);
+    return 1.0 - clamp(g_lfo_depth, 0.0, 100.0) * 0.01 * w;
+}
+
+function curve_exp(c) {
+    // -1..1 -> exponent (matches the gen~ shaper: exp(c*2), ~0.14..7.4).
+    // c>0 -> exp>1 -> pow pulls the ramp down = soft/slow; c<0 -> punchy.
+    return Math.exp(clamp(c, -1.0, 1.0) * 2.0);
+}
+
 function env_at(t_ms, a, d, s_pct, r, gate_ms) {
-    // mirrors the voice VCA (live.adsr~): A ramp, D to sustain, hold to the
-    // gate (slice end), then R release tail (linear approximations)
+    // mirrors the voice VCA: A ramp (attack-curved), D to sustain, hold to the
+    // gate (slice end), then R release tail (release-curved).
     var s01 = clamp(s_pct, 0.0, 100.0) * 0.01;
     if (t_ms <= 0.0) return 0.0;
-    if (t_ms < a) return t_ms / Math.max(0.1, a);
+    if (t_ms < a) {
+        var la = t_ms / Math.max(0.1, a);
+        return Math.pow(la, curve_exp(g_atk_curve));
+    }
     var gate_lvl;
     var td = t_ms - a;
     if (t_ms <= gate_ms) {
@@ -582,7 +609,8 @@ function env_at(t_ms, a, d, s_pct, r, gate_ms) {
     else gate_lvl = s01;
     var tr = t_ms - gate_ms;
     if (tr >= r) return 0.0;
-    return gate_lvl * (1.0 - tr / Math.max(1.0, r));
+    var lr = 1.0 - tr / Math.max(1.0, r);   // 1 -> 0 across the release
+    return gate_lvl * Math.pow(lr, curve_exp(g_rel_curve));
 }
 
 function slice_dur_ms(k) {
@@ -632,7 +660,8 @@ function enter_hit_view(k) {
     inspect_k = k;
     view = 1;
     rebuild_zoom_cache();
-    outlet(4, 'hitview', 1);   // host scripts the real ADSR dial row in
+    outlet(4, 'hitview', 1);   // host scripts the real dial row in
+    outlet(4, 'hitpage', hv_page);
     mgraphics.redraw();
 }
 
@@ -667,6 +696,31 @@ function set_sustain(v) {
 
 function set_release(v) {
     g_release = clamp(v, 1.0, 2000.0);
+    if (view === 1) mgraphics.redraw();
+}
+
+function set_attack_curve(v) {
+    g_atk_curve = clamp(v, -1.0, 1.0);
+    if (view === 1) mgraphics.redraw();
+}
+
+function set_release_curve(v) {
+    g_rel_curve = clamp(v, -1.0, 1.0);
+    if (view === 1) mgraphics.redraw();
+}
+
+function set_lfo_depth(v) {
+    g_lfo_depth = clamp(v, 0.0, 100.0);
+    if (view === 1) mgraphics.redraw();
+}
+
+function set_lfo_period(v) {
+    if (v > 0) g_lfo_period = v;
+    if (view === 1) mgraphics.redraw();
+}
+
+function set_lfo_shape(v) {
+    g_lfo_shape = clamp(Math.round(v), 0, 3);
     if (view === 1) mgraphics.redraw();
 }
 
@@ -1121,6 +1175,21 @@ function hv_rel_handle() {
     return [hv_x(dur + o[3]), hv_env_y(0.0)];
 }
 
+function hv_atk_curve_node() {
+    // sits ON the attack curve at its time-midpoint — grab it to bend
+    var o = eff_shape(inspect_k);
+    var dur = Math.max(1.0, slice_dur_ms(inspect_k));
+    var t = o[0] * 0.5;
+    return [hv_x(t), hv_env_y(env_at(t, o[0], o[1], o[2], o[3], dur))];
+}
+
+function hv_rel_curve_node() {
+    var o = eff_shape(inspect_k);
+    var dur = Math.max(1.0, slice_dur_ms(inspect_k));
+    var t = dur + o[3] * 0.5;
+    return [hv_x(t), hv_env_y(env_at(t, o[0], o[1], o[2], o[3], dur))];
+}
+
 function hv_set_shape(a, d, s, r) {
     a = clamp(a, 0.5, 200.0);
     d = clamp(d, 1.0, 2000.0);
@@ -1141,9 +1210,52 @@ function hv_set_shape(a, d, s, r) {
     mgraphics.redraw();
 }
 
+function curve_from_point(lin, v) {
+    // solve c from  v = pow(lin, exp(2c))  so the curve passes through the
+    // cursor: exp(2c) = ln(v)/ln(lin) -> c = 0.5*ln( that ). GLOBAL curves.
+    lin = clamp(lin, 0.02, 0.98);
+    v = clamp(v, 0.02, 0.98);
+    var ex = Math.log(v) / Math.log(lin);
+    if (ex <= 0.0001) return 0.0;
+    return clamp(0.5 * Math.log(ex), -1.0, 1.0);
+}
+
+function hv_set_attack_curve(x, y) {
+    var o = eff_shape(inspect_k);
+    var lt = clamp(hv_t(x) / Math.max(0.1, o[0]), 0.0, 1.0);  // linear attack frac
+    var f = hv_frame();
+    var v = clamp((f[1] - y) / Math.max(1, f[1] - f[0]), 0.0, 1.0);
+    var c = curve_from_point(lt, v);
+    if (c !== g_atk_curve) outlet(4, 'shape', 'attackcurve', c);
+    g_atk_curve = c;
+    shape_dirty = 1;
+    mgraphics.redraw();
+}
+
+function hv_set_release_curve(x, y) {
+    var o = eff_shape(inspect_k);
+    var dur = Math.max(1.0, slice_dur_ms(inspect_k));
+    var gate_lvl = clamp(o[2] * 0.01, 0.02, 1.0);
+    var tr = clamp(hv_t(x) - dur, 0.0, o[3]);
+    var lr = clamp(1.0 - tr / Math.max(1.0, o[3]), 0.0, 1.0);   // 1 -> 0
+    var f = hv_frame();
+    var v = clamp((f[1] - y) / Math.max(1, f[1] - f[0]), 0.0, 1.0) / gate_lvl;
+    var c = curve_from_point(lr, v);
+    if (c !== g_rel_curve) outlet(4, 'shape', 'releasecurve', c);
+    g_rel_curve = c;
+    shape_dirty = 1;
+    mgraphics.redraw();
+}
+
 function hv_click(x, y) {
     var w = mgraphics.size[0];
     if (x < PAD + 40 && y < PAD + 13) { exit_hit_view(); return; }   // BACK
+    if (y < PAD + 13 && x > w * 0.5 - 44 && x < w * 0.5 + 44) {      // ENV | LFO
+        hv_page = (x < w * 0.5) ? 0 : 1;
+        outlet(4, 'hitpage', hv_page);
+        mgraphics.redraw();
+        return;
+    }
     if (x > w - PAD - 44 && y < PAD + 13) {                          // PIN
         if (slice_pinned(inspect_k)) {
             delete shape_ovr[String(inspect_k)];
@@ -1161,6 +1273,21 @@ function hv_click(x, y) {
     if (Math.abs(x - dh[0]) < 8 && Math.abs(y - dh[1]) < 10) { drag_shape = 2; return; }
     var rh = hv_rel_handle();
     if (Math.abs(x - rh[0]) < 8 && Math.abs(y - rh[1]) < 10) { drag_shape = 3; return; }
+    // curve NODES: a grabbable dot on each segment's midpoint (discoverable).
+    var acn = hv_atk_curve_node();
+    if (Math.abs(x - acn[0]) < 9 && Math.abs(y - acn[1]) < 9) { drag_shape = 4; hv_set_attack_curve(x, y); return; }
+    var rcn = hv_rel_curve_node();
+    if (Math.abs(x - rcn[0]) < 9 && Math.abs(y - rcn[1]) < 9) { drag_shape = 5; hv_set_release_curve(x, y); return; }
+    // ...or grab anywhere along the attack / release SEGMENT to bend its curve
+    // (only if the click sits near the drawn envelope line there).
+    var o = eff_shape(inspect_k);
+    var dur = Math.max(1.0, slice_dur_ms(inspect_k));
+    var t = hv_t(x);
+    var env_y = hv_env_y(env_at(t, o[0], o[1], o[2], o[3], dur));
+    if (Math.abs(y - env_y) < 16) {   // generous grab: thin diagonal is hard to hit
+        if (t > o[0] * 0.12 && t < o[0] * 0.9) { drag_shape = 4; hv_set_attack_curve(x, y); return; }
+        if (t > dur + o[3] * 0.12 && t < dur + o[3] * 0.9) { drag_shape = 5; hv_set_release_curve(x, y); return; }
+    }
     set_active_index(inspect_k);
     outlet(4, 'audition', inspect_k);
 }
@@ -1176,6 +1303,10 @@ function hv_drag(x, y) {
         hv_set_shape(o[0], hv_t(x) - o[0], s, o[3]);
     } else if (drag_shape === 3) {
         hv_set_shape(o[0], o[1], o[2], hv_t(x) - dur);
+    } else if (drag_shape === 4) {
+        hv_set_attack_curve(x, y);
+    } else if (drag_shape === 5) {
+        hv_set_release_curve(x, y);
     }
 }
 
@@ -1828,12 +1959,12 @@ function paint_hit_view() {
         }
         mgraphics.stroke();
 
-        // the shaped hit: peaks * envelope, in the slice's own hue
+        // the shaped hit: peaks * envelope * LFO, in the slice's own hue
         mgraphics.set_source_rgba(rgb[0], rgb[1], rgb[2], 0.88);
         mgraphics.set_line_width(1.2);
         for (i = 0; i < zoom_cache.length; i++) {
             t = (i / (zoom_cache.length - 1)) * dur;
-            ev = env_at(t, o[0], o[1], o[2], o[3], dur);
+            ev = env_at(t, o[0], o[1], o[2], o[3], dur) * lfo_mod_at(t);
             px = PAD + (i / (zoom_cache.length - 1)) * iw * afrac;
             py = mid - zoom_cache[i] * ev * amp;
             if (i === 0) mgraphics.move_to(px, py); else mgraphics.line_to(px, py);
@@ -1841,7 +1972,7 @@ function paint_hit_view() {
         mgraphics.stroke();
         for (i = 0; i < zoom_cache.length; i++) {
             t = (i / (zoom_cache.length - 1)) * dur;
-            ev = env_at(t, o[0], o[1], o[2], o[3], dur);
+            ev = env_at(t, o[0], o[1], o[2], o[3], dur) * lfo_mod_at(t);
             px = PAD + (i / (zoom_cache.length - 1)) * iw * afrac;
             py = mid + zoom_cache[i] * ev * amp;
             if (i === 0) mgraphics.move_to(px, py); else mgraphics.line_to(px, py);
@@ -1851,9 +1982,10 @@ function paint_hit_view() {
 
     // envelope outline across the full span (release tail past the gate)
     var flash = (last_active_k === k && playhead_step >= 0);
-    mgraphics.set_source_rgba(0.99, 0.96, 0.86, flash ? 0.95 : 0.65);
+    var lfo_on = g_lfo_depth > 0.5;
+    mgraphics.set_source_rgba(0.99, 0.96, 0.86, lfo_on ? 0.30 : (flash ? 0.95 : 0.65));
     mgraphics.set_line_width(1.2);
-    var N = 128;
+    var N = 192;
     for (i = 0; i <= N; i++) {
         t = (i / N) * span;
         ev = env_at(t, o[0], o[1], o[2], o[3], dur);
@@ -1862,6 +1994,40 @@ function paint_hit_view() {
         if (i === 0) mgraphics.move_to(px, py); else mgraphics.line_to(px, py);
     }
     mgraphics.stroke();
+    if (lfo_on) {   // the tremolo-modulated envelope rides on top, in mint
+        mgraphics.set_source_rgba(@PITCH_RGB@, flash ? 0.95 : 0.8);
+        mgraphics.set_line_width(1.2);
+        for (i = 0; i <= N; i++) {
+            t = (i / N) * span;
+            ev = env_at(t, o[0], o[1], o[2], o[3], dur) * lfo_mod_at(t);
+            px = PAD + (i / N) * iw;
+            py = hv_env_y(ev);
+            if (i === 0) mgraphics.move_to(px, py); else mgraphics.line_to(px, py);
+        }
+        mgraphics.stroke();
+    }
+
+    // curve NODES: a mint DIAMOND on each segment's midpoint — drag to bend it
+    // (a diamond reads as an interactive grip, distinct from the square A/D/S/R
+    // handles; the mint matches the curve dials)
+    var cns = [hv_atk_curve_node(), hv_rel_curve_node()];
+    for (i = 0; i < cns.length; i++) {
+        var cnx = cns[i][0], cny = cns[i][1];
+        mgraphics.set_source_rgba(@PITCH_RGB@, 0.92);
+        mgraphics.move_to(cnx, cny - 3.6);
+        mgraphics.line_to(cnx + 3.6, cny);
+        mgraphics.line_to(cnx, cny + 3.6);
+        mgraphics.line_to(cnx - 3.6, cny);
+        mgraphics.close_path();
+        mgraphics.fill();
+        mgraphics.set_source_rgba(@BG@);
+        mgraphics.move_to(cnx, cny - 1.5);
+        mgraphics.line_to(cnx + 1.5, cny);
+        mgraphics.line_to(cnx, cny + 1.5);
+        mgraphics.line_to(cnx - 1.5, cny);
+        mgraphics.close_path();
+        mgraphics.fill();
+    }
 
     // handles: square grips (A, D/S, R)
     var hs = [hv_attack_handle(), hv_ds_handle(), hv_rel_handle()];
@@ -1874,7 +2040,7 @@ function paint_hit_view() {
         mgraphics.fill();
     }
 
-    // header: BACK chip / title / PIN chip (values live on the dial row)
+    // header: BACK / title / ENV|LFO sub-tabs / PIN
     mgraphics.select_font_face('Ableton Sans Medium');
     mgraphics.set_font_size(8);
     mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.85);
@@ -1883,7 +2049,17 @@ function paint_hit_view() {
     mgraphics.set_source_rgba(rgb[0], rgb[1], rgb[2], 0.95);
     mgraphics.move_to(PAD + 46, PAD + 9);
     mgraphics.show_text('SLICE ' + (k + 1)
-        + (pinned ? '  -  OWN SHAPE' : '  -  GLOBAL SHAPE'));
+        + (pinned ? ' - OWN' : ' - GLOBAL'));
+    // sub-tabs centered: the active one lit
+    mgraphics.set_source_rgba(0.99, 0.96, 0.86, hv_page === 0 ? 0.95 : 0.35);
+    mgraphics.move_to(w * 0.5 - 36, PAD + 9);
+    mgraphics.show_text('ENV');
+    mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.5);
+    mgraphics.move_to(w * 0.5 - 8, PAD + 9);
+    mgraphics.show_text('|');
+    mgraphics.set_source_rgba(@PITCH_RGB@, hv_page === 1 ? 0.95 : 0.35);
+    mgraphics.move_to(w * 0.5 + 2, PAD + 9);
+    mgraphics.show_text('LFO');
     if (pinned) mgraphics.set_source_rgba(@GLITCH_RGB@, 0.95);
     else mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.55);
     mgraphics.move_to(w - PAD - 40, PAD + 9);
@@ -1891,12 +2067,19 @@ function paint_hit_view() {
 
     // A / D / S / R letters above the real dial row (the dials sit ON the
     // canvas via scripted overlay; label from here so they stay in sync)
-    mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.75);
-    mgraphics.set_font_size(8);
-    var letters = ['A', 'D', 'S', 'R'];
-    for (i = 0; i < 4; i++) {
-        mgraphics.move_to(PAD + 36 + i * 62, bot + 24);
-        mgraphics.show_text(letters[i]);
+    mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.8);
+    mgraphics.set_font_size(6.5);
+    var labels, lxs;
+    if (hv_page === 0) {
+        labels = ['ATTACK', 'DECAY', 'SUSTAIN', 'RELEASE', 'A.CRV', 'R.CRV'];
+        lxs = [6, 54, 102, 150, 203, 245];      // canvas-local label lefts
+    } else {
+        labels = ['DEPTH', 'SHAPE', 'RATE', 'FREE HZ'];
+        lxs = [6, 60, 120, 182];
+    }
+    for (i = 0; i < labels.length; i++) {
+        mgraphics.move_to(PAD + lxs[i], bot + 8);
+        mgraphics.show_text(labels[i]);
     }
 }
 
