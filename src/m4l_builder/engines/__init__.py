@@ -69,6 +69,7 @@ from .level_meter import (
 from .lfo_display import lfo_display_js
 from .linear_phase_eq_display import linear_phase_eq_display_js
 from .peaking_eq_display import peaking_eq_display_js
+from .performance_canvas import performance_canvas_js
 from .piano_roll import piano_roll_js
 from .resonance_bank_display import resonance_bank_display_js
 from .shape_icon import (
@@ -183,4 +184,5 @@ __all__ = [
     "xy_trail_display_js",
     "slice_overview_js",
     "slice_pattern_display_js",
+    "performance_canvas_js",
 ]
