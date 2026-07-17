@@ -1129,7 +1129,7 @@ function apply_gesture(step, x, y) {
     mgraphics.redraw();
 }
 
-var HV_DIALS_H = 40;   // canvas bottom band reserved for the REAL dial row
+var HV_DIALS_H = 52;   // reserved bottom band: label row + the REAL dial row
 
 function hv_frame() {
     var iw = inner_w(), ih = inner_h();
@@ -1657,6 +1657,18 @@ function draw_waveform(x, y, w, h) {
     }
 }
 
+function label_chip(x, y_base, txt) {
+    // dark backing chip behind a small label so it reads over segments,
+    // flash columns, and the waveform alike
+    var tw = mgraphics.text_measure(txt)[0];
+    mgraphics.set_source_rgba(@BG@);
+    mgraphics.rectangle_rounded(x - 3, y_base - 8, tw + 6, 11, 3, 3);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(@TEXT@);
+    mgraphics.move_to(x, y_base);
+    mgraphics.show_text(txt);
+}
+
 function paint() {
     var w = mgraphics.size[0];
     var h = mgraphics.size[1];
@@ -1851,7 +1863,7 @@ function paint() {
             var hstep = seg_at_point(hover_x, hover_y);
             mgraphics.select_font_face('Ableton Sans Medium');
             mgraphics.set_font_size(8);
-            if (hstep >= 0) {
+            if (hstep >= 0) {   // (labels below use chips via label_chip)
                 for (i = 0; i < seg_step.length; i++) {
                     if (seg_step[i] !== hstep) continue;
                     mgraphics.set_source_rgba(0.99, 0.96, 0.86, 0.85);
@@ -1860,13 +1872,11 @@ function paint() {
                                                 seg_w[i] + 2, seg_h[i] + 2, 2, 2);
                     mgraphics.stroke();
                 }
-                mgraphics.set_source_rgba(@TEXT@);
-                mgraphics.move_to(PAD + 3, PAD + 9);
                 var hsp = step_pitch(hstep);
                 var pit = Math.abs(hsp) > 0.5
                     ? '  ' + (hsp > 0 ? '+' : '') + Math.round(hsp) + ' ST' : '';
-                mgraphics.show_text('STEP ' + (hstep + 1) + ' > SLICE '
-                                    + (step_index(hstep) + 1) + pit);
+                label_chip(PAD + 3, PAD + 9, 'STEP ' + (hstep + 1) + ' > SLICE '
+                           + (step_index(hstep) + 1) + pit);
                 mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.55);
                 var legend = 'drag MOVE  opt DIR  ctrl PITCH  cmd+opt MUTE  shift+opt RATCHET  cmd ERASE';
                 var lw = mgraphics.text_measure(legend)[0];
@@ -1882,9 +1892,7 @@ function paint() {
                                     Math.max(1, norm_to_x(hedges[1]) - norm_to_x(hedges[0])),
                                     ih - 4);
                 mgraphics.stroke();
-                mgraphics.set_source_rgba(@TEXT@);
-                mgraphics.move_to(PAD + 3, PAD + 9);
-                mgraphics.show_text('SLICE ' + (hidx + 1) + ' - CLICK TO AUDITION');
+                label_chip(PAD + 3, PAD + 9, 'SLICE ' + (hidx + 1) + ' - CLICK TO AUDITION');
             }
         }
 
@@ -1898,19 +1906,15 @@ function paint() {
 
         // labels
         if (!hover_on) {
-            mgraphics.set_source_rgba(@TEXT@);
             mgraphics.select_font_face('Ableton Sans Medium');
             mgraphics.set_font_size(8);
-            mgraphics.move_to(PAD + iw - 52, PAD + 9);
-            mgraphics.show_text('SLICES ' + Math.round(slice_count));
+            label_chip(PAD + iw - 56, PAD + 9, 'SLICES ' + Math.round(slice_count));
         }
         if (hint === 1) {
-            mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.55);
             mgraphics.set_font_size(9);
             var ht = 'HOLD A KEY';
             var hw2 = mgraphics.text_measure(ht)[0];
-            mgraphics.move_to(PAD + (iw - hw2) * 0.5, PAD + ih - 6);
-            mgraphics.show_text(ht);
+            label_chip(PAD + (iw - hw2) * 0.5, PAD + 12, ht);
         }
     }
 
@@ -2048,8 +2052,7 @@ function paint_hit_view() {
     mgraphics.show_text('< BACK');
     mgraphics.set_source_rgba(rgb[0], rgb[1], rgb[2], 0.95);
     mgraphics.move_to(PAD + 46, PAD + 9);
-    mgraphics.show_text('SLICE ' + (k + 1)
-        + (pinned ? ' - OWN' : ' - GLOBAL'));
+    mgraphics.show_text('SLICE ' + (k + 1));
     // sub-tabs centered: the active one lit
     mgraphics.set_source_rgba(0.99, 0.96, 0.86, hv_page === 0 ? 0.95 : 0.35);
     mgraphics.move_to(w * 0.5 - 36, PAD + 9);
@@ -2078,7 +2081,7 @@ function paint_hit_view() {
         lxs = [6, 60, 120, 182];
     }
     for (i = 0; i < labels.length; i++) {
-        mgraphics.move_to(PAD + lxs[i], bot + 8);
+        mgraphics.move_to(PAD + lxs[i], bot + 9);
         mgraphics.show_text(labels[i]);
     }
 }
