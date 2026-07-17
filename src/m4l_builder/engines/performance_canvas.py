@@ -1688,14 +1688,9 @@ function paint() {
         mgraphics.set_source_rgba(@TEXT@);
         mgraphics.select_font_face('Ableton Sans Medium');
         mgraphics.set_font_size(16);
-        var hw = mgraphics.text_measure('DROP A LOOP')[0];
-        mgraphics.move_to(cx - hw * 0.5, PAD + ih * 0.46);
-        mgraphics.show_text('DROP A LOOP');
-        mgraphics.set_font_size(9);
-        var l1 = 'a break, a vocal, a phrase - or hit LOAD';
-        var w1 = mgraphics.text_measure(l1)[0];
-        mgraphics.move_to(cx - w1 * 0.5, PAD + ih * 0.46 + 15);
-        mgraphics.show_text(l1);
+        var hw = mgraphics.text_measure('DRAG A SAMPLE')[0];
+        mgraphics.move_to(cx - hw * 0.5, PAD + ih * 0.5 + 5);
+        mgraphics.show_text('DRAG A SAMPLE');
     } else if (view === 1) {
         paint_hit_view();
     } else {
