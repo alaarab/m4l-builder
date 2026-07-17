@@ -22,8 +22,10 @@ as [outlet_index, ...args].
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 
 NODE = shutil.which("node") or "/opt/homebrew/bin/node"
@@ -116,12 +118,24 @@ def run_jsui(engine_js: str, driver_js: str, *, size=(660, 152), timeout=20) -> 
         .replace("__ENGINE__", engine_js)
         .replace("__DRIVER__", driver_js)
     )
-    proc = subprocess.run(
-        [NODE, "--stack-size=4096", "-e", script],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
+    # Run the script from a temp FILE, not `node -e <script>`: a large engine
+    # source passed as one argv string trips Linux's 128 KB MAX_ARG_STRLEN
+    # (E2BIG -> "Argument list too long"). macOS has no per-arg cap, so -e
+    # passed locally while CI went red on every big-engine JS behavior test.
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".js", delete=False, encoding="utf-8",
+    ) as fh:
+        fh.write(script)
+        script_path = fh.name
+    try:
+        proc = subprocess.run(
+            [NODE, "--stack-size=4096", script_path],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    finally:
+        os.unlink(script_path)
     if proc.returncode != 0:
         raise RuntimeError(f"node failed:\n{proc.stderr[-3000:]}")
     line = proc.stdout.strip().splitlines()[-1]
