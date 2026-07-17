@@ -145,6 +145,7 @@ var locked_steps = {};
 var dir_locked_steps = {};
 var pitch_locked_steps = {};
 var gate_locked_steps = {};
+var level_locked_steps = {};   // step -> 0.1..1.25 (vertical drag on a bar)
 var ratchet_locked_steps = {};
 
 // ---- hit-view / shape state ----
@@ -168,6 +169,8 @@ var shape_dirty = 0;       // audition once on release after a shape drag
 
 // ---- interaction state ----
 var drag_step = -1;      // step being gesture-dragged (-1 = none)
+var drag_x0 = 0;         // plain-press origin: first movement picks the axis
+var drag_y0 = 0;         //   (sideways = MOVE the step, vertical = LOUDNESS)
 var drag_kind = 0;       // 1 pin / 2 dir / 3 pitch / 4 gate / 5 ratchet / -1 erase / -3 pitch-erase
 var drag_band = 0;       // 1 = wave divider drag (editor instances only)
 var hover_on = 0;
@@ -779,6 +782,10 @@ function clear_pitch_locks() {
     dump_pattern();
 }
 
+function clear_level_locks() {
+    level_locked_steps = {};
+}
+
 function clear_gate_locks() {
     gate_locked_steps = {};
     dump_pattern();
@@ -861,6 +868,27 @@ function step_locked_gate(step) {
 
 function set_step_gate_lock(step, gate) {
     gate_locked_steps[String(step)] = Math.round(gate) > 0 ? 1 : 0;
+    dump_pattern();
+}
+
+function is_step_level_locked(step) {
+    return level_locked_steps.hasOwnProperty(String(step));
+}
+
+function step_locked_level(step) {
+    if (!is_step_level_locked(step)) return -1.0;
+    return clamp(level_locked_steps[String(step)], 0.1, 1.25);
+}
+
+function set_step_level_lock(step, lvl) {
+    level_locked_steps[String(step)] = clamp(lvl, 0.1, 1.25);
+    dump_pattern();
+}
+
+function set_step_level_unlock(step) {
+    if (!is_step_level_locked(step)) return;
+    delete level_locked_steps[String(step)];
+    outlet(0, 'levelunlock', step);
     dump_pattern();
 }
 
@@ -1061,6 +1089,8 @@ function step_pitch(step) {
 
 function step_level(step) {
     if (step_gate(step) < 1) return 0.0;
+    var ll = step_locked_level(step);
+    if (ll >= 0.0) return ll;          // hand-set loudness wins
     if (chop_amount <= 0.01) return 1.0;
     var rm = pseudo(Math.round(chop_seed), step, 19) % 1000;
     var r = (rm * 613 + 89) % 1000;
@@ -1101,6 +1131,11 @@ function apply_gesture(step, x, y) {
         outlet(0, 'lock', step, idx);
     } else if (drag_kind === -1) {
         set_step_unlock(step);
+        set_step_level_unlock(step);   // erase reverts the loudness edit too
+    } else if (drag_kind === 6) {
+        var lvl6 = clamp(norm_from_y(y) * 1.25, 0.1, 1.25);
+        set_step_level_lock(step, lvl6);
+        outlet(0, 'levellock', step, lvl6);
     } else if (drag_kind === 2) {
         var direction = (norm_from_y(y) >= 0.5) ? 1 : -1;
         set_step_dir_lock(step, direction);
@@ -1315,11 +1350,13 @@ function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {
         clear_pitch_locks();
         clear_gate_locks();
         clear_ratchet_locks();
+        clear_level_locks();
         outlet(0, 'clear');
         outlet(0, 'dirclear');
         outlet(0, 'pitchclear');
         outlet(0, 'gateclear');
         outlet(0, 'ratchetclear');
+        outlet(0, 'levelclear');
         mgraphics.redraw();
         return;
     }
@@ -1340,12 +1377,14 @@ function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {
     var step = seg_at_point(x, y);
     if (step >= 0) {
         drag_step = step;
+        drag_x0 = x;
+        drag_y0 = y;
         if (shift && option && !cmd && !ctrl) drag_kind = 5;
         else if (cmd && option && !ctrl) drag_kind = 4;
         else if (ctrl) drag_kind = option ? -3 : 3;
         else if (option) drag_kind = 2;
-        else drag_kind = cmd ? -1 : 1;
-        apply_gesture(step, x, y);
+        else drag_kind = cmd ? -1 : 60;   // plain press: axis decides on move
+        if (drag_kind !== 60) apply_gesture(step, x, y);
         return;
     }
     var idx = slice_from_pos(x_to_pos(x));
@@ -1356,6 +1395,10 @@ function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {
 
 function ondrag(x, y, but, cmd, shift, capslock, option, ctrl) {
     if (but === 0) {
+        if (drag_kind === 60 && drag_step >= 0 && view !== 1) {
+            drag_kind = 1;                 // plain CLICK (no move) = pin, as before
+            apply_gesture(drag_step, x, y);
+        }
         if (view === 1 && shape_dirty) {
             shape_dirty = 0;
             set_active_index(inspect_k);
@@ -1385,6 +1428,12 @@ function ondrag(x, y, but, cmd, shift, capslock, option, ctrl) {
         return;
     }
     if (drag_step < 0 || drag_kind === 0 || drag_kind === 4) return;
+    if (drag_kind === 60) {
+        var pdx = Math.abs(x - drag_x0);
+        var pdy = Math.abs(y - drag_y0);
+        if (pdx < 3 && pdy < 3) return;    // not moved enough to call the axis
+        drag_kind = (pdx >= pdy) ? 1 : 6;
+    }
     apply_gesture(drag_step, x, y);
 }
 
@@ -1469,6 +1518,11 @@ function anything() {
     }
     if (messagename === 'ratchetclear') {
         clear_ratchet_locks();
+        mgraphics.redraw();
+        return;
+    }
+    if (messagename === 'levelclear') {
+        clear_level_locks();
         mgraphics.redraw();
         return;
     }
@@ -1784,6 +1838,21 @@ function paint() {
                                                 Math.max(1, bh - 1), 2, 2);
                     mgraphics.stroke();
                 }
+                // step-order numeral (user ask): WHEN this slice plays —
+                // the first hitting step, 1-based; '+' = hit again later.
+                // Dark digit in the bar's base; skipped when slices are too
+                // narrow or the bar is a mute sliver (hover names every step).
+                if (!all_muted && col_w >= 9 && bh >= 10) {
+                    var olab = String(hits[0] + 1) + (m > 1 ? '+' : '');
+                    mgraphics.select_font_face('Ableton Sans Medium');
+                    mgraphics.set_font_size(5.8);
+                    var olw = mgraphics.text_measure(olab)[0];
+                    if (olw <= col_w - 2) {
+                        mgraphics.set_source_rgba(0.10, 0.10, 0.12, 0.92);
+                        mgraphics.move_to(col_x + (col_w - olw) * 0.5, base_y - 3);
+                        mgraphics.show_text(olab);
+                    }
+                }
                 // hit-test rects still map to per-step geometry (clicking an
                 // unsplit bar grabs the step that owns that spot)
                 var hslot = Math.min(ih * 0.60, (ih * 0.78) / m);
@@ -1899,7 +1968,7 @@ function paint() {
                 label_chip(PAD + 3, PAD + 9, 'STEP ' + (hstep + 1) + ' > SLICE '
                            + (step_index(hstep) + 1) + pit);
                 mgraphics.set_font_size(6.5);
-                var legend = 'drag MOVE   opt DIR   ctrl PITCH   cmd+opt MUTE   shift+opt RATCHET   cmd ERASE';
+                var legend = 'drag: ^v VOL  <> MOVE   opt DIR   ctrl PITCH   cmd+opt MUTE   sh+opt RATCHET   cmd ERASE';
                 var lw = mgraphics.text_measure(legend)[0];
                 label_chip(PAD + (iw - lw) * 0.5, PAD + ih - 5, legend);
                 mgraphics.set_font_size(8);
