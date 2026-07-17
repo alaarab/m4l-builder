@@ -180,23 +180,11 @@ var seg_h = [];
 var seg_step = [];
 
 // ---- slice hue ramp: position in the sample -> color ----
-var RAMP = [
-    [0.95, 0.70, 0.30],
-    [0.93, 0.47, 0.36],
-    [0.76, 0.47, 0.72],
-    [0.45, 0.62, 0.88]
-];
+var ACCENT = [0.90, 0.67, 0.28];   // ONE accent — color no longer encodes
+                                   // position (the x-axis already does)
 
 function slice_rgb(k) {
-    var n = Math.max(1, Math.round(slice_count));
-    var t = n <= 1 ? 0.0 : (k + 0.5) / n;
-    var f = t * (RAMP.length - 1);
-    var i = Math.floor(f);
-    if (i >= RAMP.length - 1) return RAMP[RAMP.length - 1];
-    var u = f - i;
-    return [RAMP[i][0] + (RAMP[i + 1][0] - RAMP[i][0]) * u,
-            RAMP[i][1] + (RAMP[i + 1][1] - RAMP[i][1]) * u,
-            RAMP[i][2] + (RAMP[i + 1][2] - RAMP[i][2]) * u];
+    return ACCENT;
 }
 
 function clamp(v, lo, hi) {
@@ -722,6 +710,12 @@ function set_lfo_period(v) {
 function set_lfo_shape(v) {
     g_lfo_shape = clamp(Math.round(v), 0, 3);
     if (view === 1) mgraphics.redraw();
+}
+
+function openhit() {
+    // host ENV button: open the hit view on the pattern's first slice
+    if (!loaded) return;
+    enter_hit_view(wrap_index(step_index(0)));
 }
 
 // ================= pattern side =================
@@ -1718,21 +1712,15 @@ function paint() {
             by_slice[key].push(i);
         }
 
-        // per-slice colored floor strip: every slice shows its hue as a thin
-        // base line, so the ramp reads even where the pattern is silent
+        // pinned-shape badge: a cream cap at the slice's column top
         for (k = 0; k < slices; k++) {
+            if (!slice_pinned(k)) continue;
             var edges0 = slice_edges(k);
             var fx = norm_to_x(edges0[0]);
             var fw = Math.max(1, norm_to_x(edges0[1]) - fx);
-            var rgb0 = slice_rgb(k);
-            mgraphics.set_source_rgba(rgb0[0], rgb0[1], rgb0[2], 0.30 * dim);
-            mgraphics.rectangle(fx + 1, PAD + ih - 2, Math.max(1, fw - 2), 2);
+            mgraphics.set_source_rgba(@GLITCH_RGB@, 0.75);
+            mgraphics.rectangle(fx + 1, PAD + 2, Math.max(1, fw - 2), 1.5);
             mgraphics.fill();
-            if (slice_pinned(k)) {   // shaped slice: cream cap at column top
-                mgraphics.set_source_rgba(@GLITCH_RGB@, 0.75);
-                mgraphics.rectangle(fx + 1, PAD + 2, Math.max(1, fw - 2), 1.5);
-                mgraphics.fill();
-            }
         }
 
         draw_waveform(PAD, PAD, iw, ih);
@@ -1749,7 +1737,12 @@ function paint() {
             }
         }
 
-        // ---- step segments, stacked inside their slice column ----
+        // ---- pattern bars: ONE bar per used slice (height = loudest step).
+        // Hovering a slice splits its bar into the individual steps with
+        // their ornaments — that's where dragging/re-pinning happens. The
+        // always-on view stays glanceable: audio, what's used, how hard.
+        var hover_slice = -1;
+        if (hover_on) hover_slice = slice_from_pos(x_to_pos(hover_x));
         for (k = 0; k < slices; k++) {
             key = String(k);
             if (!by_slice[key]) continue;
@@ -1759,12 +1752,55 @@ function paint() {
             var ex = norm_to_x(edges[1]);
             var col_x = sx + 1.5;
             var col_w = Math.max(2, (ex - sx) - 3);
-            var rgb = slice_rgb(k);
             var m = hits.length;
-            // the slice's column: one step owns a TALL bar (~60% height);
-            // stacked steps split the column budget evenly
-            var slot = Math.min(ih * 0.60, (ih * 0.78) / m);
             var base_y = PAD + ih - 3;
+            var split = (k === hover_slice);
+            var slot = split ? Math.min(ih * 0.60, (ih * 0.78) / m) : 0;
+            // aggregate: loudest live step + lock/mute presence
+            var agg_lvl = 0.0, any_lock = 0, all_muted = 1, agg_rc = 0;
+            for (i = 0; i < m; i++) {
+                var st0 = hits[i];
+                var lv0 = step_level(st0);
+                if (lv0 > agg_lvl) agg_lvl = lv0;
+                if (is_step_locked(st0)) any_lock = 1;
+                if (step_gate(st0) > 0) all_muted = 0;
+            }
+            if (!split) {
+                var bh = all_muted ? 4
+                    : Math.max(6, ih * 0.62 * (0.35 + 0.65 * Math.min(agg_lvl, 1.25) / 1.25));
+                var by = base_y - bh;
+                var is_playing = 0;
+                for (i = 0; i < m; i++) if (hits[i] === playhead_step) is_playing = 1;
+                if (is_playing) mgraphics.set_source_rgba(0.99, 0.97, 0.90, 0.92);
+                else mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2],
+                    (all_muted ? 0.20 : (0.45 + 0.35 * Math.min(agg_lvl, 1.25) / 1.25)) * dim);
+                mgraphics.rectangle_rounded(col_x, by, col_w, bh, 2, 2);
+                mgraphics.fill();
+                if (agg_lvl > 1.0) {   // accent cap
+                    mgraphics.set_source_rgba(@GLITCH_RGB@, 0.95 * dim);
+                    mgraphics.rectangle(col_x, by - 1.5, col_w, 1.5);
+                    mgraphics.fill();
+                }
+                if (any_lock) {        // pinned: cream outline
+                    mgraphics.set_source_rgba(@GLITCH_RGB@, 0.9 * dim);
+                    mgraphics.set_line_width(1.0);
+                    mgraphics.rectangle_rounded(col_x + 0.5, by + 0.5,
+                                                Math.max(1, col_w - 1),
+                                                Math.max(1, bh - 1), 2, 2);
+                    mgraphics.stroke();
+                }
+                // hit-test rects still map to per-step geometry (clicking an
+                // unsplit bar grabs the step that owns that spot)
+                var hslot = Math.min(ih * 0.60, (ih * 0.78) / m);
+                for (i = 0; i < m; i++) {
+                    var sh = Math.max(6, (hslot - 2) * 0.8);
+                    seg_x.push(col_x); seg_y.push(base_y - (i * hslot) - sh);
+                    seg_w.push(col_w); seg_h.push(sh);
+                    seg_step.push(hits[i]);
+                }
+                continue;
+            }
+            // ---- hovered slice: split into per-step segments + ornaments ----
             for (i = 0; i < m; i++) {
                 var st = hits[i];
                 var lvl = step_level(st);
@@ -1773,28 +1809,20 @@ function paint() {
                 var seg_hh = gate < 1 ? 4
                     : Math.max(6, (slot - 2) * (0.45 + 0.44 * Math.min(lvl, 1.25)));
                 var sy = base_y - (i * slot) - seg_hh;
-                var alpha = gate < 1 ? 0.22 : (0.42 + 0.40 * Math.min(lvl, 1.25) / 1.25);
-                alpha *= dim;
-
+                var alpha = gate < 1 ? 0.22 : (0.5 + 0.4 * Math.min(lvl, 1.25) / 1.25);
                 if (st === playhead_step) {
                     mgraphics.set_source_rgba(0.99, 0.97, 0.90, 0.92);
                 } else {
-                    mgraphics.set_source_rgba(rgb[0], rgb[1], rgb[2], alpha);
+                    mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2], alpha * dim);
                 }
                 mgraphics.rectangle_rounded(col_x, sy, col_w, seg_hh, 2, 2);
                 mgraphics.fill();
-
-                if (step_mutated(st) && gate >= 1 && st !== playhead_step) {
-                    mgraphics.set_source_rgba(@GLITCH_RGB@, 0.25 * dim);
-                    mgraphics.rectangle_rounded(col_x, sy, col_w, seg_hh, 2, 2);
-                    mgraphics.fill();
-                }
-                if (lvl > 1.0) {   // accent: hot cap
+                if (lvl > 1.0) {
                     mgraphics.set_source_rgba(@GLITCH_RGB@, 0.95 * dim);
                     mgraphics.rectangle(col_x, sy - 1.5, col_w, 1.5);
                     mgraphics.fill();
                 }
-                if (is_step_locked(st)) {   // pinned: bright outline
+                if (is_step_locked(st)) {
                     mgraphics.set_source_rgba(@GLITCH_RGB@, 0.9 * dim);
                     mgraphics.set_line_width(1.0);
                     mgraphics.rectangle_rounded(col_x + 0.5, sy + 0.5,
@@ -1802,16 +1830,15 @@ function paint() {
                                                 Math.max(1, seg_hh - 1), 2, 2);
                     mgraphics.stroke();
                 }
-                if (rc > 0 && gate >= 1) {   // ratchets: notches across the bar
+                if (rc > 0 && gate >= 1) {   // ratchet notches (hover only)
                     mgraphics.set_source_rgba(@BG@);
                     var t2;
                     for (t2 = 0; t2 < rc; t2++) {
-                        mgraphics.rectangle(col_x, sy + 3 + t2 * 4,
-                                            col_w, 1.4);
+                        mgraphics.rectangle(col_x, sy + 3 + t2 * 4, col_w, 1.4);
                         mgraphics.fill();
                     }
                 }
-                if (step_direction(st) < 0 && gate >= 1) {   // reversed: chevron
+                if (step_direction(st) < 0 && gate >= 1) {   // reversed chevron
                     mgraphics.set_source_rgba(@ARP_RGB@, 0.9 * dim);
                     mgraphics.set_line_width(1.0);
                     mgraphics.move_to(col_x + 4.5, sy + 1.5);
@@ -1820,13 +1847,12 @@ function paint() {
                     mgraphics.stroke();
                 }
                 var sp = step_pitch(st);
-                if (Math.abs(sp) > 0.5 && gate >= 1) {   // pitched: mint underline
+                if (Math.abs(sp) > 0.5 && gate >= 1) {   // pitched underline
                     mgraphics.set_source_rgba(@PITCH_RGB@,
                         (0.35 + 0.6 * Math.min(1, Math.abs(sp) / 24.0)) * dim);
                     mgraphics.rectangle(col_x, sy + seg_hh, col_w, 1.2);
                     mgraphics.fill();
                 }
-
                 seg_x.push(col_x); seg_y.push(sy);
                 seg_w.push(col_w); seg_h.push(seg_hh);
                 seg_step.push(st);
@@ -1877,11 +1903,11 @@ function paint() {
                     ? '  ' + (hsp > 0 ? '+' : '') + Math.round(hsp) + ' ST' : '';
                 label_chip(PAD + 3, PAD + 9, 'STEP ' + (hstep + 1) + ' > SLICE '
                            + (step_index(hstep) + 1) + pit);
-                mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.55);
-                var legend = 'drag MOVE  opt DIR  ctrl PITCH  cmd+opt MUTE  shift+opt RATCHET  cmd ERASE';
+                mgraphics.set_font_size(6.5);
+                var legend = 'drag MOVE   opt DIR   ctrl PITCH   cmd+opt MUTE   shift+opt RATCHET   cmd ERASE';
                 var lw = mgraphics.text_measure(legend)[0];
-                mgraphics.move_to(PAD + iw - lw - 3, PAD + 9);
-                mgraphics.show_text(legend);
+                label_chip(PAD + (iw - lw) * 0.5, PAD + ih - 5, legend);
+                mgraphics.set_font_size(8);
             } else {
                 var hidx = slice_from_pos(x_to_pos(hover_x));
                 var hedges = slice_edges(hidx);
@@ -1905,17 +1931,8 @@ function paint() {
         mgraphics.stroke();
 
         // labels
-        if (!hover_on) {
-            mgraphics.select_font_face('Ableton Sans Medium');
-            mgraphics.set_font_size(8);
-            label_chip(PAD + iw - 56, PAD + 9, 'SLICES ' + Math.round(slice_count));
-        }
-        if (hint === 1) {
-            mgraphics.set_font_size(9);
-            var ht = 'HOLD A KEY';
-            var hw2 = mgraphics.text_measure(ht)[0];
-            label_chip(PAD + (iw - hw2) * 0.5, PAD + 12, ht);
-        }
+        // (slice count readout lives in the SLICE card: SLICES setting + FOUND n)
+        // (the HOLD A KEY tutorial hint is retired — Info View covers it)
     }
 
     mgraphics.set_source_rgba(@GRID@);
