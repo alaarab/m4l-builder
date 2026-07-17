@@ -1754,6 +1754,7 @@ function paint() {
 
         // group the steps by the slice they fire
         var by_slice = {}, sidx, key;
+        var ord_cx = [], ord_txt = [];   // play-order numerals (drawn post-loop)
         for (i = 0; i < visible_steps; i++) {
             sidx = step_index(i);
             key = String(sidx);
@@ -1838,20 +1839,12 @@ function paint() {
                                                 Math.max(1, bh - 1), 2, 2);
                     mgraphics.stroke();
                 }
-                // step-order numeral (user ask): WHEN this slice plays —
-                // the first hitting step, 1-based; '+' = hit again later.
-                // Dark digit in the bar's base; skipped when slices are too
-                // narrow or the bar is a mute sliver (hover names every step).
-                if (!all_muted && col_w >= 9 && bh >= 10) {
-                    var olab = String(hits[0] + 1) + (m > 1 ? '+' : '');
-                    mgraphics.select_font_face('Ableton Sans Medium');
-                    mgraphics.set_font_size(5.8);
-                    var olw = mgraphics.text_measure(olab)[0];
-                    if (olw <= col_w - 2) {
-                        mgraphics.set_source_rgba(0.10, 0.10, 0.12, 0.92);
-                        mgraphics.move_to(col_x + (col_w - olw) * 0.5, base_y - 3);
-                        mgraphics.show_text(olab);
-                    }
+                // step-order numeral (user ask): EVERY playing bar gets its
+                // number — collected here, chip-drawn after the loop so
+                // skinny bars can overflow their column without vanishing.
+                if (!all_muted) {
+                    ord_cx.push(col_x + col_w * 0.5);
+                    ord_txt.push(String(hits[0] + 1) + (m > 1 ? '+' : ''));
                 }
                 // hit-test rects still map to per-step geometry (clicking an
                 // unsplit bar grabs the step that owns that spot)
@@ -1920,6 +1913,32 @@ function paint() {
                 seg_x.push(col_x); seg_y.push(sy);
                 seg_w.push(col_w); seg_h.push(seg_hh);
                 seg_step.push(st);
+            }
+        }
+
+        // play-order numerals: every bar numbered. Centered on the column
+        // (skinny bars overflow), tiny dark chip for contrast; neighbors
+        // that would collide bump to a second row above (greedy 2-row).
+        if (ord_cx.length) {
+            mgraphics.select_font_face('Ableton Sans Medium');
+            mgraphics.set_font_size(5.8);
+            var row_end = [-9999, -9999];
+            for (i = 0; i < ord_cx.length; i++) {
+                var otw = mgraphics.text_measure(ord_txt[i])[0];
+                var olx = ord_cx[i] - otw * 0.5;
+                if (olx < PAD + 1) olx = PAD + 1;
+                if (olx + otw > PAD + iw - 1) olx = PAD + iw - 1 - otw;
+                var orow = (olx >= row_end[0] + 3) ? 0
+                         : ((olx >= row_end[1] + 3) ? 1
+                         : (row_end[0] <= row_end[1] ? 0 : 1));
+                var oly = base_y - 2 - orow * 9;
+                mgraphics.set_source_rgba(@BG@);
+                mgraphics.rectangle_rounded(olx - 1.5, oly - 6, otw + 3, 8, 2, 2);
+                mgraphics.fill();
+                mgraphics.set_source_rgba(0.92, 0.90, 0.84, 0.92);
+                mgraphics.move_to(olx, oly);
+                mgraphics.show_text(ord_txt[i]);
+                row_end[orow] = olx + otw;
             }
         }
 
