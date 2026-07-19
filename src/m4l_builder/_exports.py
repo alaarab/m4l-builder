@@ -518,6 +518,13 @@ IDIOM_EXPORTS = [
     "init_prime",
 ]
 
+BRIDGE_PROBE_EXPORTS = [
+    "env_flag",
+    "livemcp_asset_dir",
+    "register_bridge_probe_assets",
+    "add_bridge_probe_runtime",
+]
+
 ROOT_ALL = _dedupe(
     ROOT_NAMESPACE_EXPORTS,
     CORE_EXPORTS,
@@ -529,6 +536,7 @@ ROOT_ALL = _dedupe(
     ROOT_RECIPE_EXPORTS,
     SURFACE_EXPORTS,
     IDIOM_EXPORTS,
+    BRIDGE_PROBE_EXPORTS,
 )
 
 BUILDER_ALL = _dedupe(
@@ -570,6 +578,7 @@ ROOT_EXPORT_GROUPS = (
     ("m4l_builder.amxd_api", AMXD_EXPORTS),
     ("m4l_builder.analysis_api", ANALYSIS_EXPORTS),
     ("m4l_builder.idioms", IDIOM_EXPORTS),
+    ("m4l_builder.bridge_probe", BRIDGE_PROBE_EXPORTS),
 )
 
 BUILDER_NAMESPACE_MODULES = {
