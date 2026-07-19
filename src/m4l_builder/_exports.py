@@ -510,6 +510,14 @@ ROOT_NAMESPACE_EXPORTS = [
     "amxd_codegen",
 ]
 
+IDIOM_EXPORTS = [
+    "expr_cond",
+    "expr_safe_mod",
+    "debounce",
+    "dedupe_value",
+    "init_prime",
+]
+
 ROOT_ALL = _dedupe(
     ROOT_NAMESPACE_EXPORTS,
     CORE_EXPORTS,
@@ -520,6 +528,7 @@ ROOT_ALL = _dedupe(
     ANALYSIS_EXPORTS,
     ROOT_RECIPE_EXPORTS,
     SURFACE_EXPORTS,
+    IDIOM_EXPORTS,
 )
 
 BUILDER_ALL = _dedupe(
@@ -560,6 +569,7 @@ ROOT_EXPORT_GROUPS = (
     ("m4l_builder.surface", SURFACE_EXPORTS),
     ("m4l_builder.amxd_api", AMXD_EXPORTS),
     ("m4l_builder.analysis_api", ANALYSIS_EXPORTS),
+    ("m4l_builder.idioms", IDIOM_EXPORTS),
 )
 
 BUILDER_NAMESPACE_MODULES = {
