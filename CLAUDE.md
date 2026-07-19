@@ -1,1 +1,1 @@
-~/.cortex/m4l-builder/CLAUDE.md
+../../.phren/m4l-builder/CLAUDE.md

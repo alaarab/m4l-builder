@@ -1,1 +1,1 @@
-~/.cortex/m4l-builder/FINDINGS.md
+../../.phren/m4l-builder/FINDINGS.md
