@@ -76,21 +76,28 @@ Note: `/publish` should update `CHANGELOG.md`; that file exists at the repo root
 ```
 src/m4l_builder/
 ├── __init__.py           # Re-exports everything: Device types, DSP, UI, theme, objects, constants
+├── _exports.py           # Shared export-name tables — the facade behind __init__.py + builder/*.py
 ├── device.py             # Base Device class + AudioEffect, Instrument, MidiEffect
 ├── patcher.py            # Assembles full JSON patcher structure
+├── patcher_walk.py       # Shared patcher/graph traversal primitives
 ├── container.py          # Wraps JSON in ampf binary header (32-byte header)
-├── ui.py                 # 16 UI element creator functions (presentation mode)
-├── dsp/                  # 117 DSP building blocks returning (boxes, lines) tuples
+├── ui.py                 # ~43 UI element creator functions (presentation mode)
+├── dsp/                  # 119 DSP building blocks returning (boxes, lines) tuples
+├── idioms.py             # Validated helpers for common Max wiring idioms (debounce, expr_cond, ...)
+├── bridge_probe.py       # Shared LiveMCP bridge-probe scaffolding (assets + runtime boxes)
 ├── objects.py            # newobj() and patchline() low-level factory functions
 ├── constants.py          # UNITSTYLE_* constants, device type codes, defaults
-├── theme.py              # Theme dataclass + 4 presets (MIDNIGHT, WARM, COOL, LIGHT)
-└── engines/              # Subpackage: JS string generators for jsui visualizations
+├── theme.py              # Theme dataclass + 16 presets (MIDNIGHT, WARM, COOL, LIGHT, ...)
+└── engines/              # Subpackage: JS string generators for jsui visualizations (68 modules)
     ├── __init__.py
-    ├── filter_curve.py   # filter_curve_js()
-    ├── eq_curve.py       # eq_curve_js()
+    ├── design_system.py     # Shared jsui design-system scaffold (design_system_js, ...)
+    ├── interaction_core.py  # Shared engine interaction/geometry helpers
+    ├── filter_curve.py      # filter_curve_js()
+    ├── eq_curve.py          # eq_curve_js()
     ├── envelope_display.py  # envelope_display_js()
     ├── spectrum_analyzer.py # spectrum_analyzer_js()
-    └── waveform_display.py  # waveform_display_js()
+    ├── waveform_display.py  # waveform_display_js()
+    └── ...                  # 61 more — see docs/catalog.md for the full generated list
 
 tests/                    # automated test suite
 ```
@@ -98,11 +105,12 @@ tests/                    # automated test suite
 ### Architecture Layers
 
 1. **Device API** (`device.py`): top-level interface; `add_panel`, `add_dial`, `add_newobj`, `add_line`, etc.
-2. **UI layer** (`ui.py`): 16 presentation-mode element constructors
-3. **DSP layer** (`dsp/`): 117 composable signal-processing blocks (io/delay/filters/dynamics/midi/spectral/synthesis/routing/live/…)
-4. **Engines** (`engines/`): JS string generators for jsui canvas visualizations
+2. **UI layer** (`ui.py`): ~43 presentation-mode element constructors
+3. **DSP layer** (`dsp/`): 119 composable signal-processing blocks (io/delay/filters/dynamics/midi/spectral/synthesis/routing/live/…)
+4. **Engines** (`engines/`): 68 JS string generator modules for jsui canvas visualizations, plus shared scaffolding (`design_system.py`, `interaction_core.py`)
 5. **Patcher** (`patcher.py`): assembles boxes + lines into the full JSON structure
 6. **Container** (`container.py`): wraps JSON in the ampf binary format
+7. **Export facade** (`_exports.py`): single source of truth for public name lists, shared by `__init__.py`, `builder/*.py`, and the root namespace re-exports, instead of hand-copying the same lists in multiple places
 
 ### Device Types
 
@@ -116,19 +124,29 @@ device = MidiEffect("name", width=200, height=100)    # MIDI only
 
 Auto-added plugin~/plugout~ objects use reserved IDs `"obj-plugin"` and `"obj-plugout"`.
 
-### UI Components (16)
+### UI Components (~43)
 
 All functions place objects in presentation mode at `rect=[x, y, w, h]`.
 Device methods are `add_<name>(id, rect, ...)` wrappers around the raw functions in `ui.py`.
+
+The original 16 (still the most common ones):
 
 - `add_panel`, `add_dial`, `add_slider`, `add_toggle`, `add_button`
 - `add_tab`, `add_menu`, `add_number_box`, `add_comment`
 - `add_scope`, `add_meter`, `add_live_text`, `add_fpic`
 - `add_live_gain`, `add_multislider`, `add_jsui`
 
+Plus ~27 more added since (`add_v8ui`, `add_rslider`, `add_kslider`, `add_bpatcher`,
+`add_filtergraph`, `add_waveform`, `add_spectrumdraw`, …) — see `docs/catalog.md` for the
+complete generated list.
+
 **kwargs passthrough**: any Max attribute can be set directly on any component.
 
-### DSP Building Blocks (117 across dsp/*; counts regenerated 2026-07-05 — see also 61 recipes, 57 gen_snippets, 28 gen_stateful kernels, 39 library-measured widgets, 66 engines)
+### DSP Building Blocks (119 across dsp/*)
+
+Counts across the kit drift as it grows — `docs/catalog.md` is the auto-generated,
+always-current index of DSP blocks, recipes, UI widgets, themes, and engines; regenerate
+it with `uv run python tools/build_catalog.py` instead of hand-updating counts here.
 
 All DSP functions return `(boxes, lines)` tuples, designed for composition.
 Add to a device with `device.add_dsp(boxes, lines)` (convenience) or individually via `device.add_box()` / `device.add_line()`.
@@ -182,12 +200,16 @@ device.add_jsui("filter_display", [10, 30, 200, 80],
                 js_code=filter_curve_js(), numinlets=3)
 ```
 
-Available generators:
+A few of the 68 generator modules:
 - `filter_curve_js()`: single filter response curve
 - `eq_curve_js()`: multi-band parametric EQ curve with draggable nodes
 - `envelope_display_js()`: ADSR envelope shape
 - `spectrum_analyzer_js()`: frequency spectrum analyzer
 - `waveform_display_js()`: waveform / oscilloscope display
+- `design_system.py` / `interaction_core.py`: not generators themselves — shared scaffolding
+  (color/type helpers, geometry/interaction primitives) that the generator modules build on
+
+See `docs/catalog.md` for the complete generated list of engine modules.
 
 ### Theme System
 
@@ -197,7 +219,7 @@ from m4l_builder.theme import MIDNIGHT, WARM, COOL, LIGHT
 device = AudioEffect("My Effect", width=400, height=200, theme=MIDNIGHT)
 ```
 
-Themes provide: `bg`, `surface`, `section`, `text`, `text_dim`, `accent`, plus derived colors for dials, needles, tabs.
+16 built-in presets provide: `bg`, `surface`, `section`, `text`, `text_dim`, `accent`, plus derived colors for dials, needles, tabs.
 Pass `theme=` to the device constructor; all `add_*` calls inherit colors automatically.
 
 ## .amxd Binary Format
@@ -226,7 +248,7 @@ is not registered.
 
 ```
 test_objects.py    :newobj, patchline factory functions
-test_ui.py         :All 16 UI element creators
+test_ui.py         :All UI element creators
 test_dsp.py        :DSP blocks return correct (boxes, lines) tuples
 test_patcher.py    :Patcher dict generation and structure
 test_container.py  :Binary format (ampf header) validation

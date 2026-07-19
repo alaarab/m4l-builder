@@ -152,7 +152,9 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 
 ---
 
-## dsp.py
+## dsp/
+
+DSP building blocks, organized as a package (`dsp/io.py`, `dsp/filters.py`, `dsp/dynamics.py`, `dsp/delay.py`, `dsp/modulation.py`, `dsp/spectral.py`, `dsp/synthesis.py`, `dsp/midi.py`, `dsp/routing.py`, `dsp/live.py`, `dsp/generative.py`, `dsp/data.py`, plus shared internals in `dsp/_common.py`). Every function below is re-exported from `m4l_builder.dsp` regardless of which submodule defines it, so `from m4l_builder.dsp import gain_stage` keeps working unchanged.
 
 All functions return `(boxes, lines)` tuples unless noted. Add with `device.add_dsp(boxes, lines)`.
 
@@ -302,6 +304,8 @@ Higher-level combos that wire multiple DSP blocks and UI elements together. Each
 `tempo_synced_delay(device, id_prefix, time_dial_rect, feedback_dial_rect, x=30, y=30)` -- Time + feedback dials with tapin~/tapout~. Returns `{"time_dial", "feedback_dial", "tapin", "tapout"}`.
 `midi_note_gate(device, id_prefix, x=30, y=30)` -- notein -> stripnote -> kslider. Returns `{"notein", "pitch", "velocity"}`.
 
+This is a small sample — recipes.py's full public surface spans dozens of higher-level recipes plus supporting widgets and helpers. See [`docs/catalog.md`](catalog.md) for the complete auto-generated index and [`docs/palette.md`](palette.md) for a curated, composition-oriented tour.
+
 ---
 
 ## engines/
@@ -330,6 +334,8 @@ JavaScript generators for Max's jsui object. Each returns an ES5 string. Max use
 `spectral_vocoder_display_js()` -- Vocoder band visualization
 
 Each engine module also exports `*_INLETS` and `*_OUTLETS` constants (e.g. `XY_PAD_INLETS`, `XY_PAD_OUTLETS`) for setting up jsui inlet/outlet counts.
+
+This is a small sample of the visualization generators — `engines/` has grown to 68 modules covering knobs, curves, meters, chip rows, and shared design-system scaffolding. See [`docs/catalog.md`](catalog.md) for the complete auto-generated index and [`docs/palette.md`](palette.md) for a curated tour.
 
 ---
 
@@ -423,6 +429,32 @@ Preset management for Max devices.
 
 `NoteEvent(pitch, start_time, duration, *, velocity=None, probability=None, velocity_deviation=None, release_velocity=None, mute=None)` -- One note in a Live 12 MIDI Tool notes dictionary. Validates ranges; `to_dict()` omits unset optionals.
 `notes_dict(events)` -- Build the `{"notes": [...]}` dictionary for `live.miditool.out` from `NoteEvent` instances and/or plain mappings. Structure-building only; emission into Live is up to the patch.
+
+---
+
+## idioms.py
+
+Validated helpers for common Max wiring idioms that devices used to hand-wire and get subtly wrong. Prefer these over rolling your own.
+
+`expr_cond(*cases)` -- Branchless conditional `expr` body: `(c1)*(v1) + (c2)*(v2) + ...` (Max `expr` has no ternary; a `?` is a silent parse error). Cases are `(condition, value)` pairs and must be mutually exclusive. Raises if any operand contains `?`.
+`expr_safe_mod(a, b)` -- Integer-safe modulo sub-expression `(a) % ((b)+((b)==0))`; guards divide-by-zero and avoids the float-`%` silent-no-output trap in Max `expr`.
+`debounce(device, id_prefix, source, target, *, ms=160, source_outlet=0, target_inlet=0, x=0, y=0)` -- Coalesce a rapidly-changing value via `t b f` + `delay` + `float`; forwards to `target` only after `source` has been quiet for `ms`. Returns `{"trig", "hold", "delay"}`.
+`dedupe_value(device, id_prefix, source, target, *, source_outlet=0, target_inlet=0, x=0, y=0)` -- Fire `target` only when a NUMBER on `source` actually changes, via `change` (which ignores bangs). Returns `{"change"}`.
+`control_smooth(device, prefix, dial_id, scale_text, x, *, y=360, ramp_ms=20)` -- Smooth a control dial into a signal: `dial -> [scale] -> pack f <ramp_ms> -> line~`. `scale_text` is an optional `expr`/`scale` object text inserted between the dial and the pack (pass `None` to skip). Returns the `line~` id.
+`init_prime(device, id_prefix, target, value, *, target_inlet=0, x=0, y=0)` -- Give a message-driven inlet a fail-open default via `loadmess <value>`, so it is not cold (silence-producing) before its first real value. Returns `{"loadmess"}`.
+`corr_readout(device, id_prefix, source, target, *, source_outlet=0, target_inlet=0, x=0, y=0)` -- Wire a `snapshot~ 50 -> sprintf CORR %.2f -> prepend set` sampling chain into a PRE-EXISTING readout box (a comment/textedit already showing placeholder text). Returns `{"snap", "fmt", "set"}`.
+`assign_parameter_banks(device, banks)` -- Assign every parameter to a NAMED Push/controller bank, 8 slots each, in the given order. `banks` is an ordered list of `(bank_name, param_names)` pairs.
+
+---
+
+## bridge_probe.py
+
+Shared LiveMCP bridge-probe scaffolding, used by devices that register a bridge probe under an env-var flag. Devices call the registration and runtime helpers separately (assets early, runtime boxes later), each gated by the same flag.
+
+`env_flag(name)` -- True if env var `name` holds a truthy flag (`1`/`true`/`yes`/`on`). Reads `os.environ` at call time, not import time.
+`livemcp_asset_dir(repo_root, root_env="LIVEMCP_ROOT")` -- The `livemcp/max_bridge` asset dir: the `root_env` override, or the sibling `../livemcp` checkout next to `repo_root`. Returns `None` if neither exists.
+`register_bridge_probe_assets(device, *, probe_env, repo_root, runtime_file, server_file, schema_file, root_env="LIVEMCP_ROOT")` -- Register the bridge probe's runtime/server/schema support files on `device`. Raises if the livemcp checkout is missing (`probe_env` names the flag in the error message).
+`add_bridge_probe_runtime(device, *, runtime_file, server_file, y=860)` -- Add the hidden bridge-probe runtime boxes (`live.thisdevice -> deferlow -> js runtime` wired to a `node.script` server) at row `y`.
 
 ---
 

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+<!-- FIXME(changelog): the entries below covering device freezing, sample_drop_target,
+     gen_snippets' harmonic-exciter foundation, engines/exciter_curve.py, NoteEvent/notes_dict,
+     the device_output_path fix, and the three Changed items were previously filed under a
+     second "## [0.8.0] - 2026-06-22" heading. That heading was a mis-versioned duplicate:
+     pyproject.toml was bumped 0.7.0 -> 0.8.0 in commit 7fc0886 (2026-05-30), the SAME commit
+     that added the "[0.8.0] — 2026-05-30" entry below, and has not been bumped since — so
+     nothing has actually shipped as its own release since 0.8.0 (05-30). The 06-22 heading
+     re-used an already-claimed version number instead of getting a real one. Folded back into
+     Unreleased here rather than guess which number it should have had (0.9.0? 0.8.1?) —
+     assign the real version at the next actual release/version bump. -->
+
 ### Added
 
 - `sysex_out` recipe: send MIDI system exclusive messages via `sxformat` -> `midiout`,
@@ -9,17 +20,6 @@
 - `cc_mapper_lane` (+ `_ui_lines` / `_mpe_lines` wiring helpers) and `mpe_io_chain`:
   building blocks for MPE-aware MIDI CC mapper devices.
 - `message()` object factory (message-box counterpart to `newobj()`).
-
-### Fixed
-
-- `sysex_out` byte validation: out-of-range values used to wrap silently
-  (`256 -> 0`, `-1 -> 255`); they now raise, and body bytes are checked to be
-  7-bit (only the 0xF0/0xF7 framing may exceed 127).
-
-## [0.8.0] - 2026-06-22
-
-### Added
-
 - **Device freezing for portability** (`m4l_builder.freeze`): build self-contained
   `.amxd` files that embed every dependency (jsui `.js`, `gen~` `.gendsp`/`.genjit`,
   `.maxpat` abstractions, images) inside the device — so a single file works on
@@ -52,6 +52,9 @@
 
 ### Fixed
 
+- `sysex_out` byte validation: out-of-range values used to wrap silently
+  (`256 -> 0`, `-1 -> 255`); they now raise, and body bytes are checked to be
+  7-bit (only the 0xF0/0xF7 framing may exceed 127).
 - `device_output_path` now knows the Live 12 MIDI Tool device types
   (`note_transformation`, `note_generator`) and resolves them to the
   `MIDI Tools/Max Transformations|Max Generators` folders at the User Library

@@ -9,9 +9,9 @@ approach.
 
 For flagship lanes, also use:
 
-- `docs/ableton_ui_playbook.md`
-- `docs/ableton_ui_review_checklist.md`
-- `docs/ableton_ui_validation_template.md`
+- `docs/archive/ui_sprint_2026_03/ableton_ui_playbook.md`
+- `docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md`
+- `docs/archive/ui_sprint_2026_03/ableton_ui_validation_template.md`
 
 The plugin README should define the product role clearly enough that the UI can
 be judged against the shared playbook.
@@ -165,7 +165,7 @@ Include:
 
 For flagship lanes, the validation section should also point to:
 
-- the current UI rubric score using `docs/ableton_ui_review_checklist.md`
+- the current UI rubric score using `docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md`
 - the latest validation note in `docs/ui_validation/`
 - any compact-vs-expanded checks that are specific to this product role
 
