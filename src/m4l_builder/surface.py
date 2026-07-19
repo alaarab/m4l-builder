@@ -41,6 +41,7 @@ from typing import Any
 
 from . import native_sizes as ns
 from .parameters import ParameterSpec
+from .patcher_walk import iter_boxes
 from .recipes import dial_value_cell
 from .theme import ACCENTS, GRAPHITE, Theme
 
@@ -370,8 +371,7 @@ class Surface:
         content_right = (self._x - self.gap) if self._has_slots else self._x
         width = content_right + self.margin
         self.device.width = width
-        for entry in self.device.boxes:
-            box = entry.get("box", {})
+        for box in iter_boxes(self.device):
             if box.get("id") == self._bg_id:
                 for key in ("presentation_rect", "patching_rect"):
                     if key in box:

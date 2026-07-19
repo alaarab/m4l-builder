@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 
 from .device import AudioEffect, Device
+from .patcher_walk import iter_boxes
 
 BRIDGE_PROTOCOL_VERSION = 1
 DEFAULT_BRIDGE_PORT = 9881
@@ -98,7 +99,7 @@ def bridge_schema(port: int = DEFAULT_BRIDGE_PORT) -> dict:
 
 
 def _existing_box_ids(device: Device) -> set[str]:
-    return {box["box"]["id"] for box in device.boxes}
+    return {box["id"] for box in iter_boxes(device)}
 
 
 def _require_bridge_id_space(device: Device, prefix: str) -> dict[str, str]:

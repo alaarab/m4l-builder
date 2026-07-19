@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from .patcher_walk import iter_boxes, iter_patchlines
+
 
 @dataclass(frozen=True)
 class ValidationIssue:
@@ -54,8 +56,7 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
     seen_ids = {}
     texts = {}
 
-    for box in boxes:
-        payload = box.get("box", {})
+    for payload in iter_boxes(boxes):
         box_id = payload.get("id")
         if not box_id:
             continue
@@ -152,8 +153,7 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
                     pass
 
     connected = set()
-    for line in lines:
-        payload = line.get("patchline", {})
+    for payload in iter_patchlines(lines):
         src = payload.get("source", [None])[0]
         dst = payload.get("destination", [None])[0]
         if src is not None:
@@ -259,8 +259,7 @@ def final_checklist_issues(boxes: list) -> list[ValidationIssue]:
     normal build, so existing devices are unaffected. Returns ``ValidationIssue``s.
     """
     issues: list[ValidationIssue] = []
-    for box in boxes:
-        payload = box.get("box", {})
+    for payload in iter_boxes(boxes):
         bid = payload.get("id")
         maxclass = payload.get("maxclass")
         text = (payload.get("text") or "").strip()
@@ -365,8 +364,7 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
     # region is actually POPULATED (non-panel content past the closed edge) —
     # otherwise it is the stale-FULL dead-zone bug (Pressure-688).
     max_setwidth = width
-    for box in boxes:
-        payload = box.get("box", {})
+    for payload in iter_boxes(boxes):
         if payload.get("maxclass") != "message":
             continue
         parts = (payload.get("text") or "").strip().split()
@@ -377,8 +375,7 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
                 pass
     reveal_populated = False
     if max_setwidth > width + 0.5:
-        for box in boxes:
-            payload = box.get("box", {})
+        for payload in iter_boxes(boxes):
             if payload.get("presentation") != 1:
                 continue
             if (payload.get("maxclass") or "") == "panel":
@@ -398,8 +395,7 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
             # presentation_rect moves the whole layout into the widened region at
             # runtime), so the region is empty at rest yet fills on open — a
             # legitimate widen, not the stale-FULL dead zone.
-            for box in boxes:
-                payload = box.get("box", {})
+            for payload in iter_boxes(boxes):
                 if payload.get("maxclass") != "message":
                     continue
                 t = (payload.get("text") or "")
@@ -407,8 +403,7 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
                     reveal_populated = True
                     break
 
-    for box in boxes:
-        payload = box.get("box", {})
+    for payload in iter_boxes(boxes):
         rect = _onscreen_rect(payload, width, height)
         if rect is None:
             continue
@@ -486,8 +481,7 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
                 severity="warning"))
 
     # setwidth-mismatch
-    for box in boxes:
-        payload = box.get("box", {})
+    for payload in iter_boxes(boxes):
         if payload.get("maxclass") != "message":
             continue
         text = (payload.get("text") or "").strip()
@@ -512,8 +506,7 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
     # control between the device edge and the x/y>=900 parking band was
     # authored to be visible but is unreachable in Live (the stranded M/S
     # menu class).
-    for box in boxes:
-        payload = box.get("box", {})
+    for payload in iter_boxes(boxes):
         if payload.get("presentation") != 1:
             continue
         if (payload.get("maxclass") or "") not in _INTERACTIVE_MAXCLASSES:

@@ -19,6 +19,7 @@ diffs, maxdiff-friendly).
 
 from __future__ import annotations
 
+from .patcher_walk import iter_boxes
 from .vendor.maxdiff import default_patcher, known_objects, object_aliases
 
 _SPEC_BY_KEY: dict[str, dict] = {}
@@ -27,10 +28,7 @@ _SPEC_BY_KEY: dict[str, dict] = {}
 def _index() -> dict[str, dict]:
     if _SPEC_BY_KEY:
         return _SPEC_BY_KEY
-    from typing import Any, cast
-    boxes = cast("list[dict[str, Any]]", dict(known_objects)["boxes"])
-    for entry in boxes:
-        box = entry["box"]
+    for box in iter_boxes(dict(known_objects)):
         maxclass = box.get("maxclass", "")
         if maxclass == "newobj":
             key = str(box.get("text", "")).split()[0] if box.get("text") else ""
@@ -101,8 +99,8 @@ def lint_box(box: dict) -> list[str]:
 def lint_boxes(boxes: list[dict]) -> list[str]:
     """Issues across a device's box list (``device.boxes`` shape)."""
     issues: list[str] = []
-    for entry in boxes:
-        issues.extend(lint_box(entry.get("box", entry)))
+    for box in iter_boxes(boxes):
+        issues.extend(lint_box(box))
     return issues
 
 

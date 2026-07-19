@@ -17,6 +17,7 @@ from .jsui_contract import validate_jsui_contract, validate_v8ui_contract
 from .layout import Column, Columns, Grid, Row
 from .native_sizes import DEVICE_H
 from .parameters import ParameterSpec
+from .patcher_walk import iter_boxes
 from .profiles import DEFAULT_PATCHER_PROFILE
 from .ui import jsui, v8ui
 from .ui_registry import DEVICE_WIDGET_SPECS, make_device_widget_method
@@ -129,8 +130,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         """
         out: list = []
         w_dev, h_dev = float(self.width), float(self.height)
-        for box in self.boxes:
-            payload = box.get("box", {})
+        for payload in iter_boxes(self):
             if payload.get("presentation") != 1:
                 continue
             if payload.get("maxclass") in _DECORATION_MAXCLASSES:
@@ -497,8 +497,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         ``add_draggable_readout`` / etc. first). Raises ``KeyError`` if not found.
         """
         target = str(box_id)
-        for entry in self.boxes:
-            box = entry.get("box", {})
+        for box in iter_boxes(self):
             if box.get("id") == target:
                 box["jspainterfile"] = painter_filename
                 break

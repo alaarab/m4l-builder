@@ -11,6 +11,7 @@ from typing import Any
 from .assets import Asset
 from .objects import newobj, patchline
 from .parameters import ParameterSpec, extract_parameter_spec
+from .patcher_walk import iter_boxes
 
 
 class BoxRef(str):
@@ -95,7 +96,7 @@ class GraphContainer:
     def unique_id(self, base: str = "obj") -> str:
         """Return a graph-unique ID using the current naming scope."""
         stem = self.scoped_name(base)
-        used = {box["box"]["id"] for box in self.boxes if "box" in box}
+        used = {box["id"] for box in iter_boxes(self)}
         used.update(self._reserved_ids)
 
         if stem not in used:
