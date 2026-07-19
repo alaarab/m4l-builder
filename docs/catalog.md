@@ -126,7 +126,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `wavetable_osc` | Create a wavetable~ oscillator. |
 | `xfade_matrix` | N-input crossfade matrix. |
 
-## UI widgets (52)
+## UI widgets (43)
 
 | Name | Summary |
 |------|---------|
@@ -139,8 +139,6 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `derive_palette` | Derive a premium TWO-accent dark :class:`Theme` from a single accent (B2). |
 | `dial` | Create a live.dial with parameter storage. |
 | `fpic` | Create an ``fpic`` picture display (logo / background / SVG state graphic). |
-| `grain_display_js` | Return JavaScript source for a granular display (Max jsui). |
-| `grid_sequencer_display_js` | Return JavaScript source for a 2D grid sequencer display (Max jsui). |
 | `js_color` | Format an RGBA color list as a ``"r, g, b, a"`` string for jsui/v8ui kwargs. |
 | `jsui` | Create a jsui display for custom vector graphics via Max's mgraphics (Cairo) API. |
 | `kslider` | Create a kslider piano keyboard display. |
@@ -159,17 +157,12 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `nslider` | Create an nslider staff notation display. |
 | `number_box` | Create a live.numbox numeric display with parameter storage. |
 | `panel` | Create a panel background element. |
-| `peaking_eq_display_js` | Return JavaScript source for a peaking EQ band display (Max jsui). |
-| `piano_roll_js` | Return JavaScript source for a piano roll display (Max jsui). |
 | `radiogroup` | Create a radiogroup (plain-Max radio buttons / checkboxes). |
-| `resonance_bank_display_js` | Return JavaScript source for a resonance bank display (Max jsui). |
 | `rslider` | Create an rslider range slider (two handles selecting a min..max range). |
 | `scope` | Create a live.scope~ display. |
 | `sidechain_display_js` | Return JavaScript source for a sidechain envelope display (Max jsui). |
 | `slider` | Create a live.slider with parameter storage. |
 | `spectral_display_js` | Return JavaScript source for a spectral bin display (Max jsui). |
-| `spectral_vocoder_display_js` | Return JavaScript source for a spectral vocoder band display (Max jsui). |
-| `step_grid_display_js` | Return JavaScript source for a step sequencer grid display (Max jsui). |
 | `swatch` | Create a ``swatch`` colour picker / display. |
 | `tab` | Create a live.tab selector. |
 | `textbutton` | Create a textbutton text button (classic Max, NO Live parameter storage — |
@@ -178,9 +171,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `ubutton` | Create a ``ubutton`` — an invisible click zone over graphics. |
 | `umenu` | Create a ``umenu`` — a NON-parameter dropdown: it outputs the selected int |
 | `v8ui` | Create a v8ui display for modern pointer-aware custom UI rendering. |
-| `velocity_curve_display_js` | Return JavaScript source for a velocity curve display (Max jsui). |
 | `wavetable_display_js` | Return JavaScript source for a wavetable display (Max jsui). |
-| `wavetable_editor_js` | Return JavaScript source for an interactive wavetable editor (Max jsui). |
 | `xy_pad_js` | Return JavaScript source for an XY pad control (Max jsui). |
 
 ## Recipes (30)
@@ -191,7 +182,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `Stage` | Base class for reusable graph stages. |
 | `StageResult` | Mapping-compatible stage result with semantic metadata. |
 | `arpeggio_quantized_stage` | Add an arpeggiator followed by pitch quantization. |
-| `bypass_wrapper` | Hard-bypass a DSP stage with a latching toggle (F4) — a ``selector~ 2 1`` |
+| `bypass_wrapper` | Hard-bypass N parallel signal paths (stereo L/R by default) with ONE |
 | `convolver_controlled_stage` | Add a convolver with dry/wet mix controlled by a dial. |
 | `dial_label_cell` | A dial with a caption directly below it — the channel strip control cell. |
 | `dry_wet_stage` | Add a dry/wet crossfade stage: live.dial (0-100) -> scaled mix. |
@@ -254,6 +245,7 @@ JavaScript (jsui) visualization generators.
 | `grid_sequencer_display` | `grid_sequencer_display_js` |
 | `icon_overlay` | `icon_overlay_js` |
 | `integrated_lufs` | `integrated_lufs_js` |
+| `interaction_core` | `plot_geometry_long_js`, `plot_geometry_short_js` |
 | `level_history` | `level_history_js` |
 | `level_meter` | `level_meter_js` |
 | `lfo_display` | `lfo_display_js` |
@@ -294,4 +286,3 @@ JavaScript (jsui) visualization generators.
 | `wavetable_display` | `wavetable_display_js` |
 | `wavetable_editor` | `wavetable_editor_js` |
 | `xy_pad` | `xy_pad_js` |
-| `xy_trail_display` | `xy_trail_display_js` |
