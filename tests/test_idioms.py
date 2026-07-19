@@ -4,6 +4,7 @@ import pytest
 
 from m4l_builder import (
     AudioEffect,
+    control_smooth,
     debounce,
     dedupe_value,
     expr_cond,
@@ -71,3 +72,19 @@ def test_init_prime_loadmess():
     init_prime(d, "ip", "tgt", 100)
     assert "loadmess 100" in _texts(d)
     assert ("ip_prime", 0, "tgt", 0) in _lines(d)
+
+
+def test_control_smooth_with_and_without_scale():
+    d = _dev()
+    ln = control_smooth(d, "cut", "cut_dial", "scale 0. 127. 20. 20000.", 40)
+    assert ln == "cut_ln"
+    t = _texts(d)
+    assert "scale 0. 127. 20. 20000." in t and "pack f 20" in t and "line~" in t
+    L = _lines(d)
+    assert ("cut_dial", 0, "cut_scale", 0) in L    # dial -> scale
+    assert ("cut_scale", 0, "cut_pk", 0) in L      # scale -> pack
+    assert ("cut_pk", 0, "cut_ln", 0) in L         # pack -> line~
+    d2 = _dev()
+    control_smooth(d2, "g", "g_dial", None, 40)    # scale_text=None skips the scale obj
+    assert ("g_dial", 0, "g_pk", 0) in _lines(d2)
+    assert not any("scale" in x for x in _texts(d2))

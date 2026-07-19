@@ -516,6 +516,7 @@ IDIOM_EXPORTS = [
     "debounce",
     "dedupe_value",
     "init_prime",
+    "control_smooth",
 ]
 
 BRIDGE_PROBE_EXPORTS = [

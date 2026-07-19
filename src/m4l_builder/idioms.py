@@ -85,6 +85,31 @@ def dedupe_value(device, id_prefix, source, target, *, source_outlet=0,
     return stage_result({"change": f"{p}_chg"}, name="dedupe_value")
 
 
+def control_smooth(device, prefix, dial_id, scale_text, x, *, y=360, ramp_ms=20):
+    """Smooth a control dial into a signal: ``dial -> [scale expr] -> pack f
+    <ramp_ms> -> line~``. Optional ``scale_text`` is a ``expr``/``scale`` object
+    text inserted between the dial and the pack (pass None to skip). Returns the
+    ``line~`` id (feed it into your DSP). Was hand-wired identically across
+    several audio-effect devices.
+    """
+    pk, ln = f"{prefix}_pk", f"{prefix}_ln"
+    if scale_text is not None:
+        sc = f"{prefix}_scale"
+        device.add_newobj(sc, scale_text, numinlets=6, numoutlets=1,
+                          outlettype=[""], patching_rect=[x, y, 130, 20])
+        device.add_line(dial_id, 0, sc, 0)
+        src = sc
+    else:
+        src = dial_id
+    device.add_newobj(pk, f"pack f {ramp_ms}", numinlets=2, numoutlets=1,
+                      outlettype=[""], patching_rect=[x, y + 25, 70, 20])
+    device.add_newobj(ln, "line~", numinlets=2, numoutlets=2,
+                      outlettype=["signal", "bang"], patching_rect=[x, y + 50, 40, 20])
+    device.add_line(src, 0, pk, 0)
+    device.add_line(pk, 0, ln, 0)
+    return ln
+
+
 def init_prime(device, id_prefix, target, value, *, target_inlet=0, x=0, y=0):
     """Give a message-driven inlet a fail-open default: ``loadmess <value>`` into
     the inlet, so it is not cold (silence-producing) before its first real value.
