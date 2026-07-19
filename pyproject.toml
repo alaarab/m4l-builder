@@ -95,6 +95,15 @@ ignore = ["E501", "UP031"]
 # recipes.py is now a thin facade re-exporting the recipes_*.py implementation
 # modules so `from m4l_builder.recipes import X` keeps working after the split.
 "src/m4l_builder/recipes.py" = ["F401", "F403"]
+# _amxd_legacy.py is a thin facade over the _amxd_*.py split modules; the
+# split modules star-import their lower layers (F405 = name-from-star), and the
+# facade re-exports the full surface (incl. original imports like Device).
+"src/m4l_builder/_amxd_legacy.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_amxd_constants.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_amxd_helpers.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_amxd_match.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_amxd_detect.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_amxd_extract.py" = ["F401", "F403", "F405"]
 # Single-letter loop / unpack vars (e.g. `l`) are idiomatic in the test suite.
 "tests/**" = ["E741"]
 
