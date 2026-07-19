@@ -105,6 +105,15 @@ def slice_overview_js(
         "var MIN_GAP = 0.004;\n"         # min normalized gap between dividers
         "var RMS_WIN = 512;\n"
         "var RMS_HOP = 256;\n"
+        # THEME: this recessed waveform "screen" defaults to the baked palette but
+        # is overridden at runtime by the live.colors theme bus (messages
+        # themebg / themefg R G B A on inlet 0), so it tracks the user's Live skin
+        # (LCD bg + neutral fg) instead of a fixed near-black. Defaults preserve the
+        # look until the bus feeds it.
+        "var TH_BG = [" + bg_color + "];\n"
+        "var TH_TEXT = [" + text_color + "];\n"
+        "function th_bg() { mgraphics.set_source_rgba(TH_BG[0], TH_BG[1], TH_BG[2], TH_BG[3]); }\n"
+        "function th_text() { mgraphics.set_source_rgba(TH_TEXT[0], TH_TEXT[1], TH_TEXT[2], TH_TEXT[3]); }\n"
         "\n"
         "function clamp(v, lo, hi) {\n"
         "    if (v < lo) return lo;\n"
@@ -154,6 +163,24 @@ def slice_overview_js(
         "        register_hit();\n"
         "    }\n"
         "    mgraphics.redraw();\n"
+        "}\n"
+        "\n"
+        # THEME BUS: live.colors broadcasts the user's Live skin here (any inlet,
+        # arrives on inlet 0), so the screen re-tints on load AND on a light/dark
+        # switch. Named handlers (set_buffer_name etc.) still win; only unmatched
+        # selectors reach anything(). Alpha defaults to 1.
+        "function anything() {\n"
+        "    var a = arrayfromargs(arguments);\n"
+        "    if (messagename === 'themebg' && a.length >= 3) {\n"
+        "        TH_BG = [a[0], a[1], a[2], a.length > 3 ? a[3] : 1.0];\n"
+        "        mgraphics.redraw();\n"
+        "        return;\n"
+        "    }\n"
+        "    if (messagename === 'themefg' && a.length >= 3) {\n"
+        "        TH_TEXT = [a[0], a[1], a[2], a.length > 3 ? a[3] : 1.0];\n"
+        "        mgraphics.redraw();\n"
+        "        return;\n"
+        "    }\n"
         "}\n"
         "\n"
         "function rebuild_waveform_cache() {\n"
@@ -518,7 +545,7 @@ def slice_overview_js(
         "    var inner_h = h - PADDING * 2;\n"
         "    var i;\n"
         "\n"
-        "    mgraphics.set_source_rgba(" + bg_color + ");\n"
+        "    th_bg();\n"
         "    mgraphics.rectangle_rounded(0, 0, w, h, 8, 8);\n"
         "    mgraphics.fill();\n"
         "\n"
@@ -541,7 +568,7 @@ def slice_overview_js(
         # loaded can flip spuriously (buffer~'s right outlet bangs at
         # instantiation) — only REAL peeked audio earns the loaded look.
         "        var cx = x + inner_w * 0.5;\n"
-        "        mgraphics.set_source_rgba(" + text_color + ");\n"
+        "        th_text();\n"
         "        mgraphics.select_font_face('Ableton Sans Medium');\n"
         "        mgraphics.set_font_size(16);\n"
         "        var hw = mgraphics.text_measure('DROP A LOOP')[0];\n"
@@ -647,7 +674,7 @@ def slice_overview_js(
         "        mgraphics.close_path();\n"
         "        mgraphics.fill();\n"
         "\n"
-        "        mgraphics.set_source_rgba(" + text_color + ");\n"
+        "        th_text();\n"
         "        mgraphics.select_font_face('Ableton Sans Medium');\n"
         "        mgraphics.set_font_size(9);\n"
         "        mgraphics.move_to(x + 10, y + 16);\n"

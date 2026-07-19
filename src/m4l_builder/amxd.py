@@ -76,6 +76,9 @@ def apply_validation_policy(device, policy) -> None:
             issue for issue in issues
             if issue.code in WIRING_INTEGRITY_CODES
             or issue.code == "setwidth-mismatch"
+            # expr-ternary: `?:` in a Max expr is a silent parse-error (dead
+            # object); zero false positives, so gate it like wiring integrity.
+            or issue.code == "expr-ternary"
         ]
         # Dataset-backed declaration check (the queued fleet-audit kit item):
         # every emitted box's numinlets/numoutlets/outlettype must match
@@ -141,11 +144,52 @@ def device_to_bytes(device, *, validate=None) -> bytes:
     return build_amxd(device_to_patcher(device), type_code)
 
 
+def _assert_sidecars_registered(device, patcher) -> None:
+    """Fail the build if a jsui/v8ui box references a sidecar .js that is NOT a
+    registered asset.
+
+    Such a reference ships a device whose jsui loads NO code: every message sent
+    to it errors ``js: no function X`` in the Max console (a real shipped bug --
+    the raw ``ui.jsui`` factory only sets ``filename`` and does NOT register the
+    code, unlike ``device.add_v8ui``). Our JSON tests never caught it because the
+    structure was valid; the *asset* was simply absent. This guard closes that gap
+    for every device (main patcher + all subpatchers, walked recursively).
+    """
+    registered = {a.filename for a in device.assets()}
+    referenced = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            box = node.get("box", node)
+            if isinstance(box, dict) and box.get("maxclass") in ("jsui", "v8ui"):
+                fn = box.get("filename")
+                if isinstance(fn, str) and fn.endswith(".js"):
+                    referenced.add(fn)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(patcher)
+    missing = sorted(referenced - registered)
+    if missing:
+        raise ValueError(
+            "jsui/v8ui sidecar(s) referenced but NOT registered as assets -- they "
+            "will ship MISSING, so the jsui loads no code and every message errors "
+            "'js: no function ...' in Max. Register the code (device.add_v8ui, or "
+            "device.register_asset(name, code, asset_type='TEXT', category='js')): "
+            + ", ".join(missing)
+        )
+
+
 def build_device(device, output_path: str, *, validate=None) -> int:
     """Write an AMXD file and any sidecar assets for a device-like object."""
     apply_validation_policy(device, validate)
     type_code = DEVICE_TYPE_CODES[device.device_type]
-    result = write_amxd(device_to_patcher(device), output_path, type_code)
+    patcher = device_to_patcher(device)
+    _assert_sidecars_registered(device, patcher)
+    result = write_amxd(patcher, output_path, type_code)
     output_dir = os.path.dirname(output_path)
     for asset in device.assets():
         try:

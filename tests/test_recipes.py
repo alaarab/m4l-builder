@@ -73,12 +73,16 @@ class TestSampleDropTarget:
         assert "t b l" in texts
         assert "prepend replace" in texts
         assert "delay 600" in texts
+        assert "sel none" in texts     # empty-Blob `none` sentinel guard
 
     def test_wires_replace_into_buffer_and_settle(self):
         device, _ = self._device()
         pairs = _line_pairs(device)
         assert ("smp_drop", "smp_trig") in pairs
-        assert ("smp_trig", "smp_replace") in pairs
+        # path is gated by `sel none` before reaching replace (drops the empty-
+        # Blob `none` sentinel that would otherwise fire `replace none`).
+        assert ("smp_trig", "smp_noneguard") in pairs
+        assert ("smp_noneguard", "smp_replace") in pairs
         assert ("smp_replace", "mybuf") in pairs       # path -> the buffer~
         assert ("smp_trig", "smp_loaded") in pairs      # bang -> settle delay
 

@@ -92,6 +92,9 @@ ignore = ["E501", "UP031"]
 "src/m4l_builder/amxd_api.py" = ["F401"]
 "src/m4l_builder/analysis_api.py" = ["F401"]
 "src/m4l_builder/bridge_api.py" = ["F401"]
+# recipes.py is now a thin facade re-exporting the recipes_*.py implementation
+# modules so `from m4l_builder.recipes import X` keeps working after the split.
+"src/m4l_builder/recipes.py" = ["F401", "F403"]
 # Single-letter loop / unpack vars (e.g. `l`) are idiomatic in the test suite.
 "tests/**" = ["E741"]
 

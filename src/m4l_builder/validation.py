@@ -91,6 +91,23 @@ def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[Val
                     box_id=box_id,
                 )
             )
+        # Max's expr-family parser has NO ternary (?:) operator. A `?` is a syntax
+        # error that kills the WHOLE expression, so the object silently never
+        # outputs — this shipped in Shard (cond_eval `?:` left chance/cond dead)
+        # and lurked in a dead EQ recipe. Zero false positives: `?` is never valid
+        # in an expr. Rewrite branchless: (cond)*a + (cond==0)*b, int-only modulo.
+        if head in ("expr", "expr~", "vexpr", "fexpr~") and "?" in text:
+            issues.append(
+                ValidationIssue(
+                    code="expr-ternary",
+                    message=(f"{head} object {box_id} uses '?' — Max expr has no "
+                             f"ternary operator; the whole expression is a parse "
+                             f"error and silently never fires. Rewrite branchless "
+                             f"[(cond)*a + (cond==0)*b]: '{text}'"),
+                    severity="error",
+                    box_id=box_id,
+                )
+            )
         if payload.get("maxclass") == "panel" and payload.get("background") != 1:
             # Foreground panels ARE legitimate (Live-proven on Shard's group
             # cards: a later background-layer panel never renders above an

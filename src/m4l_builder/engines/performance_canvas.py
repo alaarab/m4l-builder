@@ -95,14 +95,26 @@ var recent_hits = [];
 var last_hit_center = -1.0;
 var BUFFER_NAME = '@BUFNAME@';
 var WAVE_POINTS = 256;
+// THEME: structural colors default to the baked palette but are overridden at
+// runtime by the live.colors theme bus (message 'themebg'/'themefg' R G B A),
+// so the canvas tracks the user's Live skin instead of a fixed near-black.
+var TH_BG = [@BG@];
+var TH_TEXT = [@TEXT@];
+function th_bg() { mgraphics.set_source_rgba(TH_BG[0], TH_BG[1], TH_BG[2], TH_BG[3]); }
+function th_text() { mgraphics.set_source_rgba(TH_TEXT[0], TH_TEXT[1], TH_TEXT[2], TH_TEXT[3]); }
 var waveform_cache = [];
 var waveform_ready = 0;
+var wave_retry = 0;        // bounded lazy-rebuild budget: buffer~ replace is DEFERRED,
+                           // so the buffer can still be empty when 'loaded 1' fires
+                           // (waveform stuck blank while audio plays). Retry on redraw
+                           // until the buffer reads back, capped so an always-empty
+                           // buffer cannot rebuild every frame forever.
 var hint = 0;
 var HIT_LIMIT = 10;
 var sample_rate = 48000.0;
 var slice_mode = 0;
-var sensitivity = 50.0;
-var min_spacing_ms = 40.0;
+var sensitivity = 30.0;
+var min_spacing_ms = 80.0;
 var pitch_ratio = 1.0;
 var slice_boundaries = [];
 var editable = 0;
@@ -147,6 +159,14 @@ var pitch_locked_steps = {};
 var gate_locked_steps = {};
 var level_locked_steps = {};   // step -> 0.1..1.25 (vertical drag on a bar)
 var ratchet_locked_steps = {};
+var prob_locked_steps = {};    // step -> 0..100 trigger chance (shift-drag; absent = 100 = always fires)
+var euclid_pulses = 0;         // 0 = off; N = N evenly-spaced hits across step_count (ctrl+shift drag)
+var euclid_rot = 0;            // rotate the Euclid pattern under the downbeat
+var cond_locked_steps = {};    // step -> trig-condition CODE (cmd+ctrl drag). 0 = OFF (always).
+// Trig-condition codes the engine evaluates against the live loop pass + fill:
+//   0 OFF | A:B encoded B*10+A (fire when pass%B == A-1) | 1 FILL | 3 FIRST(pass 0)
+var COND_CODES  = [0, 21, 22, 31, 41, 42, 43, 81, 1, 3];
+var COND_LABELS = ['OFF', '1:2', '2:2', '1:3', '1:4', '2:4', '3:4', '1:8', 'FILL', '1ST'];
 
 // ---- hit-view / shape state ----
 var view = 0;              // 0 = overview, 1 = hit inspector
@@ -241,6 +261,8 @@ function loaded_flag(v) {
     playhead = 0.0;
     if (view === 1) exit_hit_view();
     rebuild_waveform_cache();
+    // if the buffer was not filled yet, arm the lazy-rebuild retry
+    wave_retry = (loaded && !waveform_ready) ? 40 : 0;
     mgraphics.redraw();
 }
 
@@ -796,6 +818,10 @@ function clear_ratchet_locks() {
     dump_pattern();
 }
 
+function clear_prob_locks() {
+    prob_locked_steps = {};
+}
+
 function emit_scene_dump(slot) {
     var visible_steps = Math.max(1, Math.round(step_count));
     var i;
@@ -918,6 +944,81 @@ function set_step_ratchet_unlock(step) {
     delete ratchet_locked_steps[String(step)];
     outlet(0, 'ratchetunlock', step);
     dump_pattern();
+}
+
+// ---- per-step trigger PROBABILITY (fills): 0..100. Absent = 100 (always).
+// Modeled on the level lock: a dict + a -1 sentinel + dump_pattern on change.
+function is_step_prob_locked(step) {
+    return prob_locked_steps.hasOwnProperty(String(step));
+}
+
+function step_locked_prob(step) {
+    if (!is_step_prob_locked(step)) return -1;
+    return clamp(Math.round(prob_locked_steps[String(step)]), 0, 100);
+}
+
+function set_step_prob_lock(step, pr) {
+    prob_locked_steps[String(step)] = clamp(Math.round(pr), 0, 100);
+    dump_pattern();
+}
+
+function set_step_prob_unlock(step) {
+    if (!is_step_prob_locked(step)) return;
+    delete prob_locked_steps[String(step)];
+    outlet(0, 'probunlock', step);
+    dump_pattern();
+}
+
+function step_prob(step) {
+    var lp = step_locked_prob(step);
+    if (lp >= 0) return lp;
+    return 100;
+}
+
+// ---- per-step TRIG CONDITION (cmd+ctrl drag): a CODE (see COND_CODES). The
+// engine decides fire/skip against the live loop pass + fill. 0 = OFF (always).
+function is_step_cond_locked(step) {
+    return cond_locked_steps.hasOwnProperty(String(step));
+}
+
+function step_cond(step) {
+    if (!is_step_cond_locked(step)) return 0;
+    return Math.round(cond_locked_steps[String(step)]);
+}
+
+function set_step_cond_lock(step, code) {
+    cond_locked_steps[String(step)] = Math.round(code);
+    dump_pattern();
+}
+
+function set_step_cond_unlock(step) {
+    if (!is_step_cond_locked(step)) return;
+    delete cond_locked_steps[String(step)];
+    outlet(0, 'condunlock', step);
+    dump_pattern();
+}
+
+function clear_cond_locks() {
+    cond_locked_steps = {};
+}
+
+function cond_label(code) {
+    var i;
+    for (i = 0; i < COND_CODES.length; i++) {
+        if (COND_CODES[i] === code) return COND_LABELS[i];
+    }
+    return '?';
+}
+
+// PERSISTENCE PACKING: dir/gate/ratchet are tiny, set-only lanes (no per-step
+// unlock gesture — only clear-all touches them), so they share ONE Stored-Only
+// host per step. Encode into 0..44 (0 = all unset): dir 0/1/2, gate 0/1/2,
+// ratchet 0..4, mixed-radix d + g*3 + r*9. Decoded in the 'dgr' lockrst branch.
+function dgr_packed(step) {
+    var d = is_step_dir_locked(step) ? (step_locked_direction(step) >= 0 ? 1 : 2) : 0;
+    var g = is_step_gate_locked(step) ? (step_locked_gate(step) > 0 ? 2 : 1) : 0;
+    var r = is_step_ratchet_locked(step) ? (clamp(Math.round(step_locked_ratchet(step)), 0, 3) + 1) : 0;
+    return d + g * 3 + r * 9;
 }
 
 function step_base_index(step) {
@@ -1099,9 +1200,23 @@ function step_level(step) {
     return 1.0;
 }
 
+// EUCLID (fills): N evenly-spaced hits across step_count, via the Bresenham
+// accumulator (== Bjorklund up to rotation). Returns 1 (hit) / 0 (gap) for a
+// step. Off (N<=0) or full (N>=M) -> all hits. Drives the GATE, so probability
+// (step_prob) still composes ON TOP of the Euclid rhythm at the engine gate.
+function euclid_hit(step) {
+    var M = Math.max(1, Math.round(step_count));
+    var N = Math.round(euclid_pulses);
+    if (N <= 0 || N >= M) return 1;
+    var rot = (((Math.round(euclid_rot) % M) + M) % M);
+    var idx = ((((step - rot) % M) + M) % M);
+    return (Math.floor((idx + 1) * N / M) > Math.floor(idx * N / M)) ? 1 : 0;
+}
+
 function step_gate(step) {
     var locked = step_locked_gate(step);
     if (locked >= 0) return locked;
+    if (Math.round(euclid_pulses) > 0) return euclid_hit(step);   // Euclid defines the rhythm
     var fz = fill_zone(step);
     if (fz >= 0 && (pseudo(Math.round(chop_seed), step, 41) % 1000) < fill_amount * 9.0) {
         return 1;
@@ -1124,6 +1239,20 @@ function seg_at_point(x, y) {
     return -1;
 }
 
+function step_at_x(x) {
+    // Nearest step by horizontal distance to its bar center. A forgiving
+    // fallback so a per-step gesture (shift/opt/ctrl/cmd drag) that misses the
+    // NARROW bar still snaps to the step whose column it lands in, instead of
+    // falling through to the slice-ENV editor. Returns -1 when no steps exist.
+    var best = -1, bestd = 1e9, i;
+    for (i = 0; i < seg_x.length; i++) {
+        var cx = seg_x[i] + seg_w[i] * 0.5;
+        var d = Math.abs(cx - x);
+        if (d < bestd) { bestd = d; best = seg_step[i]; }
+    }
+    return best;
+}
+
 function apply_gesture(step, x, y) {
     if (drag_kind === 1) {
         var idx = slice_from_pos(x_to_pos(x));
@@ -1132,6 +1261,8 @@ function apply_gesture(step, x, y) {
     } else if (drag_kind === -1) {
         set_step_unlock(step);
         set_step_level_unlock(step);   // erase reverts the loudness edit too
+        set_step_prob_unlock(step);    // ...and restores full trigger chance
+        set_step_cond_unlock(step);    // ...and clears the trig condition
     } else if (drag_kind === 6) {
         var lvl6 = clamp(norm_from_y(y) * 1.25, 0.1, 1.25);
         set_step_level_lock(step, lvl6);
@@ -1139,7 +1270,7 @@ function apply_gesture(step, x, y) {
     } else if (drag_kind === 2) {
         var direction = (norm_from_y(y) >= 0.5) ? 1 : -1;
         set_step_dir_lock(step, direction);
-        outlet(0, 'dirlock', step, direction);
+        outlet(0, 'dgrlock', step, dgr_packed(step));
     } else if (drag_kind === 3) {
         var semitone = clamp(Math.round((norm_from_y(y) * 48.0) - 24.0), -24, 24);
         set_step_pitch_lock(step, semitone);
@@ -1149,11 +1280,26 @@ function apply_gesture(step, x, y) {
     } else if (drag_kind === 4) {
         var gate = step_gate(step) > 0 ? 0 : 1;
         set_step_gate_lock(step, gate);
-        outlet(0, 'gatelock', step, gate);
+        outlet(0, 'dgrlock', step, dgr_packed(step));
     } else if (drag_kind === 5) {
         var count = clamp(Math.floor(norm_from_y(y) * 4.0), 0, 3);
         set_step_ratchet_lock(step, count);
-        outlet(0, 'ratchetlock', step, count);
+        outlet(0, 'dgrlock', step, dgr_packed(step));
+    } else if (drag_kind === 7) {
+        var pr7 = clamp(Math.round(norm_from_y(y) * 100.0), 0, 100);
+        set_step_prob_lock(step, pr7);
+        outlet(0, 'problock', step, pr7);
+    } else if (drag_kind === 8) {
+        // EUCLID is GLOBAL: vertical drag sets pulse count 0..step_count. The
+        // bars redraw live to the new rhythm; step ignored (any bar starts it).
+        euclid_pulses = clamp(Math.round(norm_from_y(y) * Math.max(1, Math.round(step_count))), 0, 32);
+        outlet(0, 'euclidset', euclid_pulses);   // persist (Stored-Only host)
+        dump_pattern();
+    } else if (drag_kind === 9) {
+        // TRIG CONDITION: vertical drag picks from COND_CODES (OFF .. 1ST).
+        var ci = clamp(Math.round(norm_from_y(y) * (COND_CODES.length - 1)), 0, COND_CODES.length - 1);
+        set_step_cond_lock(step, COND_CODES[ci]);
+        outlet(0, 'condlock', step, COND_CODES[ci]);
     }
     mgraphics.redraw();
 }
@@ -1351,12 +1497,16 @@ function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {
         clear_gate_locks();
         clear_ratchet_locks();
         clear_level_locks();
+        clear_prob_locks();
+        clear_cond_locks();
+        euclid_pulses = 0;
+        outlet(0, 'euclidset', 0);
         outlet(0, 'clear');
-        outlet(0, 'dirclear');
+        outlet(0, 'dgrclear');
         outlet(0, 'pitchclear');
-        outlet(0, 'gateclear');
-        outlet(0, 'ratchetclear');
         outlet(0, 'levelclear');
+        outlet(0, 'probclear');
+        outlet(0, 'condclear');
         mgraphics.redraw();
         return;
     }
@@ -1375,14 +1525,23 @@ function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {
         return;
     }
     var step = seg_at_point(x, y);
+    if (step < 0 && (shift || option || ctrl || cmd)) {
+        // A per-step gesture modifier is held but the narrow bar was missed --
+        // snap to the nearest step by x so the gesture lands (chance, pitch,
+        // dir, erase, cond...) instead of opening the slice-ENV editor.
+        step = step_at_x(x);
+    }
     if (step >= 0) {
         drag_step = step;
         drag_x0 = x;
         drag_y0 = y;
         if (shift && option && !cmd && !ctrl) drag_kind = 5;
         else if (cmd && option && !ctrl) drag_kind = 4;
+        else if (ctrl && shift && !cmd && !option) drag_kind = 8;   // ctrl+shift = EUCLID density (global)
+        else if (cmd && ctrl && !shift && !option) drag_kind = 9;   // cmd+ctrl = TRIG CONDITION (per step)
         else if (ctrl) drag_kind = option ? -3 : 3;
         else if (option) drag_kind = 2;
+        else if (shift && !option && !cmd && !ctrl) drag_kind = 7;   // shift-drag = CHANCE (per-step probability)
         else drag_kind = cmd ? -1 : 60;   // plain press: axis decides on move
         if (drag_kind !== 60) apply_gesture(step, x, y);
         return;
@@ -1466,7 +1625,8 @@ function dump_pattern() {
                step_level(i),
                step_index(i), rc >= 1 ? ratchet_index(i, 0) : -1,
                rc >= 2 ? ratchet_index(i, 1) : -1,
-               rc >= 3 ? ratchet_index(i, 2) : -1);
+               rc >= 3 ? ratchet_index(i, 2) : -1,
+               step_prob(i), step_cond(i));
     }
 }
 
@@ -1481,6 +1641,18 @@ function anything() {
         loaded_flag(argv[0]);
         return;
     }
+    // THEME BUS: live.colors broadcasts the user's Live skin here (any inlet), so
+    // the canvas re-tints on load AND on a light/dark switch. Alpha defaults to 1.
+    if (messagename === 'themebg' && argv.length >= 3) {
+        TH_BG = [argv[0], argv[1], argv[2], argv.length > 3 ? argv[3] : 1.0];
+        mgraphics.redraw();
+        return;
+    }
+    if (messagename === 'themefg' && argv.length >= 3) {
+        TH_TEXT = [argv[0], argv[1], argv[2], argv.length > 3 ? argv[3] : 1.0];
+        mgraphics.redraw();
+        return;
+    }
     if (inlet !== 14) return;
     if (messagename === 'trigger' && argv.length >= 1) {
         var vis = Math.max(1, Math.round(step_count));
@@ -1492,7 +1664,7 @@ function anything() {
         var h1 = rc >= 1 ? ratchet_index(s, 0) : -1;
         var h2 = rc >= 2 ? ratchet_index(s, 1) : -1;
         var h3 = rc >= 3 ? ratchet_index(s, 2) : -1;
-        outlet(2, 'step', s, step_gate(s), step_pitch(s), step_direction(s), 1 + rc, step_level(s), h0, h1, h2, h3);
+        outlet(2, 'step', s, step_gate(s), step_pitch(s), step_direction(s), 1 + rc, step_level(s), h0, h1, h2, h3, step_prob(s), step_cond(s));
         mgraphics.redraw();
         return;
     }
@@ -1523,6 +1695,16 @@ function anything() {
     }
     if (messagename === 'levelclear') {
         clear_level_locks();
+        mgraphics.redraw();
+        return;
+    }
+    if (messagename === 'probclear') {
+        clear_prob_locks();
+        mgraphics.redraw();
+        return;
+    }
+    if (messagename === 'condclear') {
+        clear_cond_locks();
         mgraphics.redraw();
         return;
     }
@@ -1641,6 +1823,36 @@ function anything() {
         delete ratchet_locked_steps[String(step)];
         dump_pattern();
         mgraphics.redraw();
+        return;
+    }
+    // --- unified lock-PERSISTENCE restore: the engine's Stored-Only hosts
+    // replay one 'lockrst <lane> <step> <val>' per step on load. val <= -50 is
+    // the unset sentinel -> nothing to restore (dicts start empty on load).
+    // One path for every per-step lane; scene-recall handlers above untouched.
+    if (messagename === 'lockrst' && argv.length >= 3) {
+        if (argv[2] <= -50) return;
+        var ln = argv[0];
+        var rst = Math.max(0, Math.round(argv[1]));
+        var rv = argv[2];
+        if (ln === 'dgr') {
+            var pk = Math.round(rv);
+            var dd = pk % 3, gg = Math.floor(pk / 3) % 3, rr = Math.floor(pk / 9);
+            if (dd === 1) set_step_dir_lock(rst, 1); else if (dd === 2) set_step_dir_lock(rst, -1);
+            if (gg === 1) set_step_gate_lock(rst, 0); else if (gg === 2) set_step_gate_lock(rst, 1);
+            if (rr >= 1) set_step_ratchet_lock(rst, rr - 1);
+        }
+        else if (ln === 'pitch') set_step_pitch_lock(rst, rv);
+        else if (ln === 'level') set_step_level_lock(rst, rv);
+        else if (ln === 'prob') set_step_prob_lock(rst, rv);
+        else if (ln === 'cond') set_step_cond_lock(rst, rv);
+        mgraphics.redraw();
+        return;
+    }
+    if (messagename === 'euclidval' && argv.length >= 1) {
+        euclid_pulses = clamp(Math.round(argv[0]), 0, 32);
+        dump_pattern();
+        mgraphics.redraw();
+        return;
     }
 }
 
@@ -1709,12 +1921,30 @@ function label_chip(x, y_base, txt) {
     // dark backing chip behind a small label so it reads over segments,
     // flash columns, and the waveform alike
     var tw = mgraphics.text_measure(txt)[0];
-    mgraphics.set_source_rgba(@BG@);
+    th_bg();
     mgraphics.rectangle_rounded(x - 3, y_base - 8, tw + 6, 11, 3, 3);
     mgraphics.fill();
-    mgraphics.set_source_rgba(@TEXT@);
+    th_text();
     mgraphics.move_to(x, y_base);
     mgraphics.show_text(txt);
+}
+
+// Always-on step-slot grid so the canvas is never an empty void (a spectrum-EQ device always
+// draws its grid). Faint vertical dividers at each step boundary, tinted from the
+// theme fg so it adapts to any skin (light on dark, dark on light). Drawn under
+// the waveform + bars so it structures the idle screen without cluttering.
+function draw_step_grid() {
+    var iw = inner_w();
+    var ih = inner_h();
+    var n = Math.max(1, Math.round(step_count));
+    mgraphics.set_source_rgba(TH_TEXT[0], TH_TEXT[1], TH_TEXT[2], 0.10);
+    mgraphics.set_line_width(1.0);
+    for (var i = 0; i <= n; i++) {
+        var gx = PAD + iw * (i / n);
+        mgraphics.move_to(gx, PAD);
+        mgraphics.line_to(gx, PAD + ih);
+        mgraphics.stroke();
+    }
 }
 
 function paint() {
@@ -1726,9 +1956,12 @@ function paint() {
 
     seg_x = []; seg_y = []; seg_w = []; seg_h = []; seg_step = [];
 
-    mgraphics.set_source_rgba(@BG@);
+    th_bg();
     mgraphics.rectangle_rounded(0, 0, w, h, 8, 8);
     mgraphics.fill();
+
+    // always-on step grid (idle screen never blank)
+    draw_step_grid();
 
     // quiet midline only -- the slice dividers structure the space
     mgraphics.set_source_rgba(@GRID@);
@@ -1737,9 +1970,18 @@ function paint() {
     mgraphics.line_to(PAD + iw, PAD + ih * 0.5);
     mgraphics.stroke();
 
+    // lazy rebuild: the buffer~ replace is DEFERRED, so 'loaded 1' can arrive before
+    // the buffer is fillable. Retry here (redraws keep coming from the playhead)
+    // until it reads back, so the waveform appears without any user action.
+    if (loaded && !waveform_ready && wave_retry > 0) {
+        wave_retry--;
+        rebuild_waveform_cache();
+        if (waveform_ready) mgraphics.redraw();
+    }
+
     if (!loaded || !waveform_ready) {
         var cx = PAD + iw * 0.5;
-        mgraphics.set_source_rgba(@TEXT@);
+        th_text();
         mgraphics.select_font_face('Ableton Sans Medium');
         mgraphics.set_font_size(16);
         var hw = mgraphics.text_measure('DRAG A SAMPLE')[0];
@@ -1807,13 +2049,18 @@ function paint() {
             var split = (k === hover_slice);
             var slot = split ? Math.min(ih * 0.60, (ih * 0.78) / m) : 0;
             // aggregate: loudest live step + lock/mute presence
-            var agg_lvl = 0.0, any_lock = 0, all_muted = 1, agg_rc = 0;
+            var agg_lvl = 0.0, any_lock = 0, all_muted = 1, agg_rc = 0, agg_prob = 100, agg_cond = 0;
             for (i = 0; i < m; i++) {
                 var st0 = hits[i];
                 var lv0 = step_level(st0);
                 if (lv0 > agg_lvl) agg_lvl = lv0;
                 if (is_step_locked(st0)) any_lock = 1;
-                if (step_gate(st0) > 0) all_muted = 0;
+                if (step_gate(st0) > 0) {
+                    all_muted = 0;
+                    var pb0 = step_prob(st0);
+                    if (pb0 < agg_prob) agg_prob = pb0;   // most-chancy live hit represents the column
+                    if (agg_cond === 0) agg_cond = step_cond(st0);
+                }
             }
             if (!split) {
                 var bh = all_muted ? 4
@@ -1821,9 +2068,12 @@ function paint() {
                 var by = base_y - bh;
                 var is_playing = 0;
                 for (i = 0; i < m; i++) if (hits[i] === playhead_step) is_playing = 1;
-                if (is_playing) mgraphics.set_source_rgba(0.99, 0.97, 0.90, 0.92);
+                // trigger CHANCE: a step < 100% reads as a fainter (ghostlier)
+                // bar — opacity carries probability, height still carries level.
+                var pmul = 0.22 + 0.78 * Math.min(agg_prob, 100) / 100.0;
+                if (is_playing) mgraphics.set_source_rgba(0.99, 0.97, 0.90, 0.92 * pmul);
                 else mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2],
-                    (all_muted ? 0.20 : (0.45 + 0.35 * Math.min(agg_lvl, 1.25) / 1.25)) * dim);
+                    (all_muted ? 0.20 : (0.45 + 0.35 * Math.min(agg_lvl, 1.25) / 1.25)) * pmul * dim);
                 mgraphics.rectangle_rounded(col_x, by, col_w, bh, 2, 2);
                 mgraphics.fill();
                 if (agg_lvl > 1.0) {   // accent cap
@@ -1842,6 +2092,13 @@ function paint() {
                 // step-order numeral (user ask): EVERY playing bar gets its
                 // number — collected here, chip-drawn after the loop so
                 // skinny bars can overflow their column without vanishing.
+                // trig-condition marker: a small cyan pip inside the top-left of
+                // a conditioned bar (distinct from the centered accent cap).
+                if (agg_cond !== 0 && !all_muted) {
+                    mgraphics.set_source_rgba(0.35, 0.85, 0.95, 0.92 * dim);
+                    mgraphics.rectangle_rounded(col_x + 1.2, by + 1.2, 3, 3, 1, 1);
+                    mgraphics.fill();
+                }
                 if (!all_muted) {
                     ord_cx.push(col_x + col_w * 0.5);
                     ord_txt.push(String(hits[0] + 1) + (m > 1 ? '+' : ''));
@@ -1867,6 +2124,7 @@ function paint() {
                     : Math.max(6, (slot - 2) * (0.45 + 0.44 * Math.min(lvl, 1.25)));
                 var sy = base_y - (i * slot) - seg_hh;
                 var alpha = gate < 1 ? 0.22 : (0.5 + 0.4 * Math.min(lvl, 1.25) / 1.25);
+                alpha = alpha * (0.22 + 0.78 * Math.min(step_prob(st), 100) / 100.0);   // CHANCE -> opacity
                 if (st === playhead_step) {
                     mgraphics.set_source_rgba(0.99, 0.97, 0.90, 0.92);
                 } else {
@@ -1888,7 +2146,7 @@ function paint() {
                     mgraphics.stroke();
                 }
                 if (rc > 0 && gate >= 1) {   // ratchet notches (hover only)
-                    mgraphics.set_source_rgba(@BG@);
+                    th_bg();
                     var t2;
                     for (t2 = 0; t2 < rc; t2++) {
                         mgraphics.rectangle(col_x, sy + 3 + t2 * 4, col_w, 1.4);
@@ -1932,7 +2190,7 @@ function paint() {
                          : ((olx >= row_end[1] + 3) ? 1
                          : (row_end[0] <= row_end[1] ? 0 : 1));
                 var oly = base_y - 2 - orow * 9;
-                mgraphics.set_source_rgba(@BG@);
+                th_bg();
                 mgraphics.rectangle_rounded(olx - 1.5, oly - 6, otw + 3, 8, 2, 2);
                 mgraphics.fill();
                 mgraphics.set_source_rgba(0.92, 0.90, 0.84, 0.92);
@@ -1967,6 +2225,24 @@ function paint() {
             mgraphics.stroke();
         }
 
+        // EUCLID readout: persistent (top-right) so the gesture-set density is
+        // visible without hovering. The bars already redraw to the rhythm.
+        if (Math.round(euclid_pulses) > 0) {
+            mgraphics.select_font_face('Ableton Sans Medium');
+            mgraphics.set_font_size(6.5);
+            var etxt = 'EUC ' + Math.round(euclid_pulses) + '/' + Math.max(1, Math.round(step_count));
+            var ewi = mgraphics.text_measure(etxt)[0];
+            label_chip(PAD + iw - ewi - 4, PAD + 9, etxt);
+            mgraphics.set_font_size(8);
+        }
+
+        // trig-condition drag: live readout of the code being set on the bar.
+        if (drag_kind === 9 && drag_step >= 0) {
+            mgraphics.select_font_face('Ableton Sans Medium');
+            mgraphics.set_font_size(7);
+            label_chip(PAD + 3, PAD + 9, 'COND  ' + cond_label(step_cond(drag_step)));
+        }
+
         // hover feedback
         if (hover_on && !editable) {
             var hstep = seg_at_point(hover_x, hover_y);
@@ -1984,12 +2260,17 @@ function paint() {
                 var hsp = step_pitch(hstep);
                 var pit = Math.abs(hsp) > 0.5
                     ? '  ' + (hsp > 0 ? '+' : '') + Math.round(hsp) + ' ST' : '';
+                var hcond = step_cond(hstep);
+                var clab = (hcond !== 0) ? '  [' + cond_label(hcond) + ']' : '';
                 label_chip(PAD + 3, PAD + 9, 'STEP ' + (hstep + 1) + ' > SLICE '
-                           + (step_index(hstep) + 1) + pit);
+                           + (step_index(hstep) + 1) + pit + clab);
                 mgraphics.set_font_size(6.5);
-                var legend = 'drag: ^v VOL  <> MOVE   opt DIR   ctrl PITCH   cmd+opt MUTE   sh+opt RATCHET   cmd ERASE';
-                var lw = mgraphics.text_measure(legend)[0];
-                label_chip(PAD + (iw - lw) * 0.5, PAD + ih - 5, legend);
+                var legA = 'drag: ^v VOL   <> MOVE   sh CHANCE   opt DIR   ctrl PITCH';
+                var legB = 'ctrl+sh EUCLID   cmd+ctrl COND   cmd+opt MUTE   sh+opt RATCHET   cmd ERASE';
+                var lwA = mgraphics.text_measure(legA)[0];
+                var lwB = mgraphics.text_measure(legB)[0];
+                label_chip(PAD + (iw - lwA) * 0.5, PAD + ih - 13, legA);
+                label_chip(PAD + (iw - lwB) * 0.5, PAD + ih - 5, legB);
                 mgraphics.set_font_size(8);
             } else {
                 var hidx = slice_from_pos(x_to_pos(hover_x));
@@ -2124,7 +2405,7 @@ function paint_hit_view() {
         mgraphics.line_to(cnx - 3.6, cny);
         mgraphics.close_path();
         mgraphics.fill();
-        mgraphics.set_source_rgba(@BG@);
+        th_bg();
         mgraphics.move_to(cnx, cny - 1.5);
         mgraphics.line_to(cnx + 1.5, cny);
         mgraphics.line_to(cnx, cny + 1.5);
@@ -2139,7 +2420,7 @@ function paint_hit_view() {
         mgraphics.set_source_rgba(0.99, 0.96, 0.86, 0.95);
         mgraphics.rectangle_rounded(hs[i][0] - 3.5, hs[i][1] - 3.5, 7, 7, 1.5, 1.5);
         mgraphics.fill();
-        mgraphics.set_source_rgba(@BG@);
+        th_bg();
         mgraphics.rectangle_rounded(hs[i][0] - 1.5, hs[i][1] - 1.5, 3, 3, 1, 1);
         mgraphics.fill();
     }
