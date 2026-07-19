@@ -1791,7 +1791,6 @@ class TestEngineImports:
 
     def test_import_from_engines_package(self):
         from m4l_builder.engines import (
-            envelope_display_js,
             eq_curve_js,
             filter_curve_js,
             grain_display_js,
@@ -1804,15 +1803,12 @@ class TestEngineImports:
             spectrum_analyzer_js,
             step_grid_display_js,
             velocity_curve_display_js,
-            waveform_display_js,
             wavetable_display_js,
             xy_pad_js,
         )
         assert callable(filter_curve_js)
         assert callable(eq_curve_js)
-        assert callable(envelope_display_js)
         assert callable(spectrum_analyzer_js)
-        assert callable(waveform_display_js)
         assert callable(xy_pad_js)
         assert callable(piano_roll_js)
         assert callable(velocity_curve_display_js)

@@ -1,22 +1,5 @@
 """UI widgets, themes, and display engines."""
 
-from ..engines.grain_display import GRAIN_DISPLAY_INLETS, GRAIN_DISPLAY_OUTLETS, grain_display_js
-from ..engines.grid_sequencer_display import (
-    GRID_SEQ_INLETS,
-    GRID_SEQ_OUTLETS,
-    grid_sequencer_display_js,
-)
-from ..engines.peaking_eq_display import (
-    PEAKING_EQ_DISPLAY_INLETS,
-    PEAKING_EQ_DISPLAY_OUTLETS,
-    peaking_eq_display_js,
-)
-from ..engines.piano_roll import PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS, piano_roll_js
-from ..engines.resonance_bank_display import (
-    RESONANCE_BANK_INLETS,
-    RESONANCE_BANK_OUTLETS,
-    resonance_bank_display_js,
-)
 from ..engines.sidechain_display import (
     SIDECHAIN_DISPLAY_INLETS,
     SIDECHAIN_DISPLAY_OUTLETS,
@@ -27,30 +10,10 @@ from ..engines.spectral_display import (
     SPECTRAL_DISPLAY_OUTLETS,
     spectral_display_js,
 )
-from ..engines.spectral_vocoder_display import (
-    SPECTRAL_VOCODER_INLETS,
-    SPECTRAL_VOCODER_OUTLETS,
-    spectral_vocoder_display_js,
-)
-from ..engines.step_grid_display import (
-    STEP_GRID_DISPLAY_INLETS,
-    STEP_GRID_DISPLAY_OUTLETS,
-    step_grid_display_js,
-)
-from ..engines.velocity_curve_display import (
-    VELOCITY_CURVE_INLETS,
-    VELOCITY_CURVE_OUTLETS,
-    velocity_curve_display_js,
-)
 from ..engines.wavetable_display import (
     WAVETABLE_DISPLAY_INLETS,
     WAVETABLE_DISPLAY_OUTLETS,
     wavetable_display_js,
-)
-from ..engines.wavetable_editor import (
-    WAVETABLE_EDITOR_INLETS,
-    WAVETABLE_EDITOR_OUTLETS,
-    wavetable_editor_js,
 )
 from ..engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS, xy_pad_js
 from ..theme import (
@@ -162,40 +125,13 @@ __all__ = [
     "xy_pad_js",
     "XY_PAD_INLETS",
     "XY_PAD_OUTLETS",
-    "piano_roll_js",
-    "PIANO_ROLL_INLETS",
-    "PIANO_ROLL_OUTLETS",
-    "velocity_curve_display_js",
-    "VELOCITY_CURVE_INLETS",
-    "VELOCITY_CURVE_OUTLETS",
     "wavetable_display_js",
     "WAVETABLE_DISPLAY_INLETS",
     "WAVETABLE_DISPLAY_OUTLETS",
-    "resonance_bank_display_js",
-    "RESONANCE_BANK_INLETS",
-    "RESONANCE_BANK_OUTLETS",
     "sidechain_display_js",
     "SIDECHAIN_DISPLAY_INLETS",
     "SIDECHAIN_DISPLAY_OUTLETS",
     "spectral_display_js",
     "SPECTRAL_DISPLAY_INLETS",
     "SPECTRAL_DISPLAY_OUTLETS",
-    "peaking_eq_display_js",
-    "PEAKING_EQ_DISPLAY_INLETS",
-    "PEAKING_EQ_DISPLAY_OUTLETS",
-    "step_grid_display_js",
-    "STEP_GRID_DISPLAY_INLETS",
-    "STEP_GRID_DISPLAY_OUTLETS",
-    "grain_display_js",
-    "GRAIN_DISPLAY_INLETS",
-    "GRAIN_DISPLAY_OUTLETS",
-    "grid_sequencer_display_js",
-    "GRID_SEQ_INLETS",
-    "GRID_SEQ_OUTLETS",
-    "wavetable_editor_js",
-    "WAVETABLE_EDITOR_INLETS",
-    "WAVETABLE_EDITOR_OUTLETS",
-    "spectral_vocoder_display_js",
-    "SPECTRAL_VOCODER_INLETS",
-    "SPECTRAL_VOCODER_OUTLETS",
 ]

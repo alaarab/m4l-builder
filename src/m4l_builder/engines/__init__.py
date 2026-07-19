@@ -24,7 +24,6 @@ from .delay_trail import (
     delay_trail_js,
 )
 from .energy_history import energy_history_inlets, energy_history_js
-from .envelope_display import envelope_display_js
 from .envelope_editor import (
     ENVELOPE_EDITOR_INLETS,
     ENVELOPE_EDITOR_OUTLETS,
@@ -100,7 +99,6 @@ from .transient_history import (
     transient_history_js,
 )
 from .velocity_curve_display import velocity_curve_display_js
-from .waveform_display import waveform_display_js
 from .waveshape_curve import (
     WAVESHAPE_CURVE_INLETS,
     WAVESHAPE_CURVE_OUTLETS,
@@ -109,7 +107,6 @@ from .waveshape_curve import (
 from .wavetable_display import wavetable_display_js
 from .wavetable_editor import wavetable_editor_js
 from .xy_pad import xy_pad_js
-from .xy_trail_display import xy_trail_display_js
 
 __all__ = [
     "filter_curve_js",
@@ -147,7 +144,6 @@ __all__ = [
     "linear_phase_eq_display_js",
     "energy_history_inlets",
     "energy_history_js",
-    "envelope_display_js",
     "envelope_editor_js",
     "ENVELOPE_EDITOR_INLETS",
     "ENVELOPE_EDITOR_OUTLETS",
@@ -158,7 +154,6 @@ __all__ = [
     "STEP_BARS_INLETS",
     "STEP_BARS_OUTLETS",
     "spectrum_analyzer_js",
-    "waveform_display_js",
     "xy_pad_js",
     "piano_roll_js",
     "velocity_curve_display_js",
@@ -181,7 +176,6 @@ __all__ = [
     "spectral_vocoder_display_js",
     "lfo_display_js",
     "compressor_display_js",
-    "xy_trail_display_js",
     "slice_overview_js",
     "slice_pattern_display_js",
     "performance_canvas_js",
