@@ -1275,4 +1275,9 @@ def meter_feed(device, id_prefix, target_id, *, sources, held_ms=None,
             device.add_line(src_id, src_out, pak_id, i)
     device.add_line(pak_id, 0, pp_id, 0)
     device.add_line(pp_id, 0, target_id, target_inlet)
-    return {"holds": holds, "pak": pak_id, "prepend": pp_id}
+    return stage_result(
+        {"holds": holds, "pak": pak_id, "prepend": pp_id},
+        name="meter_feed",
+        params={},
+        ports={},
+    )
