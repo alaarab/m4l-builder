@@ -66,13 +66,20 @@ function ms_to_lufs(m) {
     return (m <= 0.0) ? ABS_GATE : (OFF + 10.0 * Math.log(m) / Math.LN10);
 }
 
-function reset() {
+// State init WITHOUT emitting. Safe to call during the top-level script pass,
+// when the js object's outlets are not yet allocated (calling outlet() there
+// errors "bad outlet index 0"). reset() layers the emit on top for runtime use.
+function clear_state() {
     hist = [];
     hsum = [];
     for (var i = 0; i < H_N; i++) { hist[i] = 0; hsum[i] = 0.0; }
     n_abs = 0;
     sum_ms = 0.0;
     ilufs = ABS_GATE;
+}
+
+function reset() {
+    clear_state();
     outlet(0, ilufs);
 }
 
@@ -115,7 +122,11 @@ function anything() {
 }
 function bang() { reset(); }
 
-reset();
+// Max calls loadbang() once the patch (and this object's outlets) have finished
+// loading — the earliest point it is safe to emit the initial sentinel.
+function loadbang() { outlet(0, ilufs); }
+
+clear_state();
 """
 
 
