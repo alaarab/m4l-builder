@@ -1,137 +1,25 @@
 """UI widgets, themes, and display engines."""
 
-from ..engines.sidechain_display import (
-    SIDECHAIN_DISPLAY_INLETS,
-    SIDECHAIN_DISPLAY_OUTLETS,
-    sidechain_display_js,
-)
-from ..engines.spectral_display import (
-    SPECTRAL_DISPLAY_INLETS,
-    SPECTRAL_DISPLAY_OUTLETS,
-    spectral_display_js,
-)
-from ..engines.wavetable_display import (
-    WAVETABLE_DISPLAY_INLETS,
-    WAVETABLE_DISPLAY_OUTLETS,
-    wavetable_display_js,
-)
-from ..engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS, xy_pad_js
-from ..theme import (
-    COOL,
-    FOREST,
-    INDUSTRIAL,
-    LIGHT,
-    LOFI,
-    MIDNIGHT,
-    SOLAR,
-    NEBULA,
-    SYNTHWAVE,
-    VIOLET,
-    WARM,
-    Theme,
-    alpha,
-    derive_palette,
-    js_color,
-)
-from ..ui import (
-    adsrui,
-    bpatcher,
-    button,
-    comment,
-    dial,
-    fpic,
-    jsui,
-    kslider,
-    live_arrows,
-    live_drop,
-    live_gain,
-    live_grid,
-    live_line,
-    live_step,
-    live_text,
-    matrixctrl,
-    menu,
-    meter,
-    multislider,
-    nodes,
-    nslider,
-    number_box,
-    panel,
-    radiogroup,
-    rslider,
-    scope,
-    slider,
-    swatch,
-    tab,
-    textbutton,
-    textedit,
-    toggle,
-    ubutton,
-    umenu,
-    v8ui,
+from collections import ChainMap as _ChainMap
+
+from .. import theme as _theme
+from .. import ui as _ui
+from .._exports import UI_EXPORTS as _UI_EXPORTS
+from ..engines import sidechain_display as _sidechain_display
+from ..engines import spectral_display as _spectral_display
+from ..engines import wavetable_display as _wavetable_display
+from ..engines import xy_pad as _xy_pad
+
+_SOURCE_MODULES = (
+    _sidechain_display,
+    _spectral_display,
+    _wavetable_display,
+    _xy_pad,
+    _theme,
+    _ui,
 )
 
-__all__ = [
-    "panel",
-    "dial",
-    "tab",
-    "toggle",
-    "comment",
-    "scope",
-    "meter",
-    "menu",
-    "number_box",
-    "slider",
-    "button",
-    "live_text",
-    "fpic",
-    "live_gain",
-    "multislider",
-    "jsui",
-    "v8ui",
-    "adsrui",
-    "live_drop",
-    "bpatcher",
-    "swatch",
-    "textedit",
-    "live_step",
-    "live_grid",
-    "live_line",
-    "live_arrows",
-    "rslider",
-    "kslider",
-    "textbutton",
-    "umenu",
-    "radiogroup",
-    "nodes",
-    "matrixctrl",
-    "ubutton",
-    "nslider",
-    "Theme",
-    "js_color",
-    "alpha",
-    "derive_palette",
-    "NEBULA",
-    "MIDNIGHT",
-    "WARM",
-    "COOL",
-    "LIGHT",
-    "FOREST",
-    "VIOLET",
-    "SOLAR",
-    "LOFI",
-    "SYNTHWAVE",
-    "INDUSTRIAL",
-    "xy_pad_js",
-    "XY_PAD_INLETS",
-    "XY_PAD_OUTLETS",
-    "wavetable_display_js",
-    "WAVETABLE_DISPLAY_INLETS",
-    "WAVETABLE_DISPLAY_OUTLETS",
-    "sidechain_display_js",
-    "SIDECHAIN_DISPLAY_INLETS",
-    "SIDECHAIN_DISPLAY_OUTLETS",
-    "spectral_display_js",
-    "SPECTRAL_DISPLAY_INLETS",
-    "SPECTRAL_DISPLAY_OUTLETS",
-]
+__all__ = list(_UI_EXPORTS)
+
+_namespace = _ChainMap(*(vars(module) for module in _SOURCE_MODULES))
+globals().update({name: _namespace[name] for name in __all__})

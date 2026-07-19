@@ -1,155 +1,55 @@
 """Core graph, device, and serialization primitives."""
 
-from ..assets import Asset
-from ..constants import AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
-from ..container import build_amxd, write_amxd
-from ..device import (
-    AudioEffect,
-    Device,
-    Instrument,
-    MidiEffect,
-    MidiGenerator,
-    MidiTransformation,
-)
-from ..freeze import (
-    assemble_frozen_amxd,
-    device_to_frozen_bytes,
-    extract_frozen_amxd,
-    freeze_amxd_file,
-)
-from ..gen_lint import lint_genexpr
-from ..gen_patcher import build_gendsp, embed_gendsp
-from ..gen_sim import GenKernel, UnsupportedKernel, simulate
-from ..gen_snippets import (
-    biquad_df1,
-    drive_blend,
-    dynamics_band,
-    exp_pole,
-    exp_pole_cached,
-    isp_catmull_4x,
-    kweight_coeffs_bs1770,
-    kweight_coeffs_bs1770_cached,
-    ms_decode,
-    ms_encode,
-    ms_width,
-    one_pole_coeff_cached,
-    peak_follower,
-    rbj_peaking,
-    rbj_shelf,
-    soft_knee_gain_computer,
-)
-from ..graph import BoxRef, GraphContainer, InletRef, OutletRef
-from ..jsui_contract import (
-    JsuiContractError,
-    find_jsui_contract_issues,
-    find_v8ui_contract_issues,
-    validate_jsui_contract,
-    validate_v8ui_contract,
-)
-from ..layout import Column, Columns, Grid, Row, inset_rect
-from ..modules import ModuleSpec, module_from_block, mount_module
-from ..notes import NoteEvent, notes_dict
-from ..objects import message, newobj, patchline
-from ..parameters import (
-    LIVE_NATIVE_INT_MAX,
-    LIVE_NATIVE_INT_MIN,
-    PARAM_HIDDEN,
-    PARAM_VIS_AUTOMATED_AND_STORED,
-    PARAM_VIS_HIDDEN,
-    PARAM_VIS_STORED_ONLY,
-    PARAM_VISIBLE,
-    ParameterSpec,
-)
-from ..paths import device_output_path, user_library
-from ..profiles import DEFAULT_PATCHER_PROFILE, PatcherProfile
-from ..stages import Stage, StageResult, stage_result
-from ..subpatcher import Subpatcher
-from ..validation import (
-    BuildValidationError,
-    ValidationIssue,
-    format_validation_issues,
-    lint_graph,
+from collections import ChainMap as _ChainMap
+
+from .. import assets as _assets
+from .. import constants as _constants
+from .. import container as _container
+from .. import device as _device
+from .. import freeze as _freeze
+from .. import gen_lint as _gen_lint
+from .. import gen_patcher as _gen_patcher
+from .. import gen_sim as _gen_sim
+from .. import gen_snippets as _gen_snippets
+from .. import graph as _graph
+from .. import jsui_contract as _jsui_contract
+from .. import layout as _layout
+from .. import modules as _modules
+from .. import notes as _notes
+from .. import objects as _objects
+from .. import parameters as _parameters
+from .. import paths as _paths
+from .. import profiles as _profiles
+from .. import stages as _stages
+from .. import subpatcher as _subpatcher
+from .. import validation as _validation
+from .._exports import CORE_EXPORTS as _CORE_EXPORTS
+
+_SOURCE_MODULES = (
+    _assets,
+    _constants,
+    _container,
+    _device,
+    _freeze,
+    _gen_lint,
+    _gen_patcher,
+    _gen_sim,
+    _gen_snippets,
+    _graph,
+    _jsui_contract,
+    _layout,
+    _modules,
+    _notes,
+    _objects,
+    _parameters,
+    _paths,
+    _profiles,
+    _stages,
+    _subpatcher,
+    _validation,
 )
 
-__all__ = [
-    "Device",
-    "AudioEffect",
-    "Instrument",
-    "MidiEffect",
-    "MidiTransformation",
-    "MidiGenerator",
-    "Subpatcher",
-    "GraphContainer",
-    "BoxRef",
-    "OutletRef",
-    "InletRef",
-    "ParameterSpec",
-    "PARAM_HIDDEN",
-    "PARAM_VISIBLE",
-    "PARAM_VIS_AUTOMATED_AND_STORED",
-    "PARAM_VIS_STORED_ONLY",
-    "PARAM_VIS_HIDDEN",
-    "LIVE_NATIVE_INT_MIN",
-    "LIVE_NATIVE_INT_MAX",
-    "Asset",
-    "PatcherProfile",
-    "DEFAULT_PATCHER_PROFILE",
-    "JsuiContractError",
-    "find_jsui_contract_issues",
-    "validate_jsui_contract",
-    "find_v8ui_contract_issues",
-    "validate_v8ui_contract",
-    "build_gendsp",
-    "embed_gendsp",
-    "lint_genexpr",
-    "ms_encode",
-    "ms_decode",
-    "ms_width",
-    "drive_blend",
-    "peak_follower",
-    "isp_catmull_4x",
-    "kweight_coeffs_bs1770",
-    "kweight_coeffs_bs1770_cached",
-    "exp_pole",
-    "exp_pole_cached",
-    "one_pole_coeff_cached",
-    "soft_knee_gain_computer",
-    "dynamics_band",
-    "biquad_df1",
-    "rbj_peaking",
-    "rbj_shelf",
-    "simulate",
-    "GenKernel",
-    "UnsupportedKernel",
-    "Stage",
-    "StageResult",
-    "stage_result",
-    "ModuleSpec",
-    "module_from_block",
-    "mount_module",
-    "NoteEvent",
-    "notes_dict",
-    "ValidationIssue",
-    "BuildValidationError",
-    "format_validation_issues",
-    "lint_graph",
-    "Row",
-    "Column",
-    "Columns",
-    "Grid",
-    "inset_rect",
-    "build_amxd",
-    "write_amxd",
-    "assemble_frozen_amxd",
-    "extract_frozen_amxd",
-    "device_to_frozen_bytes",
-    "freeze_amxd_file",
-    "newobj",
-    "message",
-    "patchline",
-    "AUDIO_EFFECT",
-    "INSTRUMENT",
-    "MIDI_EFFECT",
-    "user_library",
-    "device_output_path",
-]
+__all__ = list(_CORE_EXPORTS)
+
+_namespace = _ChainMap(*(vars(module) for module in _SOURCE_MODULES))
+globals().update({name: _namespace[name] for name in __all__})

@@ -1,77 +1,23 @@
 """Live API helpers, controller shells, presets, and bridge tooling."""
 
-from ..controller_shells import (
-    controller_surface_shell,
-    embedded_ui_shell,
-    embedded_ui_shell_v2,
-    init_dispatch_chain,
-    named_bus_router,
-    poly_shell,
-    poly_shell_bank,
-    sequencer_dispatch_shell,
-)
-from ..live_api import (
-    device_active_state,
-    live_object_path,
-    live_observer,
-    live_parameter_probe,
-    live_set_control,
-    live_state_observer,
-    live_thisdevice,
-)
-from ..livemcp_bridge import (
-    BOX_ATTR_ALLOWLIST,
-    BRIDGE_CAPABILITIES,
-    BRIDGE_COMMANDS,
-    BRIDGE_PROTOCOL_VERSION,
-    BRIDGE_RUNTIME_FILENAME,
-    BRIDGE_SCHEMA_FILENAME,
-    BRIDGE_SERVER_FILENAME,
-    DEFAULT_BRIDGE_PORT,
-    DISALLOWED_CREATE_CLASSES,
-    OBJECT_ATTR_ALLOWLIST,
-    bridge_runtime_js,
-    bridge_schema,
-    bridge_server_js,
-    build_livemcp_bridge_demo,
-    enable_livemcp_bridge,
-)
-from ..paths import device_output_path, user_library
-from ..presets import add_preset_buttons, preset_manager
+from collections import ChainMap as _ChainMap
 
-__all__ = [
-    "user_library",
-    "device_output_path",
-    "live_object_path",
-    "live_parameter_probe",
-    "live_observer",
-    "live_state_observer",
-    "live_set_control",
-    "live_thisdevice",
-    "device_active_state",
-    "controller_surface_shell",
-    "sequencer_dispatch_shell",
-    "embedded_ui_shell",
-    "embedded_ui_shell_v2",
-    "named_bus_router",
-    "init_dispatch_chain",
-    "poly_shell",
-    "poly_shell_bank",
-    "preset_manager",
-    "add_preset_buttons",
-    "BRIDGE_PROTOCOL_VERSION",
-    "DEFAULT_BRIDGE_PORT",
-    "BRIDGE_RUNTIME_FILENAME",
-    "BRIDGE_SERVER_FILENAME",
-    "BRIDGE_SCHEMA_FILENAME",
-    "BRIDGE_CAPABILITIES",
-    "OBJECT_ATTR_ALLOWLIST",
-    "BOX_ATTR_ALLOWLIST",
-    "DISALLOWED_CREATE_CLASSES",
-    "BRIDGE_COMMANDS",
-    "bridge_schema",
-    "bridge_runtime_js",
-    "bridge_server_js",
-    "enable_livemcp_bridge",
-    "build_livemcp_bridge_demo",
-]
+from .. import controller_shells as _controller_shells
+from .. import live_api as _live_api
+from .. import livemcp_bridge as _livemcp_bridge
+from .. import paths as _paths
+from .. import presets as _presets
+from .._exports import LIVE_EXPORTS as _LIVE_EXPORTS
+
+_SOURCE_MODULES = (
+    _controller_shells,
+    _live_api,
+    _livemcp_bridge,
+    _paths,
+    _presets,
+)
+
+__all__ = list(_LIVE_EXPORTS)
+
+_namespace = _ChainMap(*(vars(module) for module in _SOURCE_MODULES))
+globals().update({name: _namespace[name] for name in __all__})
