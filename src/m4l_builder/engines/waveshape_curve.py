@@ -55,6 +55,14 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 from .design_system import design_system_js
+from .interaction_core import (
+    CLAMP_TERNARY_JS,
+    ONRESIZE_JS,
+    POINTER_BUTTONS_JS,
+    POINTER_X_JS,
+    POINTER_Y_JS,
+    plot_geometry_short_js,
+)
 
 WAVESHAPE_CURVE_INLETS = 1
 WAVESHAPE_CURVE_OUTLETS = 1
@@ -88,6 +96,18 @@ def waveshape_curve_js(
         grid_color=grid_color,
         text_color=text_color,
         accent_color=accent_color,
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "MARGIN + 8",
+            "mgraphics.size[0] - MARGIN",
+            "MARGIN",
+            "mgraphics.size[1] - MARGIN - 4",
+        ),
+    ).replace("//__POINTER_Y__//", POINTER_Y_JS).replace(
+        "//__POINTER_X__//", POINTER_X_JS
+    ).replace("//__POINTER_BUTTONS__//", POINTER_BUTTONS_JS).replace(
+        "//__ONRESIZE__//", ONRESIZE_JS
     )
 
 
@@ -202,7 +222,7 @@ var dmode = 0;
 var NUM_ZONES = 3;
 var zone_mode = [0, 0, 0];
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
 // Effective mode (0..3) of a zone: AUTO follows the global brush.
 function zone_eff(z) {
@@ -398,12 +418,7 @@ function clear_sample() {
     mgraphics.redraw();
 }
 
-function plot_l() { return MARGIN + 8; }
-function plot_r() { return mgraphics.size[0] - MARGIN; }
-function plot_t() { return MARGIN; }
-function plot_b() { return mgraphics.size[1] - MARGIN - 4; }
-function plot_w() { return plot_r() - plot_l(); }
-function plot_h() { return plot_b() - plot_t(); }
+//__PLOT_GEOMETRY__//
 
 function x_of(v) { return plot_l() + ((v + 1.0) * 0.5) * plot_w(); }
 function y_of(v) { return plot_b() - ((v + 1.0) * 0.5) * plot_h(); }
@@ -1001,28 +1016,9 @@ function io_level(e)      {
 // Robust v8ui pointer resolver (.y/.localY/.offsetY/.clientY); raw .y is
 // undefined in Live. Relative feel kept (0.3 dB/px, 0.045 with shift) so
 // dragging drive reshapes the saturated overlay over a dropped sample live.
-function pointer_y(pe, fb) {
-    if (!pe) return fb;
-    if (pe.y !== undefined) return pe.y;
-    if (pe.localY !== undefined) return pe.localY;
-    if (pe.offsetY !== undefined) return pe.offsetY;
-    if (pe.clientY !== undefined) return pe.clientY;
-    return fb;
-}
-function pointer_x(pe, fb) {
-    if (!pe) return fb;
-    if (pe.x !== undefined) return pe.x;
-    if (pe.localX !== undefined) return pe.localX;
-    if (pe.offsetX !== undefined) return pe.offsetX;
-    if (pe.clientX !== undefined) return pe.clientX;
-    return fb;
-}
-function pointer_buttons(pe, fb) {
-    if (!pe) return fb;
-    if (pe.buttons !== undefined) return pe.buttons;
-    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
-    return fb;
-}
+//__POINTER_Y__//
+//__POINTER_X__//
+//__POINTER_BUTTONS__//
 
 function start_drag(x, y) {
     if (isNaN(y)) return;
@@ -1121,5 +1117,5 @@ function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) {
 }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } }
 function onidleout() { hovering = 0; mgraphics.redraw(); }
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

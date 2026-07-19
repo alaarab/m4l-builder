@@ -45,6 +45,14 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 from .design_system import design_system_js
+from .interaction_core import (
+    CLAMP_TERNARY_JS,
+    ONRESIZE_JS,
+    POINTER_BUTTONS_JS,
+    POINTER_X_JS,
+    POINTER_Y_JS,
+    plot_geometry_short_js,
+)
 
 DELAY_TRAIL_INLETS = 1
 DELAY_TRAIL_OUTLETS = 1
@@ -84,6 +92,15 @@ def delay_trail_js(
         max_ms=max_ms,
         reset_time_ms=reset_time_ms,
         reset_feedback_pct=reset_feedback_pct,
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "8", "mgraphics.size[0] - 8", "8", "mgraphics.size[1] - 16"
+        ),
+    ).replace("//__POINTER_X__//", POINTER_X_JS).replace(
+        "//__POINTER_Y__//", POINTER_Y_JS
+    ).replace("//__POINTER_BUTTONS__//", POINTER_BUTTONS_JS).replace(
+        "//__ONRESIZE__//", ONRESIZE_JS
     )
 
 
@@ -163,14 +180,9 @@ var drag_start_feedback = 0.0;
 var drag_start_mix = 35.0;
 var drag_start_damp = 20.0;
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
-function plot_l() { return 8; }
-function plot_r() { return mgraphics.size[0] - 8; }
-function plot_t() { return 8; }
-function plot_b() { return mgraphics.size[1] - 16; }
-function plot_w() { return plot_r() - plot_l(); }
-function plot_h() { return plot_b() - plot_t(); }
+//__PLOT_GEOMETRY__//
 
 function ms_to_x(ms) {
     return plot_l() + clamp(ms / MAX_MS, 0.0, 1.0) * plot_w();
@@ -695,28 +707,9 @@ function tide_energy(arr, age_ms) {
 // (and the readout showed "NaN ms"). This is the exact helper set eq_curve uses
 // (that engine drags reliably). The legacy onclick/ondrag path already passes
 // real object-local pixels, so it needs no resolver.
-function pointer_x(pe, fb) {
-    if (!pe) return fb;
-    if (pe.x !== undefined) return pe.x;
-    if (pe.localX !== undefined) return pe.localX;
-    if (pe.offsetX !== undefined) return pe.offsetX;
-    if (pe.clientX !== undefined) return pe.clientX;
-    return fb;
-}
-function pointer_y(pe, fb) {
-    if (!pe) return fb;
-    if (pe.y !== undefined) return pe.y;
-    if (pe.localY !== undefined) return pe.localY;
-    if (pe.offsetY !== undefined) return pe.offsetY;
-    if (pe.clientY !== undefined) return pe.clientY;
-    return fb;
-}
-function pointer_buttons(pe, fb) {
-    if (!pe) return fb;
-    if (pe.buttons !== undefined) return pe.buttons;
-    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
-    return fb;
-}
+//__POINTER_X__//
+//__POINTER_Y__//
+//__POINTER_BUTTONS__//
 // Cross-runtime modifier reads: v8ui pointer events expose .commandKey (NOT
 // metaKey) and .altKey/.optionKey; the classic jsui path passes positional
 // booleans. These prefer the pointerevent, fall back to the boolean.
@@ -886,5 +879,5 @@ function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl) {
     mgraphics.redraw();
 }
 
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

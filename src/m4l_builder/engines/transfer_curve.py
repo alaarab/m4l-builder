@@ -28,6 +28,14 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 from .design_system import design_system_js
+from .interaction_core import (
+    CLAMP_TERNARY_JS,
+    ONRESIZE_JS,
+    POINTER_BUTTONS_JS,
+    POINTER_X_JS,
+    POINTER_Y_JS,
+    plot_geometry_short_js,
+)
 
 TRANSFER_CURVE_INLETS = 1
 TRANSFER_CURVE_OUTLETS = 1
@@ -85,6 +93,18 @@ def transfer_curve_js(
         live_color=live_color,
         min_db=min_db,
         reset_db=reset_db,
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "MARGIN_L",
+            "mgraphics.size[0] - MARGIN_R - GR_BAR_W - 6",
+            "MARGIN_T",
+            "mgraphics.size[1] - MARGIN_B",
+        ),
+    ).replace("//__POINTER_Y__//", POINTER_Y_JS).replace(
+        "//__POINTER_X__//", POINTER_X_JS
+    ).replace("//__POINTER_BUTTONS__//", POINTER_BUTTONS_JS).replace(
+        "//__ONRESIZE__//", ONRESIZE_JS
     )
 
 
@@ -140,14 +160,9 @@ var drag_start_x = 0.0;
 var drag_start_ratio = 2.0;
 var drag_start_threshold = 0.0;   // anchor for shift=fine (relative-to-press)
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
-function plot_l() { return MARGIN_L; }
-function plot_r() { return mgraphics.size[0] - MARGIN_R - GR_BAR_W - 6; }
-function plot_t() { return MARGIN_T; }
-function plot_b() { return mgraphics.size[1] - MARGIN_B; }
-function plot_w() { return plot_r() - plot_l(); }
-function plot_h() { return plot_b() - plot_t(); }
+//__PLOT_GEOMETRY__//
 
 function in_to_x(db) {
     return plot_l() + ((db - MIN_DB) / (MAX_DB - MIN_DB)) * plot_w();
@@ -410,28 +425,9 @@ function io_level(e, g) {
 // undefined in Live and the old relative model mis-scaled (the it38 latent
 // bug, masked here by the small dB range). ABSOLUTE: the threshold follows the
 // cursor's level on the output axis. Double-click resets to RESET_DB.
-function pointer_y(pe, fb) {
-    if (!pe) return fb;
-    if (pe.y !== undefined) return pe.y;
-    if (pe.localY !== undefined) return pe.localY;
-    if (pe.offsetY !== undefined) return pe.offsetY;
-    if (pe.clientY !== undefined) return pe.clientY;
-    return fb;
-}
-function pointer_x(pe, fb) {
-    if (!pe) return fb;
-    if (pe.x !== undefined) return pe.x;
-    if (pe.localX !== undefined) return pe.localX;
-    if (pe.offsetX !== undefined) return pe.offsetX;
-    if (pe.clientX !== undefined) return pe.clientX;
-    return fb;
-}
-function pointer_buttons(pe, fb) {
-    if (!pe) return fb;
-    if (pe.buttons !== undefined) return pe.buttons;
-    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
-    return fb;
-}
+//__POINTER_Y__//
+//__POINTER_X__//
+//__POINTER_BUTTONS__//
 function pointer_shift_key(pe) {
     return (pe && pe.shiftKey) ? 1 : 0;
 }
@@ -555,5 +551,5 @@ function onwheel(x, y, scrollx, scrolly, cmd, shift) {
     mgraphics.redraw();
 }
 
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

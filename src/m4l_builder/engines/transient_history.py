@@ -36,6 +36,7 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 from .design_system import design_system_js
+from .interaction_core import CLAMP_TERNARY_JS, ONRESIZE_JS, plot_geometry_short_js
 
 TRANSIENT_HISTORY_INLETS = 1
 TRANSIENT_HISTORY_OUTLETS = 1
@@ -85,7 +86,12 @@ def transient_history_js(
         grid_db=grid_db,
         seconds=seconds,
         rate_hz=rate_hz,
-    )
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "22", "mgraphics.size[0] - 8", "6", "mgraphics.size[1] - 6"
+        ),
+    ).replace("//__ONRESIZE__//", ONRESIZE_JS)
 
 
 _JS_TEMPLATE = Template("""\
@@ -138,14 +144,9 @@ function rebuild_ring() {
 }
 rebuild_ring();
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
-function plot_l() { return 22; }
-function plot_r() { return mgraphics.size[0] - 8; }
-function plot_t() { return 6; }
-function plot_b() { return mgraphics.size[1] - 6; }
-function plot_w() { return plot_r() - plot_l(); }
-function plot_h() { return plot_b() - plot_t(); }
+//__PLOT_GEOMETRY__//
 
 // The gain lane (upper 62%) and the level lane (lower 38%) split the plot.
 function gain_split() { return plot_t() + plot_h() * 0.62; }
@@ -381,5 +382,5 @@ function clear() {
     mgraphics.redraw();
 }
 
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

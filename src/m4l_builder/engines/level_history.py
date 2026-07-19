@@ -38,6 +38,14 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 from .design_system import design_system_js
+from .interaction_core import (
+    CLAMP_TERNARY_JS,
+    ONRESIZE_JS,
+    POINTER_BUTTONS_JS,
+    POINTER_X_JS,
+    POINTER_Y_JS,
+    plot_geometry_short_js,
+)
 
 LEVEL_HISTORY_INLETS = 1
 LEVEL_HISTORY_OUTLETS = 1
@@ -99,6 +107,15 @@ def level_history_js(
         interactive=1 if interactive else 0,
         reset_db=reset_db,
         loudness_target=1 if loudness_target else 0,
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "24", "mgraphics.size[0] - 22", "6", "mgraphics.size[1] - 6"
+        ),
+    ).replace("//__POINTER_Y__//", POINTER_Y_JS).replace(
+        "//__POINTER_X__//", POINTER_X_JS
+    ).replace("//__POINTER_BUTTONS__//", POINTER_BUTTONS_JS).replace(
+        "//__ONRESIZE__//", ONRESIZE_JS
     )
 
 
@@ -167,14 +184,9 @@ function rebuild_ring() {
 }
 rebuild_ring();
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
-function plot_l() { return 24; }
-function plot_r() { return mgraphics.size[0] - 22; }
-function plot_t() { return 6; }
-function plot_b() { return mgraphics.size[1] - 6; }
-function plot_w() { return plot_r() - plot_l(); }
-function plot_h() { return plot_b() - plot_t(); }
+//__PLOT_GEOMETRY__//
 
 function db_to_y(db) {
     var n = (clamp(db, lo_db, hi_db) - lo_db) / (hi_db - lo_db);
@@ -558,28 +570,9 @@ function set_ref_db(v) {
 // (the it38 bug). Mirrors eq_curve / delay_trail. The mapping is ABSOLUTE — the
 // line follows the cursor's level on the dB scale (robust to any v8ui frame
 // quirk), not a relative start+delta.
-function pointer_y(pe, fb) {
-    if (!pe) return fb;
-    if (pe.y !== undefined) return pe.y;
-    if (pe.localY !== undefined) return pe.localY;
-    if (pe.offsetY !== undefined) return pe.offsetY;
-    if (pe.clientY !== undefined) return pe.clientY;
-    return fb;
-}
-function pointer_x(pe, fb) {
-    if (!pe) return fb;
-    if (pe.x !== undefined) return pe.x;
-    if (pe.localX !== undefined) return pe.localX;
-    if (pe.offsetX !== undefined) return pe.offsetX;
-    if (pe.clientX !== undefined) return pe.clientX;
-    return fb;
-}
-function pointer_buttons(pe, fb) {
-    if (!pe) return fb;
-    if (pe.buttons !== undefined) return pe.buttons;
-    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
-    return fb;
-}
+//__POINTER_Y__//
+//__POINTER_X__//
+//__POINTER_BUTTONS__//
 
 // Hit-test the top-right loudness readout block (M/S/I/TGT). A press there
 // cycles the loudness target instead of grabbing the reference line.
@@ -696,5 +689,5 @@ function clear() {
     mgraphics.redraw();
 }
 
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

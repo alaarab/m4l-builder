@@ -68,6 +68,13 @@ from ._graph_colors import (
 )
 from .design_system import design_system_js
 from .graph_core import GRAPH_CORE_JS
+from .interaction_core import (
+    CLAMP_IFORM_JS,
+    POINTER_BUTTONS_LONGNAME_JS,
+    POINTER_X_LONGNAME_JS,
+    POINTER_Y_LONGNAME_JS,
+    plot_geometry_long_js,
+)
 
 EQ_CURVE_INLETS = 3
 EQ_CURVE_OUTLETS = 4
@@ -130,7 +137,19 @@ def eq_curve_js(
         external_spectrum=(1 if external_spectrum else 0),
         minimal_grid=(1 if minimal_grid else 0),
         band_colors=band_palette_js(),
-    ).replace("//__GRAPH_CORE__//", GRAPH_CORE_JS)
+    ).replace("//__GRAPH_CORE__//", GRAPH_CORE_JS).replace(
+        "//__CLAMP_IFORM__//", CLAMP_IFORM_JS
+    ).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_long_js(
+            "MARGIN_LEFT",
+            "mgraphics.size[0] - MARGIN_RIGHT",
+            "MARGIN_TOP",
+            "mgraphics.size[1] - MARGIN_BOTTOM",
+        ),
+    ).replace("//__POINTER_X__//", POINTER_X_LONGNAME_JS).replace(
+        "//__POINTER_Y__//", POINTER_Y_LONGNAME_JS
+    ).replace("//__POINTER_BUTTONS__//", POINTER_BUTTONS_LONGNAME_JS)
 
 
 _JS_TEMPLATE = Template("""\
@@ -333,21 +352,12 @@ for (i = 0; i < MAX_BANDS; i++) {
 }
 
 // ── Coordinate helpers ───────────────────────────────────────────────
-function plot_left()   { return MARGIN_LEFT; }
-function plot_right()  { return mgraphics.size[0] - MARGIN_RIGHT; }
-function plot_top()    { return MARGIN_TOP; }
-function plot_bottom() { return mgraphics.size[1] - MARGIN_BOTTOM; }
-function plot_w()      { return plot_right() - plot_left(); }
-function plot_h()      { return plot_bottom() - plot_top(); }
+//__PLOT_GEOMETRY__//
 function point_in_plot(x, y) {
     return x >= plot_left() && x <= plot_right() && y >= plot_top() && y <= plot_bottom();
 }
 
-function clamp(v, lo, hi) {
-    if (v < lo) return lo;
-    if (v > hi) return hi;
-    return v;
-}
+//__CLAMP_IFORM__//
 
 function safe_log10(v) {
     if (v <= 1.0e-20) v = 1.0e-20;
@@ -2653,33 +2663,11 @@ function pointer_control_key(pointerevent, ctrl) {
     return ctrl ? 1 : 0;
 }
 
-function pointer_x(pointerevent, fallback) {
-    if (!pointerevent) return fallback;
-    if (pointerevent.x !== undefined) return pointerevent.x;
-    if (pointerevent.localX !== undefined) return pointerevent.localX;
-    if (pointerevent.offsetX !== undefined) return pointerevent.offsetX;
-    if (pointerevent.clientX !== undefined) return pointerevent.clientX;
-    return fallback;
-}
+//__POINTER_X__//
 
-function pointer_y(pointerevent, fallback) {
-    if (!pointerevent) return fallback;
-    if (pointerevent.y !== undefined) return pointerevent.y;
-    if (pointerevent.localY !== undefined) return pointerevent.localY;
-    if (pointerevent.offsetY !== undefined) return pointerevent.offsetY;
-    if (pointerevent.clientY !== undefined) return pointerevent.clientY;
-    return fallback;
-}
+//__POINTER_Y__//
 
-function pointer_buttons(pointerevent, fallback) {
-    if (!pointerevent) return fallback;
-    if (pointerevent.buttons !== undefined) return pointerevent.buttons;
-    if (pointerevent.button !== undefined) {
-        if (pointerevent.button === 2) return 2;
-        return 1;
-    }
-    return fallback;
-}
+//__POINTER_BUTTONS__//
 
 function note_pointer_press(x, y) {
     last_pointer_press_ms = new Date().getTime();

@@ -32,6 +32,14 @@ from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_COLOR,
     resolve_graph_panel_color,
 )
+from .interaction_core import (
+    CLAMP_TERNARY_JS,
+    ONRESIZE_JS,
+    POINTER_BUTTONS_JS,
+    POINTER_X_JS,
+    POINTER_Y_JS,
+    plot_geometry_short_js,
+)
 
 LOOP_FILTER_CURVE_INLETS = 1
 LOOP_FILTER_CURVE_OUTLETS = 1
@@ -97,6 +105,15 @@ def loop_filter_curve_js(
         db_hi=db_hi,
         db_lo=db_lo,
         interactive=1 if interactive else 0,
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "6", "mgraphics.size[0] - 6", "12", "mgraphics.size[1] - 12", guarded=True
+        ),
+    ).replace("//__POINTER_X__//", POINTER_X_JS).replace(
+        "//__POINTER_Y__//", POINTER_Y_JS
+    ).replace("//__POINTER_BUTTONS__//", POINTER_BUTTONS_JS).replace(
+        "//__ONRESIZE__//", ONRESIZE_JS
     )
 
 
@@ -134,14 +151,9 @@ var dragging = 0;
 var FMIN = 20.0, FMAX = 20000.0;
 var LOG_FMIN = Math.log(FMIN), LOG_FMAX = Math.log(FMAX);
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
-function plot_l() { return 6; }
-function plot_r() { return mgraphics.size[0] - 6; }
-function plot_t() { return 12; }
-function plot_b() { return mgraphics.size[1] - 12; }
-function plot_w() { var d = plot_r() - plot_l(); return d > 1 ? d : 1; }
-function plot_h() { var d = plot_b() - plot_t(); return d > 1 ? d : 1; }
+//__PLOT_GEOMETRY__//
 
 function freq_to_x(f) {
     var t = (Math.log(clamp(f, FMIN, FMAX)) - LOG_FMIN) / (LOG_FMAX - LOG_FMIN);
@@ -257,28 +269,9 @@ function set_samplerate(v) { if (isFinite(v) && v > 0) { samplerate = v; mgraphi
 // ── Interaction: 2-axis pad — X = DAMP (0..100), Y = TONE (+100 top..-100) ──
 // Absolute mapping with the proven v8ui pointer resolver; outlet fires only on a
 // user gesture (no-echo). Both axes update together (the trail/X-Y-pad idiom).
-function pointer_x(pe, fb) {
-    if (!pe) return fb;
-    if (pe.x !== undefined) return pe.x;
-    if (pe.localX !== undefined) return pe.localX;
-    if (pe.offsetX !== undefined) return pe.offsetX;
-    if (pe.clientX !== undefined) return pe.clientX;
-    return fb;
-}
-function pointer_y(pe, fb) {
-    if (!pe) return fb;
-    if (pe.y !== undefined) return pe.y;
-    if (pe.localY !== undefined) return pe.localY;
-    if (pe.offsetY !== undefined) return pe.offsetY;
-    if (pe.clientY !== undefined) return pe.clientY;
-    return fb;
-}
-function pointer_buttons(pe, fb) {
-    if (!pe) return fb;
-    if (pe.buttons !== undefined) return pe.buttons;
-    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
-    return fb;
-}
+//__POINTER_X__//
+//__POINTER_Y__//
+//__POINTER_BUTTONS__//
 
 function apply_drag(x, y) {
     if (isNaN(x) || isNaN(y)) return;
@@ -319,5 +312,5 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x, y); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) { if (but) drag_to(x, y); else end_drag(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_filter(); }
 
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

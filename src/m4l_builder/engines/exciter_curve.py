@@ -38,6 +38,14 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 from .design_system import design_system_js
+from .interaction_core import (
+    CLAMP_TERNARY_JS,
+    ONRESIZE_JS,
+    POINTER_BUTTONS_JS,
+    POINTER_X_JS,
+    POINTER_Y_JS,
+    plot_geometry_short_js,
+)
 
 EXCITER_CURVE_INLETS = 1
 EXCITER_CURVE_OUTLETS = 1
@@ -79,6 +87,18 @@ def exciter_curve_js(
         accent_color=accent_color,
         spec_fill_color=spec_fill_color,
         spec_line_color=spec_line_color,
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "MARGIN_L",
+            "mgraphics.size[0] - MARGIN_R",
+            "MARGIN_T",
+            "mgraphics.size[1] - MARGIN_B",
+        ),
+    ).replace("//__POINTER_X__//", POINTER_X_JS).replace(
+        "//__POINTER_Y__//", POINTER_Y_JS
+    ).replace("//__POINTER_BUTTONS__//", POINTER_BUTTONS_JS).replace(
+        "//__ONRESIZE__//", ONRESIZE_JS
     )
 
 
@@ -143,14 +163,9 @@ var analyzer_buffer_bins = 0;
 var analyzer_poll_task = null;
 var analyzer_display = [];        // smoothed dB per display bin (fast atk/slow rel)
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
-function plot_l() { return MARGIN_L; }
-function plot_r() { return mgraphics.size[0] - MARGIN_R; }
-function plot_t() { return MARGIN_T; }
-function plot_b() { return mgraphics.size[1] - MARGIN_B; }
-function plot_w() { return plot_r() - plot_l(); }
-function plot_h() { return plot_b() - plot_t(); }
+//__PLOT_GEOMETRY__//
 
 function freq_to_x(f) {
     var lv = Math.log(clamp(f, MIN_FREQ, MAX_FREQ)) / Math.LN10;
@@ -470,28 +485,9 @@ function draw_spectrum() {
 }
 
 // ── Interaction: grab the nearest handle, drag X = tune, Y = amount ───────
-function pointer_x(pe, fb) {
-    if (!pe) return fb;
-    if (pe.x !== undefined) return pe.x;
-    if (pe.localX !== undefined) return pe.localX;
-    if (pe.offsetX !== undefined) return pe.offsetX;
-    if (pe.clientX !== undefined) return pe.clientX;
-    return fb;
-}
-function pointer_y(pe, fb) {
-    if (!pe) return fb;
-    if (pe.y !== undefined) return pe.y;
-    if (pe.localY !== undefined) return pe.localY;
-    if (pe.offsetY !== undefined) return pe.offsetY;
-    if (pe.clientY !== undefined) return pe.clientY;
-    return fb;
-}
-function pointer_buttons(pe, fb) {
-    if (!pe) return fb;
-    if (pe.buttons !== undefined) return pe.buttons;
-    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
-    return fb;
-}
+//__POINTER_X__//
+//__POINTER_Y__//
+//__POINTER_BUTTONS__//
 
 function pick_handle(px, py) {
     var lx = freq_to_x(lo_tune), ly = lo_handle_y();
@@ -552,5 +548,5 @@ function onclick(x, y, but, cmd, shift) { start(x, y); }
 function ondrag(x, y, but, cmd, shift) { if (but) apply_drag(x, y); else end_drag(); }
 function onidle(x, y) { if (!hovering) { hovering = 1; mgraphics.redraw(); } ds_set_cursor(DS_CUR_HAND); }
 function onidleout() { hovering = 0; ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

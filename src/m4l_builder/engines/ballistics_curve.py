@@ -36,6 +36,13 @@ from ._graph_colors import (
     DEFAULT_GRAPH_PLOT_COLOR,
     resolve_graph_panel_color,
 )
+from .interaction_core import (
+    CLAMP_TERNARY_JS,
+    ONRESIZE_JS,
+    POINTER_BUTTONS_JS,
+    POINTER_X_JS,
+    plot_geometry_short_js,
+)
 
 BALLISTICS_CURVE_INLETS = 1
 BALLISTICS_CURVE_OUTLETS = 1
@@ -105,7 +112,14 @@ def ballistics_curve_js(
         attack_max_ms=attack_max_ms,
         release_min_ms=release_min_ms,
         release_max_ms=release_max_ms,
-    )
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__PLOT_GEOMETRY__//",
+        plot_geometry_short_js(
+            "5", "mgraphics.size[0] - 5", "11", "mgraphics.size[1] - 10", guarded=True
+        ),
+    ).replace("//__POINTER_X__//", POINTER_X_JS).replace(
+        "//__POINTER_BUTTONS__//", POINTER_BUTTONS_JS
+    ).replace("//__ONRESIZE__//", ONRESIZE_JS)
 
 
 _JS_TEMPLATE = Template("""\
@@ -142,14 +156,9 @@ var drag_zone = 0;     // 0 = attack (left half), 1 = release (right half)
 var live_gr_db = 0.0;  // live gain reduction (dB, >=0) fed from the compressor
 var live_gr_prev = -1.0;
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
-function plot_l() { return 5; }
-function plot_r() { return mgraphics.size[0] - 5; }
-function plot_t() { return 11; }
-function plot_b() { return mgraphics.size[1] - 10; }
-function plot_w() { var d = plot_r() - plot_l(); return d > 1 ? d : 1; }
-function plot_h() { var d = plot_b() - plot_t(); return d > 1 ? d : 1; }
+//__PLOT_GEOMETRY__//
 
 // Representative GR depth: a 12 dB-over-threshold step through the ratio.
 function target_gr() {
@@ -325,20 +334,8 @@ function set_live_gr(v) {
 // (matches the ATK/REL corner labels). Absolute + log-mapped, with the proven
 // v8ui pointer resolver (.x/.localX/.offsetX/.clientX); outlet fires only on a
 // user gesture (no-echo). The curve reshapes live as you drag.
-function pointer_x(pe, fb) {
-    if (!pe) return fb;
-    if (pe.x !== undefined) return pe.x;
-    if (pe.localX !== undefined) return pe.localX;
-    if (pe.offsetX !== undefined) return pe.offsetX;
-    if (pe.clientX !== undefined) return pe.clientX;
-    return fb;
-}
-function pointer_buttons(pe, fb) {
-    if (!pe) return fb;
-    if (pe.buttons !== undefined) return pe.buttons;
-    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;
-    return fb;
-}
+//__POINTER_X__//
+//__POINTER_BUTTONS__//
 function log_map(f, lo, hi) { return lo * Math.pow(hi / lo, clamp(f, 0.0, 1.0)); }
 
 function apply_drag(x) {
@@ -390,5 +387,5 @@ function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { start_drag(x); }
 function ondrag(x, y, but, cmd, shift, caps, opt, ctrl) { if (but) drag_to(x); else end_drag(); }
 function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_ballistics(); }
 
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)

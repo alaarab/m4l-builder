@@ -24,6 +24,7 @@ from ._graph_colors import (
     resolve_graph_panel_color,
 )
 from .design_system import design_system_js
+from .interaction_core import CLAMP_TERNARY_JS, ONRESIZE_JS
 
 LEVEL_METER_INLETS = 1
 LEVEL_METER_OUTLETS = 0
@@ -49,6 +50,8 @@ def level_meter_js(
         text_color=text_color,
         lo_db=lo_db,
         hi_db=hi_db,
+    ).replace("//__CLAMP_TERNARY__//", CLAMP_TERNARY_JS).replace(
+        "//__ONRESIZE__//", ONRESIZE_JS
     )
 
 
@@ -74,7 +77,7 @@ var lvlL = 0.0, lvlR = 0.0;     // live amplitude (dB)
 var peakL = -200.0, peakR = -200.0;  // decaying peak-hold (dB)
 var clip = 0;                    // latched clip flag
 
-function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+//__CLAMP_TERNARY__//
 
 function lin_to_db(x) {
     if (x <= 0.0000001) return -200.0;
@@ -173,5 +176,5 @@ function reset_clip() { clip = 0; peakL = -200.0; peakR = -200.0; mgraphics.redr
 // Click anywhere resets the latched clip flag + peak-hold (EQ meter UX).
 function onpointerdown(pe) { reset_clip(); }
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_clip(); }
-function onresize(w, h) { mgraphics.redraw(); }
+//__ONRESIZE__//
 """)
