@@ -104,6 +104,17 @@ ignore = ["E501", "UP031"]
 "src/m4l_builder/_amxd_match.py" = ["F401", "F403", "F405"]
 "src/m4l_builder/_amxd_detect.py" = ["F401", "F403", "F405"]
 "src/m4l_builder/_amxd_extract.py" = ["F401", "F403", "F405"]
+# library_analysis.py is a thin facade over the _library_*.py split modules; the
+# split modules star-import their lower layers (F405 = name-from-star), and the
+# facade re-exports the full surface (incl. original imports like iter_boxes).
+"src/m4l_builder/library_analysis.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_library_helpers.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_library_file.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_library_ranking.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_library_mapping.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_library_dossier.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_library_aggregate.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_library_markdown.py" = ["F401", "F403", "F405"]
 # Single-letter loop / unpack vars (e.g. `l`) are idiomatic in the test suite.
 "tests/**" = ["E741"]
 
