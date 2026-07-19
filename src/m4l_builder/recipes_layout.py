@@ -544,7 +544,17 @@ def modulator_slot_component(device, *, accent, text_color=None,
         "slot_js", f"v8 {fname} #1", numinlets=1, numoutlets=2,
         outlettype=["", ""], patching_rect=[30, 400, 180, 20],
         saved_object_attributes={"filename": fname, "parameter_enable": 0}))
-    sub.add_line("slot_in", 0, "slot_js", 0)
+    # slot_in fans out to several taps (enable/rowcolor/lanes/page routes) that
+    # own those selectors; gate the v8 tap so only the mapper messages it
+    # actually handles reach it. route's reject outlet (2) passes the whole
+    # original message through, so map/unmap/setid/settarget/announce/extunmap
+    # dispatch is unchanged; "enable"/"rowcolor" no longer hit the js (they are
+    # already handled by slot_en_route/slot_rc_route) -> no "no function" errors.
+    sub.add_newobj("slot_js_gate", "route enable rowcolor", numinlets=1,
+                   numoutlets=3, outlettype=["", "", ""],
+                   patching_rect=[220, 370, 140, 20])
+    sub.add_line("slot_in", 0, "slot_js_gate", 0)
+    sub.add_line("slot_js_gate", 2, "slot_js", 0)
     sink_boxes, sink_lines = retargetable_param_sink(
         "slot_sink", normalized=normalized)
     sub.add_dsp(sink_boxes, sink_lines)
