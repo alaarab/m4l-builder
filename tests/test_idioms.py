@@ -11,6 +11,7 @@ from m4l_builder import (
     expr_safe_mod,
     init_prime,
 )
+from m4l_builder.idioms import assign_parameter_banks, corr_readout
 
 
 def _dev():
@@ -88,3 +89,31 @@ def test_control_smooth_with_and_without_scale():
     control_smooth(d2, "g", "g_dial", None, 40)    # scale_text=None skips the scale obj
     assert ("g_dial", 0, "g_pk", 0) in _lines(d2)
     assert not any("scale" in x for x in _texts(d2))
+
+
+def test_corr_readout_wiring():
+    d = _dev()
+    d.add_comment("readout", [0, 0, 60, 12], "CORR 1.00")
+    res = corr_readout(d, "corr", "gen_box", "readout", source_outlet=3, x=10, y=20)
+    t = _texts(d)
+    assert "snapshot~ 50" in t and "sprintf CORR %.2f" in t and "prepend set" in t
+    L = _lines(d)
+    assert ("gen_box", 3, "corr_snap", 0) in L      # source outlet -> snapshot~
+    assert ("corr_snap", 0, "corr_fmt", 0) in L
+    assert ("corr_fmt", 0, "corr_set", 0) in L
+    assert ("corr_set", 0, "readout", 0) in L        # -> the pre-existing target
+    assert res["snap"] == "corr_snap" and res["fmt"] == "corr_fmt" and res["set"] == "corr_set"
+
+
+def test_assign_parameter_banks_preserves_order():
+    d = _dev()
+    calls = []
+    d.assign_parameter_bank = lambda name, bank, slot, bank_name=None: calls.append(
+        (name, bank, slot, bank_name))
+    assign_parameter_banks(d, [
+        ("Main", ["A", "B"]),
+        ("Aux", ["C"]),
+    ])
+    assert calls == [
+        ("A", 0, 0, "Main"), ("B", 0, 1, "Main"), ("C", 1, 0, "Aux"),
+    ]

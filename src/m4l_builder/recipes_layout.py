@@ -202,42 +202,57 @@ def stacked_panels(device, id_prefix, tab_param, panel_ids, *, rect, labels=None
     )
 
 
-def bypass_wrapper(device, id_prefix, *, label="Bypass", button_rect=None,
-                   x=30, y=30):
-    """Hard-bypass a DSP stage with a latching toggle (F4) — a ``selector~ 2 1``
-    crossfade-free switch between the DRY (bypass) and WET (processed) paths.
+def bypass_wrapper(device, id_prefix, *, toggle, wet_source, dry_source=None,
+                   audio_out="obj-plugout", channels=(("l", 0), ("r", 1)),
+                   sel_x=110, y=300, ch_dx=200, add1_x=420):
+    """Hard-bypass N parallel signal paths (stereo L/R by default) with ONE
+    shared latching toggle: a ``selector~ 2 1`` per channel picks WET (inlet 1)
+    or DRY (inlet 2), driven by a ``+ 1`` shim off the toggle (Max's
+    ``selector~`` control inlet is 1-indexed, so toggle 0/1 -> control 1/2).
+    This exact shape — ``+ 1`` feeding N ``selector~ 2 1``s — was hand-wired
+    identically across five audio-effect devices' bypass stages.
 
-    Wire the unprocessed signal into the ``dry_in`` port and your processed signal
-    into ``wet_in``; ``audio_out`` carries whichever the toggle selects (toggle OFF
-    = processed/wet, ON = dry/bypass). The toggle is a first-class ``live.text``
-    parameter (so the bypass state automates + saves). Returns the toggle/selector
-    ids and ``dry_in`` / ``wet_in`` / ``audio_out`` ports.
+    ``toggle`` is an EXISTING box id (the device's own bypass button/param;
+    this recipe does not build one — every real adopter already has its
+    toggle from elsewhere in its layout). ``wet_source`` / ``dry_source`` are
+    ``(channel_label, channel_index) -> (box_id, outlet)`` callables selecting
+    each channel's feed; ``dry_source`` defaults to the device's raw input
+    (``obj-plugin`` at ``channel_index``) — pass your own when the dry tap
+    isn't the raw input (e.g. a lookahead-delayed tap). Each channel's
+    selector output is wired to ``audio_out`` at its channel index. Returns a
+    StageResult with the per-channel ``selector`` ids (keyed by channel label)
+    and the ``shim`` (``+ 1``) id.
+
+    NOTE: this owns one contiguous per-channel loop + a trailing shim, so it
+    only fits devices whose selector creation isn't interleaved with OTHER,
+    unrelated per-channel box creation (m4l_builder's boxes/lines are plain
+    insertion-ordered lists — reproducing a different interleaving would
+    require either reordering output or bolting injection hooks onto this
+    recipe for one-off callers, neither of which is worth it here).
     """
     p = id_prefix
-    btn = device.add_live_text(f"{p}_bypass", label, button_rect or [x, y, 50, 16],
-                               mode=1)
-    # toggle 0 (active) -> selector control 2 (wet) ; toggle 1 (bypass) -> 1 (dry)
-    inv = device.add_newobj(
-        f"{p}_inv", "expr 2-$i1", numinlets=1, numoutlets=1,
-        outlettype=[""], patching_rect=[x, y + 30, 70, 20],
-    )
-    sel = device.add_newobj(
-        f"{p}_sel", "selector~ 2 1", numinlets=3, numoutlets=1,
-        outlettype=["signal"], patching_rect=[x, y + 60, 90, 20],
-    )
-    device.add_line(btn, 0, inv, 0)
-    device.add_line(inv, 0, sel, 0)
+    dry_source = dry_source or (lambda ch, ci: ("obj-plugin", ci))
+    sel_ids = {}
+    for ch, ci in channels:
+        sel_id = f"{p}_sel_{ch}"
+        sel_ids[ch] = sel_id
+        device.add_newobj(sel_id, "selector~ 2 1", numinlets=3, numoutlets=1,
+                          outlettype=["signal"],
+                          patching_rect=[sel_x + ci * ch_dx, y, 80, 20])
+        wsrc, wout = wet_source(ch, ci)
+        device.add_line(wsrc, wout, sel_id, 1)
+        dsrc, dout = dry_source(ch, ci)
+        device.add_line(dsrc, dout, sel_id, 2)
+    for ch, ci in channels:
+        device.add_line(sel_ids[ch], 0, audio_out, ci)
+    shim_id = f"{p}_add1"
+    device.add_newobj(shim_id, "+ 1", numinlets=2, numoutlets=1,
+                      outlettype=["int"], patching_rect=[add1_x, y, 40, 20])
+    device.add_line(toggle, 0, shim_id, 0)
+    for ch, _ci in channels:
+        device.add_line(shim_id, 0, sel_ids[ch], 0)
 
-    return stage_result(
-        {"bypass": btn, "selector": sel},
-        name="bypass_wrapper",
-        params={f"{p}_bypass": device.parameter(btn)},
-        ports={
-            "dry_in": device.box(sel).inlet(1),
-            "wet_in": device.box(sel).inlet(2),
-            "audio_out": device.box(sel).outlet(0),
-        },
-    )
+    return stage_result({"selector": sel_ids, "shim": shim_id}, name="bypass_wrapper")
 
 
 def switchable_bank(device, id_prefix, options, *, tab_param=None, tab_rect=None,

@@ -279,25 +279,34 @@ class TestSwitchableBank:
 
 
 class TestBypassWrapper:
-    def test_selector_switch_with_param_toggle(self):
+    def test_selector_switch_with_shared_toggle(self):
         device = AudioEffect("test", width=200, height=120)
-        res = bypass_wrapper(device, "comp")
+        device.add_live_text("my_toggle", "Bypass", [0, 0, 50, 16], mode=1)
+        res = bypass_wrapper(device, "comp", toggle="my_toggle",
+                             wet_source=lambda ch, ci: ("wet_gen", ci))
         texts = _box_texts(device)
         assert "selector~ 2 1" in texts
-        assert "expr 2-$i1" in texts          # toggle 0->wet(2), 1->dry(1)
-        # the bypass is a first-class parameter (automatable/saved)
-        btn = next(b["box"] for b in device.boxes if b["box"]["id"] == "comp_bypass")
-        assert btn["maxclass"] == "live.text" and btn["parameter_enable"] == 1
+        assert "+ 1" in texts                 # toggle 0/1 -> control 1/2 (1-indexed)
         pairs = _line_pairs(device)
-        assert ("comp_bypass", "comp_inv") in pairs
-        assert ("comp_inv", "comp_sel") in pairs
-        assert "comp_bypass" in res.params
+        assert ("my_toggle", "comp_add1") in pairs
+        assert ("comp_add1", "comp_sel_l") in pairs
+        assert ("comp_add1", "comp_sel_r") in pairs
+        assert ("wet_gen", "comp_sel_l") in pairs
+        assert ("obj-plugin", "comp_sel_l") in pairs     # default dry source
+        assert ("comp_sel_l", "obj-plugout") in pairs    # default audio_out
+        assert res["selector"] == {"l": "comp_sel_l", "r": "comp_sel_r"}
 
-    def test_ports_exposed(self):
+    def test_custom_dry_source_and_audio_out(self):
         device = AudioEffect("test", width=200, height=120)
-        res = bypass_wrapper(device, "eq")
-        assert "dry_in" in res.ports and "wet_in" in res.ports
-        assert "audio_out" in res.ports
+        res = bypass_wrapper(device, "eq", toggle="tog",
+                             wet_source=lambda ch, ci: (f"mix_{ch}", 0),
+                             dry_source=lambda ch, ci: ("pre_gen", 4 + ci),
+                             audio_out="custom_out")
+        pairs = _line_pairs(device)
+        assert ("mix_l", "eq_sel_l") in pairs
+        assert ("pre_gen", "eq_sel_l") in pairs           # custom dry tap
+        assert ("eq_sel_l", "custom_out") in pairs
+        assert res["shim"] == "eq_add1"
 
 
 class TestStackedPanels:

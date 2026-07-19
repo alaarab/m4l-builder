@@ -120,3 +120,41 @@ def init_prime(device, id_prefix, target, value, *, target_inlet=0, x=0, y=0):
                       outlettype=[""], patching_rect=[x, y, 90, 20])
     device.add_line(f"{p}_prime", 0, target, target_inlet)
     return stage_result({"loadmess": f"{p}_prime"}, name="init_prime")
+
+
+def corr_readout(device, id_prefix, source, target, *, source_outlet=0,
+                 target_inlet=0, x=0, y=0):
+    """Sample a signal into a live ``"CORR x.xx"`` text readout: ``snapshot~ 50
+    -> sprintf CORR %.2f -> prepend set -> target``. ``target`` is the
+    PRE-EXISTING readout box (a comment/textedit already showing placeholder
+    text like ``"CORR 1.00"``) — this only wires the sampling chain into it.
+    Was hand-wired identically for stereo-correlation meters across several
+    devices. Returns ids ``{snap, fmt, set}``.
+    """
+    p = id_prefix
+    device.add_newobj(f"{p}_snap", "snapshot~ 50", numinlets=2, numoutlets=1,
+                      outlettype=["float"], patching_rect=[x, y, 80, 20])
+    device.add_newobj(f"{p}_fmt", "sprintf CORR %.2f", numinlets=1, numoutlets=1,
+                      outlettype=[""], patching_rect=[x, y + 30, 130, 20])
+    device.add_newobj(f"{p}_set", "prepend set", numinlets=1, numoutlets=1,
+                      outlettype=[""], patching_rect=[x, y + 60, 90, 20])
+    device.add_line(source, source_outlet, f"{p}_snap", 0)
+    device.add_line(f"{p}_snap", 0, f"{p}_fmt", 0)
+    device.add_line(f"{p}_fmt", 0, f"{p}_set", 0)
+    device.add_line(f"{p}_set", 0, target, target_inlet)
+    return stage_result({"snap": f"{p}_snap", "fmt": f"{p}_fmt", "set": f"{p}_set"},
+                        name="corr_readout")
+
+
+def assign_parameter_banks(device, banks):
+    """Assign every parameter to a NAMED Push/controller bank, 8 slots each, in
+    the given order — without this, Live auto-banks in creation order (8 per
+    UNNAMED bank), scattering related controls across banks. ``banks`` is an
+    ordered list of ``(bank_name, param_names)`` pairs; each bank's slot index
+    is a parameter's position within its ``param_names``. Was hand-wired as an
+    identical nested loop across several devices.
+    """
+    for bank_index, (bank_name, param_names) in enumerate(banks):
+        for slot_index, param_name in enumerate(param_names):
+            device.assign_parameter_bank(param_name, bank_index, slot_index,
+                                         bank_name=bank_name)
