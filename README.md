@@ -71,6 +71,9 @@ uv run python examples/02_generative_midi.py   # builds a generative MIDI device
 - [`01_gain_audio_effect.py`](examples/01_gain_audio_effect.py) — audio effect, low-level API
 - [`02_generative_midi.py`](examples/02_generative_midi.py) — MIDI effect using the generative recipe
 - [`03_stereo_width.py`](examples/03_stereo_width.py) — audio effect using the mid/side width recipe
+- [`04_midi_transformation.py`](examples/04_midi_transformation.py) — Live 12 MIDI Tool (`MidiTransformation`) built on the `live.miditool.in`/`out` chain
+- [`05_euclidean_midi.py`](examples/05_euclidean_midi.py) — MIDI effect using the Euclidean rhythm generator
+- [`06_simple_synth.py`](examples/06_simple_synth.py) — `Instrument` device: oscillator through an ADSR amplitude envelope
 
 ## Key concepts
 
@@ -183,11 +186,11 @@ device.add_jsui("display", [10, 30, 200, 80],
                 js_code=filter_curve_js(), numinlets=3)
 ```
 
-26 generators available: filter curves, EQ, envelopes, spectrum, waveforms, XY pad, piano roll, step grids, grain clouds, vocoder bands, and more.
+Dozens of generators are available: filter curves, EQ, envelopes, spectrum, waveforms, XY pad, piano roll, step grids, grain clouds, vocoder bands, and more. See the auto-generated [catalog](docs/catalog.md) for the complete, current list of engines.
 
 ### Themes
 
-Seven built-in color themes. Pass to the device constructor and all UI elements inherit colors automatically:
+16 built-in color themes — `AMBER`, `COOL`, `FOREST`, `GRAPHITE`, `INDUSTRIAL`, `LIGHT`, `LOFI`, `MIDNIGHT`, `NEON`, `COBALT`, `SOLAR`, `NEBULA`, `SYNTHWAVE`, `MAGMA`, `VIOLET`, `WARM` (see the [catalog](docs/catalog.md) for the current list). Pass to the device constructor and all UI elements inherit colors automatically:
 
 ```python
 from m4l_builder import AudioEffect, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR
@@ -234,23 +237,23 @@ with device.row(10, 10, spacing=8, height=70) as r:
 For Ableton-style flagship device work, the repo now includes a shared UI
 practice and review set:
 
-- [docs/ableton_ui_playbook.md](docs/ableton_ui_playbook.md): shared UI rules
+- [docs/archive/ui_sprint_2026_03/ableton_ui_playbook.md](docs/archive/ui_sprint_2026_03/ableton_ui_playbook.md): shared UI rules
   for primary surfaces, contextual editing, compact behavior, and analyzer
   semantics
-- [docs/ableton_ui_construction_internals.md](docs/ableton_ui_construction_internals.md):
+- [docs/archive/ui_sprint_2026_03/ableton_ui_construction_internals.md](docs/archive/ui_sprint_2026_03/ableton_ui_construction_internals.md):
   how UI elements, parameter metadata, custom surfaces, and plugin-local state
   routing are actually constructed in the repo today
-- [docs/ableton_ui_review_checklist.md](docs/ableton_ui_review_checklist.md):
+- [docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md](docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md):
   weekly scoring rubric
-- [docs/ableton_ui_90_day_sprint.md](docs/ableton_ui_90_day_sprint.md): the
+- [docs/archive/ui_sprint_2026_03/ableton_ui_90_day_sprint.md](docs/archive/ui_sprint_2026_03/ableton_ui_90_day_sprint.md): the
   execution guide for the 12-week Ableton UI sprint
-- [docs/ableton_ui_baseline_audit.md](docs/ableton_ui_baseline_audit.md):
+- [docs/archive/ui_sprint_2026_03/ableton_ui_baseline_audit.md](docs/archive/ui_sprint_2026_03/ableton_ui_baseline_audit.md):
   starting assessment of the current flagship lanes
-- [docs/ableton_ui_tracker.md](docs/ableton_ui_tracker.md): week-by-week sprint
+- [docs/archive/ui_sprint_2026_03/ableton_ui_tracker.md](docs/archive/ui_sprint_2026_03/ableton_ui_tracker.md): week-by-week sprint
   status and artifact tracking
-- [docs/ableton_ui_scoreboard.md](docs/ableton_ui_scoreboard.md): conservative
+- [docs/archive/ui_sprint_2026_03/ableton_ui_scoreboard.md](docs/archive/ui_sprint_2026_03/ableton_ui_scoreboard.md): conservative
   baseline scoring for current flagship lanes
-- [docs/ableton_ui_reference_matrix.md](docs/ableton_ui_reference_matrix.md):
+- [docs/archive/ui_sprint_2026_03/ableton_ui_reference_matrix.md](docs/archive/ui_sprint_2026_03/ableton_ui_reference_matrix.md):
   reference-device order and repo translation map
 - [docs/ui_validation/README.md](docs/ui_validation/README.md): validation-note
   workflow for in-Live review
@@ -629,6 +632,69 @@ private sibling repo for concrete devices:
 - `../the device repo/plugins/<plugin>/build.py`: canonical product workspaces
 - `../the device repo/legacy_examples/*.py`: migrated private example/archive
   scripts from older framework iterations
+
+## Architecture / internals
+
+Notes on how the library itself is organized, for anyone extending it rather
+than just building devices with it.
+
+### Engines layer
+
+`src/m4l_builder/engines/` (68 modules) holds the jsui/v8ui JS generators
+described above, plus two shared-scaffold modules that are not generators
+themselves:
+
+- [`engines/design_system.py`](src/m4l_builder/engines/design_system.py) —
+  shared MGraphics drawing helpers and cursor handling that the hero displays
+  embed, so a visual change lands once instead of being hand-copied. Sidecar
+  `.js` filenames are content-addressed by `js_sidecar_name()` (stem + BLAKE2b
+  hash of the JS source): Max caches jsui/v8ui sidecars by filename for the
+  whole Live session, so editing the JS without renaming the file would
+  otherwise keep serving the stale cached version.
+- [`engines/interaction_core.py`](src/m4l_builder/engines/interaction_core.py)
+  — the shared JS interaction scaffold (pointer-coordinate resolvers, `clamp`,
+  `onresize`, plot-geometry accessors) that used to be hand-copied verbatim
+  into every interactive display engine.
+
+### `patcher_walk.py`
+
+[`patcher_walk.py`](src/m4l_builder/patcher_walk.py) is the one shared
+implementation of the box/line traversal dance (`iter_boxes`, `boxes_by_id`,
+`iter_patchlines`, `unwrap_box`) that used to be hand-rolled independently
+throughout the library. It accepts a live `Device`/`GraphContainer`, a raw
+patcher/snapshot dict, or an already-extracted list of wrapper entries, so the
+same functions serve live authoring code and analysis/library code
+alike.
+
+### `idioms.py` and `bridge_probe.py`
+
+Root-level helper modules: [`idioms.py`](src/m4l_builder/idioms.py) wraps Max
+wiring patterns that are easy to get subtly wrong — `expr_cond` for branchless
+`expr` conditionals (Max `expr` has no ternary), plus `debounce`,
+`dedupe_value`, `control_smooth`, `init_prime`, `corr_readout`, and
+`assign_parameter_banks` — each one encodes a trap that previously shipped as
+a real bug. [`bridge_probe.py`](src/m4l_builder/bridge_probe.py) is shared
+scaffolding for devices that embed a LiveMCP bridge probe
+(`register_bridge_probe_assets`, `add_bridge_probe_runtime`), factored out
+after two EQ devices each hand-copied the same ~76 lines.
+
+### Facade + introspection pattern
+
+`m4l_builder/__init__.py` and `m4l_builder/builder/__init__.py` don't
+hand-maintain their own export lists — both build their public surface from
+shared metadata in [`_exports.py`](src/m4l_builder/_exports.py) and resolve
+names lazily via module-level `__getattr__`/`__dir__`, so importing
+`m4l_builder` doesn't eagerly load analysis or library-analysis
+tooling.
+
+Several large modules are themselves thin facades that re-export from a set
+of split implementation modules, so existing `from m4l_builder.X import Y`
+code keeps working unchanged: `recipes.py` (from `recipes_stages.py`,
+`recipes_layout.py`, `recipes_widgets.py`, `recipes_io.py`), `reverse.py`
+(from `amxd_snapshot.py`, `amxd_patterns.py`, `amxd_analysis.py`,
+`amxd_codegen.py`), and `library_analysis.py` (from `_library_helpers.py`,
+`_library_file.py`, `_library_ranking.py`, `_library_mapping.py`,
+`_library_dossier.py`, `_library_aggregate.py`, `_library_markdown.py`).
 
 ## Development
 
