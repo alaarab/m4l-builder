@@ -300,7 +300,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
                              mode_colors=None, unmap_button=False,
                              value_bar=False, row_color=False,
                              uplink_pname=False, uplink_dname=False,
-                             pages=False, ratio_lcd=False):
+                             ratio_lcd=False):
     """The E2/E3 mapping slot — ONE ``#1``-parameterized Subpatcher to stamp N
     times via :meth:`Device.add_component_rack` (a modulation device's slot, F2+E2).
 
@@ -761,34 +761,6 @@ def modulator_slot_component(device, *, accent, text_color=None,
         sub.add_line("slot_lanes_route", 0, "slot_lanes_cmp", 0)
         sub.add_line("slot_lanes_cmp", 0, "slot_hide_msg", 0)
         sub.add_line("slot_hide_msg", 0, "slot_this", 0)
-    if pages:
-        # catalog #25 (Rnd_Gen 8-page idiom): rows stamped at the SAME rects
-        # in page groups; a `pagewin <lo> <hi>` broadcast on inlet 0 hides
-        # every row whose 1-based index falls outside the window (same
-        # thispatcher-hides-the-bpatcher mechanism as `reveal`).
-        sub.add_newobj("slot_page_route", "route pagewin", numinlets=1,
-                       numoutlets=2, outlettype=["", ""],
-                       patching_rect=[120, 560, 100, 20])
-        sub.add_newobj("slot_page_unp", "unpack 1 1", numinlets=1,
-                       numoutlets=2, outlettype=["int", "int"],
-                       patching_rect=[120, 590, 70, 20])
-        sub.add_newobj("slot_page_cmp",
-                       "expr (#1 - 1) < $i1 || (#1 - 1) > $i2",
-                       numinlets=2, numoutlets=1, outlettype=[""],
-                       patching_rect=[120, 620, 190, 20])
-        sub.add_box({"box": {
-            "id": "slot_page_hide", "maxclass": "message", "text": "hidden $1",
-            "numinlets": 2, "numoutlets": 1, "outlettype": [""],
-            "patching_rect": [120, 650, 70, 20]}})
-        sub.add_newobj("slot_page_this", "thispatcher", numinlets=1,
-                       numoutlets=2, outlettype=["", ""],
-                       patching_rect=[120, 680, 80, 20])
-        sub.add_line("slot_in", 0, "slot_page_route", 0)
-        sub.add_line("slot_page_route", 0, "slot_page_unp", 0)
-        sub.add_line("slot_page_unp", 0, "slot_page_cmp", 0)
-        sub.add_line("slot_page_unp", 1, "slot_page_cmp", 1)
-        sub.add_line("slot_page_cmp", 0, "slot_page_hide", 0)
-        sub.add_line("slot_page_hide", 0, "slot_page_this", 0)
 
     ids = {"js": "slot_js", "map": "slot_map", "readout": "slot_pname",
            "sink_reg": "slot_sink_reg", "remote": "slot_sink_remote",

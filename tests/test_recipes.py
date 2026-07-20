@@ -1354,56 +1354,48 @@ console.log(JSON.stringify(on));
 
 
 class TestPageSelector:
-    """Vertical page tab broadcasting `pagewin lo hi` (catalog #25)."""
+    """Vertical page tab; rows hidden via manage= script sendbox (catalog #25)."""
 
-    def test_tab_and_window_math(self):
+    def test_tab_and_manage(self):
         from m4l_builder import AudioEffect
         from m4l_builder.recipes import page_selector
         device = AudioEffect("pg", width=300, height=168)
-        res = page_selector(device, "pg", at=[4, 40], n_pages=3,
-                            rows_per_page=3)
+        page_selector(device, "pg", at=[4, 40], n_pages=3, rows_per_page=3,
+                      manage={"row_1": 1, "row_2": 2})
         boxes = {b["box"]["id"]: b["box"] for b in device.boxes}
         tab = boxes["pg_tab"]
         assert tab["maxclass"] == "live.tab"
-        v = tab["saved_attribute_attributes"]["valueof"]
-        assert v["parameter_enum"] == ["1", "2", "3"]
-        assert boxes["pg_lo"]["text"] == "* 3"
-        assert boxes["pg_hi"]["text"] == "+ 2"
+        assert tab["saved_attribute_attributes"]["valueof"]["parameter_enum"] \
+            == ["1", "2", "3"]
         lines = {(ln["patchline"]["source"][0],
                   ln["patchline"]["destination"][0]) for ln in device.lines}
-        # order-safe: tab -> trigger; right branch computes hi into the
-        # pak's cold inlet BEFORE the left branch fires the hot inlet
-        assert ("pg_tab", "pg_t") in lines
-        assert ("pg_t", "pg_lo2") in lines and ("pg_lo2", "pg_hi") in lines
-        assert ("pg_t", "pg_lo") in lines and ("pg_lo", "pg_pk") in lines
-        assert ("pg_pk", "pg_pre") in lines
         # load re-broadcast via live.thisdevice (never loadbang)
         assert ("pg_td", "pg_tb") in lines and ("pg_tb", "pg_tab") in lines
-        assert "pagewin_out" in res.ports
-        assert boxes["pg_pre"]["text"] == "prepend pagewin"
+        # manage= hiding path: tab -> per-row window expr -> `script sendbox
+        # <varname> hidden $1` -> parent-side thispatcher
+        assert boxes["pg_mm0"]["text"] == "script sendbox row_1 hidden $1"
+        assert ("pg_tab", "pg_mx0") in lines
+        assert ("pg_mx0", "pg_mm0") in lines and ("pg_mm0", "pg_this") in lines
+        # the removed pagewin broadcast chain leaves no pg_pre/pg_pk/pg_lo/pg_t
+        for gone in ("pg_pre", "pg_pk", "pg_lo", "pg_lo2", "pg_hi", "pg_t"):
+            assert gone not in boxes
 
-    def test_slot_pages_route(self):
+    def test_slot_has_no_page_machinery(self):
+        # the broken slot-side pages= broadcast (unsubstituted `#1` -> Max
+        # 'expr: bad string #1' at load, thispatcher-in-bpatcher that never
+        # hid) was removed; a built slot carries no slot_page* boxes and
+        # pages= is no longer an accepted kwarg.
+        import pytest
+
         from m4l_builder import AudioEffect
         from m4l_builder.recipes import modulator_slot_component
         device = AudioEffect("pg", width=300, height=168)
-        sub, _ids = modulator_slot_component(
-            device, accent=[1, 0.6, 0.2, 1], pages=True)
-        boxes = {b["box"]["id"]: b["box"] for b in sub.boxes}
-        assert boxes["slot_page_route"]["text"] == "route pagewin"
-        assert boxes["slot_page_cmp"]["text"] == \
-            "expr (#1 - 1) < $i1 || (#1 - 1) > $i2"
-        conn = {(ln["patchline"]["source"][0], ln["patchline"]["source"][1],
-                 ln["patchline"]["destination"][0],
-                 ln["patchline"]["destination"][1]) for ln in sub.lines}
-        assert ("slot_in", 0, "slot_page_route", 0) in conn
-        assert ("slot_page_unp", 0, "slot_page_cmp", 0) in conn
-        assert ("slot_page_unp", 1, "slot_page_cmp", 1) in conn
-        assert ("slot_page_hide", 0, "slot_page_this", 0) in conn
-        # default stays clean
-        device2 = AudioEffect("pg2", width=300, height=168)
-        sub2, _ = modulator_slot_component(device2, accent=[1, 0.6, 0.2, 1])
+        sub, _ = modulator_slot_component(device, accent=[1, 0.6, 0.2, 1])
         assert not any(b["box"]["id"].startswith("slot_page")
-                       for b in sub2.boxes)
+                       for b in sub.boxes)
+        with pytest.raises(TypeError):
+            modulator_slot_component(AudioEffect("x", 300, 168),
+                                     accent=[1, 0.6, 0.2, 1], pages=True)
 
 
 class TestMultiLaneThumbnail:

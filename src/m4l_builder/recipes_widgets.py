@@ -234,18 +234,17 @@ def page_selector(device, id_prefix, *, at, n_pages, rows_per_page,
     """Vertical page selector for stacked mapping rows (catalog #25).
 
     A slim vertical ``live.tab`` (one dot-cell per page, automatable enum
-    ``param_name``) that broadcasts ``pagewin <lo> <hi>`` — build the slot
-    with ``pages=True`` and fan this stage's ``pagewin_out`` port into every
-    stamped row's inlet 0 (alongside ``announce``/``lanes``). Rows are
-    1-based: page ``k`` shows rows ``k*rows_per_page+1 ..
-    (k+1)*rows_per_page``.
+    ``param_name``). Rows are 1-based: page ``k`` shows rows
+    ``k*rows_per_page+1 .. (k+1)*rows_per_page``.
 
     ``manage``: dict of ``{parent_box_varname: 1-based_row_index}`` — the
-    LIVE-PROVEN hiding path: the parent computes each managed box's hidden
-    state and delivers it via ``script sendbox <varname> hidden $1`` through
-    a parent-side thispatcher (the exact mode_stack mechanism). Prefer this
-    over the slot-side ``pages=`` broadcast: a thispatcher INSIDE a stamped
-    bpatcher does NOT hide the containing box (Live-verified failure).
+    hiding path: the parent computes each managed box's hidden state and
+    delivers it via ``script sendbox <varname> hidden $1`` through a
+    parent-side thispatcher (the exact mode_stack mechanism). This is the
+    only supported page-hiding path — a thispatcher INSIDE a stamped bpatcher
+    does NOT hide the containing box (Live-verified failure), which is why the
+    slot-side ``pages=`` broadcast (and this stage's old ``pagewin_out`` port)
+    were removed.
     """
     from .parameters import ParameterSpec
     from .ui import tab
@@ -262,34 +261,8 @@ def page_selector(device, id_prefix, *, at, n_pages, rows_per_page,
         parameter=ParameterSpec(name=param_name, shortname=param_name,
                                 parameter_type=2, enum=list(labels),
                                 initial=[0], initial_enable=True)))
-    # ORDER-SAFE window compute: t i i guarantees hi lands in the pak's
-    # COLD inlet before lo fires the HOT one (bare fan-out from one `* N`
-    # races and broadcasts a stale hi).
-    tt = device.add_newobj(f"{p}_t", "t i i", numinlets=1, numoutlets=2,
-                           outlettype=["int", "int"],
-                           patching_rect=[840, 1940, 50, 20])
-    lo = device.add_newobj(f"{p}_lo", f"* {int(rows_per_page)}",
-                           numinlets=2, numoutlets=1, outlettype=["int"],
-                           patching_rect=[820, 1970, 50, 20])
-    lo2 = device.add_newobj(f"{p}_lo2", f"* {int(rows_per_page)}",
-                            numinlets=2, numoutlets=1, outlettype=["int"],
-                            patching_rect=[890, 1970, 50, 20])
-    hi = device.add_newobj(f"{p}_hi", f"+ {int(rows_per_page) - 1}",
-                           numinlets=2, numoutlets=1, outlettype=["int"],
-                           patching_rect=[890, 2000, 50, 20])
-    pk = device.add_newobj(f"{p}_pk", "pak 0 0", numinlets=2, numoutlets=1,
-                           outlettype=[""], patching_rect=[840, 2030, 60, 20])
-    pre = device.add_newobj(f"{p}_pre", "prepend pagewin", numinlets=1,
-                            numoutlets=1, outlettype=[""],
-                            patching_rect=[840, 2060, 110, 20])
-    device.add_line(f"{p}_tab", 0, tt, 0)
-    device.add_line(tt, 1, lo2, 0)      # right first: hi -> pak cold
-    device.add_line(lo2, 0, hi, 0)
-    device.add_line(hi, 0, pk, 1)
-    device.add_line(tt, 0, lo, 0)       # then lo -> pak hot fires
-    device.add_line(lo, 0, pk, 0)
-    device.add_line(pk, 0, pre, 0)
-    # re-broadcast at load so freshly-restored pages hide their off rows
+    # re-broadcast at load so freshly-restored pages re-hide their off rows
+    # (the manage= exprs below listen to the tab)
     td = device.add_newobj(f"{p}_td", "live.thisdevice", numinlets=1,
                            numoutlets=3, outlettype=["bang", "int", "int"],
                            patching_rect=[840, 1880, 90, 20])
@@ -326,7 +299,6 @@ def page_selector(device, id_prefix, *, at, n_pages, rows_per_page,
         {"tab": f"{p}_tab"},
         name="page_selector",
         params={param_name: device.parameter(device.box(f"{p}_tab"))},
-        ports={"pagewin_out": device.box(pre).outlet(0)},
     )
 
 
