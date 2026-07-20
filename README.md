@@ -9,15 +9,15 @@ Build Max for Live devices in Python. Write scripts, emit `.amxd` files straight
 
 ## Workspace boundaries
 
-`m4l-builder` is the library/tooling repo. The active flagship plugin products
-and their per-plugin workspaces live in the sibling `../the device repo` repo
-on this machine (or `M4L_DEVICES_ROOT` if you have it checked out
-elsewhere).
+`m4l-builder` is a standalone library with zero runtime dependencies -- it
+builds `.amxd` files on its own and has no requirement on any other repo.
+This repo intentionally does not ship in-repo plugin/device scripts; it's a
+framework, not a product collection.
 
-This repo intentionally does not ship in-repo plugin/device scripts. If you are
-building or revising a real plugin, start in
-`the device repo/plugins/<plugin>/`. Migrated legacy device scripts now live in
-`../the device repo/legacy_examples/`.
+The maintainer's own plugin products live in a private repo not published
+here. If you're building your own devices with this library, there's no
+required layout -- write your `build.py` scripts wherever you like and
+`import m4l_builder`.
 
 ## Install
 
@@ -232,34 +232,13 @@ with device.row(10, 10, spacing=8, height=70) as r:
     r.add_dial("d3", "Param3", width=50)
 ```
 
-## Flagship UI workflow
+### UI guidance
 
-For Ableton-style flagship device work, the repo now includes a shared UI
-practice and review set:
-
-- [docs/archive/ui_sprint_2026_03/ableton_ui_playbook.md](docs/archive/ui_sprint_2026_03/ableton_ui_playbook.md): shared UI rules
-  for primary surfaces, contextual editing, compact behavior, and analyzer
-  semantics
-- [docs/archive/ui_sprint_2026_03/ableton_ui_construction_internals.md](docs/archive/ui_sprint_2026_03/ableton_ui_construction_internals.md):
-  how UI elements, parameter metadata, custom surfaces, and plugin-local state
-  routing are actually constructed in the repo today
-- [docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md](docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md):
-  weekly scoring rubric
-- [docs/archive/ui_sprint_2026_03/ableton_ui_90_day_sprint.md](docs/archive/ui_sprint_2026_03/ableton_ui_90_day_sprint.md): the
-  execution guide for the 12-week Ableton UI sprint
-- [docs/archive/ui_sprint_2026_03/ableton_ui_baseline_audit.md](docs/archive/ui_sprint_2026_03/ableton_ui_baseline_audit.md):
-  starting assessment of the current flagship lanes
-- [docs/archive/ui_sprint_2026_03/ableton_ui_tracker.md](docs/archive/ui_sprint_2026_03/ableton_ui_tracker.md): week-by-week sprint
-  status and artifact tracking
-- [docs/archive/ui_sprint_2026_03/ableton_ui_scoreboard.md](docs/archive/ui_sprint_2026_03/ableton_ui_scoreboard.md): conservative
-  baseline scoring for current flagship lanes
-- [docs/archive/ui_sprint_2026_03/ableton_ui_reference_matrix.md](docs/archive/ui_sprint_2026_03/ableton_ui_reference_matrix.md):
-  reference-device order and repo translation map
-- [docs/ui_validation/README.md](docs/ui_validation/README.md): validation-note
-  workflow for in-Live review
-
-The flagship per-plugin design docs and active build work now live in the
-sibling `the device repo/plugins/*/README.md` workspaces on this machine.
+Beyond the widget API above, deeper UI/visual-design guidance lives in
+[docs/ui_inputs_reference.md](docs/ui_inputs_reference.md) (every input
+widget's full behavior), [docs/m4l_advanced_ui_techniques.md](docs/m4l_advanced_ui_techniques.md),
+[docs/ui_goodies_and_graphics_pipeline.md](docs/ui_goodies_and_graphics_pipeline.md),
+and [docs/ui_premium_playbook.md](docs/ui_premium_playbook.md).
 
 ### Subpatchers
 
@@ -285,94 +264,25 @@ device.add_dial("new_knob", "NewParam", [10, 10, 50, 70])
 device.build("path/to/modified.amxd")
 ```
 
-### analysis snapshots
+## analysis
 
-You can also capture a low-level snapshot from an `.amxd` and emit a starter
-Python rebuild script:
+Capture an existing `.amxd` (yours or a third party's) into a Python rebuild
+script, at increasing levels of abstraction -- from an exact structural
+mirror up through a version that collapses recognized patterns back into
+`m4l-builder` recipe/helper calls:
 
 ```python
-from m4l_builder import (
-    snapshot_from_amxd,
-    extract_snapshot_knowledge,
-    generate_python_from_snapshot,
-    generate_builder_python_from_snapshot,
-    generate_optimized_python_from_snapshot,
-    generate_semantic_python_from_snapshot,
-)
+from m4l_builder import snapshot_from_amxd, generate_semantic_python_from_snapshot
 
 snapshot = snapshot_from_amxd("path/to/device.amxd")
-knowledge = extract_snapshot_knowledge(snapshot)
-exact_source = generate_python_from_snapshot(snapshot)
-builder_source = generate_builder_python_from_snapshot(snapshot)
-optimized_source = generate_optimized_python_from_snapshot(snapshot)
-semantic_source = generate_semantic_python_from_snapshot(snapshot)
+source = generate_semantic_python_from_snapshot(snapshot)
 ```
 
-This is fidelity-first: the exact generator preserves the patcher structure and
-recovered sidecars, the builder generator emits nicer `add_*` style code when
-the snapshot is recognized, the optimized generator can collapse known
-`m4l-builder` DSP blocks back into helper calls like `param_smooth(...)` or
-`delay_line(...)`, `transport_lfo(...)`, and similar helpers, and larger
-recognized stages back into recipe calls like `gain_controlled_stage(...)`,
-`dry_wet_stage(...)`, `tempo_synced_delay(...)`, `midi_note_gate(...)`, or
-`transport_sync_lfo_recipe(...)`. The semantic generator sits one level above
-that exact-safe path: it can also normalize safe non-canonical Live API
-clusters into helper calls while leaving manual-review cases expanded.
-The builder path also rebuilds common UI/support-file
-objects semantically, including `jsui`, `v8ui`, `bpatcher`, `fpic`,
-`multislider`, `textbutton`, `umenu`, `radiogroup`, `live.step`, `live.grid`,
-`kslider`, and related display widgets, while the optimized path only collapses
-to helper/recipe calls when the recognized structure is safe to regenerate.
-The reverse analysis also exposes generic Max motifs from external devices, such
-as named send/receive buses, Live API control clusters, and embedded patcher
-hosts, so library mining is useful even when a device was not built with
-`m4l-builder`.
-It now also detects non-LiveAPI controller structures that dominate public
-devices: dispatcher clusters (`route` / `sel` / `gate` / `switch` with trigger
-fan-out), scheduler chains (`loadbang`, `deferlow`, timed dispatch), and
-state-bundle/list utilities (`pack`, `pak`, `unpack`, `zl*`).
-For deeper devices, the motif layer now also detects advanced sample/granular
-pipelines such as `sample_buffer_toolchain` (for `buffer~`, `info~`, `peek~`,
-`live.drop`, and related file/visualization shells) and
-`gen_processing_core` (for `gen~` plus attached buffer/trigger/routing
-structure), which makes devices like a granular instrument much less opaque at the
-embedded-patcher level.
-Those motifs also feed semantic grouping now: extracted subpatchers can be
-lifted as `sample_file_handling_shell`, `sample_visualization_shell`,
-`sample_playback_shell`, or `buffered_gen_capture_shell` instead of staying as
-anonymous raw object clusters.
-Live API motifs now also classify small controller archetypes such as
-`parameter_probe`, `tempo_observer`, `transport_state_observer`,
-`device_active_state`, and `track_management`, which makes public-device mining
-much more actionable than raw operator counts alone.
-The optimized rebuild path now collapses canonical `live.path` /
-`live.object` / `live.observer` / `live.thisdevice` structures back into
-semantic helpers like `live_object_path(...)`, `live_parameter_probe(...)`,
-`live_observer(...)`, `live_state_observer(...)`, `live_set_control(...)`,
-`live_thisdevice(...)`, and `device_active_state(...)` when the emitted helper
-boxes match the source
-exactly. `live_observer(...)` now also supports the direct
-`live.path -> live.observer` topology used by many external devices, plus
-property-message binding in both topologies for semantic rewrites.
-`live_parameter_probe(...)` now also supports object-only parameter probes with
-optional `route` fan-out and `t ...` trigger wrappers, which lets the reverse
-path recover common external-device `live.object -> route` probe clusters
-instead of leaving them as opaque raw boxes.
-`device_active_state(...)` now preserves both the normal
-`prepend active -> live.thisdevice` toggle path and external variants that feed
-`live.thisdevice` outlet state back into `prepend active`, which moved another
-external controller motif out of manual-review territory.
-`live_state_observer(...)` captures the initialized direct-observer controller
-shape used by external devices such as MoireArp: `live.thisdevice -> t b b ->
-live.path/property -> live.observer -> t i i -> sel 0`.
-See [docs/reverse_engineering.md](docs/reverse_engineering.md).
-
-If you already captured a live bridge-enabled device through LiveMCP, you can
-also normalize that data with `snapshot_from_bridge_payload(...)` and feed it
-into the same pipeline.
-
-You can also mine a whole directory of external `.amxd` files into a structured
-library report:
+The same pipeline can mine a whole directory of external devices into a
+structured library report -- ranked rebuild candidates, motif/object
+frequencies, family groupings for versioned variants, and generated
+per-device fixtures (snapshot, knowledge, and all four codegen tiers) for
+batch analysis:
 
 ```python
 from m4l_builder import analyze_amxd_library, library_report_markdown
@@ -381,235 +291,16 @@ report = analyze_amxd_library("/path/to/amxd-library")
 markdown = library_report_markdown(report)
 ```
 
-That report now includes helper/recipe hits, semantic Live API helper
-recoveries, non-exact Live API helper opportunities plus blocker reasons,
-generic motif frequencies, object-name frequencies, control-class
-distributions, display-role counts across the library, and a ranked
-`reverse_candidates` list that surfaces which external devices are currently the
-best targets for further semantic work. The report also includes
-`reverse_candidate_families`, which collapses versioned variants into device
-families so the queue is not dominated by duplicate builds of the same patch,
-plus `reverse_candidate_family_profiles`, which aggregate motif/object signals
-across those variants.
+See [docs/reverse_engineering.md](docs/reverse_engineering.md) for the full
+pipeline (live-bridge snapshots, library mining, family/lane comparisons,
+mapping-product briefs) and the `tools/` scripts that wrap it.
 
-If you want to focus one semantic lane at a time, build a detailed family
-profile with stable-vs-variable signals:
+## LiveMCP bridge (optional)
 
-```python
-from m4l_builder import analyze_amxd_library, build_reverse_candidate_family_profile
-
-report = analyze_amxd_library("/path/to/amxd-library")
-profile = build_reverse_candidate_family_profile(report, "zs-Knobbler3")
-```
-
-That family profile separates stable motif/object/archetype signals from
-variant-only noise, which makes it much easier to decide what should become a
-new helper or normalization rule.
-
-Family profiles also infer `semantic_targets` and `next_work_items` from those
-stable signals, so the reverse queue can move from “interesting family” to
-“normalize this shell next” without re-reading the raw motif tables each time.
-
-At the snapshot level, `extract_controller_shell_candidates(...)` now surfaces
-controller-oriented semantic targets such as `controller_surface_shell` and
-`sequencer_dispatch_shell`, while `extract_embedded_ui_shell_candidates(...)`
-surfaces exact embedded-host shells for subpatcher and `bpatcher` boxes.
-Both `generate_optimized_python_from_snapshot(...)` and
-`generate_semantic_python_from_snapshot(...)` now use those candidates to call
-reusable package helpers in the emitted script instead of leaving every shell
-box flattened into the top-level build sequence.
-The factory-first reverse lane also promotes exact shell helpers such as
-`embedded_ui_shell_v2(...)`, `named_bus_router(...)`,
-`init_dispatch_chain(...)`, `poly_shell(...)`, and `poly_shell_bank(...)`,
-while keeping
-first-party-only structures such as `first_party_api_rig`,
-`first_party_abstraction_host`, and `building_block_candidate` as semantic
-groupings until they prove reusable. Factory-lane mining also tracks repeated
-internal `M4L.*` abstraction hosts like `M4L.bal2~` and `M4L.gain1~`, so
-first-party building blocks can be decomposed into abstraction-backed clusters
-before they fall back to whole-device grouping. On the current Ableton factory
-pack library, the strongest abstraction families are `balance_shell`,
-`gain_shell`, `api_internal_shell`, `envelope_follower_shell`, and
-`pan_shell`, which gives the next reverse work a much clearer target than
-treating every building blocks device as a one-off block. Semantic output now
-uses those family labels directly on recovered first-party abstraction groups,
-so devices like `Max BalanceStereo`, `Max GainStereo`, and `Max PanStereo` read
-as `balance_shell`, `gain_shell`, and `pan_shell` instead of one generic
-factory-host bucket.
-
-The reverse lane can also now collapse repeated `poly~` editor shells into a
-single `poly_shell_bank(...)` helper when a device exposes the same voice-edit
-host repeatedly with numbered bus wiring. On the semantic side, those exact
-banks can be lifted one step further into a `poly_editor_bank` grouping. That
-pattern now lands on devices like `[dnksaus] a device v2.2`, where the old
-output emitted nine separate `poly_shell(...)` calls and the new output emits
-one grouped bank in optimized mode and one `poly_editor_bank` semantic group in
-semantic mode.
-
-The knowledge manifest can also now expose behavior-level hints from that same
-structure. For devices like `a device`, the reverse layer can infer summaries
-such as `multi_lane_mapping_bank`, `manual_or_midi_trigger_mode`,
-`mapping_session_controller`, and the combined `mapped_random_control_device`
-hint even when the deepest sidecar logic is still missing. On the semantic
-codegen side, that same evidence can now be grouped into a higher-level
-`mapping_workflow_shell` instead of stopping at the lower-level
-`poly_editor_bank` description. A new mapping/modulation trace layer now sits
-above that too: `Expression Control`-style devices read as
-`mapped_modulation_bank`, `Macro Randomizer`-style devices read as
-`random_modulation_mapper`, and `a device`-style devices can now lift all the
-way to `triggered_parameter_mapper` when the trigger/session evidence is
-present.
-
-The knowledge manifest also now includes `named_bus_networks`, which groups
-same-name send/receive fabrics across the root patcher and any embedded
-subpatchers that expose their internals.
-
-The library report also now carries `source_lane_profiles`, so factory contents,
-public internet corpora, and site-lead discovery lanes can be compared without
-manually splitting the dataset first:
-
-```python
-from m4l_builder import analyze_amxd_library, source_lane_profiles_markdown
-
-report = analyze_amxd_library("/path/to/amxd-library")
-markdown = source_lane_profiles_markdown(report["source_lane_profiles"])
-```
-
-If you keep public and factory corpora in separate roots, compare them
-directly:
-
-```python
-from m4l_builder import analyze_amxd_library, build_library_comparison, library_comparison_markdown
-
-comparison = build_library_comparison({
-    "public": analyze_amxd_library("/path/to/public-library"),
-    "factory": analyze_amxd_library("/path/to/factory contents"),
-})
-markdown = library_comparison_markdown(comparison)
-```
-
-And for a fixed proof set, you can build reference-device dossiers that measure
-raw `add_box(...)` fallback, helper-call recovery, and overall structural lift
-across semantic generation:
-
-```python
-from m4l_builder import build_reference_device_dossiers
-
-dossiers = build_reference_device_dossiers([
-    "/path/to/Max DelayLine.amxd",
-    "/path/to/Poly Vocoder.amxd",
-])
-```
-
-If you want a product-level view of mapping/modulation devices rather than one
-large generic library report, build a focused mapping lane report:
-
-```python
-from m4l_builder import analyze_amxd_library, build_mapping_lane_report, mapping_lane_report_markdown
-
-report = analyze_amxd_library("/path/to/amxd-library")
-lane_report = build_mapping_lane_report(report, limit=20)
-markdown = mapping_lane_report_markdown(lane_report)
-```
-
-That report classifies devices into high-level families such as
-`Expression Control`-style modulation banks, `Macro Randomizer`-style random
-modulation sources, and `a device`-style triggered parameter mappers. It also
-separates the essential controls from accidental patch complexity so it is much
-closer to a design brief than to a raw topology dump.
-
-If you want fully expanded product briefs for the strongest mapping/modulation
-devices in a library, use the brief helpers:
-
-```python
-from m4l_builder import analyze_amxd_library, build_mapping_product_briefs, mapping_product_briefs_markdown
-
-report = analyze_amxd_library("/path/to/amxd-library")
-briefs = build_mapping_product_briefs(report, limit=10)
-markdown = mapping_product_briefs_markdown(briefs)
-```
-
-Those briefs add plain-language fields like:
-
-- product read
-- value model
-- target model
-- trigger model
-- essential subsystems
-- build-cleanly recommendation
-- open questions
-
-For a single device, you can skip the library step and generate one brief
-directly:
-
-```python
-from m4l_builder import build_mapping_product_brief_from_path, mapping_product_brief_markdown
-
-brief = build_mapping_product_brief_from_path("/path/to/device.amxd")
-markdown = mapping_product_brief_markdown(brief)
-```
-
-For local research batches, the repo also ships a helper script:
-
-```bash
-uv run python tools/mine_amxd_library.py /path/to/amxd-library
-```
-
-To turn a local library into a reusable analysis fixture set, build a
-manifest plus per-device snapshot/codegen artifacts:
-
-```python
-from m4l_builder import build_library_manifest, run_library_fixture
-
-manifest = build_library_manifest("/path/to/amxd-library", stable_sample_size=12)
-results = run_library_fixture(manifest, "/tmp/amxd-fixture", selection="stable")
-```
-
-That fixture writes, for each selected device:
-
-- `snapshot.json`
-- `knowledge.json`
-- fidelity-first `exact.py`
-- builder-style `builder.py`
-- exact-safe `optimized.py`
-- rewrite-oriented `semantic.py`
-
-If one generation mode fails on a particular external device, the fixture run
-keeps going and records the per-mode error instead of aborting the whole batch.
-
-There is also a repo helper script for this:
-
-```bash
-uv run python tools/build_library_fixture.py /path/to/amxd-library /tmp/amxd-fixture
-```
-
-Selections can target whole families as well as sample sets, for example
-`--selection family:zs-Knobbler3`. They can also target the new lane/pack
-metadata, for example `--selection lane:factory`,
-`--selection pack:building blocks`, or
-`--selection pack_section:building blocks / API`.
-
-For a focused family dossier, the repo also ships:
-
-```bash
-uv run python tools/build_family_report.py /path/to/amxd-library zs-Knobbler3
-```
-
-There are also dedicated helpers for lane comparison and fixed proof sets:
-
-```bash
-uv run python tools/build_source_lane_report.py /path/to/amxd-library /tmp/lane-report.md
-uv run python tools/build_library_comparison_report.py /tmp/comparison.md public=/path/to/public-library factory=/path/to/factory contents
-uv run python tools/build_reference_dossiers.py /tmp/reference-dossiers.md /path/to/Max\ DelayLine.amxd
-uv run python tools/build_mapping_lane_report.py /path/to/amxd-library /tmp/mapping-lane-report.md
-uv run python tools/build_mapping_product_brief.py /path/to/device.amxd /tmp/mapping-product-brief.md
-uv run python tools/build_mapping_product_briefs.py /path/to/amxd-library /tmp/mapping-product-briefs.md
-```
-
-### LiveMCP bridge embedding
-
-If you want a device to expose its own native Max editing bridge to LiveMCP,
-embed the bridge directly into that device:
+Entirely optional: `enable_livemcp_bridge` embeds a self-contained JSON-lines
+TCP bridge (pure stdlib -- no LiveMCP install required by the library itself)
+inside a device's own `.amxd`, so a compatible external tool -- LiveMCP is
+one -- can inspect and edit that device's patcher live in Ableton.
 
 ```python
 from m4l_builder import AudioEffect, enable_livemcp_bridge, device_output_path
@@ -626,12 +317,10 @@ that device's patcher, not to arbitrary third-party Max devices in the set. See
 
 ## Plugin workspaces
 
-This framework repo does not keep buildable plugin scripts in-tree. Use the
-private sibling repo for concrete devices:
-
-- `../the device repo/plugins/<plugin>/build.py`: canonical product workspaces
-- `../the device repo/legacy_examples/*.py`: migrated private example/archive
-  scripts from older framework iterations
+This framework repo does not keep buildable plugin scripts in-tree -- the
+maintainer's own concrete devices live in a private repo, not published.
+There's no dependency on that repo (or any other) to use `m4l-builder`:
+write your own `build.py` anywhere and `import m4l_builder`.
 
 ## Architecture / internals
 
