@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.so
+.venv/
+venv/
+env/
+.env
+*.amxd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+site/
+.coverage
+coverage.xml
+
+# large research staging (packs, extracted audio) — local only
+research/amxd_corpus/_staging/
+research/amxd_corpus/_json/
+research/amxd_corpus/studies/
+
+# local AI-assistant tooling (not part of the library)
+.claude/
+AGENTS.md
+CLAUDE.md
+FINDINGS.md

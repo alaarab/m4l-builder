@@ -1,0 +1,1932 @@
+"""Composable GenExpr snippet registry.
+
+Reusable, parameterized gen~ DSP fragments that plugins compose into their
+GEN_CODE instead of re-deriving the same math inline. Each function returns a
+GenExpr source string with caller-chosen variable names, so the same audited
+primitive serves every plugin (and a fix lands once).
+
+This is the registry the bigger DSP foundations (oversampling, dynamics,
+true-peak, multiband) will grow into; it seeds with the Mid/Side matrix — the
+highest-reach foundation, the gate for activating the suite's dead M/S menus.
+
+Convention: every emitted block is a run of ``<lhs> = <expr>;`` statements with
+no leading/trailing newline, so a caller splices it between its own lines.
+"""
+
+from __future__ import annotations
+
+import math
+
+__all__ = [
+    "flush",
+    "ms_encode",
+    "ms_decode",
+    "ms_width",
+    "ms_width_equal_power",
+    "ms_mode_split",
+    "ms_mode_merge",
+    "mono_below",
+    "frac_read_cubic",
+    "frac_read_allpass",
+    "spectral_mag_compressor",
+    "drive_blend",
+    "tanh_adaa",
+    "hardclip_adaa",
+    "square_adaa",
+    "peak_follower",
+    "isp_catmull_4x",
+    "kweight_coeffs_bs1770",
+    "exp_pole",
+    "soft_knee_gain_computer",
+    "dynamics_band",
+    "biquad_df1",
+    "rbj_peaking",
+    "rbj_shelf",
+    "rbj_lowpass",
+    "rbj_highpass",
+    "butterworth_q_table",
+    "biquad_cascade",
+    "tilt_shelf",
+    "lr_crossover",
+    "multiband_split",
+    "tpt_svf",
+    "lfo",
+    "one_pole_coeff",
+    "one_pole_lp",
+    "one_pole_hp",
+    "exciter_harmonics",
+    "tpdf_dither",
+    "param_slew",
+    "rms_detector",
+    "crest_factor",
+    "transient_split",
+    "allpass_first_order",
+    "wavefold",
+    "moog_ladder",
+    "smooth_coeffs",
+    "kweight_lufs",
+    "grain_window_lookup",
+]
+
+
+def flush(x: str) -> str:
+    """Denormal-flush a feedback state write: ``fixdenorm(x)`` (gen built-in).
+
+    Feedback-bearing kernels (biquad y-history, one-pole smoother state, reverb
+    tanks, delay feedback) decay exponentially toward 0 on silent input; once
+    the value crosses into the subnormal range the CPU cost of every multiply
+    spikes (the classic denormal-tail CPU blowup). gen~ has no global FTZ knob,
+    so the fix is ``fixdenorm`` at each STATE-WRITE site — bit-transparent for
+    zero and all normal-range values (any golden-value diff means a wrong site
+    was touched). One shared spelling so the whole kit is greppable:
+    ``flush("y")`` -> ``fixdenorm(y)``.
+    """
+    return f"fixdenorm({x})"
+
+
+def ms_encode(left: str, right: str, mid: str, side: str) -> str:
+    """Encode L/R -> Mid/Side: ``mid = (L+R)/2``, ``side = (L-R)/2``.
+
+    At unity this is loss-less; pair with :func:`ms_decode` to process the M and
+    S channels independently (e.g. per-band EQ or compression in M/S).
+    """
+    return (
+        f"{mid} = ({left} + {right}) * 0.5;\n"
+        f"{side} = ({left} - {right}) * 0.5;"
+    )
+
+
+def ms_decode(mid: str, side: str, left: str, right: str) -> str:
+    """Decode Mid/Side -> L/R: ``L = M+S``, ``R = M-S`` (inverse of ms_encode)."""
+    return (
+        f"{left} = {mid} + {side};\n"
+        f"{right} = {mid} - {side};"
+    )
+
+
+def ms_width(
+    left: str,
+    right: str,
+    out_left: str,
+    out_right: str,
+    width: str,
+    *,
+    mid: str = "mid",
+    side: str = "side",
+) -> str:
+    """Stereo-width via M/S: scale the Side by ``width`` then decode.
+
+    ``width`` is a linear factor variable (0 = mono, 1 = unchanged, up to 2 =
+    double-wide). Emits the fused encode -> side-scale -> decode form::
+
+        mid       = (L + R) * 0.5;
+        side      = (L - R) * 0.5 * width;
+        out_left  = mid + side;
+        out_right = mid - side;
+
+    ``mid``/``side`` are the intermediate variable names (override to avoid a
+    clash when the primitive is used twice in one codebox).
+    """
+    return (
+        f"{mid} = ({left} + {right}) * 0.5;\n"
+        f"{side} = ({left} - {right}) * 0.5 * {width};\n"
+        f"{out_left} = {mid} + {side};\n"
+        f"{out_right} = {mid} - {side};"
+    )
+
+
+def ms_width_equal_power(
+    left: str,
+    right: str,
+    out_left: str,
+    out_right: str,
+    width: str,
+    *,
+    mid: str = "mid",
+    side: str = "side",
+) -> str:
+    """Equal-power (constant-sum) M/S width — the standard orthonormal
+    equal-power M/S transform.
+
+    Orthonormal ``/sqrt(2)`` encode + decode with the constant-SUM gain law
+    ``gMid + gSide = 2``, so widening does NOT inflate level the way the legacy
+    :func:`ms_width` does (that one scales the Side by ``width`` post-encode, which
+    boosts side energy by ``width**2`` — louder as it widens). Prefer this for any
+    real stereo-width control.
+
+    CONVENTION DIFFERS from :func:`ms_width`: here ``width`` is ``0..1`` with **0.5
+    = neutral** (0 = mono, 1 = full-side); the legacy primitive uses ``1 =
+    neutral``. Emits::
+
+        mid       = (L + R) / sqrt(2);
+        side      = (L - R) / sqrt(2);
+        mid      *= 2 * (1 - width);
+        side     *= 2 * width;
+        out_left  = (mid + side) / sqrt(2);
+        out_right = (mid - side) / sqrt(2);
+    """
+    return (
+        f"{mid} = ({left} + {right}) / sqrt(2);\n"
+        f"{side} = ({left} - {right}) / sqrt(2);\n"
+        f"{mid} *= 2 * (1 - {width});\n"
+        f"{side} *= 2 * {width};\n"
+        f"{out_left} = ({mid} + {side}) / sqrt(2);\n"
+        f"{out_right} = ({mid} - {side}) / sqrt(2);"
+    )
+
+
+def ms_mode_split(param: str = "msmode") -> str:
+    """Complete gen~ code for a processing-Mode M/S SPLIT matrix (2 in, 4 out).
+
+    Wraps the INPUT of a stereo EQ/dynamics cascade so a single Mode param routes
+    STEREO / MID / SIDE. ``in1``/``in2`` = L/R. Outputs::
+
+        out1/out2 -> the two processing chains (STEREO: L/R; MID/SIDE: M/S)
+        out3/out4 -> the DRY mid / side (for the recombine stage)
+
+    ``param`` (0 STEREO, 1 MID, 2 SIDE) is a gen Param a host menu sets via a
+    ``<param> <v>`` message. STEREO is byte-identical (out1==L, out2==R), so the
+    whole wrap is a no-op at the default. Pair with :func:`ms_mode_merge`. Build
+    it with ``build_gendsp(ms_mode_split(), 2, 4)``.
+    """
+    return (
+        f"Param {param}(0);\n"
+        "L = in1;\n"
+        "R = in2;\n"
+        "M = (L + R) * 0.5;\n"
+        "S = (L - R) * 0.5;\n"
+        f"out1 = {param} == 0 ? L : M;\n"
+        f"out2 = {param} == 0 ? R : S;\n"
+        "out3 = M;\n"
+        "out4 = S;\n"
+    )
+
+
+def ms_mode_merge(param: str = "msmode") -> str:
+    """Complete gen~ code for the M/S RECOMBINE matrix (4 in, 2 out).
+
+    Pairs with :func:`ms_mode_split` on the OUTPUT side of the cascade. ``in1``/
+    ``in2`` = the two processed chain outputs; ``in3``/``in4`` = the DRY mid/side
+    from the split (for a LATENCY device — e.g. a linear-phase FFT EQ — these
+    must be delayed to match the chain latency). Outputs L/R::
+
+        STEREO -> chain L/R straight through (byte-identical)
+        MID    -> processed mid + dry side   (only the mid was EQ'd)
+        SIDE   -> dry mid + processed side    (only the side was EQ'd)
+
+    Build it with ``build_gendsp(ms_mode_merge(), 4, 2)``.
+    """
+    return (
+        f"Param {param}(0);\n"
+        "LO = in1;\n"
+        "RO = in2;\n"
+        "M = in3;\n"
+        "S = in4;\n"
+        f"out1 = {param} == 0 ? LO : ({param} == 1 ? LO + S : M + RO);\n"
+        f"out2 = {param} == 0 ? RO : ({param} == 1 ? LO - S : M - RO);\n"
+    )
+
+
+def drive_blend(x: str, out: str, k: str, drive: str) -> str:
+    """Soft-clip drive with a clean<->saturated crossfade. Emits::
+
+        out = x + (tanh(x*k)/tanh(k) - x) * drive;
+
+    The ``tanh(x*k)`` shaper is level-matched by ``/tanh(k)`` (so full-scale
+    stays unity and the stage adds harmonics without dumping gain), then
+    crossfaded against the clean ``x`` by ``drive`` (0..1). At ``drive=0`` the
+    block is bit-transparent; at ``drive=1`` it is the normalized soft-clip.
+    ``k`` is the pre-gain / curve sharpness (caller computes it, e.g.
+    ``1 + drive*5``).
+    """
+    return f"{out} = {x} + (tanh({x} * {k}) / tanh({k}) - {x}) * {drive};"
+
+
+def stereo_correlation(
+    left: str,
+    right: str,
+    out: str,
+    *,
+    lr: str = "cc_lr", ll: str = "cc_ll", rr: str = "cc_rr",
+    coef: str = "0.002",
+) -> str:
+    """Smoothed output stereo correlation: +1 (mono) .. 0 (wide) .. -1 (anti-phase).
+
+    One-pole running averages (time constant ``coef``) of the products ``L*R`` /
+    ``L*L`` / ``R*R``, then the normalized correlation
+    ``cc_lr / sqrt(cc_ll*cc_rr)`` clamped to [-1, 1]. The caller declares the three
+    ``History`` states (``lr``/``ll``/``rr``) and reads ``out`` -- a -1..+1 signal,
+    e.g. sampled by ``snapshot~`` into a readout/meter. Drives the stereo-image
+    readouts on the width-shaping flagships (Echotide, Aurora)."""
+    return (
+        f"{lr} = fixdenorm({lr} + ({left} * {right} - {lr}) * {coef});\n"
+        f"{ll} = fixdenorm({ll} + ({left} * {left} - {ll}) * {coef});\n"
+        f"{rr} = fixdenorm({rr} + ({right} * {right} - {rr}) * {coef});\n"
+        f"{out} = clamp({lr} / (sqrt({ll} * {rr}) + 0.000001), -1., 1.);"
+    )
+
+
+def tanh_adaa(
+    x: str,
+    out: str,
+    xprev: str,
+    *,
+    ax: str = "adaa_ax", axp: str = "adaa_axp",
+    fx: str = "adaa_fx", fxp: str = "adaa_fxp", dx: str = "adaa_dx",
+) -> str:
+    """First-order antiderivative-anti-aliased (ADAA) tanh saturation.
+
+    A drop-in for ``tanh(x)`` that SUPPRESSES the aliasing a naive per-sample
+    waveshaper folds back into the audio band — the transparency move every
+    flagship saturator/clipper makes (the classic soft-clip)
+    but WITHOUT oversampling. Instead of sampling ``f(x)=tanh(x)`` it uses the
+    average of ``f`` over each sample step via the antiderivative
+    ``F(x)=ln(cosh(x))`` (Parker/Bilbao 2016)::
+
+        adaa_dx = x - xprev;
+        out = abs(adaa_dx) > 0.00001
+            ? (F(x) - F(xprev)) / adaa_dx       # mean of tanh over [xprev, x]
+            : tanh(0.5 * (x + xprev));           # |dx|->0 limit (avoids 0/0)
+        xprev = x;
+
+    ``F`` is evaluated in the overflow-stable form ``|x| + log(1 + exp(-2|x|)) -
+    ln2`` (no ``cosh`` blow-up at high drive). Output is bounded in ``[-1, 1]``
+    (a mean of ``tanh`` values) and matches ``tanh`` for slow signals; it adds a
+    constant 0.5-sample group delay (1st-order ADAA). ``xprev`` is the caller's
+    1-sample state (declare ``History {xprev}(0.);``). Scale ``x`` by a drive
+    pre-gain and level-match at the call site (as :func:`drive_blend` does);
+    ``ax axp fx fxp dx`` are scratch var names (override to place several in one
+    codebox). The anti-aliased upgrade path for Heat/Ceiling/Pressure/Echotide.
+    """
+    ln2 = "0.6931471805599453"
+    return "\n".join([
+        f"{ax} = abs({x});",
+        f"{fx} = {ax} + log(1. + exp(-2. * {ax})) - {ln2};",
+        f"{axp} = abs({xprev});",
+        f"{fxp} = {axp} + log(1. + exp(-2. * {axp})) - {ln2};",
+        f"{dx} = {x} - {xprev};",
+        f"{out} = abs({dx}) > 0.00001 ? "
+        f"({fx} - {fxp}) / {dx} : tanh(0.5 * ({x} + {xprev}));",
+        f"{xprev} = {x};",
+    ])
+
+
+def hardclip_adaa(
+    x: str,
+    out: str,
+    xprev: str,
+    *,
+    ax: str = "hca_ax", axp: str = "hca_axp",
+    fx: str = "hca_fx", fxp: str = "hca_fxp", dx: str = "hca_dx", mid: str = "hca_mid",
+) -> str:
+    """First-order antiderivative-anti-aliased HARD clipper (clamp at +/-1).
+
+    The brickwall counterpart to :func:`tanh_adaa`: a ``clamp(x, -1, 1)`` clipper
+    that SUPPRESSES the aliasing a naive per-sample clipper folds back into the
+    band — the loudness-clipper move (mastering / brickwall clip) without
+    oversampling. Unlike a soft tanh, a clipper
+    is TRANSPARENT below the ceiling (no level loss on already-quiet signal), so
+    it is the right shape for a true-peak limiter's clip stage. Uses the mean of
+    ``f(x)=clamp(x,-1,1)`` over each sample step via its antiderivative
+    ``F(x) = |x|<=1 ? x^2/2 : |x| - 1/2`` (Parker/Bilbao 1st-order ADAA)::
+
+        hca_dx = x - xprev;
+        out = abs(hca_dx) > 0.00001
+            ? (F(x) - F(xprev)) / hca_dx        # mean of clamp over [xprev, x]
+            : clamp(0.5*(x + xprev), -1., 1.);   # |dx|->0 limit (avoids 0/0)
+        xprev = x;
+
+    Output is bounded in ``[-1, 1]`` (a mean of clamp values) and equals the input
+    (modulo a 0.5-sample average) while ``|x| <= 1``; scale ``x`` by a drive
+    pre-gain and the result by its inverse at the call site to set the clip
+    ceiling. Arithmetic + ``clamp`` only (no log/exp) — fully gen_sim-verifiable.
+    ``xprev`` is the caller's 1-sample state (declare ``History {xprev}(0.);``);
+    ``ax axp fx fxp dx mid`` are scratch var names. Adds a constant 0.5-sample
+    group delay. The clip half of the anti-aliased-shaper set (soft = tanh_adaa).
+    """
+    return "\n".join([
+        f"{ax} = abs({x});",
+        f"{fx} = {ax} <= 1. ? {x} * {x} * 0.5 : {ax} - 0.5;",
+        f"{axp} = abs({xprev});",
+        f"{fxp} = {axp} <= 1. ? {xprev} * {xprev} * 0.5 : {axp} - 0.5;",
+        f"{dx} = {x} - {xprev};",
+        f"{mid} = 0.5 * ({x} + {xprev});",
+        f"{out} = abs({dx}) > 0.00001 ? "
+        f"({fx} - {fxp}) / {dx} : clamp({mid}, -1., 1.);",
+        f"{xprev} = {x};",
+    ])
+
+
+def square_adaa(x: str, out: str, xprev: str) -> str:
+    """First-order antiderivative-anti-aliased SQUARER (``x^2``). Emits::
+
+        out = (x*x + x*xprev + xprev*xprev) * 0.3333333333333333;
+        xprev = x;
+
+    The squarer ``f(x)=x^2`` is the even-harmonic generator at the heart of every
+    exciter / "warm" tube colour — and the worst aliaser, since it DOUBLES the
+    input's frequency content (a 7 kHz tone -> 14 kHz that folds). This is the
+    1st-order ADAA squarer: the mean of ``x^2`` over each sample step via the
+    antiderivative ``F(x)=x^3/3``. Uniquely it needs NO div / no fallback — the
+    difference quotient ``(x^3 - xprev^3) / (3 (x - xprev))`` reduces EXACTLY to the
+    polynomial ``(x^2 + x*xprev + xprev^2)/3`` (which equals ``x^2`` when
+    ``x == xprev``), so it is unconditional, branch-free, and bit-cheap. Output
+    equals ``x^2`` for slow signals (modulo a 0.5-sample average) but suppresses
+    the aliased second harmonic. ``xprev`` is the caller's 1-sample state (declare
+    ``History {xprev}(0.);``). The squarer member of the anti-aliased-shaper set
+    (soft = tanh_adaa, hard = hardclip_adaa); pairs with :func:`exciter_harmonics`.
+    """
+    return (
+        f"{out} = ({x} * {x} + {x} * {xprev} + {xprev} * {xprev}) "
+        f"* 0.3333333333333333;\n"
+        f"{xprev} = {x};"
+    )
+
+
+def peak_follower(
+    peak: str,
+    state: str,
+    attack_coeff: str,
+    release_coeff: str,
+    coeff: str = "acoeff",
+) -> str:
+    """Attack/release peak envelope follower (the dynamics detector core). Emits::
+
+        coeff = peak > state ? attack_coeff : release_coeff;
+        state = fixdenorm(peak + coeff * (state - peak));
+
+    A one-pole that chases ``peak`` with separate rise/fall rates: when the input
+    rises above the envelope it uses ``attack_coeff``, otherwise ``release_coeff``
+    (each a per-sample one-pole pole 0..1 — SMALLER = faster). This is the
+    detector every compressor / limiter / ducker / de-esser sits on. ``peak`` is
+    typically ``max(abs(L), abs(R))``; ``coeff`` names the scratch coefficient var.
+    The recirculating ``state`` write is denormal-flushed (:func:`flush`): on a
+    silent tail the envelope decays exponentially toward 0 and would otherwise
+    park a subnormal (same silent-tail guard as :func:`one_pole_lp` /
+    :func:`biquad_df1`; bit-transparent for zero and all normal values).
+    """
+    return (
+        f"{coeff} = {peak} > {state} ? {attack_coeff} : {release_coeff};\n"
+        f"{state} = {flush(f'{peak} + {coeff} * ({state} - {peak})')};"
+    )
+
+
+def isp_catmull_4x(x: str, h1: str, h2: str, h3: str, out: str, *, ch: str = "l") -> str:
+    """4x inter-sample-peak (ISP) estimate for one channel via cubic Catmull-Rom.
+
+    ITU-R BS.1770-style true-peak detection: fit a cubic Catmull-Rom spline
+    through the 4-sample window ``h3..h0`` (oldest..newest) and evaluate the
+    inter-sample positions ``t = .25/.5/.75`` between ``h2`` and ``h1``; ``out``
+    is the max absolute of those three estimates. ~1-sample detector group
+    delay. Emits, with ``ch`` the channel suffix used for the scratch vars::
+
+        h0{ch} = {x}; h1{ch} = {h1}; h2{ch} = {h2}; h3{ch} = {h3};
+        k{ch}0 = h2{ch};
+        k{ch}1 = 0.5 * (h1{ch} - h3{ch});
+        k{ch}2 = h3{ch} - 2.5 * h2{ch} + 2.0 * h1{ch} - 0.5 * h0{ch};
+        k{ch}3 = 0.5 * (h0{ch} - h3{ch}) + 1.5 * (h2{ch} - h1{ch});
+        y{ch}1 = k{ch}0 + 0.25 * (k{ch}1 + 0.25 * (k{ch}2 + 0.25 * k{ch}3));
+        y{ch}2 = k{ch}0 + 0.5 * (k{ch}1 + 0.5 * (k{ch}2 + 0.5 * k{ch}3));
+        y{ch}3 = k{ch}0 + 0.75 * (k{ch}1 + 0.75 * (k{ch}2 + 0.75 * k{ch}3));
+        {out} = max(max(abs(y{ch}1), abs(y{ch}2)), abs(y{ch}3));
+
+    ``x`` is the newest sample; ``h1``/``h2``/``h3`` are the caller's 3 history
+    vars (the caller shifts them each sample). Call once per channel (``ch="l"``
+    / ``ch="r"``) then take ``tp = max(sp, max(ispl, ispr))``. This is the
+    detector behind a provable dBTP limiter / true-peak meter — shared so the
+    limiter (Ceiling) and the analyzer (Spectrum Analyzer) stop copy-pasting it.
+    """
+    return (
+        f"h0{ch} = {x}; h1{ch} = {h1}; h2{ch} = {h2}; h3{ch} = {h3};\n"
+        f"k{ch}0 = h2{ch};\n"
+        f"k{ch}1 = 0.5 * (h1{ch} - h3{ch});\n"
+        f"k{ch}2 = h3{ch} - 2.5 * h2{ch} + 2.0 * h1{ch} - 0.5 * h0{ch};\n"
+        f"k{ch}3 = 0.5 * (h0{ch} - h3{ch}) + 1.5 * (h2{ch} - h1{ch});\n"
+        f"y{ch}1 = k{ch}0 + 0.25 * (k{ch}1 + 0.25 * (k{ch}2 + 0.25 * k{ch}3));\n"
+        f"y{ch}2 = k{ch}0 + 0.5 * (k{ch}1 + 0.5 * (k{ch}2 + 0.5 * k{ch}3));\n"
+        f"y{ch}3 = k{ch}0 + 0.75 * (k{ch}1 + 0.75 * (k{ch}2 + 0.75 * k{ch}3));\n"
+        f"{out} = max(max(abs(y{ch}1), abs(y{ch}2)), abs(y{ch}3));"
+    )
+
+
+def kweight_coeffs_bs1770() -> str:
+    """ITU-R BS.1770-4 K-weighting biquad coefficients, computed at the live rate.
+
+    Emits the two-stage K-weight filter coefficients used by every BS.1770
+    loudness meter — Stage 1 a +4 dB high-shelf at 1681.97 Hz (Q 0.7072), Stage 2
+    an RLB high-pass at 38.135 Hz (Q 0.5003) — bilinear-transformed via ``tan`` at
+    the running ``samplerate`` so the meter stays accurate at 44.1 / 48 / 96 kHz
+    (the tabulated reference coefficients are 48k-only). Defines the Stage-1 vars
+    ``sb0 sb1 sb2 sa1 sa2`` and the Stage-2 vars ``hb0 hb1 hb2 ha1 ha2`` for a
+    Direct-Form-I application by the caller, plus the scratch vars
+    ``KPI Ks Vh Vb a0s Kh a0h``.
+
+    NOTE: unlike the other snippets this block keeps its two explanatory comments
+    — the magic constants (1681.9744509555319, 0.7071752369554193, ...) are
+    inscrutable and were carried verbatim from the audited Ceiling / Spectrum
+    Analyzer source so the migration is byte-identical. Centralizing them means a
+    coefficient fix/audit lands once instead of in every metering plugin.
+    """
+    return (
+        "KPI = 3.14159265358979;\n"
+        "// Stage 1 — high-shelf pre-filter (f0 1681.97 Hz, Q 0.70718, +3.9998 dB).\n"
+        "Ks = tan(KPI * 1681.9744509555319 / samplerate);\n"
+        "Vh = pow(10., 3.99984385397 / 20.);\n"
+        "Vb = pow(Vh, 0.499666774155);\n"
+        "a0s = 1. + Ks / 0.7071752369554193 + Ks * Ks;\n"
+        "sb0 = (Vh + Vb * Ks / 0.7071752369554193 + Ks * Ks) / a0s;\n"
+        "sb1 = 2. * (Ks * Ks - Vh) / a0s;\n"
+        "sb2 = (Vh - Vb * Ks / 0.7071752369554193 + Ks * Ks) / a0s;\n"
+        "sa1 = 2. * (Ks * Ks - 1.) / a0s;\n"
+        "sa2 = (1. - Ks / 0.7071752369554193 + Ks * Ks) / a0s;\n"
+        "// Stage 2 — RLB high-pass (f0 38.135 Hz, Q 0.50033).\n"
+        "Kh = tan(KPI * 38.13547087613982 / samplerate);\n"
+        "a0h = 1. + Kh / 0.5003270373253953 + Kh * Kh;\n"
+        "hb0 = 1. / a0h;\n"
+        "hb1 = -2. / a0h;\n"
+        "hb2 = 1. / a0h;\n"
+        "ha1 = 2. * (Kh * Kh - 1.) / a0h;\n"
+        "ha2 = (1. - Kh / 0.5003270373253953 + Kh * Kh) / a0h;"
+    )
+
+
+_KWEIGHT_COEFF_NAMES = ("sb0", "sb1", "sb2", "sa1", "sa2",
+                        "hb0", "hb1", "hb2", "ha1", "ha2")
+
+
+def kweight_coeffs_bs1770_cached() -> str:
+    """change()-gated :func:`kweight_coeffs_bs1770` (hunt #57): the 2 ``tan`` +
+    2 ``pow`` + ~20-division coefficient block runs ONLY when ``samplerate``
+    changes (gen~ never hoists samplerate-dependent transcendentals itself);
+    every other sample reads the 10 latched ``History`` cells. The original
+    audited block is emitted VERBATIM inside the gate and the same
+    ``sb0..sa2 / hb0..ha2`` names are defined for the caller, so adopting this
+    is a drop-in, bit-exact swap for meter kernels (ceiling, spectrum
+    analyzer) that recomputed it per sample.
+    """
+    body = "\n".join("\t" + ln for ln in kweight_coeffs_bs1770().splitlines())
+    decls = "\n".join(
+        f"History kwc_{n}(0.);" for n in _KWEIGHT_COEFF_NAMES)
+    latch = "\n".join(
+        f"\tkwc_{n} = {n};" for n in _KWEIGHT_COEFF_NAMES)
+    alias = "\n".join(
+        f"{n} = kwc_{n};" for n in _KWEIGHT_COEFF_NAMES)
+    return (
+        f"{decls}\n"
+        "History kwc_init(0.);\n"
+        "kwc_chg = change(samplerate);\n"
+        "if (kwc_chg != 0 || kwc_init < 0.5) {\n"
+        f"{body}\n"
+        f"{latch}\n"
+        "\tkwc_init = 1.;\n"
+        "}\n"
+        f"{alias}"
+    )
+
+
+def exp_pole(out: str, tau_seconds: str) -> str:
+    """One-pole smoothing/ballistics coefficient: ``out = exp(-1/(tau*sr))``. Emits::
+
+        out = exp(-1.0 / (tau_seconds * samplerate));
+
+    The per-sample feedback pole of a one-pole low-pass / envelope follower with
+    time constant ``tau_seconds``: pair it with a ``state = x + out*(state - x)``
+    update (or peak_follower). SMALLER tau = faster. ``tau_seconds`` is an
+    expression in the gen vars — e.g. ``"0.0004"`` for a fixed 0.4 ms smoother or
+    ``"atk_ms * 0.001"`` for a millisecond Param. This is the smoothing/ballistics
+    coefficient copy-pasted across every dynamics + metering plugin; sharing it
+    audits the `exp(-1/(tau*fs))` formula once and is the unit the future
+    samplerate-coefficient cache will wrap.
+    """
+    return f"{out} = exp(-1.0 / ({tau_seconds} * samplerate));"
+
+
+def exp_pole_cached(out: str, tau_seconds: str,
+                    *, deps: tuple = ()) -> str:
+    """change()-gated :func:`exp_pole` (hunt #57): the ``exp`` fires only when
+    ``samplerate`` (always watched) or any expression in ``deps`` changes —
+    e.g. ``deps=("atk_ms",)`` for a Param-driven ballistics pole. Params are
+    block-stepped so a ``change()`` on one is effectively k-rate. Every other
+    sample reads the latched ``History``. Statement-level only (declares
+    ``History {out}_c``); bit-exact vs :func:`exp_pole` for the same inputs.
+    """
+    watches = " + ".join(
+        ["change(samplerate)"] + [f"change({d})" for d in deps])
+    return (
+        f"History {out}_c(0.);\n"
+        f"History {out}_ci(0.);\n"
+        f"{out}_chg = {watches};\n"
+        f"if ({out}_chg != 0 || {out}_ci < 0.5) {{\n"
+        f"\t{out}_c = exp(-1.0 / ({tau_seconds} * samplerate));\n"
+        f"\t{out}_ci = 1.;\n"
+        f"}}\n"
+        f"{out} = {out}_c;"
+    )
+
+
+def tpdf_dither(
+    param: str = "dither",
+    in_l: str = "in1",
+    in_r: str = "in2",
+    out_l: str = "out1",
+    out_r: str = "out2",
+) -> str:
+    """TPDF-dithered requantization for a final mastering stage (stereo).
+
+    ``param`` selects the target bit depth as a small index: ``0`` = OFF
+    (a transparent, byte-identical passthrough — ``out == in``), ``1`` = 16-bit,
+    ``2`` = 24-bit. The classic dither recipe: add **triangular-PDF** noise — the
+    sum of two independent uniform sources, ``±1 LSB`` peak — *before* rounding to
+    the target quantization grid, so the quantization error is decorrelated from
+    the signal (no harmonic distortion / no noise modulation) when the signal is
+    later truncated to that depth downstream. OFF leaves the signal bit-identical,
+    so dropping this on the end of a chain is safe.
+
+    Reach for it as the LAST stage of a limiter / mastering device (engage when
+    the device is the final plugin before a 16/24-bit bounce). Uses ``noise()``,
+    so the kernel is intentionally **not** ``gen_sim``-able — host it in its own
+    downstream ``gen~`` so the upstream (testable) DSP stays simulator-clean.
+    """
+    return (
+        f"{param}_bits = {param} > 1.5 ? 24. : ({param} > 0.5 ? 16. : 0.);\n"
+        f"{param}_on = {param}_bits > 0.5 ? 1. : 0.;\n"
+        f"{param}_q = pow(2., {param}_bits - 1.);\n"
+        f"{out_l} = {in_l} + {param}_on * "
+        f"(round({in_l} * {param}_q + (noise() + noise()) * 0.5) / {param}_q - {in_l});\n"
+        f"{out_r} = {in_r} + {param}_on * "
+        f"(round({in_r} * {param}_q + (noise() + noise()) * 0.5) / {param}_q - {in_r});"
+    )
+
+
+def soft_knee_gain_computer(
+    level: str,
+    threshold: str,
+    ratio: str,
+    knee: str,
+    out: str,
+    *,
+    over: str = "over",
+    half_knee: str = "half_knee",
+    slope: str = "slope",
+    t: str = "t",
+) -> str:
+    """Soft-knee downward-compression gain computer (the dB gain-reduction curve).
+
+    Given a detector ``level`` (dB), a ``threshold`` (dB), a ``ratio`` (>= 1) and a
+    ``knee`` width (dB), emit the gain reduction ``out`` (dB, <= 0). Below the knee
+    there is no reduction; within +/- half the knee a quadratic soft transition; above
+    it the hard ``over * (1/ratio - 1)`` slope. This is the static compressor/limiter
+    curve — pair it with a :func:`peak_follower` (or instant-attack envelope) feeding
+    ``level`` and a ``dbtoa(out + makeup)`` applied to the audio. It is the
+    gain-computer half of the audio-rate dynamics foundation (the detector half is
+    peak_follower) that the dynamic-EQ bands compose. Emits an ``if``/``else if``
+    block::
+
+        over = level - threshold;
+        half_knee = knee * 0.5;
+        slope = (1.0 / max(ratio, 1.0)) - 1.0;
+        out = 0.;
+        if (over > half_knee) {
+            out = over * slope;
+        } else if (over > -half_knee && knee > 0.01) {
+            t = over + half_knee;
+            out = (t * t) / (2.0 * knee) * slope;
+        }
+
+    ``over``/``half_knee``/``slope``/``t`` are the scratch var names (override to
+    avoid a clash when the primitive is used twice in one codebox).
+    """
+    return (
+        f"{over} = {level} - {threshold};\n"
+        f"{half_knee} = {knee} * 0.5;\n"
+        f"{slope} = (1.0 / max({ratio}, 1.0)) - 1.0;\n"
+        f"{out} = 0.;\n"
+        f"if ({over} > {half_knee}) {{\n"
+        f"    {out} = {over} * {slope};\n"
+        f"}} else if ({over} > -{half_knee} && {knee} > 0.01) {{\n"
+        f"    {t} = {over} + {half_knee};\n"
+        f"    {out} = ({t} * {t}) / (2.0 * {knee}) * {slope};\n"
+        f"}}"
+    )
+
+
+def dynamics_band(
+    peak: str,
+    env: str,
+    attack_coeff: str,
+    release_coeff: str,
+    threshold: str,
+    ratio: str,
+    knee: str,
+    makeup: str,
+    out_gain: str,
+    *,
+    level: str = "level_db",
+    coeff: str = "dcoeff",
+    grdb: str = "grdb",
+    floor: str = "0.0000316",
+) -> str:
+    """End-to-end downward-compression gain path: detector -> knee -> makeup.
+
+    Composes the two shipped dynamics primitives into the reusable macro a
+    dynamic-EQ band / compressor / limiter applies to one signal:
+
+    1. convert the input ``peak`` (linear, e.g. ``max(abs(L), abs(R))``) to dB,
+       floored so silence reads a finite ``-90`` dB instead of ``-inf``;
+    2. attack/release envelope-follow in the dB domain (:func:`peak_follower`)
+       into the ``env`` History with ``attack_coeff``/``release_coeff`` poles;
+    3. soft-knee gain reduction (:func:`soft_knee_gain_computer`) -> ``grdb`` dB;
+    4. ``out_gain = dbtoa(grdb + makeup)`` — the linear gain to multiply the
+       (optionally delayed) audio by.
+
+    At ``ratio == 1`` and ``makeup == 0`` the whole band is unity (transparent);
+    it only ever attenuates relative to the makeup. ``level``/``coeff``/``grdb``
+    are scratch var names (override to use the macro twice in one codebox);
+    ``floor`` is the linear silence floor fed to ``atodb``. This is the audio-rate
+    dynamics foundation the EQ dynamic-bands compose (detector = peak_follower,
+    gain computer = soft_knee_gain_computer, both already null-tested).
+    """
+    return (
+        f"{level} = max(atodb(max({peak}, {floor})), -90.);\n"
+        + peak_follower(level, env, attack_coeff, release_coeff, coeff) + "\n"
+        + soft_knee_gain_computer(env, threshold, ratio, knee, grdb) + "\n"
+        + f"{out_gain} = dbtoa({grdb} + {makeup});"
+    )
+
+
+def biquad_df1(
+    x: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    x1: str, x2: str,
+    y1: str, y2: str,
+    out: str,
+) -> str:
+    """One Direct-Form-I biquad stage: ``y = b0 x + b1 x1 + b2 x2 - a1 y1 - a2 y2``.
+
+    Applies a normalised biquad (``a0 == 1``) to ``x`` with feed-forward coeffs
+    ``b0 b1 b2`` and feedback coeffs ``a1 a2``, using the four History state cells
+    ``x1 x2`` (input delays) and ``y1 y2`` (output delays), writing the filtered
+    sample to ``out`` and shifting the state. Emits::
+
+        out = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x; y2 = fixdenorm(y1); y1 = fixdenorm(out);
+
+    Cascade two stages for the BS.1770 K-weight (shelf then RLB high-pass), and it
+    is the apply-block the cascaded-filter foundation builds on. The caller
+    declares ``x1 x2 y1 y2`` as History and supplies the coeffs (e.g. from
+    :func:`kweight_coeffs_bs1770`). This is the DF-I apply copy-pasted across the
+    metering plugins; sharing it audits the recurrence once. Both y-history
+    (feedback) writes are denormal-flushed (:func:`flush`) so a silent tail
+    cannot park subnormals in the recursion; the x taps are pure input history
+    (no feedback) and stay untouched.
+    """
+    return (
+        f"{out} = {b0} * {x} + {b1} * {x1} + {b2} * {x2} - {a1} * {y1} - {a2} * {y2};\n"
+        f"{x2} = {x1}; {x1} = {x}; {y2} = {flush(y1)}; {y1} = {flush(out)};"
+    )
+
+
+def one_pole_coeff(out: str, freq: str) -> str:
+    """Cutoff-frequency one-pole coefficient: ``out = 1 - exp(-2*pi*fc/fs)``. Emits::
+
+        out = 1.0 - exp(-6.28318530717959 * freq / samplerate);
+
+    The per-sample lerp coefficient of a one-pole low-pass with -3 dB corner at
+    ``freq`` Hz, computed at the running ``samplerate`` so the corner stays put at
+    44.1 / 48 / 96 / 192 kHz. Pair it with :func:`one_pole_lp` / :func:`one_pole_hp`
+    (``state = state + coeff*(x - state)``). LARGER coeff (higher freq) = faster /
+    brighter; at ``freq`` -> 0 the coeff -> 0 (the filter freezes, output holds).
+    This is the ``1 - exp(-2*pi*f/fs)`` form copy-pasted across the saturation /
+    tone / exciter plugins (distinct from :func:`exp_pole`'s time-constant
+    ``exp(-1/(tau*fs))`` ballistics pole); sharing it audits the corner math once.
+    """
+    return f"{out} = 1.0 - exp(-6.28318530717959 * {freq} / samplerate);"
+
+
+def one_pole_coeff_cached(out: str, freq: str,
+                          *, deps: tuple = ()) -> str:
+    """change()-gated :func:`one_pole_coeff` (hunt #57): the ``exp`` fires only
+    when ``samplerate`` (always watched) or any expression in ``deps`` changes
+    — pass the cutoff Param name in ``deps`` when ``freq`` is user-driven.
+    Every other sample reads the latched ``History``. Statement-level only
+    (declares ``History {out}_c``); bit-exact vs :func:`one_pole_coeff` for
+    the same inputs.
+    """
+    watches = " + ".join(
+        ["change(samplerate)"] + [f"change({d})" for d in deps])
+    return (
+        f"History {out}_c(0.);\n"
+        f"History {out}_ci(0.);\n"
+        f"{out}_chg = {watches};\n"
+        f"if ({out}_chg != 0 || {out}_ci < 0.5) {{\n"
+        f"\t{out}_c = 1.0 - exp(-6.28318530717959 * {freq} / samplerate);\n"
+        f"\t{out}_ci = 1.;\n"
+        f"}}\n"
+        f"{out} = {out}_c;"
+    )
+
+
+def one_pole_lp(x: str, state: str, coeff: str, out: str) -> str:
+    """One-pole low-pass: chase ``x`` into the ``state`` History, expose it. Emits::
+
+        state = fixdenorm(state + coeff * (x - state));
+        out = state;
+
+    A first-order (6 dB/oct) low-pass where ``coeff`` (0..1, from
+    :func:`one_pole_coeff`) is the lerp rate: 1 passes ``x`` through, 0 freezes the
+    state. ``state`` is the caller's History cell (the filter memory); ``out`` may
+    alias ``state``. This is the smoother/tone-LP recurrence shared across the
+    saturation + exciter cores (the LP half; :func:`one_pole_hp` is the complement).
+    The state write is denormal-flushed (:func:`flush`): on silent input the
+    recursion decays exponentially to 0 and would otherwise park a subnormal.
+    """
+    return (
+        f"{state} = {flush(f'{state} + {coeff} * ({x} - {state})')};\n"
+        f"{out} = {state};"
+    )
+
+
+def one_pole_hp(x: str, state: str, coeff: str, out: str) -> str:
+    """One-pole high-pass via ``x - lowpass(x)``. Emits::
+
+        state = fixdenorm(state + coeff * (x - state));
+        out = x - state;
+
+    The complement of :func:`one_pole_lp` sharing the same one-pole ``state``: the
+    low-passed energy is subtracted from the input, leaving a first-order
+    (6 dB/oct) high-pass with corner ``freq`` (via :func:`one_pole_coeff`). At
+    ``coeff`` -> 0 the state stays at its init so ``out`` -> ``x`` (all-pass / DC
+    retained); at ``coeff`` -> 1 the state tracks ``x`` so ``out`` -> 0. This is the
+    pre-saturation low-cut / exciter high-band split shared across the cores.
+    The state write is denormal-flushed (:func:`flush`) — same silent-tail
+    subnormal guard as :func:`one_pole_lp`.
+    """
+    return (
+        f"{state} = {flush(f'{state} + {coeff} * ({x} - {state})')};\n"
+        f"{out} = {x} - {state};"
+    )
+
+
+def exciter_harmonics(band: str, k: str, even: str, out: str,
+                      *, odd: str = "hx_odd", sq: str = "hx_sq",
+                      sq_state: str | None = None,
+                      odd_state: str | None = None) -> str:
+    """Generated harmonic content of a band-limited signal (the exciter core). Emits::
+
+        odd = tanh(band * k) / tanh(k);
+        sq = band * band;
+        out = (odd - band) + even * sq;
+
+    A harmonic exciter ADDS upper harmonics of a filtered band back to the dry
+    signal (a harmonic exciter), and ``out`` is exactly that ADDED
+    content (the delta, not the wet band):
+
+    * ``odd - band`` — a level-matched ``tanh`` shaper (``tanh(x*k)/tanh(k)``)
+      minus its input, i.e. the ODD harmonics it generated (symmetric, "clear"
+      air). ``k`` (>= 1) is the drive / harmonic density; bigger = brighter.
+    * ``even * sq`` — a squarer (``band^2``) scaled by ``even`` (0..1), the EVEN
+      harmonics (2nd, "warm" tube colour). ``band^2`` carries DC, so the CALLER
+      DC-blocks ``out`` before mixing (the exciter sums it into the dry path).
+
+    At ``band == 0`` -> ``out == 0`` (silence in, silence added). The caller scales
+    ``out`` by a per-band amount and adds it to dry, so amount 0 is a perfect null.
+    ``odd``/``sq`` are scratch var names (override to use the macro twice — e.g. a
+    LOW and a HIGH band — in one codebox). Pass ``sq_state`` (a ``History`` cell var
+    name) to ANTI-ALIAS the squarer via :func:`square_adaa` — the squarer doubles
+    the band's frequency content and aliases worst at high ``even``, so on a HIGH
+    exciter band ``sq_state`` swaps the naive ``band^2`` for the bandlimited mean of
+    ``band^2`` (the caller declares ``History {sq_state}(0.);``). ``even == 0`` is a
+    perfect null either way.
+
+    Pass ``odd_state`` (a ``History`` cell var name, caller-declared like
+    ``sq_state``) to ANTI-ALIAS the odd generator via :func:`tanh_adaa` — on
+    CLEAR-style settings (``even == 0``) the naive ``tanh`` is the SOLE
+    harmonic source at the highest drive, so AA'ing only the squarer protects
+    the term that contributes nothing there (hunt #12). The ADAA odd is
+    level-matched by the same ``/ tanh(k)`` and adds only the standard
+    0.5-sample odd-path group delay; scratch names derive from ``odd`` so two
+    calls (L/R or LOW/HIGH) in one codebox never collide.
+    """
+    if sq_state is not None:
+        sq_line = square_adaa(band, sq, sq_state)
+    else:
+        sq_line = f"{sq} = {band} * {band};"
+    if odd_state is not None:
+        odd_lines = (
+            f"{odd}_drv = {band} * {k};\n"
+            + tanh_adaa(
+                f"{odd}_drv", f"{odd}_raw", odd_state,
+                ax=f"{odd}_ax", axp=f"{odd}_axp",
+                fx=f"{odd}_fx", fxp=f"{odd}_fxp", dx=f"{odd}_dx")
+            + f"\n{odd} = {odd}_raw / tanh({k});"
+        )
+    else:
+        odd_lines = f"{odd} = tanh({band} * {k}) / tanh({k});"
+    return (
+        odd_lines + "\n"
+        + sq_line + "\n"
+        + f"{out} = ({odd} - {band}) + {even} * {sq};"
+    )
+
+
+def rbj_peaking(
+    freq: str,
+    q: str,
+    gain_db: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha", a0: str = "a0",
+) -> str:
+    """Runtime RBJ peaking-EQ biquad coefficients (Audio-EQ-Cookbook, a0-normalised).
+
+    Computes the Direct-Form-I coefficients ``b0 b1 b2 a1 a2`` for a peaking
+    (bell) EQ band from ``freq`` (Hz), ``q``, and ``gain_db``, at the running
+    ``samplerate`` — so the band is tunable LIVE (unlike the build-time-baked
+    ``_biquad_shelf`` or the ``filtercoeff~`` object path). Pair with
+    :func:`biquad_df1` to apply it. Emits::
+
+        A = pow(10., gain_db / 40.);
+        w0 = 2 * pi * freq / samplerate;
+        cw = cos(w0);  alpha = sin(w0) / (2 * q);
+        a0 = 1 + alpha / A;
+        b0 = (1 + alpha * A) / a0;   b1 = (-2 * cw) / a0;   b2 = (1 - alpha * A) / a0;
+        a1 = (-2 * cw) / a0;         a2 = (1 - alpha / A) / a0;
+
+    At ``gain_db == 0`` the b coeffs equal the a coeffs -> unity (flat); the band
+    is unity at DC and Nyquist for any gain. This is the runtime peaking-band
+    coefficient half of the cascaded-filter foundation (the apply half is
+    :func:`biquad_df1`). ``A w0 cw alpha a0`` are scratch var names (override to
+    use the primitive twice in one codebox).
+    """
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = 1. + {alpha} / {A};\n"
+        f"{b0} = (1. + {alpha} * {A}) / {a0};\n"
+        f"{b1} = (-2. * {cw}) / {a0};\n"
+        f"{b2} = (1. - {alpha} * {A}) / {a0};\n"
+        f"{a1} = (-2. * {cw}) / {a0};\n"
+        f"{a2} = (1. - {alpha} / {A}) / {a0};"
+    )
+
+
+def rbj_shelf(
+    freq: str,
+    gain_db: str,
+    kind: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha",
+    a0: str = "a0", sqA: str = "sqA", tsa: str = "tsa",
+) -> str:
+    """Runtime RBJ low/high-shelf biquad coefficients (Butterworth slope, S=1).
+
+    ``kind`` is ``"low"`` or ``"high"``. Computes the Direct-Form-I shelf
+    coefficients ``b0 b1 b2 a1 a2`` from ``freq`` (Hz) and ``gain_db`` at the
+    running ``samplerate`` (tunable LIVE), matching the build-time ``_biquad_shelf``
+    math (alpha uses the Butterworth shelf slope ``1/S = sqrt(2)``). Pair with
+    :func:`biquad_df1` to apply it.
+
+    A low-shelf boosts/cuts DC by ``gain_db`` and is unity at Nyquist; a high-shelf
+    is the inverse. At ``gain_db == 0`` (A == 1) the b coeffs equal the a coeffs ->
+    flat. This is the shelf half of the runtime EQ-band coefficient set (peaking is
+    :func:`rbj_peaking`). ``A w0 cw alpha a0 sqA tsa`` are scratch var names.
+    """
+    if kind not in ("low", "high"):
+        raise ValueError(f"rbj_shelf kind must be 'low' or 'high', got {kind!r}")
+    if kind == "low":
+        b0e = f"{A} * (({A} + 1.) - ({A} - 1.) * {cw} + {tsa})"
+        b1e = f"2. * {A} * (({A} - 1.) - ({A} + 1.) * {cw})"
+        b2e = f"{A} * (({A} + 1.) - ({A} - 1.) * {cw} - {tsa})"
+        a0e = f"({A} + 1.) + ({A} - 1.) * {cw} + {tsa}"
+        a1e = f"-2. * (({A} - 1.) + ({A} + 1.) * {cw})"
+        a2e = f"({A} + 1.) + ({A} - 1.) * {cw} - {tsa}"
+    else:  # high
+        b0e = f"{A} * (({A} + 1.) + ({A} - 1.) * {cw} + {tsa})"
+        b1e = f"-2. * {A} * (({A} - 1.) + ({A} + 1.) * {cw})"
+        b2e = f"{A} * (({A} + 1.) + ({A} - 1.) * {cw} - {tsa})"
+        a0e = f"({A} + 1.) - ({A} - 1.) * {cw} + {tsa}"
+        a1e = f"2. * (({A} - 1.) - ({A} + 1.) * {cw})"
+        a2e = f"({A} + 1.) - ({A} - 1.) * {cw} - {tsa}"
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / 2. * sqrt(({A} + 1. / {A}) * (1.4142135623730951 - 1.) + 2.);\n"
+        f"{sqA} = sqrt({A});\n"
+        f"{tsa} = 2. * {sqA} * {alpha};\n"
+        f"{a0} = {a0e};\n"
+        f"{b0} = ({b0e}) / {a0};\n"
+        f"{b1} = ({b1e}) / {a0};\n"
+        f"{b2} = ({b2e}) / {a0};\n"
+        f"{a1} = ({a1e}) / {a0};\n"
+        f"{a2} = ({a2e}) / {a0};"
+    )
+
+
+def rbj_lowpass(
+    freq: str,
+    q: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    w0: str = "w0", cw: str = "cw", alpha: str = "alpha", a0: str = "a0",
+) -> str:
+    """Runtime RBJ low-pass biquad coefficients (Audio-EQ-Cookbook, a0-normalised).
+
+    Computes the Direct-Form-I coefficients ``b0 b1 b2 a1 a2`` for a 2nd-order
+    (12 dB/oct) low-pass at cutoff ``freq`` (Hz) and resonance ``q``, at the
+    running ``samplerate`` (tunable LIVE). Pair with :func:`biquad_df1` to apply
+    it. Emits::
+
+        w0 = 2 * pi * freq / samplerate;  cw = cos(w0);  alpha = sin(w0) / (2 * q);
+        a0 = 1 + alpha;
+        b0 = ((1 - cw) / 2) / a0;  b1 = (1 - cw) / a0;  b2 = ((1 - cw) / 2) / a0;
+        a1 = (-2 * cw) / a0;       a2 = (1 - alpha) / a0;
+
+    Unity gain at DC, zero at Nyquist; ``q = 0.70710678`` gives a maximally-flat
+    (Butterworth) -3.01 dB corner at ``freq``. Cascade staggered-Q stages
+    (:func:`butterworth_q_table` / :func:`biquad_cascade`) for variable slope.
+    The complement is :func:`rbj_highpass`. ``w0 cw alpha a0`` are scratch var
+    names (override to use the primitive twice in one codebox).
+    """
+    return (
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = 1. + {alpha};\n"
+        f"{b0} = ((1. - {cw}) / 2.) / {a0};\n"
+        f"{b1} = (1. - {cw}) / {a0};\n"
+        f"{b2} = ((1. - {cw}) / 2.) / {a0};\n"
+        f"{a1} = (-2. * {cw}) / {a0};\n"
+        f"{a2} = (1. - {alpha}) / {a0};"
+    )
+
+
+def rbj_highpass(
+    freq: str,
+    q: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    w0: str = "w0", cw: str = "cw", alpha: str = "alpha", a0: str = "a0",
+) -> str:
+    """Runtime RBJ high-pass biquad coefficients (Audio-EQ-Cookbook, a0-normalised).
+
+    The complement of :func:`rbj_lowpass`: a 2nd-order (12 dB/oct) high-pass at
+    cutoff ``freq`` (Hz), resonance ``q``, at the running ``samplerate``. Pair
+    with :func:`biquad_df1`. Emits the same ``w0 cw alpha a0`` and feedback
+    coeffs as the low-pass, with high-pass numerators::
+
+        b0 = ((1 + cw) / 2) / a0;  b1 = (-(1 + cw)) / a0;  b2 = ((1 + cw) / 2) / a0;
+        a1 = (-2 * cw) / a0;        a2 = (1 - alpha) / a0;
+
+    Zero gain at DC, unity at Nyquist; ``q = 0.70710678`` is the Butterworth
+    -3.01 dB corner. Cascade staggered-Q stages via :func:`biquad_cascade` for
+    variable slope. ``w0 cw alpha a0`` are scratch var names.
+    """
+    return (
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = 1. + {alpha};\n"
+        f"{b0} = ((1. + {cw}) / 2.) / {a0};\n"
+        f"{b1} = (-(1. + {cw})) / {a0};\n"
+        f"{b2} = ((1. + {cw}) / 2.) / {a0};\n"
+        f"{a1} = (-2. * {cw}) / {a0};\n"
+        f"{a2} = (1. - {alpha}) / {a0};"
+    )
+
+
+def butterworth_q_table(order: int) -> list[float]:
+    """Per-stage resonance Q values for an even-order Butterworth filter.
+
+    Returns ``order // 2`` Q values for realising an order-``order`` Butterworth
+    low/high-pass as a cascade of 2nd-order sections: stage ``k`` (1-indexed) has
+    ``Q_k = 1 / (2 * cos((2k - 1) * pi / (2 * order)))``. A cascade of
+    :func:`rbj_lowpass` / :func:`rbj_highpass` biquads at these staggered Qs is a
+    maximally-flat Butterworth of the given order (``order * 6`` dB/oct slope),
+    exactly -3.01 dB at the cutoff for any order.
+
+    Examples: ``order 2 -> [0.7071]``; ``order 4 -> [0.5412, 1.3066]``;
+    ``order 8 -> [0.5098, 0.6013, 0.9000, 2.5629]``. ``order`` must be even and
+    >= 2 (slopes 12, 24, 36, ... dB/oct; up to order 16 = 96 dB/oct).
+    """
+    if order < 2 or order % 2 != 0:
+        raise ValueError(
+            f"butterworth_q_table order must be even and >= 2, got {order}"
+        )
+    return [
+        1.0 / (2.0 * math.cos((2 * k - 1) * math.pi / (2 * order)))
+        for k in range(1, order // 2 + 1)
+    ]
+
+
+def biquad_cascade(
+    x: str,
+    out: str,
+    freq: str,
+    kind: str,
+    order: int,
+    *,
+    prefix: str = "cas",
+) -> str:
+    """Variable-slope Butterworth low/high-pass as cascaded biquads (self-contained).
+
+    Chains ``order // 2`` :func:`biquad_df1` stages, each an :func:`rbj_lowpass`
+    (``kind="low"``) or :func:`rbj_highpass` (``kind="high"``) at the
+    Butterworth-staggered Q from :func:`butterworth_q_table`, from input ``x`` to
+    output ``out``, all sharing the one runtime cutoff ``freq`` (Hz). The result
+    is a maximally-flat ``order``-th-order filter: ``order * 6`` dB/oct slope
+    (e.g. ``order=4`` = 24 dB/oct, ``order=16`` = 96 dB/oct), -3.01 dB at ``freq``.
+
+    SELF-CONTAINED: emits its own ``History`` state declarations (4 cells per
+    stage, named ``{prefix}{i}_x1/_x2/_y1/_y2``) plus per-stage scratch coeff vars,
+    so the caller just splices the returned block into its codebox. ``order`` must
+    be even and >= 2. ``prefix`` namespaces all generated vars (override to use
+    more than one cascade in a single codebox).
+    """
+    if kind not in ("low", "high"):
+        raise ValueError(f"biquad_cascade kind must be 'low' or 'high', got {kind!r}")
+    qs = butterworth_q_table(order)  # validates even / >= 2
+    coeff_fn = rbj_lowpass if kind == "low" else rbj_highpass
+    n = len(qs)
+    decls = []
+    body = []
+    for i, q in enumerate(qs):
+        p = f"{prefix}{i}"
+        stage_in = x if i == 0 else f"{prefix}{i - 1}_y"
+        stage_out = out if i == n - 1 else f"{p}_y"
+        decls.append(
+            f"History {p}_x1(0.); History {p}_x2(0.); "
+            f"History {p}_y1(0.); History {p}_y2(0.);"
+        )
+        body.append(
+            coeff_fn(
+                freq, f"{q:.12g}",
+                f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                w0=f"{p}_w0", cw=f"{p}_cw", alpha=f"{p}_al", a0=f"{p}_a0",
+            )
+        )
+        body.append(
+            biquad_df1(
+                stage_in, f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                f"{p}_x1", f"{p}_x2", f"{p}_y1", f"{p}_y2", stage_out,
+            )
+        )
+    return "\n".join(decls) + "\n" + "\n".join(body)
+
+
+def tilt_shelf(
+    x: str,
+    out: str,
+    freq: str,
+    tilt_db: str,
+    *,
+    prefix: str = "tilt",
+) -> str:
+    """Constant-slope spectral TILT around a pivot frequency (self-contained).
+
+    A tilt EQ pivots the whole spectrum about ``freq``: positive ``tilt_db``
+    CUTS everything below ``freq`` and BOOSTS everything above it (the mastering
+    "tilt"/"tone" control — a tilt-shelf shape).
+    Built as a complementary shelf pair on the shared runtime :func:`rbj_shelf` +
+    :func:`biquad_df1`: a LOW-shelf at ``-tilt_db`` in series with a HIGH-shelf at
+    ``+tilt_db``, both at cutoff ``freq``. Asymptotes: ``-tilt_db`` at DC,
+    ``+tilt_db`` at Nyquist (a ``2 * tilt_db`` total spread), and ~0 dB at the
+    pivot (the two shelves cross). ``tilt_db == 0`` is flat (each shelf unity), so
+    a hosted Tilt control is transparent at center.
+
+    SELF-CONTAINED: emits its own ``History`` state (two biquads = 8 cells, named
+    ``{prefix}_lo_*`` / ``{prefix}_hi_*``) plus per-stage scratch coeff vars and
+    one intermediate signal ``{prefix}_mid``, so the caller just splices the block
+    in. ``freq`` and ``tilt_db`` are gen expressions (var names or literals), both
+    tunable LIVE. ``prefix`` namespaces all generated vars (override for more than
+    one tilt in a codebox). Gives both EQs the "audio tilt" feature and any tone
+    stage a one-knob spectral tilt — the last piece of the cascaded-filter layer.
+    """
+    lo, hi = f"{prefix}_lo", f"{prefix}_hi"
+    mid = f"{prefix}_mid"
+    decls = (
+        f"History {lo}_x1(0.); History {lo}_x2(0.); "
+        f"History {lo}_y1(0.); History {lo}_y2(0.);\n"
+        f"History {hi}_x1(0.); History {hi}_x2(0.); "
+        f"History {hi}_y1(0.); History {hi}_y2(0.);"
+    )
+    coeff_lo = rbj_shelf(
+        freq, f"-1. * ({tilt_db})", "low",
+        f"{lo}_b0", f"{lo}_b1", f"{lo}_b2", f"{lo}_a1", f"{lo}_a2",
+        A=f"{lo}_A", w0=f"{lo}_w0", cw=f"{lo}_cw", alpha=f"{lo}_al",
+        a0=f"{lo}_a0", sqA=f"{lo}_sqA", tsa=f"{lo}_tsa",
+    )
+    apply_lo = biquad_df1(
+        x, f"{lo}_b0", f"{lo}_b1", f"{lo}_b2", f"{lo}_a1", f"{lo}_a2",
+        f"{lo}_x1", f"{lo}_x2", f"{lo}_y1", f"{lo}_y2", mid,
+    )
+    coeff_hi = rbj_shelf(
+        freq, f"{tilt_db}", "high",
+        f"{hi}_b0", f"{hi}_b1", f"{hi}_b2", f"{hi}_a1", f"{hi}_a2",
+        A=f"{hi}_A", w0=f"{hi}_w0", cw=f"{hi}_cw", alpha=f"{hi}_al",
+        a0=f"{hi}_a0", sqA=f"{hi}_sqA", tsa=f"{hi}_tsa",
+    )
+    apply_hi = biquad_df1(
+        mid, f"{hi}_b0", f"{hi}_b1", f"{hi}_b2", f"{hi}_a1", f"{hi}_a2",
+        f"{hi}_x1", f"{hi}_x2", f"{hi}_y1", f"{hi}_y2", out,
+    )
+    return "\n".join([decls, coeff_lo, apply_lo, coeff_hi, apply_hi])
+
+
+def lr_crossover(
+    x: str,
+    lo_out: str,
+    hi_out: str,
+    freq: str,
+    order: int,
+    *,
+    prefix: str = "xo",
+) -> str:
+    """Linkwitz-Riley complementary crossover split (self-contained).
+
+    Splits ``x`` into a LOW band (``lo_out``) and a HIGH band (``hi_out``) at the
+    runtime cutoff ``freq`` (Hz) with an LR filter of ``order`` — a positive
+    multiple of 4 (``4`` = LR4 24 dB/oct, ``8`` = LR8 48 dB/oct, ``12`` = 72,
+    ``16`` = 96). Each band is a Butterworth filter of order ``order // 2`` applied
+    TWICE (the Linkwitz-Riley = Butterworth-squared construction), so the two
+    bands stay in phase and **sum to a flat (allpass) magnitude**: ``lo_out +
+    hi_out`` reconstructs the input with no peak or notch at the crossover (each
+    band is exactly -6 dB at ``freq``). Split repeatedly for an N-band multiband
+    bank whose bands recombine flat.
+
+    SELF-CONTAINED: emits its own ``History`` state (``order`` biquads total,
+    ``order // 2`` per band, 4 cells each) and per-stage scratch coeffs, so the
+    caller just splices the block in. ``order`` MUST be a positive multiple of 4
+    — odd/lower LR orders (e.g. LR2) are 180 deg out of phase at the crossover and
+    notch instead of summing flat, so they are rejected. ``prefix`` namespaces all
+    generated vars (override to place more than one crossover in a codebox).
+    """
+    if order < 4 or order % 4 != 0:
+        raise ValueError(
+            f"lr_crossover order must be a positive multiple of 4 (LR4/LR8/...), got {order}"
+        )
+    # LR = Butterworth-(order/2) applied twice; order//2 is even so the table accepts it.
+    qs = butterworth_q_table(order // 2) * 2
+    decls = []
+    body = []
+    for coeff_fn, out_var, tag in ((rbj_lowpass, lo_out, "lo"),
+                                   (rbj_highpass, hi_out, "hi")):
+        n = len(qs)
+        for i, q in enumerate(qs):
+            p = f"{prefix}_{tag}{i}"
+            stage_in = x if i == 0 else f"{prefix}_{tag}{i - 1}_y"
+            stage_out = out_var if i == n - 1 else f"{p}_y"
+            decls.append(
+                f"History {p}_x1(0.); History {p}_x2(0.); "
+                f"History {p}_y1(0.); History {p}_y2(0.);"
+            )
+            body.append(
+                coeff_fn(
+                    freq, f"{q:.12g}",
+                    f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                    w0=f"{p}_w0", cw=f"{p}_cw", alpha=f"{p}_al", a0=f"{p}_a0",
+                )
+            )
+            body.append(
+                biquad_df1(
+                    stage_in, f"{p}_b0", f"{p}_b1", f"{p}_b2", f"{p}_a1", f"{p}_a2",
+                    f"{p}_x1", f"{p}_x2", f"{p}_y1", f"{p}_y2", stage_out,
+                )
+            )
+    return "\n".join(decls) + "\n" + "\n".join(body)
+
+
+def multiband_split(x: str, band_outs: list, freqs: list, order: int = 4,
+                    *, prefix: str = "mb") -> str:
+    """Flat-reconstructing N-band Linkwitz-Riley split (allpass-compensated).
+
+    Splits ``x`` into ``len(freqs) + 1`` frequency bands at the ascending
+    crossover cutoffs ``freqs`` (var names or literals), writing band signals
+    low->high into the ``band_outs`` var names. Built from :func:`lr_crossover`
+    on a split-the-high tree, with the key correction that makes a multiband
+    bank usable on a flagship: each lower band is ALLPASS-COMPENSATED for every
+    higher crossover it skipped (run through that crossover and re-summed, since
+    an LR crossover's ``lo + hi`` is an allpass). Without this the bands sum with
+    audible ripple at the lower crossovers; WITH it the bands recombine to a
+    perfectly FLAT magnitude — ``sum(band_outs)`` reconstructs the input
+    (allpass overall), so the band processors can be transparent at unity.
+
+    ``order`` is the LR order (a multiple of 4: 4 = 24 dB/oct, 8 = 48; see
+    :func:`lr_crossover`). SELF-CONTAINED: emits all the ``History`` state for
+    every internal crossover. ``prefix`` namespaces all generated vars. Needs at
+    least one crossover (2 bands); ``len(band_outs)`` must equal
+    ``len(freqs) + 1``.
+    """
+    n_bands = len(freqs) + 1
+    if len(freqs) < 1:
+        raise ValueError("multiband_split needs at least 1 crossover frequency (2 bands)")
+    if len(band_outs) != n_bands:
+        raise ValueError(
+            f"multiband_split needs {n_bands} band_outs for {len(freqs)} crossover(s), "
+            f"got {len(band_outs)}"
+        )
+    parts = []
+    raw_lows = []          # (band_index, low_var)
+    hchain = x             # the running high-band signal (the HP cascade)
+    for i, f in enumerate(freqs):
+        is_last = i == len(freqs) - 1
+        lo_var = f"{prefix}_lo{i}"
+        hi_var = band_outs[n_bands - 1] if is_last else f"{prefix}_hi{i}"
+        parts.append(lr_crossover(hchain, lo_var, hi_var, f, order,
+                                  prefix=f"{prefix}_s{i}"))
+        raw_lows.append((i, lo_var))
+        hchain = hi_var
+    # band n_bands-1 (the top) is already the last split's high; compensate lows.
+    for i, lo_var in raw_lows:
+        comps = freqs[i + 1:]     # higher crossovers this band skipped
+        sig = lo_var
+        if not comps:
+            parts.append(f"{band_outs[i]} = {sig};")
+            continue
+        for k, cf in enumerate(comps):
+            last = k == len(comps) - 1
+            c_lo, c_hi = f"{prefix}_c{i}_{k}lo", f"{prefix}_c{i}_{k}hi"
+            out_var = band_outs[i] if last else f"{prefix}_c{i}_{k}o"
+            parts.append(lr_crossover(sig, c_lo, c_hi, cf, order,
+                                      prefix=f"{prefix}_c{i}_{k}"))
+            parts.append(f"{out_var} = {c_lo} + {c_hi};")
+            sig = out_var
+    return "\n".join(parts)
+
+
+def tpt_svf(
+    x: str,
+    freq: str,
+    q: str,
+    lp: str, bp: str, hp: str, notch: str,
+    ic1: str, ic2: str,
+    *,
+    g: str = "g", k: str = "k", a1: str = "a1", a2: str = "a2", a3: str = "a3",
+    v1: str = "v1", v2: str = "v2", v3: str = "v3",
+) -> str:
+    """Zero-delay-feedback / TPT state-variable filter (Zavalishin).
+
+    A single 2nd-order structure that yields the four classic responses at once
+    from input ``x`` at runtime cutoff ``freq`` (Hz) and resonance ``q``: writes
+    ``lp`` (low-pass), ``bp`` (band-pass), ``hp`` (high-pass) and ``notch``. This
+    is the MODULATION-FRIENDLY resonant filter — the bilinear/topology-preserving
+    transform makes it stable and zipper-free under fast cutoff/Q sweeps (where a
+    static biquad zippers), and it is the gen-domain workaround for Live 12's
+    silent ``svf~``. Emits::
+
+        g = tan(pi * freq / samplerate);  k = 1 / q;
+        a1 = 1/(1 + g*(g+k));  a2 = g*a1;  a3 = g*a2;
+        v3 = x - ic2;  v1 = a1*ic1 + a2*v3;  v2 = ic2 + a2*ic1 + a3*v3;
+        ic1 = 2*v1 - ic1;  ic2 = 2*v2 - ic2;          # trapezoidal integrators
+        lp = v2;  bp = v1;  hp = x - k*v1 - v2;  notch = x - k*v1;
+
+    At ``q = 0.70710678`` it is a Butterworth corner (all three of LP/BP/HP are
+    -3 dB at ``freq``, notch is a deep null there); higher ``q`` resonates. The
+    identity ``notch == lp + hp`` holds. ``ic1 ic2`` are the caller's two History
+    integrator states (declare ``History {ic1}(0.); History {ic2}(0.);``); the
+    other names are per-sample scratch (override to place several SVFs in one
+    codebox).
+    """
+    return (
+        f"{g} = tan(3.14159265358979 * {freq} / samplerate);\n"
+        f"{k} = 1. / {q};\n"
+        f"{a1} = 1. / (1. + {g} * ({g} + {k}));\n"
+        f"{a2} = {g} * {a1};\n"
+        f"{a3} = {g} * {a2};\n"
+        f"{v3} = {x} - {ic2};\n"
+        f"{v1} = {a1} * {ic1} + {a2} * {v3};\n"
+        f"{v2} = {ic2} + {a2} * {ic1} + {a3} * {v3};\n"
+        f"{ic1} = 2. * {v1} - {ic1};\n"
+        f"{ic2} = 2. * {v2} - {ic2};\n"
+        f"{lp} = {v2};\n"
+        f"{bp} = {v1};\n"
+        f"{hp} = {x} - {k} * {v1} - {v2};\n"
+        f"{notch} = {x} - {k} * {v1};"
+    )
+
+
+def lfo(
+    out: str,
+    rate: str,
+    shape: str,
+    phase: str,
+    *,
+    sq: str = "lfo_sq", tri: str = "lfo_tri", saw: str = "lfo_saw", sn: str = "lfo_sn",
+) -> str:
+    """In-gen low-frequency oscillator (phase accumulator -> selectable shape).
+
+    A bipolar (-1..1) LFO at runtime ``rate`` (Hz) for modulating gen parameters
+    INSIDE a codebox — filter-sweep / auto-wah cutoff (pair with :func:`tpt_svf`),
+    tape wobble, tremolo, drive movement — without leaving gen for a ``cycle~``.
+    ``shape``: 0 = sine, 1 = triangle, 2 = saw (rising), 3 = square. Emits::
+
+        phase = phase + rate / samplerate;
+        phase = phase >= 1. ? phase - 1. : phase;     # wrap 0..1
+        sq  = phase < 0.5 ? 1. : -1.;
+        tri = 1. - 4. * abs(phase - 0.5);             # -1 at 0/1, +1 at 0.5
+        saw = 2. * phase - 1.;
+        sn  = sin(2 * pi * phase);
+        out = shape==1 ? tri : (shape==2 ? saw : (shape==3 ? sq : sn));
+
+    ``phase`` is the caller's History cell (declare ``History {phase}(0.);``).
+    Single-subtract wrap is exact for LFO rates (rate << samplerate). Scale/offset
+    ``out`` at the call site to map the -1..1 swing onto a target range. ``sq tri
+    saw sn`` are scratch names (override to place several LFOs in one codebox).
+    """
+    return (
+        f"{phase} = {phase} + {rate} / samplerate;\n"
+        f"{phase} = {phase} >= 1. ? {phase} - 1. : {phase};\n"
+        f"{sq} = {phase} < 0.5 ? 1. : -1.;\n"
+        f"{tri} = 1. - 4. * abs({phase} - 0.5);\n"
+        f"{saw} = 2. * {phase} - 1.;\n"
+        f"{sn} = sin(6.28318530717959 * {phase});\n"
+        f"{out} = {shape} == 1 ? {tri} : "
+        f"({shape} == 2 ? {saw} : ({shape} == 3 ? {sq} : {sn}));"
+    )
+
+
+def param_slew(target: str, out: str, coeff: str = "0.001") -> str:
+    """One-pole parameter slew / glide toward ``target`` (de-click control jumps).
+
+    Emits ``{out} = {out} + ({target} - {out}) * {coeff};`` where ``out`` is BOTH
+    the running state and the output, so the caller declares ``History {out}(init);``.
+    SMALLER ``coeff`` = slower glide (per-sample one-pole pole). The cheap smoothing
+    every parameter-fed gen~ kernel should sit behind to avoid zipper noise.
+    """
+    return f"{out} = {out} + ({target} - {out}) * {coeff};"
+
+
+def rms_detector(x: str, out: str, coeff: str = "0.001", *, ms: str = "rms_ms") -> str:
+    """One-pole RMS level of ``x``. Emits::
+
+        {ms} = {ms} + ({x} * {x} - {ms}) * {coeff};
+        {out} = sqrt({ms});
+
+    Tracks the mean-square with a one-pole then square-roots it — the loudness/
+    level core for meters and RMS-sensing dynamics. Caller declares
+    ``History {ms}(0.);``. For a constant level the output converges to ``|x|``.
+    """
+    return (
+        f"{ms} = {ms} + ({x} * {x} - {ms}) * {coeff};\n"
+        f"{out} = sqrt({ms});"
+    )
+
+
+def crest_factor(peak: str, rms: str, out: str) -> str:
+    """Crest factor = ``peak / rms`` (peakiness: ~1.41 for a sine, higher = transient).
+
+    Stateless ratio with a tiny denominator guard; feed it a ``peak_follower`` peak
+    and an ``rms_detector`` rms. Drives transient/loudness displays and adaptive
+    dynamics (auto-release, program-dependent ratios).
+    """
+    return f"{out} = {peak} / ({rms} + 0.000001);"
+
+
+def transient_split(
+    x: str,
+    out: str,
+    *,
+    fast_coeff: str = "0.3",
+    slow_coeff: str = "0.005",
+    env_f: str = "tr_ef",
+    env_s: str = "tr_es",
+) -> str:
+    """Differential-envelope transient amount: a FAST envelope minus a SLOW one.
+
+    Emits two one-pole followers of ``x`` (typically ``abs`` of the input) and
+    their positive difference::
+
+        {env_f} = {env_f} + ({x} - {env_f}) * {fast_coeff};
+        {env_s} = {env_s} + ({x} - {env_s}) * {slow_coeff};
+        {out} = max({env_f} - {env_s}, 0.);
+
+    ``out`` spikes on attacks (fast outruns slow) and returns to ~0 in steady
+    state — the detector core for transient designers / Snap. Caller declares
+    ``History {env_f}(0.); History {env_s}(0.);``. Larger coeff = faster envelope.
+    """
+    return (
+        f"{env_f} = {env_f} + ({x} - {env_f}) * {fast_coeff};\n"
+        f"{env_s} = {env_s} + ({x} - {env_s}) * {slow_coeff};\n"
+        f"{out} = max({env_f} - {env_s}, 0.);"
+    )
+
+
+def allpass_first_order(
+    x: str,
+    out: str,
+    coeff: str = "0.5",
+    *,
+    xprev: str = "ap_xprev",
+    yprev: str = "ap_yprev",
+) -> str:
+    """First-order all-pass: magnitude-flat, phase-rotating diffusion / phaser stage.
+
+    Transfer function ``H(z) = (c + z^-1) / (1 + c z^-1)`` realized with one input
+    and one output history cell::
+
+        {out} = {coeff} * {x} + {xprev} - {coeff} * {yprev};
+        {xprev} = {x};
+        {yprev} = {out};
+
+    Chain several (override ``xprev``/``yprev`` per stage) for an all-pass
+    diffusion network (reverb tails, phasers). DC gain is 1 (transparent to DC).
+    Caller declares ``History {xprev}(0.); History {yprev}(0.);``. Stable for
+    ``|coeff| < 1``. (For long FIXED delays use tapin~/tapout~; this is the dense
+    embeddable gen~ stage.)
+    """
+    return (
+        f"{out} = {coeff} * {x} + {xprev} - {coeff} * {yprev};\n"
+        f"{xprev} = {x};\n"
+        f"{yprev} = {out};"
+    )
+
+
+def wavefold(x: str, out: str, gain: str = "1.", bias: str = "0.") -> str:
+    """Sine wavefolder: ``{out} = sin({gain} * {x} + {bias});``.
+
+    Driving ``gain`` above 1 folds peaks back into ``[-1, 1]`` (West-coast timbre),
+    adding harmonics that grow with drive; ``bias`` adds even harmonics by breaking
+    symmetry. Stateless and bounded. Pair with an oversampling wrapper for clean
+    high-gain folding.
+    """
+    return f"{out} = sin({gain} * {x} + {bias});"
+
+
+def moog_ladder(
+    x: str,
+    out: str,
+    g: str,
+    res: str,
+    *,
+    nonlinear: bool = True,
+    s1: str = "ml_s1",
+    s2: str = "ml_s2",
+    s3: str = "ml_s3",
+    s4: str = "ml_s4",
+    fb: str = "ml_fb",
+) -> str:
+    """4-pole Moog-style ladder lowpass with resonance feedback.
+
+    Four cascaded one-poles inside a resonance feedback loop::
+
+        {fb} = [tanh]({x} - {res} * {s4});      // s4 = last sample (feedback)
+        {s1} = {s1} + {g} * ({fb} - {s1});      // ... and three more stages
+        {out} = {s4};
+
+    ``g`` is the one-pole coefficient (0..1, from cutoff: ``1 - exp(-2*pi*fc/sr)``);
+    ``res`` is the resonance feedback amount (0..~4, self-oscillating near 4).
+    ``nonlinear=True`` wraps the feedback summing node in ``tanh`` — the Moog
+    character + graceful self-limiting at high resonance; ``False`` is the clean
+    linear ladder (DC gain ``1/(1+res)``, unity at ``res == 0``). Caller declares
+    ``History {s1}(0.); … {s4}(0.);``. Override the state names to stack ladders.
+    """
+    drive = f"tanh({x} - {res} * {s4})" if nonlinear else f"({x} - {res} * {s4})"
+    return (
+        f"{fb} = {drive};\n"
+        f"{s1} = {s1} + {g} * ({fb} - {s1});\n"
+        f"{s2} = {s2} + {g} * ({s1} - {s2});\n"
+        f"{s3} = {s3} + {g} * ({s2} - {s3});\n"
+        f"{s4} = {s4} + {g} * ({s3} - {s4});\n"
+        f"{out} = {s4};"
+    )
+
+
+def smooth_coeffs(
+    target_prefix: str,
+    smooth_prefix: str,
+    coeff: str = "0.05",
+    *,
+    names: tuple = ("b0", "b1", "b2", "a1", "a2"),
+) -> str:
+    """Per-sample slew of biquad coefficients (de-zipper a moving filter).
+
+    Emits one :func:`param_slew` per coefficient, gliding ``{target_prefix}_{n}``
+    (the freshly-computed RBJ target) into ``{smooth_prefix}_{n}``; apply
+    :func:`biquad_df1` with the SMOOTHED coeffs so a swept cutoff/gain/Q doesn't
+    zipper. Caller declares ``History {smooth_prefix}_{n}(init);`` for each name.
+    SMALLER ``coeff`` = slower coefficient glide. gen_sim-testable (it is just a
+    stack of param_slews).
+    """
+    return "\n".join(
+        param_slew(f"{target_prefix}_{n}", f"{smooth_prefix}_{n}", coeff) for n in names
+    )
+
+
+def kweight_lufs(
+    left: str,
+    right: str,
+    out: str,
+    *,
+    coeff: str = "0.0001",
+    prefix: str = "kw",
+) -> str:
+    """Momentary BS.1770 K-weighted loudness (LUFS) of a stereo pair (self-contained).
+
+    Composes the shipped pieces: :func:`kweight_coeffs_bs1770` (the two K-weight
+    biquad stages, computed at the live ``samplerate``) applied Direct-Form-I to L
+    and R, a one-pole mean-square over the momentary window (``coeff`` — smaller =
+    longer window; ~400 ms is ``1/(0.4*sr)``), then::
+
+        {out} = -0.691 + 10 * log10(mean_square + 1e-10);
+
+    Emits ALL its own ``History`` state (16 biquad cells + 1 mean-square cell),
+    so the caller just splices it in. This is the MOMENTARY loudness — gen~ cannot
+    do BS.1770 gated INTEGRATION (that needs a host-side ring buffer of block
+    loudnesses), so a full integrated-LUFS meter pairs this with a Max-side buffer.
+    The gen~ fallback for a portable loudness meter when ``loudness~`` (Live-12) is
+    unavailable.
+    """
+    p = prefix
+    decls = (
+        f"History {p}_lx1(0.); History {p}_lx2(0.); History {p}_ly1(0.); History {p}_ly2(0.);\n"
+        f"History {p}_lhx1(0.); History {p}_lhx2(0.); History {p}_lhy1(0.); History {p}_lhy2(0.);\n"
+        f"History {p}_rx1(0.); History {p}_rx2(0.); History {p}_ry1(0.); History {p}_ry2(0.);\n"
+        f"History {p}_rhx1(0.); History {p}_rhx2(0.); History {p}_rhy1(0.); History {p}_rhy2(0.);\n"
+        f"History {p}_ms(0.);"
+    )
+    coeffs = kweight_coeffs_bs1770()
+    l_s1 = biquad_df1(left, "sb0", "sb1", "sb2", "sa1", "sa2",
+                      f"{p}_lx1", f"{p}_lx2", f"{p}_ly1", f"{p}_ly2", f"{p}_l1")
+    l_s2 = biquad_df1(f"{p}_l1", "hb0", "hb1", "hb2", "ha1", "ha2",
+                      f"{p}_lhx1", f"{p}_lhx2", f"{p}_lhy1", f"{p}_lhy2", f"{p}_lk")
+    r_s1 = biquad_df1(right, "sb0", "sb1", "sb2", "sa1", "sa2",
+                      f"{p}_rx1", f"{p}_rx2", f"{p}_ry1", f"{p}_ry2", f"{p}_r1")
+    r_s2 = biquad_df1(f"{p}_r1", "hb0", "hb1", "hb2", "ha1", "ha2",
+                      f"{p}_rhx1", f"{p}_rhx2", f"{p}_rhy1", f"{p}_rhy2", f"{p}_rk")
+    ms = (
+        f"{p}_ms = {p}_ms + (({p}_lk * {p}_lk + {p}_rk * {p}_rk) - {p}_ms) * {coeff};\n"
+        f"{out} = -0.691 + 10. * log10({p}_ms + 0.0000000001);"
+    )
+    return "\n".join([decls, coeffs, l_s1, l_s2, r_s1, r_s2, ms])
+
+
+def grain_window_lookup(
+    phase: str,
+    *,
+    buf: str = "buf_win",
+    chan: str = "0",
+    out: str = "win",
+    interp: str = "linear",
+) -> str:
+    """Read a grain amplitude-window value from a Buffer by NORMALIZED phase.
+
+    Emits the standard window-lookup idiom::
+
+        win = peek(buf_win, <phase>, <chan>, index="phase", interp="linear");
+
+    ``index="phase"`` makes ``phase`` a 0..1 normalized position into the window
+    (so the same lookup works for any buffer length), and ``interp="linear"``
+    smooths between samples. ``buf`` holds the window shape (e.g. a Hann/Tukey
+    table), ``chan`` selects the window variant (stores a per-voice
+    window index, e.g. ``peek(data_winPokedIndex, 0, i)``). Multiply a grain's
+    sample by ``out`` to apply the envelope; sum ``out`` across voices for the
+    normalization total (a ``totalWin`` accumulator).
+    """
+    return f'{out} = peek({buf}, {phase}, {chan}, index="phase", interp="{interp}");'
+
+
+# ITU-R BS.1770-4 Annex 2 4x true-peak oversampler: one 48-tap lowpass
+# decomposed into 4 polyphase branches of 12 taps (the exact coefficient
+# table the standard publishes and libebur128 ships). Catmull-Rom
+# under-reads sharp inter-sample peaks by up to ~0.6 dB vs this filter.
+_BS1770_PHASES = [
+    [0.0017089843750, 0.0109863281250, -0.0196533203125, 0.0332031250000,
+     -0.0594482421875, 0.1373291015625, 0.9721679687500, -0.1022949218750,
+     0.0476074218750, -0.0266113281250, 0.0148925781250, -0.0083007812500],
+    [-0.0291748046875, 0.0292968750000, -0.0517578125000, 0.0891113281250,
+     -0.1665039062500, 0.4650878906250, 0.7797851562500, -0.2003173828125,
+     0.1015625000000, -0.0582275390625, 0.0330810546875, -0.0189208984375],
+    [-0.0189208984375, 0.0330810546875, -0.0582275390625, 0.1015625000000,
+     -0.2003173828125, 0.7797851562500, 0.4650878906250, -0.1665039062500,
+     0.0891113281250, -0.0517578125000, 0.0292968750000, -0.0291748046875],
+    [-0.0083007812500, 0.0148925781250, -0.0266113281250, 0.0476074218750,
+     -0.1022949218750, 0.9721679687500, 0.1373291015625, -0.0594482421875,
+     0.0332031250000, -0.0196533203125, 0.0109863281250, 0.0017089843750],
+]
+
+
+def isp_bs1770_4x(x: str, out: str, *, ch: str = "l") -> str:
+    """4x inter-sample-peak detector for one channel — the REAL BS.1770-4
+    polyphase FIR (4 branches x 12 taps), replacing the Catmull-Rom
+    estimate where standards accuracy matters (true-peak METERING).
+
+    Self-contained: declares + shifts its own 11 History taps (``bp{ch}1``
+    .. ``bp{ch}11``). ``out`` = max |.| of the four interpolated phases AND
+    the on-grid sample itself (a sample-aligned peak must never read lower
+    than a plain peak meter). ~5.5-sample detector group delay — irrelevant
+    for metering. Call once per channel (``ch="l"`` / ``ch="r"``).
+    """
+    taps = [x] + [f"bp{ch}{i}" for i in range(1, 12)]
+    lines = [
+        "".join(f"History bp{ch}{i}(0.); " for i in range(1, 12)).rstrip()
+    ]
+    for p, coefs in enumerate(_BS1770_PHASES):
+        terms = " + ".join(f"{c:.13f} * {t}" for c, t in zip(coefs, taps))
+        lines.append(f"ph{ch}{p} = {terms};")
+    lines.append(
+        f"{out} = max(max(max(abs(ph{ch}0), abs(ph{ch}1)), "
+        f"max(abs(ph{ch}2), abs(ph{ch}3))), abs({x}));"
+    )
+    for i in range(11, 1, -1):
+        lines.append(f"bp{ch}{i} = bp{ch}{i - 1};")
+    lines.append(f"bp{ch}1 = {x};")
+    return "\n".join(lines) + "\n"
+
+
+def os2x_declares(ch: str = "l") -> str:
+    """History taps for :func:`os2x_pre`/:func:`os2x_post` (one channel):
+    3 input taps + the 7-tap halfband decimator ring."""
+    return (
+        f"History x{ch}1(0.); History x{ch}2(0.); History x{ch}3(0.);\n"
+        f"History y{ch}1(0.); History y{ch}2(0.); History y{ch}3(0.); "
+        f"History y{ch}4(0.);\n"
+        f"History y{ch}5(0.); History y{ch}6(0.); History y{ch}7(0.);\n"
+    )
+
+
+def os2x_pre(x: str, s1: str, s2: str, *, os: str = "os",
+             ch: str = "l") -> str:
+    """2x-oversampling INPUT stage (heat's shipped HQ path, extracted).
+
+    Emits the two shaper inputs for one channel: with ``{os} <= 0.5``,
+    ``s1 = x`` (the plain sample — the bypass path is byte-exact); in HQ,
+    ``s1`` is the 2-sample-delayed even sample and ``s2`` the cubic-halfband
+    midpoint ``(9*(x1+x2) - (x+x3)) / 16`` — the 2x stream. Shape BOTH
+    through the nonlinearity, then decimate with :func:`os2x_post`.
+    Requires :func:`os2x_declares` and pairs with the post stage's history
+    shifts (do not shift ``x{ch}*`` yourself).
+    """
+    return (
+        f"{s1} = {x};\n"
+        f"{s2} = 0.;\n"
+        f"if ({os} > 0.5) {{\n"
+        f"    {s1} = x{ch}2;\n"
+        f"    {s2} = (9.0 * (x{ch}1 + x{ch}2) - ({x} + x{ch}3)) * 0.0625;\n"
+        f"}}\n"
+    )
+
+
+def os2x_post(w1: str, w2: str, wet: str, dry: str, x: str, *,
+              os: str = "os", ch: str = "l") -> str:
+    """2x-oversampling OUTPUT stage: 7-tap halfband decimator on the shaped
+    2x stream + the pipeline-aligned dry tap (comb-free parallel mix), then
+    the input history shifts. 3 samples of detector latency in HQ (report
+    ``latency`` mode-aware — the Q43 helper); 0 when off.
+    """
+    return (
+        f"{wet} = {w1};\n"
+        f"{dry} = {x};\n"
+        f"if ({os} > 0.5) {{\n"
+        f"    y{ch}7 = y{ch}5; y{ch}6 = y{ch}4; y{ch}5 = y{ch}3; "
+        f"y{ch}4 = y{ch}2; y{ch}3 = y{ch}1; y{ch}2 = {w1}; y{ch}1 = {w2};\n"
+        f"    {wet} = 0.5 * y{ch}4 + 0.28125 * (y{ch}3 + y{ch}5) "
+        f"- 0.03125 * (y{ch}1 + y{ch}7);\n"
+        f"    {dry} = x{ch}3;\n"
+        f"}}\n"
+        f"x{ch}3 = x{ch}2; x{ch}2 = x{ch}1; x{ch}1 = {x};\n"
+    )
+
+
+def mono_below(left: str, right: str, out_left: str, out_right: str,
+               freq: str, *, prefix: str = "mb") -> str:
+    """Bass-mono primitive (catalog Q51): SUM the band below ``freq`` to
+    mono, keep everything above it stereo — the vinyl-cut / club-system
+    low-end discipline.
+
+    One-pole complementary split per channel (6 dB/oct — phase-benign when
+    the halves recombine), lows mono'd by killing their side component.
+    ``{freq} <= 20.`` bypasses byte-exactly (outs = ins). Declares its own
+    two History poles (``{prefix}_lp_l/r``).
+    """
+    return (
+        f"History {prefix}_lp_l(0.); History {prefix}_lp_r(0.);\n"
+        f"{prefix}_k = 1.0 - exp(-6.2831853 * clamp({freq}, 20., 500.) "
+        "/ samplerate);\n"
+        f"{prefix}_lp_l = {prefix}_lp_l + {prefix}_k * ({left} - {prefix}_lp_l);\n"
+        f"{prefix}_lp_r = {prefix}_lp_r + {prefix}_k * ({right} - {prefix}_lp_r);\n"
+        f"{prefix}_mono = ({prefix}_lp_l + {prefix}_lp_r) * 0.5;\n"
+        f"{out_left} = {left};\n"
+        f"{out_right} = {right};\n"
+        f"if ({freq} > 20.) {{\n"
+        f"    {out_left} = {prefix}_mono + ({left} - {prefix}_lp_l);\n"
+        f"    {out_right} = {prefix}_mono + ({right} - {prefix}_lp_r);\n"
+        f"}}\n"
+    )
+
+
+def frac_read_cubic(delay: str, pos: str, out: str) -> str:
+    """4-point cubic (Catmull-Rom) fractional read on a gen~ ``Delay`` —
+    the canonical smooth-modulation read (T25/Q54; echotide / aurora /
+    drift / motes / shard each hand-rolled a variant).
+
+    ``pos`` is the read position in SAMPLES (float >= 1); emits a single
+    expression using gen~'s built-in cubic interpolation mode.
+    """
+    return f"{out} = {delay}.read({pos}, interp=\"cubic\");\n"
+
+
+def frac_read_allpass(delay: str, pos: str, out: str, *,
+                      prefix: str = "apr") -> str:
+    """First-order ALLPASS fractional read on a gen~ ``Delay`` — flat
+    magnitude at the cost of phase memory: preferred inside FEEDBACK loops
+    (pitch stays true as the delay time modulates; cubic inside feedback
+    accumulates lowpass loss). One History per call site (``{prefix}_h``).
+    """
+    return (
+        f"History {prefix}_h(0.);\n"
+        f"{prefix}_i = floor({pos});\n"
+        f"{prefix}_f = {pos} - {prefix}_i;\n"
+        f"{prefix}_eta = (1.0 - {prefix}_f) / (1.0 + {prefix}_f);\n"
+        f"{prefix}_x0 = {delay}.read({prefix}_i, interp=\"none\");\n"
+        f"{prefix}_x1 = {delay}.read({prefix}_i + 1, interp=\"none\");\n"
+        f"{out} = {prefix}_x1 + {prefix}_eta * ({prefix}_x0 - {prefix}_h);\n"
+        f"{prefix}_h = {out};\n"
+    )
+
+
+def spectral_mag_compressor(mag: str, out_mag: str,
+                            threshold: str = "thresh",
+                            ratio: str = "ratio",
+                            attack_ms: str = "atk_ms",
+                            release_ms: str = "rel_ms",
+                            makeup: str = "makeup",
+                            *, prefix: str = "spec") -> str:
+    """Per-stream spectral magnitude compressor CURVE (plan #7, T29):
+    envelope-follow the bin magnitude in dB, apply a hard-knee downward
+    ratio above threshold, return the gain-scaled magnitude. History-only
+    (gen_sim-testable); inside a ``pfft~`` wrap it with a Data env keyed by
+    bin index — this snippet IS the per-bin math for one stream.
+    """
+    p = prefix
+    return (
+        f"History {p}_env(-120.);\n"
+        f"{p}_db = atodb({mag} + 1e-9);\n"
+        f"{p}_atk = 1.0 - exp(-1.0 / (0.001 * max({attack_ms}, 0.01) "
+        "* samplerate));\n"
+        f"{p}_rel = 1.0 - exp(-1.0 / (0.001 * max({release_ms}, 0.1) "
+        "* samplerate));\n"
+        f"{p}_k = {p}_db > {p}_env ? {p}_atk : {p}_rel;\n"
+        f"{p}_env = {p}_env + ({p}_db - {p}_env) * {p}_k;\n"
+        f"{p}_over = {p}_env - {threshold};\n"
+        f"{p}_gr = {p}_over > 0. ? {p}_over * (1.0 - 1.0 / max({ratio}, 1.))"
+        " : 0.;\n"
+        f"{out_mag} = {mag} * dbtoa({makeup} - {p}_gr);\n"
+    )
+
+
+def rbj_lowshelf(
+    freq: str,
+    q: str,
+    gain_db: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha",
+    a0: str = "a0", sA: str = "sA",
+) -> str:
+    """Runtime RBJ low-shelf biquad coefficients (Audio-EQ-Cookbook,
+    a0-normalised) — the shelf sibling of :func:`rbj_peaking`.
+
+    Boosts/cuts everything BELOW ``freq`` by ``gain_db``; ``q`` shapes the
+    corner (0.71 = classic). ``gain_db == 0`` collapses to unity. Pair with
+    :func:`biquad_df1`. ``A w0 cw alpha a0 sA`` are scratch names (override
+    to instantiate several shelves in one codebox).
+    """
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{sA} = sqrt({A});\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = ({A} + 1.) + ({A} - 1.) * {cw} + 2. * {sA} * {alpha};\n"
+        f"{b0} = ({A} * (({A} + 1.) - ({A} - 1.) * {cw} + 2. * {sA} * {alpha})) / {a0};\n"
+        f"{b1} = (2. * {A} * (({A} - 1.) - ({A} + 1.) * {cw})) / {a0};\n"
+        f"{b2} = ({A} * (({A} + 1.) - ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};\n"
+        f"{a1} = (-2. * (({A} - 1.) + ({A} + 1.) * {cw})) / {a0};\n"
+        f"{a2} = ((({A} + 1.) + ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};"
+    )
+
+
+def rbj_highshelf(
+    freq: str,
+    q: str,
+    gain_db: str,
+    b0: str, b1: str, b2: str,
+    a1: str, a2: str,
+    *,
+    A: str = "A", w0: str = "w0", cw: str = "cw", alpha: str = "alpha",
+    a0: str = "a0", sA: str = "sA",
+) -> str:
+    """Runtime RBJ high-shelf biquad coefficients (Audio-EQ-Cookbook,
+    a0-normalised) — boosts/cuts everything ABOVE ``freq`` by ``gain_db``.
+
+    Mirror of :func:`rbj_lowshelf`; same scratch-name contract. Pair with
+    :func:`biquad_df1`.
+    """
+    return (
+        f"{A} = pow(10., {gain_db} / 40.);\n"
+        f"{sA} = sqrt({A});\n"
+        f"{w0} = 2. * 3.14159265358979 * {freq} / samplerate;\n"
+        f"{cw} = cos({w0});\n"
+        f"{alpha} = sin({w0}) / (2. * {q});\n"
+        f"{a0} = ({A} + 1.) - ({A} - 1.) * {cw} + 2. * {sA} * {alpha};\n"
+        f"{b0} = ({A} * (({A} + 1.) + ({A} - 1.) * {cw} + 2. * {sA} * {alpha})) / {a0};\n"
+        f"{b1} = (-2. * {A} * (({A} - 1.) + ({A} + 1.) * {cw})) / {a0};\n"
+        f"{b2} = ({A} * (({A} + 1.) + ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};\n"
+        f"{a1} = (2. * (({A} - 1.) - ({A} + 1.) * {cw})) / {a0};\n"
+        f"{a2} = ((({A} + 1.) - ({A} - 1.) * {cw} - 2. * {sA} * {alpha})) / {a0};"
+    )
+
+
+def schroeder_comb(x: str, out: str, delay_ms: str, feedback: str,
+                   damp: str = "0.2", *, prefix: str = "scb",
+                   max_ms: float = 100.0) -> str:
+    """Tone-shaped feedback comb (T40/idea #8 — the Schroeder reverb comb
+    with the classic one-pole lowpass in the feedback path).
+
+    ``feedback`` 0..0.98 sets the tail, ``damp`` 0..1 darkens each pass
+    (0 = bright metallic, 1 = fast HF decay). Prime-number ``delay_ms``
+    values in parallel banks stay maximally in-phase-diffuse. Declares its
+    own ``Delay`` and damping ``History`` under ``prefix``.
+    """
+    p = prefix
+    samps = int(max_ms * 48) + 96
+    return (
+        f"Delay {p}_dl({samps});\n"
+        f"History {p}_lp(0.);\n"
+        f"{p}_rd = {p}_dl.read(mstosamps(clamp({delay_ms}, 0.05, "
+        f"{max_ms})), interp=\"linear\");\n"
+        f"{p}_lp = {p}_lp + clamp({damp}, 0., 1.) * ({p}_rd - {p}_lp);\n"
+        f"{p}_dl.write({x} + clamp({feedback}, 0., 0.98) * {p}_lp);\n"
+        f"{out} = {p}_rd;\n"
+    )
+
+
+def transient_detector(x: str, out: str, *, prefix: str = "trd",
+                       fast_ms: float = 1.0, slow_ms: float = 80.0) -> str:
+    """Dual-rate transient detector (T40/idea #9 — the sibilant/ducking
+    idiom extracted): a FAST envelope minus a SLOW envelope of ``|x|``.
+
+    ``out`` is the positive-only difference — it spikes on attacks and
+    sits at ~0 during sustains, ready for ducking/gating/transient
+    shaping. Both envelopes are one-pole followers on the rectified
+    input; declares two ``History`` states under ``prefix``.
+    """
+    p = prefix
+    return (
+        f"History {p}_fe(0.); History {p}_se(0.);\n"
+        f"{p}_r = abs({x});\n"
+        f"{p}_fk = 1.0 - exp(-1.0 / (0.001 * {fast_ms} * samplerate));\n"
+        f"{p}_sk = 1.0 - exp(-1.0 / (0.001 * {slow_ms} * samplerate));\n"
+        f"{p}_fe = {p}_fe + {p}_fk * ({p}_r - {p}_fe);\n"
+        f"{p}_se = {p}_se + {p}_sk * ({p}_r - {p}_se);\n"
+        f"{out} = max({p}_fe - {p}_se, 0.);\n"
+    )

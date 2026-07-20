@@ -1,0 +1,670 @@
+"""Tests for Theme dataclass and Device theme integration."""
+
+from m4l_builder.device import AudioEffect, Device
+from m4l_builder.theme import (
+    COOL,
+    FOREST,
+    INDUSTRIAL,
+    LIGHT,
+    LOFI,
+    MIDNIGHT,
+    NEBULA,
+    PALETTES,
+    SOLAR,
+    SYNTHWAVE,
+    VIOLET,
+    WARM,
+    Theme,
+    alpha,
+    derive_palette,
+    js_color,
+)
+
+
+class TestColorHelpers:
+    """js_color/alpha were duplicated identically across 5 flagships; lifting them
+    to theme.py must preserve the exact formatting those inline copies produced."""
+
+    def test_js_color_rounds_to_4_decimals(self):
+        assert js_color([0.45, 0.75, 0.65, 1.0]) == "0.45, 0.75, 0.65, 1.0"
+        assert js_color([0.123456, 0.0, 1.0, 0.5]) == "0.1235, 0.0, 1.0, 0.5"
+
+    def test_alpha_replaces_only_the_alpha_channel(self):
+        assert alpha([0.1, 0.2, 0.3, 1.0], 0.0) == [0.1, 0.2, 0.3, 0.0]
+        assert alpha([0.9, 0.8, 0.7], 0.85) == [0.9, 0.8, 0.7, 0.85]
+
+    def test_alpha_then_js_color_composes(self):
+        # the exact idiom the plugins use: js_color(alpha(GRAPH_BG, 0.0))
+        assert js_color(alpha([0.07, 0.07, 0.08, 1.0], 0.0)) == "0.07, 0.07, 0.08, 0.0"
+
+
+class TestThemeDataclass:
+    """Test Theme dataclass defaults and __post_init__ derivation."""
+
+    def test_basic_construction(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.bg == [0.1, 0.1, 0.1, 1.0]
+        assert t.accent == [0.5, 0.8, 0.6, 1.0]
+
+    def test_dial_color_derived_from_accent(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.dial_color == [0.5, 0.8, 0.6, 1.0]
+
+    def test_needle_color_derived_from_text(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.needle_color == [0.9, 0.9, 0.9, 1.0]
+
+    def test_tab_bg_derived_from_surface(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.tab_bg == [0.15, 0.15, 0.15, 1.0]
+
+    def test_tab_bg_on_derived_from_accent(self):
+        # single-accent theme: accent2 == accent, so the selected tab stays on accent
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.tab_bg_on == [0.5, 0.8, 0.6, 1.0]
+
+    def test_tab_bg_on_uses_accent2_when_two_accent(self):
+        # two-accent premium: the SELECTED tab takes the selection accent (accent2),
+        # the primary accent stays for dials/bars.
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.30, 0.80, 0.86, 1.0],     # cyan primary
+            accent2=[0.92, 0.40, 0.62, 1.0],    # pink selection
+        )
+        assert t.tab_bg_on == [0.92, 0.40, 0.62, 1.0]   # selected tab = accent2
+        assert t.dial_color == [0.30, 0.80, 0.86, 1.0]  # dials stay on accent
+
+    def test_tab_text_derived_from_text_dim(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.tab_text == [0.5, 0.5, 0.5, 1.0]
+
+    def test_tab_text_on_derived_from_text(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.tab_text_on == [0.9, 0.9, 0.9, 1.0]
+
+    def test_explicit_dial_color_not_overridden(self):
+        custom = [1.0, 0.0, 0.0, 1.0]
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+            dial_color=custom,
+        )
+        assert t.dial_color == custom
+
+    def test_default_fontname(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.fontname == "Ableton Sans Medium"
+        assert t.fontname_bold == "Ableton Sans Bold"
+
+    def test_derived_values_are_copies(self):
+        """Derived values should be copies, not references to the original."""
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        t.dial_color[0] = 0.99
+        assert t.accent[0] == 0.5  # original unchanged
+
+    def test_default_meter_colors_exist(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.meter_cold is not None and len(t.meter_cold) == 4
+        assert t.meter_warm is not None and len(t.meter_warm) == 4
+        assert t.meter_hot is not None and len(t.meter_hot) == 4
+        assert t.meter_over is not None and len(t.meter_over) == 4
+
+    def test_scope_color_derived_from_accent(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.scope_color == [0.5, 0.8, 0.6, 1.0]
+
+    def test_scope_bgcolor_derived_from_bg(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        assert t.scope_bgcolor == [0.1, 0.1, 0.1, 1.0]
+
+    def test_meter_kwargs_structure(self):
+        t = Theme(
+            bg=[0.1, 0.1, 0.1, 1.0],
+            surface=[0.15, 0.15, 0.15, 1.0],
+            section=[0.2, 0.2, 0.2, 1.0],
+            text=[0.9, 0.9, 0.9, 1.0],
+            text_dim=[0.5, 0.5, 0.5, 1.0],
+            accent=[0.5, 0.8, 0.6, 1.0],
+        )
+        kwargs = t.meter_kwargs()
+        assert 'coldcolor' in kwargs
+        assert 'warmcolor' in kwargs
+        assert 'hotcolor' in kwargs
+        assert 'overloadcolor' in kwargs
+        assert kwargs['coldcolor'] == t.meter_cold
+        assert kwargs['warmcolor'] == t.meter_warm
+        assert kwargs['hotcolor'] == t.meter_hot
+        assert kwargs['overloadcolor'] == t.meter_over
+
+
+class TestPrebuiltThemes:
+    """Test the 4 pre-built themes are valid."""
+
+    def test_midnight_has_all_fields(self):
+        assert MIDNIGHT.bg is not None
+        assert MIDNIGHT.accent is not None
+        assert MIDNIGHT.dial_color is not None
+        assert MIDNIGHT.meter_cold is not None
+        assert MIDNIGHT.meter_warm is not None
+        assert MIDNIGHT.meter_hot is not None
+        assert MIDNIGHT.meter_over is not None
+        assert MIDNIGHT.scope_color is not None
+        assert MIDNIGHT.scope_bgcolor is not None
+
+    def test_warm_has_all_fields(self):
+        assert WARM.bg is not None
+        assert WARM.accent is not None
+        assert WARM.dial_color is not None
+        assert WARM.meter_cold is not None
+        assert WARM.meter_warm is not None
+        assert WARM.meter_hot is not None
+        assert WARM.meter_over is not None
+        assert WARM.scope_color is not None
+        assert WARM.scope_bgcolor is not None
+
+    def test_cool_has_all_fields(self):
+        assert COOL.bg is not None
+        assert COOL.accent is not None
+        assert COOL.dial_color is not None
+        assert COOL.meter_cold is not None
+        assert COOL.meter_warm is not None
+        assert COOL.meter_hot is not None
+        assert COOL.meter_over is not None
+        assert COOL.scope_color is not None
+        assert COOL.scope_bgcolor is not None
+
+    def test_light_has_all_fields(self):
+        assert LIGHT.bg is not None
+        assert LIGHT.accent is not None
+        assert LIGHT.dial_color is not None
+        assert LIGHT.meter_cold is not None
+        assert LIGHT.meter_warm is not None
+        assert LIGHT.meter_hot is not None
+        assert LIGHT.meter_over is not None
+        assert LIGHT.scope_color is not None
+        assert LIGHT.scope_bgcolor is not None
+
+    def test_themes_are_distinct(self):
+        assert MIDNIGHT.bg != WARM.bg
+        assert COOL.bg != LIGHT.bg
+        assert WARM.accent != COOL.accent
+
+    def test_meter_colors_are_four_element_lists(self):
+        for theme in (MIDNIGHT, WARM, COOL, LIGHT):
+            assert len(theme.meter_cold) == 4
+            assert len(theme.meter_warm) == 4
+            assert len(theme.meter_hot) == 4
+            assert len(theme.meter_over) == 4
+
+    def test_scope_colors_are_four_element_lists(self):
+        for theme in (MIDNIGHT, WARM, COOL, LIGHT):
+            assert len(theme.scope_color) == 4
+            assert len(theme.scope_bgcolor) == 4
+
+    def test_meter_kwargs_returns_correct_keys(self):
+        kwargs = MIDNIGHT.meter_kwargs()
+        assert set(kwargs.keys()) == {'coldcolor', 'warmcolor', 'hotcolor', 'overloadcolor'}
+
+    def test_meter_kwargs_values_match_fields(self):
+        for theme in (MIDNIGHT, WARM, COOL, LIGHT):
+            kwargs = theme.meter_kwargs()
+            assert kwargs['coldcolor'] == theme.meter_cold
+            assert kwargs['warmcolor'] == theme.meter_warm
+            assert kwargs['hotcolor'] == theme.meter_hot
+            assert kwargs['overloadcolor'] == theme.meter_over
+
+
+class TestDeviceThemeIntegration:
+    """Test Device with theme applies colors to UI elements."""
+
+    def test_device_without_theme_works(self):
+        d = Device("Test", 200, 100)
+        d.add_panel("bg", [0, 0, 200, 100], bgcolor=[0.1, 0.1, 0.1, 1.0])
+        d.add_dial("d1", "test", [10, 10, 45, 45])
+        assert len(d.boxes) == 2
+
+    def test_device_with_theme_stores_it(self):
+        d = Device("Test", 200, 100, theme=WARM)
+        assert d.theme is WARM
+
+    def test_panel_gets_theme_bgcolor(self):
+        d = Device("Test", 200, 100, theme=WARM)
+        d.add_panel("bg", [0, 0, 200, 100])
+        box = d.boxes[0]["box"]
+        assert box["bgcolor"] == WARM.bg
+
+    def test_panel_user_bgcolor_overrides_theme(self):
+        custom = [0.5, 0.5, 0.5, 1.0]
+        d = Device("Test", 200, 100, theme=WARM)
+        d.add_panel("bg", [0, 0, 200, 100], bgcolor=custom)
+        box = d.boxes[0]["box"]
+        assert box["bgcolor"] == custom
+
+    def test_dial_gets_theme_colors(self):
+        d = Device("Test", 200, 100, theme=MIDNIGHT)
+        d.add_dial("d1", "test", [10, 10, 45, 45])
+        box = d.boxes[0]["box"]
+        assert box["activedialcolor"] == MIDNIGHT.dial_color
+        assert box["activeneedlecolor"] == MIDNIGHT.needle_color
+
+    def test_dial_user_color_overrides_theme(self):
+        custom = [1.0, 0.0, 0.0, 1.0]
+        d = Device("Test", 200, 100, theme=MIDNIGHT)
+        d.add_dial("d1", "test", [10, 10, 45, 45], activedialcolor=custom)
+        box = d.boxes[0]["box"]
+        assert box["activedialcolor"] == custom
+
+    def test_comment_gets_theme_text_color(self):
+        d = Device("Test", 200, 100, theme=COOL)
+        d.add_comment("c1", [0, 0, 100, 20], "Hello")
+        box = d.boxes[0]["box"]
+        assert box["textcolor"] == COOL.text
+
+    def test_comment_user_textcolor_overrides_theme(self):
+        custom = [1.0, 0.0, 0.0, 1.0]
+        d = Device("Test", 200, 100, theme=COOL)
+        d.add_comment("c1", [0, 0, 100, 20], "Hello", textcolor=custom)
+        box = d.boxes[0]["box"]
+        assert box["textcolor"] == custom
+
+    def test_tab_gets_theme_colors(self):
+        d = Device("Test", 200, 100, theme=WARM)
+        d.add_tab("t1", "mode", [0, 0, 200, 30], options=["A", "B"])
+        box = d.boxes[0]["box"]
+        assert box["bgcolor"] == WARM.tab_bg
+        assert box["bgoncolor"] == WARM.tab_bg_on
+        assert box["textcolor"] == WARM.tab_text
+        assert box["textoncolor"] == WARM.tab_text_on
+
+    def test_toggle_gets_theme_accent(self):
+        d = Device("Test", 200, 100, theme=MIDNIGHT)
+        d.add_toggle("tog1", "on", [10, 10, 20, 20])
+        box = d.boxes[0]["box"]
+        assert box["activebgoncolor"] == MIDNIGHT.accent
+
+    def test_menu_highlighted_item_text_is_themed(self):
+        # live.menu's highlighted item: bg = hltcolor (tab_bg_on / accent2), and its
+        # TEXT = hlttextcolor (tab_text_on). The theme must inject textoncolor so the
+        # highlight text is legible — corpus themes hlttextcolor; tab already does too.
+        d = Device("Test", 200, 100, theme=WARM)
+        d.add_menu("m1", "mode", [0, 0, 80, 15], options=["A", "B"])
+        box = d.boxes[0]["box"]
+        assert box["hltcolor"] == WARM.tab_bg_on        # highlight bg = accent
+        assert box["hlttextcolor"] == WARM.tab_text_on  # highlight TEXT now themed
+
+    def test_scope_gets_theme_colors(self):
+        # live.scope~ trace is the BARE linecolor (verified across the real-device
+        # corpus); activelinecolor is not a real live.scope~ attribute.
+        d = Device("Test", 200, 100, theme=COOL)
+        d.add_scope("s1", [0, 0, 200, 100])
+        box = d.boxes[0]["box"]
+        assert box["bgcolor"] == COOL.scope_bgcolor
+        assert box["linecolor"] == COOL.scope_color
+        assert "activelinecolor" not in box
+
+    def test_meter_gets_theme_colors(self):
+        d = Device("Test", 200, 100, theme=MIDNIGHT)
+        d.add_meter("m1", [0, 0, 20, 100])
+        box = d.boxes[0]["box"]
+        assert box["coldcolor"] == MIDNIGHT.meter_cold
+        assert box["warmcolor"] == MIDNIGHT.meter_warm
+        assert box["hotcolor"] == MIDNIGHT.meter_hot
+        assert box["overloadcolor"] == MIDNIGHT.meter_over
+
+    def test_meter_user_colors_override_theme(self):
+        custom_cold = [0.0, 1.0, 0.0, 1.0]
+        d = Device("Test", 200, 100, theme=MIDNIGHT)
+        d.add_meter("m1", [0, 0, 20, 100], coldcolor=custom_cold)
+        box = d.boxes[0]["box"]
+        assert box["coldcolor"] == custom_cold
+        # other colors still from theme
+        assert box["warmcolor"] == MIDNIGHT.meter_warm
+
+    def test_meter_without_theme_has_no_colors_injected(self):
+        d = Device("Test", 200, 100)
+        d.add_meter("m1", [0, 0, 20, 100])
+        box = d.boxes[0]["box"]
+        assert "coldcolor" not in box
+        assert "warmcolor" not in box
+
+    def test_audio_effect_with_theme(self):
+        d = AudioEffect("Test", 200, 100, theme=WARM)
+        assert d.theme is WARM
+        d.add_panel("bg", [0, 0, 200, 100])
+        box = d.boxes[-1]["box"]
+        assert box["bgcolor"] == WARM.bg
+
+    def test_builds_successfully_with_theme(self):
+        d = AudioEffect("Themed", 200, 100, theme=MIDNIGHT)
+        d.add_panel("bg", [0, 0, 200, 100])
+        d.add_dial("d1", "test", [10, 10, 45, 45])
+        d.add_comment("title", [8, 8, 100, 16], "TEST")
+        data = d.to_bytes()
+        assert len(data) > 0
+
+
+class TestFromAccent:
+    def test_returns_theme_instance(self):
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0])
+        assert isinstance(t, Theme)
+
+    def test_accent_is_preserved(self):
+        accent = [0.4, 0.7, 0.5, 1.0]
+        t = Theme.from_accent(accent)
+        assert t.accent == accent
+
+    def test_bg_is_darker_than_accent(self):
+        accent = [0.4, 0.7, 0.5, 1.0]
+        t = Theme.from_accent(accent)
+        accent_luma = 0.299 * accent[0] + 0.587 * accent[1] + 0.114 * accent[2]
+        bg_luma = 0.299 * t.bg[0] + 0.587 * t.bg[1] + 0.114 * t.bg[2]
+        assert bg_luma < accent_luma
+
+    def test_surface_is_between_bg_and_accent(self):
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0])
+        bg_luma = 0.299 * t.bg[0] + 0.587 * t.bg[1] + 0.114 * t.bg[2]
+        surf_luma = 0.299 * t.surface[0] + 0.587 * t.surface[1] + 0.114 * t.surface[2]
+        assert surf_luma >= bg_luma
+
+    def test_all_rgba_fields_are_length_4(self):
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0])
+        for field in (t.bg, t.surface, t.section, t.text, t.text_dim, t.accent):
+            assert len(field) == 4
+
+    def test_custom_bg_is_respected(self):
+        custom_bg = [0.02, 0.02, 0.02, 1.0]
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0], bg=custom_bg)
+        assert t.bg == custom_bg
+
+    def test_custom_surface_is_respected(self):
+        custom_surface = [0.15, 0.15, 0.15, 1.0]
+        t = Theme.from_accent([0.4, 0.7, 0.5, 1.0], surface=custom_surface)
+        assert t.surface == custom_surface
+
+
+class TestCustomTheme:
+    def test_no_args_matches_midnight_core_fields(self):
+        t = Theme.custom()
+        assert t.bg == MIDNIGHT.bg
+        assert t.surface == MIDNIGHT.surface
+        assert t.section == MIDNIGHT.section
+        assert t.text == MIDNIGHT.text
+        assert t.text_dim == MIDNIGHT.text_dim
+        assert t.accent == MIDNIGHT.accent
+
+    def test_accent_override(self):
+        new_accent = [0.8, 0.3, 0.1, 1.0]
+        t = Theme.custom(accent=new_accent)
+        assert t.accent == new_accent
+
+    def test_bg_override(self):
+        new_bg = [0.05, 0.05, 0.05, 1.0]
+        t = Theme.custom(bg=new_bg)
+        assert t.bg == new_bg
+
+    def test_unspecified_fields_stay_midnight(self):
+        t = Theme.custom(accent=[0.9, 0.2, 0.2, 1.0])
+        assert t.bg == MIDNIGHT.bg
+        assert t.text == MIDNIGHT.text
+
+    def test_returns_theme_instance(self):
+        assert isinstance(Theme.custom(), Theme)
+
+
+class TestNewPresets:
+    def test_forest_has_green_accent(self):
+        # green channel should dominate
+        assert FOREST.accent[1] > FOREST.accent[0]
+        assert FOREST.accent[1] > FOREST.accent[2]
+
+    def test_violet_has_purple_accent(self):
+        # red and blue channels prominent relative to green
+        assert VIOLET.accent[0] > 0.4
+        assert VIOLET.accent[2] > 0.6
+
+    def test_solar_has_yellow_accent(self):
+        # red and green high, blue low
+        assert SOLAR.accent[0] > 0.7
+        assert SOLAR.accent[1] > 0.6
+        assert SOLAR.accent[2] < 0.4
+
+    def test_all_presets_are_theme_instances(self):
+        for preset in (FOREST, VIOLET, SOLAR):
+            assert isinstance(preset, Theme)
+
+    def test_all_presets_have_valid_rgba_fields(self):
+        for preset in (FOREST, VIOLET, SOLAR):
+            for field in (preset.bg, preset.surface, preset.section,
+                          preset.text, preset.text_dim, preset.accent):
+                assert len(field) == 4
+
+    def test_presets_are_distinct_from_each_other(self):
+        assert FOREST.accent != VIOLET.accent
+        assert VIOLET.accent != SOLAR.accent
+        assert FOREST.accent != SOLAR.accent
+
+    def test_forest_has_dark_bg(self):
+        bg_luma = 0.299 * FOREST.bg[0] + 0.587 * FOREST.bg[1] + 0.114 * FOREST.bg[2]
+        assert bg_luma < 0.3
+
+    def test_violet_has_dark_bg(self):
+        bg_luma = 0.299 * VIOLET.bg[0] + 0.587 * VIOLET.bg[1] + 0.114 * VIOLET.bg[2]
+        assert bg_luma < 0.3
+
+    def test_solar_has_dark_bg(self):
+        bg_luma = 0.299 * SOLAR.bg[0] + 0.587 * SOLAR.bg[1] + 0.114 * SOLAR.bg[2]
+        assert bg_luma < 0.3
+
+
+class TestThemePresetsWave2:
+    """Test LOFI, SYNTHWAVE, INDUSTRIAL presets."""
+
+    def test_lofi_is_theme_with_accent(self):
+        assert isinstance(LOFI, Theme)
+        assert LOFI.accent is not None
+
+    def test_synthwave_is_theme_with_accent(self):
+        assert isinstance(SYNTHWAVE, Theme)
+        assert SYNTHWAVE.accent is not None
+
+    def test_industrial_is_theme_with_accent(self):
+        assert isinstance(INDUSTRIAL, Theme)
+        assert INDUSTRIAL.accent is not None
+
+    def test_lofi_has_warm_muted_accent(self):
+        # amber/gold: red > green > blue
+        assert LOFI.accent[0] > 0.5
+        assert LOFI.accent[1] > 0.4
+        assert LOFI.accent[2] < 0.4
+
+    def test_synthwave_has_cyan_accent(self):
+        # cyan: low red, high green and blue
+        assert SYNTHWAVE.accent[1] > 0.7
+        assert SYNTHWAVE.accent[2] > 0.7
+
+    def test_industrial_has_orange_accent(self):
+        # vivid orange: high red, mid green, low blue
+        assert INDUSTRIAL.accent[0] > 0.8
+        assert INDUSTRIAL.accent[1] > 0.3
+        assert INDUSTRIAL.accent[2] < 0.2
+
+    def test_all_wave2_have_valid_rgba_fields(self):
+        for preset in (LOFI, SYNTHWAVE, INDUSTRIAL):
+            for field in (preset.bg, preset.surface, preset.section,
+                          preset.text, preset.text_dim, preset.accent):
+                assert len(field) == 4
+
+    def test_all_wave2_have_dark_bg(self):
+        for preset in (LOFI, SYNTHWAVE, INDUSTRIAL):
+            bg_luma = 0.299 * preset.bg[0] + 0.587 * preset.bg[1] + 0.114 * preset.bg[2]
+            assert bg_luma < 0.3
+
+    def test_all_wave2_have_meter_colors(self):
+        for preset in (LOFI, SYNTHWAVE, INDUSTRIAL):
+            assert len(preset.meter_cold) == 4
+            assert len(preset.meter_warm) == 4
+            assert len(preset.meter_hot) == 4
+            assert len(preset.meter_over) == 4
+
+    def test_wave2_are_distinct(self):
+        assert LOFI.accent != SYNTHWAVE.accent
+        assert SYNTHWAVE.accent != INDUSTRIAL.accent
+        assert LOFI.accent != INDUSTRIAL.accent
+
+
+class TestDerivePalette:
+    """B2: HSL accent-pair derivation; B3: a violet+cyan two-accent preset."""
+
+    def test_complementary_rotates_accent_180(self):
+        # complementary accent2 = the hue-opposite of the accent
+        t = derive_palette([0.90, 0.20, 0.20, 1.0], scheme="complementary")
+        assert t.accent == [0.90, 0.20, 0.20, 1.0]
+        # red -> cyan-ish: green & blue dominate accent2, red is lowest
+        assert t.accent2[0] < t.accent2[1]
+        assert t.accent2[0] < t.accent2[2]
+
+    def test_accent2_preserves_lightness_and_saturation(self):
+        import colorsys
+        acc = [0.20, 0.55, 0.85, 1.0]
+        t = derive_palette(acc, scheme="complementary")
+        _h1, l1, s1 = colorsys.rgb_to_hls(*acc[:3])
+        _h2, l2, s2 = colorsys.rgb_to_hls(*t.accent2[:3])
+        assert abs(l1 - l2) < 1e-9 and abs(s1 - s2) < 1e-9
+
+    def test_scheme_changes_the_rotation(self):
+        acc = [0.20, 0.55, 0.85, 1.0]
+        comp = derive_palette(acc, scheme="complementary").accent2
+        analog = derive_palette(acc, scheme="analogous").accent2
+        assert comp != analog
+
+    def test_derived_theme_is_usable(self):
+        # a derived two-accent theme renders on a device like any preset
+        t = derive_palette([0.66, 0.94, 0.26, 1.0])
+        d = AudioEffect("t", width=120, height=80, theme=t)
+        assert d.theme.accent2 is not None
+
+    def test_nebula_preset_two_accent(self):
+        # violet primary + cyan secondary
+        assert NEBULA.accent == [0.70, 0.42, 0.89, 1.0]
+        assert NEBULA.accent2 == [0.43, 0.83, 1.0, 1.0]
+        assert NEBULA.accent != NEBULA.accent2
+        assert PALETTES["nebula"] is NEBULA
+
+
+class TestGraphiteAndAccents:
+    def test_graphite_consolidates_the_fleet_constants(self):
+        from m4l_builder.theme import GRAPHITE
+        # byte-identical to the block copied across pressure/heat/ceiling/echotide/snap
+        assert GRAPHITE.bg == [0.13, 0.13, 0.14, 1.0]
+        assert GRAPHITE.surface == [0.17, 0.17, 0.18, 1.0]
+        assert GRAPHITE.section == [0.24, 0.24, 0.25, 1.0]        # CONTROL_BG
+        assert GRAPHITE.text == [0.93, 0.95, 0.98, 1.0]
+        assert GRAPHITE.text_dim == [0.63, 0.64, 0.66, 1.0]
+        assert GRAPHITE.scope_bgcolor == [0.08, 0.09, 0.10, 1.0]  # GRAPH_BG
+        assert GRAPHITE.panel_border == [0.28, 0.28, 0.30, 1.0]   # GRAPH_BORDER
+
+    def test_accent_registry_matches_shipping_devices(self):
+        from m4l_builder.theme import ACCENTS
+        # verbatim from the build.py files (zero-visual-delta adoption)
+        assert ACCENTS["pressure"] == [0.95, 0.62, 0.28, 1.0]
+        assert ACCENTS["strip"] == [0.96, 0.66, 0.16, 1.0]
+        assert ACCENTS["aurora"] == [0.30, 0.85, 0.74, 1.0]
+        for name, rgba in ACCENTS.items():
+            assert len(rgba) == 4 and all(0.0 <= c <= 1.0 for c in rgba), name
+
+    def test_graphite_usable_on_device(self):
+        from m4l_builder.theme import GRAPHITE
+        d = AudioEffect("g", width=120, height=80, theme=GRAPHITE)
+        assert d.theme.bg == [0.13, 0.13, 0.14, 1.0]

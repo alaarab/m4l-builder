@@ -1,0 +1,3433 @@
+"""Tests for visual engine modules (jsui JavaScript code generators)."""
+import os
+import tempfile
+
+import pytest
+
+from m4l_builder import MIDNIGHT, AudioEffect
+from m4l_builder.engines.ballistics_curve import ballistics_curve_js
+from m4l_builder.engines.crossover_display import (
+    CROSSOVER_DISPLAY_INLETS,
+    CROSSOVER_DISPLAY_OUTLETS,
+    crossover_display_js,
+)
+from m4l_builder.engines.curve_editor import (
+    CURVE_EDITOR_INLETS,
+    CURVE_EDITOR_OUTLETS,
+    curve_editor_js,
+)
+from m4l_builder.engines.delay_trail import delay_trail_js
+from m4l_builder.engines.design_system import (
+    DESIGN_SYSTEM_VERSION,
+    design_system_js,
+    version_tag,
+)
+from m4l_builder.engines.energy_history import (
+    energy_history_inlets,
+    energy_history_js,
+)
+from m4l_builder.engines.envelope_display import ENVELOPE_INLETS, envelope_display_js
+from m4l_builder.engines.envelope_editor import (
+    ENVELOPE_EDITOR_INLETS,
+    ENVELOPE_EDITOR_OUTLETS,
+    envelope_editor_js,
+)
+from m4l_builder.engines.eq_band_column import (
+    EQ_BAND_COLUMN_INLETS,
+    EQ_BAND_COLUMN_OUTLETS,
+    eq_band_column_js,
+)
+from m4l_builder.engines.eq_curve import EQ_CURVE_INLETS, eq_curve_js
+from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, filter_curve_js
+from m4l_builder.engines.grain_display import (
+    GRAIN_DISPLAY_INLETS,
+    GRAIN_DISPLAY_OUTLETS,
+    grain_display_js,
+)
+from m4l_builder.engines.grid_sequencer_display import (
+    GRID_SEQ_INLETS,
+    GRID_SEQ_OUTLETS,
+    grid_sequencer_display_js,
+)
+from m4l_builder.engines.icon_overlay import icon_overlay_js
+from m4l_builder.engines.level_history import (
+    LEVEL_HISTORY_INLETS,
+    LEVEL_HISTORY_OUTLETS,
+    level_history_js,
+)
+from m4l_builder.engines.level_meter import level_meter_js
+from m4l_builder.engines.linear_phase_eq_display import (
+    LINEAR_PHASE_EQ_DISPLAY_INLETS,
+    LINEAR_PHASE_EQ_DISPLAY_OUTLETS,
+    linear_phase_eq_display_js,
+)
+from m4l_builder.engines.loop_filter_curve import loop_filter_curve_js
+from m4l_builder.engines.peaking_eq_display import (
+    PEAKING_EQ_DISPLAY_INLETS,
+    PEAKING_EQ_DISPLAY_OUTLETS,
+    peaking_eq_display_js,
+)
+from m4l_builder.engines.piano_roll import PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS, piano_roll_js
+from m4l_builder.engines.resonance_bank_display import (
+    RESONANCE_BANK_INLETS,
+    RESONANCE_BANK_OUTLETS,
+    resonance_bank_display_js,
+)
+from m4l_builder.engines.sidechain_display import (
+    SIDECHAIN_DISPLAY_INLETS,
+    SIDECHAIN_DISPLAY_OUTLETS,
+    sidechain_display_js,
+)
+from m4l_builder.engines.slice_overview import (
+    SLICE_OVERVIEW_INLETS,
+    SLICE_OVERVIEW_OUTLETS,
+    slice_overview_js,
+)
+from m4l_builder.engines.slice_pattern_display import (
+    SLICE_PATTERN_DISPLAY_INLETS,
+    SLICE_PATTERN_DISPLAY_OUTLETS,
+    slice_pattern_display_js,
+)
+from m4l_builder.engines.spectral_display import (
+    SPECTRAL_DISPLAY_INLETS,
+    SPECTRAL_DISPLAY_OUTLETS,
+    spectral_display_js,
+)
+from m4l_builder.engines.spectral_vocoder_display import (
+    SPECTRAL_VOCODER_INLETS,
+    SPECTRAL_VOCODER_OUTLETS,
+    spectral_vocoder_display_js,
+)
+from m4l_builder.engines.spectrum_analyzer import (
+    SPECTRUM_INLETS,
+    spectrum_analyzer_dsp,
+    spectrum_analyzer_js,
+)
+from m4l_builder.engines.step_bars import (
+    STEP_BARS_INLETS,
+    STEP_BARS_OUTLETS,
+    step_bars_js,
+)
+from m4l_builder.engines.step_grid_display import (
+    STEP_GRID_DISPLAY_INLETS,
+    STEP_GRID_DISPLAY_OUTLETS,
+    step_grid_display_js,
+)
+from m4l_builder.engines.transfer_curve import transfer_curve_js
+from m4l_builder.engines.velocity_curve_display import (
+    VELOCITY_CURVE_INLETS,
+    VELOCITY_CURVE_OUTLETS,
+    velocity_curve_display_js,
+)
+from m4l_builder.engines.waveform_display import WAVEFORM_INLETS, waveform_display_js
+from m4l_builder.engines.waveshape_curve import waveshape_curve_js
+from m4l_builder.engines.wavetable_display import (
+    WAVETABLE_DISPLAY_INLETS,
+    WAVETABLE_DISPLAY_OUTLETS,
+    wavetable_display_js,
+)
+from m4l_builder.engines.wavetable_editor import (
+    WAVETABLE_EDITOR_INLETS,
+    WAVETABLE_EDITOR_OUTLETS,
+    wavetable_editor_js,
+)
+from m4l_builder.engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS, xy_pad_js
+from m4l_builder.jsui_contract import find_jsui_contract_issues, find_v8ui_contract_issues
+
+ALL_JSUI_FACTORIES = [
+    crossover_display_js,
+    filter_curve_js,
+    eq_band_column_js,
+    spectrum_analyzer_js,
+    envelope_display_js,
+    envelope_editor_js,
+    curve_editor_js,
+    step_bars_js,
+    waveform_display_js,
+    xy_pad_js,
+    piano_roll_js,
+    velocity_curve_display_js,
+    wavetable_display_js,
+    resonance_bank_display_js,
+    sidechain_display_js,
+    spectral_display_js,
+    peaking_eq_display_js,
+    step_grid_display_js,
+    grain_display_js,
+    grid_sequencer_display_js,
+    wavetable_editor_js,
+    spectral_vocoder_display_js,
+    slice_overview_js,
+    slice_pattern_display_js,
+    lambda: icon_overlay_js("expand"),
+    lambda: icon_overlay_js("collapse"),
+    lambda: energy_history_js([
+        {"color": "0.30, 0.74, 0.68, 0.85", "mode": "fill"},
+        {"color": "0.94, 0.42, 0.62, 1.0", "mode": "line", "line_width": 1.8},
+    ]),
+]
+
+
+class TestEnergyHistory:
+    BANDS = [
+        {"color": "0.30, 0.74, 0.68, 0.85", "mode": "fill"},
+        {"color": "0.62, 0.83, 0.30, 0.55", "mode": "fill"},
+        {"color": "0.94, 0.42, 0.62, 1.0", "mode": "line", "line_width": 1.8},
+    ]
+
+    def test_inlets_match_band_count(self):
+        assert energy_history_inlets(self.BANDS) == 3
+        js = energy_history_js(self.BANDS)
+        assert "inlets = NB;" in js and "var NB = BANDS.length;" in js
+
+    def test_bands_and_modes_embedded(self):
+        js = energy_history_js(self.BANDS)
+        # fill = m:0, line = m:1
+        assert "{c:[0.30, 0.74, 0.68, 0.85], m:0" in js
+        assert "{c:[0.94, 0.42, 0.62, 1.0], m:1, lw:1.8}" in js
+
+    def test_rate_sets_task_interval(self):
+        js = energy_history_js(self.BANDS, rate_hz=20.0)
+        assert "_task.interval = 50;" in js  # 1000/20
+
+    def test_requires_at_least_one_band(self):
+        with pytest.raises(ValueError):
+            energy_history_js([])
+
+    def test_follows_jsui_contract(self):
+        assert find_jsui_contract_issues(energy_history_js(self.BANDS)) == []
+
+
+def test_design_system_snippet_is_es5_clean():
+    """The shared snippet must carry no forbidden ES6 constructs (it lacks the
+    paint/init bootstrap, so test the forbidden half, not the full contract)."""
+    snippet = design_system_js()
+    for bad in ("`", "=>", " let ", " const ", "class "):
+        assert bad not in snippet, bad
+    assert "function ds_node_glow" in snippet
+    assert "function ds_set_cursor" in snippet
+    assert version_tag() == "ds" + str(DESIGN_SYSTEM_VERSION)
+
+MINIMAL_JSUI_CODE = """\
+mgraphics.init();
+mgraphics.relative_coords = 0;
+mgraphics.autofill = 0;
+function bang() { mgraphics.redraw(); }
+function paint() {}
+"""
+
+
+@pytest.mark.parametrize("factory", ALL_JSUI_FACTORIES)
+def test_all_engine_outputs_follow_shared_jsui_contract(factory):
+    assert find_jsui_contract_issues(factory()) == []
+
+# POINTER-EVENT engines: hosted in v8ui boxes in every shipping device
+# (verified per-device) — pointer handlers never fire in a classic jsui,
+# so these are held to the v8ui contract and must NEVER be add_jsui'd.
+V8UI_FACTORIES = [
+    eq_curve_js,
+    linear_phase_eq_display_js,
+    transfer_curve_js,
+    ballistics_curve_js,
+    level_history_js,
+    delay_trail_js,
+    loop_filter_curve_js,
+    waveshape_curve_js,
+    level_meter_js,
+]
+
+
+@pytest.mark.parametrize("factory", V8UI_FACTORIES)
+def test_pointer_engines_follow_v8ui_contract(factory):
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues as v8
+    assert v8(factory()) == []
+
+
+def test_exciter_curve_reflects_delta_listen_state():
+    # set_listen <0-3> draws a DELTA ALL/HIGH/LOW badge so the hero shows which
+    # band's harmonics are being soloed (the menu had no display sync before).
+    from m4l_builder.engines.exciter_curve import exciter_curve_js
+    js = exciter_curve_js()
+    assert "function set_listen(v)" in js
+    assert "listen = clamp(Math.round(v), 0, 3)" in js
+    for badge in ("DELTA ALL", "DELTA HIGH", "DELTA LOW"):
+        assert badge in js
+    assert find_v8ui_contract_issues(js) == []
+
+
+def test_exciter_curve_draws_live_fft_spectrum():
+    # The hero now reads the fft_analyzer buffer~ (set_analyzer_buffer +
+    # set_samplerate, polled ~30 fps) and draws a spectrum behind the band
+    # curves so you SEE the harmonics each band adds (premium-exciter-style).
+    from m4l_builder.engines.exciter_curve import exciter_curve_js
+    js = exciter_curve_js()
+    for fn in ("function set_analyzer_buffer(name, bins)",
+               "function set_samplerate(hz)",
+               "function update_spectrum(mags)",
+               "function poll_analyzer_buffer()",
+               "function draw_spectrum()"):
+        assert fn in js, fn
+    # the spectrum is a display-only backdrop: it must never emit an outlet.
+    assert "draw_spectrum()" in js          # wired into paint()
+    assert "new Buffer(" in js              # reads the analyzer buffer~
+    # custom fill/line colors are substitutable (kept dim by default).
+    js2 = exciter_curve_js(spec_line_color="1.0, 0.0, 0.0, 1.0")
+    assert "var SPEC_LINE_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+    # exciter_curve is a POINTER-EVENT engine hosted in a v8ui (Sheen) —
+    # hold it to the v8ui contract, not the classic-jsui one.
+    assert find_v8ui_contract_issues(js) == []
+
+
+class TestCrossoverDisplayEngine:
+    def test_returns_string(self):
+        js = crossover_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_inlets_and_outlets(self):
+        js = crossover_display_js()
+        assert "inlets = 5;" in js       # low Hz, high Hz, MID + SIDE analyzers, mode
+        assert "outlets = 2;" in js      # low/high split, on drag
+
+    def test_contains_paint_function(self):
+        js = crossover_display_js()
+        assert "function paint()" in js
+
+    def test_contains_msg_float_handler(self):
+        js = crossover_display_js()
+        assert "function msg_float" in js
+
+    def test_interactive_and_spectrum(self):
+        js = crossover_display_js()
+        # draggable splits + live spectrum feed
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function set_analyzer_buffer" in js
+
+    def test_mid_side_two_spectrum_path(self):
+        js = crossover_display_js()
+        # a 2nd analyzer buffer + a mode flag drive the Mid-Side two-spectrum draw
+        assert "function set_analyzer_buffer2" in js
+        assert "function set_mode" in js
+        assert "mags2" in js
+        assert "stereo_mode === 1" in js       # the two-spectrum branch
+        # the SIDE overlay uses its own tint (custom color threads through)
+        js2 = crossover_display_js(side_line="0.11, 0.22, 0.33, 0.44")
+        assert "0.11, 0.22, 0.33, 0.44" in js2
+
+    def test_custom_colors_present(self):
+        js = crossover_display_js(low_color="0.1, 0.2, 0.3, 0.4")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+
+    def test_inlet_outlet_count_metadata(self):
+        assert CROSSOVER_DISPLAY_INLETS == 5
+        assert CROSSOVER_DISPLAY_OUTLETS == 2
+
+
+class TestEnvelopeEditorEngine:
+    def test_returns_string(self):
+        js = envelope_editor_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_inlets_and_outlets(self):
+        js = envelope_editor_js()
+        assert "inlets = 4;" in js       # attack / decay / sustain / release back-sync
+        assert "outlets = 4;" in js      # the same four, emitted on drag
+
+    def test_contains_paint_function(self):
+        js = envelope_editor_js()
+        assert "function paint()" in js
+
+    def test_contains_msg_float_handler(self):
+        js = envelope_editor_js()
+        assert "function msg_float" in js
+
+    def test_interactive_drag_idiom(self):
+        # the proven jsui pointer pair + nearest-node hit test drive the editor
+        js = envelope_editor_js()
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function nearest_node" in js
+
+    def test_set_phase_hook_reserved(self):
+        # future live trigger / progress cursor: the hook exists, stores, draws nothing
+        js = envelope_editor_js()
+        assert "function set_phase(v)" in js
+
+    def test_es5_jsui_contract(self):
+        assert find_jsui_contract_issues(envelope_editor_js()) == []
+
+    def test_custom_colors_present(self):
+        js = envelope_editor_js(accent="0.1, 0.2, 0.3, 0.4", bg="0.9, 0.8, 0.7, 1.0")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+        assert "0.9, 0.8, 0.7, 1.0" in js
+
+    def test_fill_derives_from_accent_by_default(self):
+        # fill_color=None -> the under-curve wash is the accent at low alpha
+        js = envelope_editor_js(accent="0.1, 0.2, 0.3, 1.0")
+        assert "var FILL_COLOR  = [0.1, 0.2, 0.3, 0.13];" in js
+        js2 = envelope_editor_js(fill_color="0.5, 0.5, 0.5, 0.5")
+        assert "var FILL_COLOR  = [0.5, 0.5, 0.5, 0.5];" in js2
+
+    def test_range_template_params(self):
+        js = envelope_editor_js()
+        assert "var MAX_A = 2000.0;" in js
+        assert "var MAX_D = 4000.0;" in js
+        assert "var MAX_R = 8000.0;" in js
+        js2 = envelope_editor_js(max_attack_ms=1234.0, max_decay_ms=555.0,
+                                 max_release_ms=9999.0)
+        assert "var MAX_A = 1234.0;" in js2
+        assert "var MAX_D = 555.0;" in js2
+        assert "var MAX_R = 9999.0;" in js2
+
+    def test_initials_thread_into_first_paint(self):
+        js = envelope_editor_js(init_attack_ms=25.0, init_decay_ms=300.0,
+                                init_sustain=0.5, init_release_ms=750.0)
+        assert "var attack_ms  = 25.0;" in js
+        assert "var decay_ms   = 300.0;" in js
+        assert "var sustain    = 0.5;" in js
+        assert "var release_ms = 750.0;" in js
+
+    def test_value_row_present(self):
+        # the value row beneath the plot: A / D / S / R readout cells
+        js = envelope_editor_js()
+        assert "function draw_value_row()" in js
+        assert '["A", "D", "S", "R"]' in js
+        assert "draw_value_row();" in js     # wired into paint()
+
+    def test_inlet_outlet_count_metadata(self):
+        assert ENVELOPE_EDITOR_INLETS == 4
+        assert ENVELOPE_EDITOR_OUTLETS == 4
+
+
+class TestCurveEditorEngine:
+    def test_returns_string(self):
+        js = curve_editor_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_single_inlet_and_outlet(self):
+        js = curve_editor_js()
+        assert "inlets = 1;" in js       # messages only (set_points / set_* )
+        assert "outlets = 1;" in js      # the points list, the persistence payload
+
+    def test_contains_paint_function(self):
+        js = curve_editor_js()
+        assert "function paint()" in js
+
+    def test_interactive_gesture_idiom(self):
+        # onclick adds/grabs, ondrag moves, ondblclick deletes -- plus the
+        # shared nearest-node hit test.
+        js = curve_editor_js()
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function ondblclick" in js
+        assert "function nearest_node" in js
+
+    def test_message_handlers_present(self):
+        js = curve_editor_js()
+        for handler in ("function set_points()", "function set_all()",
+                        "function set_tension(v)", "function set_grid(v)",
+                        "function set_snap(v)", "function set_loop(v)"):
+            assert handler in js
+
+    def test_es5_jsui_contract(self):
+        assert find_jsui_contract_issues(curve_editor_js()) == []
+
+    def test_custom_colors_present(self):
+        js = curve_editor_js(accent="0.1, 0.2, 0.3, 0.4", bg="0.9, 0.8, 0.7, 1.0")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+        assert "0.9, 0.8, 0.7, 1.0" in js
+
+    def test_fill_derives_from_accent_by_default(self):
+        js = curve_editor_js(accent="0.1, 0.2, 0.3, 1.0")
+        assert "var FILL_COLOR  = [0.1, 0.2, 0.3, 0.13];" in js
+        js2 = curve_editor_js(fill_color="0.5, 0.5, 0.5, 0.5")
+        assert "var FILL_COLOR  = [0.5, 0.5, 0.5, 0.5];" in js2
+
+    def test_max_points_and_initials_thread_into_the_js(self):
+        js = curve_editor_js(max_points=8, init_y0=0.25, init_y1=0.75,
+                             init_tension=40.0, init_grid=8, init_snap=1)
+        assert "var MAX_POINTS = 8;" in js
+        assert "var ys = [0.25, 0.75];" in js
+        assert "var tension = 40.0;" in js
+        assert "var grid_n  = 8;" in js
+        assert "var snap_on = 1;" in js
+
+    def test_max_points_range_validated(self):
+        with pytest.raises(ValueError):
+            curve_editor_js(max_points=1)
+        with pytest.raises(ValueError):
+            curve_editor_js(max_points=65)
+
+    def test_value_row_and_readout_present(self):
+        # the curve-editor footer ("N pt" / "Curve %" / "Grid" / "Snap") plus
+        # the drag telemetry and the loop-glyph hook, all wired into paint().
+        js = curve_editor_js()
+        assert "function draw_value_row()" in js
+        assert '" pt"' in js
+        assert '"Curve "' in js
+        assert '"Grid "' in js
+        assert "function format_xy()" in js
+        assert "function draw_drag_readout()" in js
+        assert "function draw_loop_glyph()" in js
+        assert "draw_value_row();" in js
+        assert "draw_loop_glyph();" in js
+
+    def test_inlet_outlet_count_metadata(self):
+        assert CURVE_EDITOR_INLETS == 1
+        assert CURVE_EDITOR_OUTLETS == 1
+
+
+class TestStepBarsEngine:
+    def test_returns_string(self):
+        js = step_bars_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_single_inlet_and_outlet(self):
+        js = step_bars_js()
+        assert "inlets = 1;" in js       # messages only (set_steps / set_* )
+        assert "outlets = 1;" in js      # step + values streams share outlet 0
+
+    def test_contains_paint_function(self):
+        js = step_bars_js()
+        assert "function paint()" in js
+
+    def test_interactive_gesture_idiom(self):
+        # onclick sets/starts a paint stroke, ondrag paints across bars; NO
+        # double-click semantics (the brief's explicit exclusion).
+        js = step_bars_js()
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function bar_index" in js
+        assert "function paint_to" in js
+        assert "function ondblclick" not in js
+
+    def test_message_handlers_present(self):
+        js = step_bars_js()
+        for handler in ("function set_steps(n)", "function set_values()",
+                        "function set_all()", "function set_link(v)",
+                        "function set_playhead(v)"):
+            assert handler in js
+
+    def test_es5_jsui_contract(self):
+        assert find_jsui_contract_issues(step_bars_js()) == []
+
+    def test_custom_colors_present(self):
+        js = step_bars_js(accent="0.1, 0.2, 0.3, 0.4", bg="0.9, 0.8, 0.7, 1.0")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+        assert "0.9, 0.8, 0.7, 1.0" in js
+
+    def test_fill_derives_from_accent_by_default(self):
+        js = step_bars_js(accent="0.1, 0.2, 0.3, 1.0")
+        assert "var FILL_COLOR  = [0.1, 0.2, 0.3, 0.13];" in js
+        js2 = step_bars_js(fill_color="0.5, 0.5, 0.5, 0.5")
+        assert "var FILL_COLOR  = [0.5, 0.5, 0.5, 0.5];" in js2
+
+    def test_max_steps_and_initials_thread_into_the_js(self):
+        js = step_bars_js(max_steps=8, init_steps=4,
+                          init_values=(0.25, 0.5), init_value=0.75,
+                          reset_value=0.5, init_link=1)
+        assert "var MAX_STEPS   = 8;" in js
+        # leading slots from init_values, the rest fill with init_value
+        assert "var values = [0.25, 0.5, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75];" in js
+        assert "var num_steps = 4;" in js
+        assert "var RESET_VALUE = 0.5;" in js
+        assert "var link_on  = 1;" in js
+
+    def test_max_steps_and_value_ranges_validated(self):
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=1)
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=33)
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=4, init_steps=5)
+        with pytest.raises(ValueError):
+            step_bars_js(init_steps=1)
+        with pytest.raises(ValueError):
+            step_bars_js(max_steps=2, init_values=(0.1, 0.2, 0.3))
+        with pytest.raises(ValueError):
+            step_bars_js(init_values=(0.5, 1.5))
+        with pytest.raises(ValueError):
+            step_bars_js(init_value=1.5)
+        with pytest.raises(ValueError):
+            step_bars_js(reset_value=-0.1)
+
+    def test_value_row_and_readout_present(self):
+        # curve_editor's chrome idiom: footer value row ("N st" / "Link"),
+        # the drag telemetry, the link glyph + tint and the playhead
+        # highlight, all wired into paint().
+        js = step_bars_js()
+        assert "function draw_value_row()" in js
+        assert '" st"' in js
+        assert '"Link"' in js
+        assert "function format_step()" in js
+        assert "function draw_drag_readout()" in js
+        assert "function draw_link_glyph()" in js
+        assert "function draw_playhead()" in js
+        assert "draw_value_row();" in js
+        assert "draw_link_glyph();" in js
+        assert "draw_playhead();" in js
+
+    def test_inlet_outlet_count_metadata(self):
+        assert STEP_BARS_INLETS == 1
+        assert STEP_BARS_OUTLETS == 1
+
+
+class TestFilterCurveEngine:
+    def test_returns_string(self):
+        js = filter_curve_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = filter_curve_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = filter_curve_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = filter_curve_js()
+        assert "inlets = 3;" in js
+
+    def test_handles_msg_float(self):
+        js = filter_curve_js()
+        assert "function msg_float" in js
+
+    def test_custom_line_color(self):
+        js = filter_curve_js(line_color="1.0, 0.0, 0.0, 1.0")
+        assert "1.0, 0.0, 0.0, 1.0" in js
+
+    def test_custom_bg_color(self):
+        js = filter_curve_js(bg_color="0.1, 0.1, 0.1, 1.0")
+        assert "0.1, 0.1, 0.1, 1.0" in js
+
+    def test_defaults_to_grey_shell_and_blue_plot(self):
+        js = filter_curve_js()
+        assert "0.24, 0.24, 0.25, 1.0" in js
+        assert "0.07, 0.10, 0.15, 1.0" in js
+
+    def test_samplerate_message_replaces_hardcode(self):
+        # Shelf response math must follow the actual DSP rate, not 48k.
+        js = filter_curve_js()
+        assert "function set_samplerate(v)" in js
+        assert "var sample_rate = 48000.0;" in js
+        assert "/ 48000" not in js
+        assert "/ sample_rate" in js
+
+    def test_no_es6_let(self):
+        """Verify no 'let' declarations (ES5 only uses var).
+        Checks for 'let ' at the start of a statement, not as substring of 'inlet'."""
+        import re
+        js = filter_curve_js()
+        # Match 'let ' as a statement keyword (preceded by start or whitespace, not alphanumeric)
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        """Verify no arrow functions."""
+        js = filter_curve_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+    def test_inlet_count_metadata(self):
+        assert FILTER_CURVE_INLETS == 3
+
+    def test_contains_filter_types(self):
+        js = filter_curve_js()
+        assert "LP" in js
+        assert "HP" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = filter_curve_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_default_colors_present(self):
+        js = filter_curve_js()
+        # Default line color
+        assert "0.45, 0.75, 0.65, 1.0" in js
+
+
+class TestEqBandColumnEngine:
+    def test_returns_string(self):
+        js = eq_band_column_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_handlers(self):
+        js = eq_band_column_js()
+        assert "function paint()" in js
+        assert "function set_band" in js
+        assert "function set_selected" in js
+        assert "function onclick" in js
+        assert "function ondrag" in js
+
+    def test_contains_expected_messages(self):
+        js = eq_band_column_js(show_slope=True, show_solo=True, show_motion=True, show_dynamic=True)
+        assert '"band_freq"' in js
+        assert '"band_gain"' in js
+        assert '"band_q"' in js
+        assert '"band_type"' in js
+        assert '"band_slope"' in js
+        assert '"band_enable"' in js
+        assert '"band_solo"' in js
+        assert '"band_motion"' in js
+        assert '"band_dynamic"' in js
+        assert '"band_motion_rate"' in js
+        assert '"band_motion_depth"' in js
+        assert '"band_motion_direction"' in js
+
+    def test_custom_titles_and_types_present(self):
+        js = eq_band_column_js(title="DETAIL", type_names=["Peak", "Shelf"])
+        assert '"DETAIL"' in js
+        assert '"Shelf"' in js
+
+    def test_inlet_and_outlet_metadata(self):
+        assert EQ_BAND_COLUMN_INLETS == 1
+        assert EQ_BAND_COLUMN_OUTLETS == 1
+
+    def test_normalizes_cut_filter_q_and_disables_unsupported_dynamic(self):
+        js = eq_band_column_js(show_motion=True, show_dynamic=True)
+        assert "function apply_type_change(next_type)" in js
+        assert "if (next_type === 3 || next_type === 4)" in js
+        assert 'outlet(0, "band_q", selected_band, band.q);' in js
+        assert "function supports_dynamic(type_idx)" in js
+        assert "if (!supports_dynamic(band.type)) return;" in js
+
+    def test_uses_distinct_motion_knob_accent(self):
+        js = eq_band_column_js(show_motion=True)
+        assert "var MOTION_ACCENT_COLOR = [0.34, 0.86, 0.98, 1.0];" in js
+        assert "function knob_accent_color(info)" in js
+        assert "function default_motion_rate(idx)" in js
+
+    def test_supports_motion_direction_knob(self):
+        js = eq_band_column_js(show_motion=True, show_type_controls=False)
+        assert '"band_motion_direction"' in js
+        assert "function default_motion_direction(idx)" in js
+        assert "function clamp_motion_direction(value)" in js
+        assert 'key: "motion_direction"' in js
+        assert 'label: "DIR"' in js
+
+    def test_can_hide_type_scroller_and_keep_vertical_state_stack(self):
+        js = eq_band_column_js(show_motion=True, show_dynamic=True, show_type_controls=False)
+        assert "var SHOW_TYPE_CONTROLS = 0;" in js
+        assert "if (SHOW_TYPE_CONTROLS) {" in js
+        assert "push_stack(\"enable\")" in js
+
+    def test_uses_theme_font_hooks_and_compact_breakpoint(self):
+        js = eq_band_column_js(font_name="Ableton Sans Medium", font_bold_name="Ableton Sans Bold")
+        assert 'var FONT_NAME = "Ableton Sans Medium";' in js
+        assert 'var FONT_BOLD_NAME = "Ableton Sans Bold";' in js
+        assert "return mgraphics.size[0] <= 118 || mgraphics.size[1] <= 148;" in js
+        assert "function mix_color(color_a, color_b, amount)" in js
+
+    def test_gain_knob_uses_upright_zero_bipolar_arc(self):
+        js = eq_band_column_js()
+        assert "if (info.key === \"gain\") {" in js
+        assert "var zero_norm = norm_for_info({value: 0.0, min: info.min, max: info.max, log: 0});" in js
+        assert "var zero_angle = start + (end - start) * zero_norm;" in js
+        assert "mgraphics.arc(knob.cx, knob.cy, ring_radius, arc_start, arc_end);" in js
+
+    def test_gain_knob_uses_dedicated_value_label_offset(self):
+        js = eq_band_column_js()
+        assert "var value_y_offset = minimal ? 7 : (compact ? 9 : 11);" in js
+        assert "value_y_offset = minimal ? 6 : (compact ? 8 : 10);" in js
+        assert "value_y = knob.cy + knob.radius + value_y_offset;" in js
+
+    def test_supports_frameless_headerless_rail_and_alt_scroll_q(self):
+        js = eq_band_column_js(show_header=False, show_frame=False, force_regular_layout=True)
+        assert "var SHOW_HEADER = 0;" in js
+        assert "var SHOW_FRAME = 0;" in js
+        assert "var FORCE_REGULAR_LAYOUT = 1;" in js
+        assert "function uses_minimal_rail_layout()" in js
+        assert "if (FORCE_REGULAR_LAYOUT) return 0;" in js
+        assert "function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl)" in js
+        assert 'emit_value("q", next_q);' in js
+
+    def test_uses_10hz_to_22khz_frequency_range(self):
+        js = eq_band_column_js()
+        assert "var MIN_FREQ = 10.0;" in js
+        assert "var MAX_FREQ = 22000.0;" in js
+
+
+class TestBandPaletteSingleSource:
+    """Both flagship EQ displays must share one band palette (it43: they had
+    drifted at band 5). They now inject BAND_PALETTE from _graph_colors, so
+    the generated `var BAND_COLORS` declaration must be byte-identical."""
+
+    @staticmethod
+    def _band_colors(js):
+        import re
+        m = re.search(r"var BAND_COLORS = (\[.*?\]);", js, re.S)
+        assert m, "BAND_COLORS not found"
+        return m.group(1)
+
+    def test_both_eqs_use_the_shared_palette(self):
+        from m4l_builder.engines._graph_colors import band_palette_js
+        eq = self._band_colors(eq_curve_js())
+        lp = self._band_colors(linear_phase_eq_display_js())
+        assert eq == lp
+        assert eq == band_palette_js()
+
+    def test_palette_has_eight_bands(self):
+        from m4l_builder.engines._graph_colors import BAND_PALETTE
+        assert len(BAND_PALETTE) == 8
+        assert all(len(c) == 4 for c in BAND_PALETTE)
+
+
+class TestEqCurveEngine:
+    def test_returns_string(self):
+        js = eq_curve_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_paint_function(self):
+        js = eq_curve_js()
+        assert "function paint()" in js
+
+    def test_contains_mgraphics_init(self):
+        js = eq_curve_js()
+        assert "mgraphics.init()" in js
+
+
+    def test_contains_mouse_handlers(self):
+        js = eq_curve_js()
+        assert "function onclick" in js
+        assert "function ondblclick" in js
+        assert "function ondrag" in js
+
+    def test_declares_inlets(self):
+        js = eq_curve_js()
+        assert "inlets = 3;" in js
+
+    def test_declares_outlets(self):
+        js = eq_curve_js()
+        assert "outlets = 4;" in js
+
+    def test_outlet_count_metadata(self):
+        from m4l_builder.engines.eq_curve import EQ_CURVE_OUTLETS
+        assert EQ_CURVE_OUTLETS == 4
+
+    def test_inlet_count_metadata(self):
+        assert EQ_CURVE_INLETS == 3
+
+    def test_custom_bg_color(self):
+        js = eq_curve_js(bg_color="0.1, 0.2, 0.3, 1.0")
+        assert "0.1, 0.2, 0.3, 1.0" in js
+
+    def test_transparent_plot_keeps_transparent_panel(self):
+        js = eq_curve_js(bg_color="0.0, 0.0, 0.0, 0.0")
+        assert "var PANEL_CLR      = [0.0, 0.0, 0.0, 0.0];" in js
+
+    def test_contains_set_band_handler(self):
+        js = eq_curve_js()
+        assert "function set_band" in js
+
+    def test_contains_set_num_bands(self):
+        js = eq_curve_js()
+        assert "function set_num_bands" in js
+
+    def test_contains_draw_grid(self):
+        js = eq_curve_js()
+        assert "function draw_grid" in js or "draw_grid" in js
+
+    def test_contains_draw_nodes(self):
+        js = eq_curve_js()
+        assert "function draw_nodes" in js or "draw_nodes" in js
+
+    def test_contains_band_colors(self):
+        js = eq_curve_js()
+        assert "BAND_COLORS" in js
+
+    def test_contains_onwheel(self):
+        js = eq_curve_js()
+        assert "function onwheel" in js
+
+    def test_contains_onidleout(self):
+        js = eq_curve_js()
+        assert "function onidleout" in js
+
+    def test_contains_tooltip(self):
+        js = eq_curve_js()
+        assert "draw_tooltip" in js
+
+    def test_contains_sample_rate_state(self):
+        js = eq_curve_js()
+        assert "var sample_rate = DEFAULT_SR;" in js
+        assert "if (inlet === 1)" in js
+
+    def test_contains_analyzer_support(self):
+        js = eq_curve_js()
+        assert "function draw_analyzer" in js
+        assert "function set_analyzer_enabled" in js
+        assert "if (inlet === 2)" in js
+        assert "function list()" in js
+
+    def test_contains_graph_band_management_messages(self):
+        js = eq_curve_js()
+        assert '"add_band"' in js
+        assert '"delete_band"' in js
+        assert "find_free_band" in js
+
+    def test_contains_node_menu_motion_and_dynamic_messages(self):
+        js = eq_curve_js()
+        assert "function draw_node_menu" in js
+        assert "function node_menu_hit_test" in js
+        assert "function draw_dynamic_handles" in js
+        assert "function dynamic_hit_test" in js
+        assert "function open_node_menu_for" in js
+        assert '"band_motion"' in js
+        assert '"band_dynamic"' in js
+        assert '"band_dynamic_amount"' in js
+        assert '"band_motion_rate"' in js
+        assert '"band_motion_depth"' in js
+        assert "MAX_DYNAMIC_RANGE" in js
+        assert "TYPE_SHORT_NAMES" in js
+
+    def test_supports_pointer_context_clicks_for_node_menu(self):
+        js = eq_curve_js()
+        assert "function pointer_middle_click(pointerevent, but)" in js
+        assert "pointerevent.button !== undefined && pointerevent.button === 1" in js
+        assert "pointerevent.buttons !== undefined && (pointerevent.buttons & 4) !== 0" in js
+        assert "if ((but & 4) !== 0) return 1;" in js
+        assert "function pointer_context_click(pointerevent, but, ctrl)" in js
+        assert "pointerevent.button !== undefined && pointerevent.button === 2" in js
+        assert "pointerevent.buttons !== undefined && (pointerevent.buttons & 2) !== 0" in js
+        assert "if ((but & 2) !== 0) return 1;" in js
+        assert "return ctrl ? 1 : 0;" in js
+        assert "function pointer_x(pointerevent, fallback)" in js
+        assert "function pointer_y(pointerevent, fallback)" in js
+        assert "function pointer_buttons(pointerevent, fallback)" in js
+        assert "function note_pointer_press(x, y)" in js
+        assert "function should_ignore_pointer_click(x, y)" in js
+        assert "function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent)" in js
+        assert "var middle_click = pointer_middle_click(pointerevent, but);" in js
+        assert "var context_click = pointer_context_click(pointerevent, but, ctrl);" in js
+        assert "if (middle_click) {" in js
+        assert "if (context_click) {" in js
+        assert "if (dynamic_hit >= 0 || hit >= 0) {" in js
+        assert "open_node_menu_for(selected_band, x, y);" in js
+        assert "if (should_ignore_pointer_click(x, y)) return;" in js
+        assert "function onpointerdown(pointerevent)" in js
+        assert "function onpointermove(pointerevent)" in js
+        assert "function onpointerup(pointerevent)" in js
+        assert "function onpointerleave(pointerevent)" in js
+
+    def test_contains_double_click_create_delete_and_drag_fast_path(self):
+        js = eq_curve_js()
+        assert "function create_band_at(x, y, btype, no_snap, bq)" in js
+        assert "function ondblclick(x, y, but, cmd, shift, caps, opt, ctrl)" in js
+        assert "function delete_band_at(idx)" in js
+        assert "var DOUBLE_CLICK_MS = 320;" in js
+        assert "var suppress_next_ondblclick_delete = 0;" in js
+        # premium-EQ semantics (it16): double-click RESETS the band; delete
+        # stays on the context menu (behavioral coverage in
+        # tests/test_js_behavior.py).
+        assert "function reset_band_at(idx)" in js
+        assert "reset_band_at(clicked_band);" in js
+        assert "delete_band_at(clicked_band);" not in js
+        assert "suppress_next_ondblclick_delete = 1;" in js
+        assert "if (dynamic_hit >= 0 || hit >= 0)" in js
+        # premium-EQ create gesture (user request): a single press on the empty graph
+        # creates a band whose TYPE depends on the click position; an empty
+        # double-click no longer creates.
+        assert "function band_type_for_x(x)" in js
+        assert "if (create_band_at(x, y)) {" in js
+        # cmd-drag edits Q (not gain) on a gain band -> the commit keys off edits_gain.
+        assert "if (edits_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
+        assert "if (!edits_gain && new_freq === b.freq && new_q === b.q) return;" in js
+
+    def test_contains_biquad_coeffs(self):
+        js = eq_curve_js()
+        assert "function biquad_coeffs" in js
+        assert "function response_db" in js
+
+    def test_contains_allpass_type(self):
+        js = eq_curve_js()
+        assert "TYPE_ALLPASS" in js
+        assert "AllPass" in js
+
+    def test_gain_range_30db(self):
+        js = eq_curve_js()
+        assert "MIN_GAIN" in js and "= -30" in js
+        assert "MAX_GAIN" in js and "= 30" in js
+
+    def test_display_range_defaults_to_15db(self):
+        js = eq_curve_js()
+        assert "var display_range = 15.0;" in js
+        assert "if (display_range <= 15.0) return 3.0;" in js
+        assert "display_range = 15.0;" in js
+
+    def test_uses_10hz_to_22khz_frequency_range(self):
+        js = eq_curve_js()
+        assert "var MIN_FREQ      = 10;" in js
+        assert "var MAX_FREQ      = 22000;" in js
+        assert 'var FREQ_LABELS = ["10", "20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "22k"];' in js
+
+    def test_no_ondragend(self):
+        """ondragend does not exist in jsui — use but===0 in ondrag."""
+        js = eq_curve_js()
+        assert "ondragend" not in js
+
+    def test_mouse_up_in_ondrag(self):
+        """ondrag checks but === 0 for mouse release."""
+        js = eq_curve_js()
+        assert "but === 0" in js
+
+    def test_normalizes_cut_filter_q_on_type_change(self):
+        js = eq_curve_js()
+        assert "function apply_band_type(idx, type_idx)" in js
+        assert "if ((next_type === TYPE_LOWPASS || next_type === TYPE_HIGHPASS) && prev_type !== next_type)" in js
+        assert 'outlet(3, "band_q", idx, band_cache[idx].q);' in js
+
+    def test_contains_motion_animation_scheduler_and_redraw_throttle(self):
+        js = eq_curve_js()
+        assert "var REDRAW_INTERVAL_MS = 33;" in js
+        assert "function request_redraw()" in js
+        assert "function animation_tick()" in js
+        assert 'typeof Task !== "undefined"' in js
+        assert "refresh_animation_task();" in js
+
+    def test_supports_motion_direction_and_draws_guides(self):
+        js = eq_curve_js()
+        assert "function motion_direction_components(direction)" in js
+        assert "function draw_motion_guides()" in js
+        assert "function set_motion_direction(idx, value)" in js
+        assert 'outlet(0, "band_motion_direction", created_idx, bands[created_idx].motion_direction);' in js
+        assert "Math.cos(radians)" in js
+        assert "Math.sin(radians)" in js
+
+    def test_includes_motion_readout_in_tooltip(self):
+        js = eq_curve_js()
+        assert 'line3 += "MOT " + format_motion_rate(b.motion_rate) + "  " + format_motion_depth(b.motion_depth) + "  DIR " + Math.round(clamp_motion_direction(b.motion_direction)) + "°";' in js
+        assert "var tw = line3 ? 214 : 104;" in js
+
+    def test_draws_continuous_analyzer_fill(self):
+        js = eq_curve_js()
+        assert "analyzer_display[i] = analyzer_display[i] * 0.55 + incoming * 0.45;" in js
+        # A premium spectrum-EQ look (display.js StereoSpectrum.displayNormal): the
+        # max-per-column polyline ROUNDED with path_roundcorners (spectRCorners=4),
+        # not Catmull-Rom grass; a light fill anchored just below the floor; a thin
+        # 1.1px crisp envelope.
+        assert "var ANALYZER_RCORNERS = 4.0;" in js
+        assert "mgraphics.path_roundcorners(ANALYZER_RCORNERS);" in js
+        assert "mgraphics.move_to(xs[0], bottom + 2);" in js   # fill anchored just below the floor
+        assert "mgraphics.set_line_width(1.1);" in js          # thin crisp envelope
+
+    def test_analyzer_style_toggle_line_vs_eq8(self):
+        js = eq_curve_js()
+        # Runtime spectrum render style: 0 = Line (thin line + light wash),
+        # 1 = EQ8 (heavy grey solid fill + ±3-tap smoothing). Same FFT/data.
+        assert "function set_analyzer_style(v)" in js
+        assert "var ANALYZER_STYLE = 0;" in js
+        assert "var ANALYZER_EQ8_CLR  = [" in js
+        # 3-way: 0 Line, 1 EQ8, 2 Both (grey backdrop + cyan line).
+        assert "var eq8 = (style === 1);" in js
+        assert "var both = (style === 2);" in js
+        # EQ8 path smooths + uses the grey fill; Line keeps the configured wash.
+        assert "ys = sm;" in js
+        # the EQ8 colour is overridable per device
+        assert eq_curve_js(analyzer_eq8_color="0.1, 0.2, 0.3, 1.0") != js
+
+    def test_external_spectrum_mode_makes_jsui_transparent_overlay(self):
+        # With external_spectrum=True a COMPILED spectrum (Max spectroscope~)
+        # draws behind, so the jsui skips its opaque plot bg + its own spectrum
+        # and renders only grid+curve+bands transparently on top. Default is off.
+        ext = eq_curve_js(external_spectrum=True)
+        norm = eq_curve_js()
+        assert "var EXTERNAL_SPECTRUM = 1;" in ext
+        assert "var EXTERNAL_SPECTRUM = 0;" in norm
+        # the opaque-bg fill + the jsui spectrum are gated off in external mode
+        assert "if (EXTERNAL_SPECTRUM) {" in ext          # draw_plot_background early-out
+        assert "if (!EXTERNAL_SPECTRUM) {" in ext         # paint() skips draw_analyzer*
+        # the FFT data still feeds snap-to-peak + dynamics (poll not gated)
+        assert "function poll_analyzer_buffer()" in ext
+
+    def test_pro_q_band_shading_tints_all_active_gain_bands(self):
+        # Every enabled gain band tints its contribution (color-coded EQ);
+        # the active band gets a stronger fill (0.34 vs 0.20) + an outline.
+        js = eq_curve_js()
+        assert "is_active = (i === selected_band || i === hover_band);" in js
+        assert "fill_a = is_active ? 0.34 : 0.20;" in js
+        assert "if (!band_cache[i].uses_gain) continue;" in js
+        assert "if (!is_active) continue;" in js
+
+    def test_bypass_keeps_nodes_visible_and_no_longer_calls_delete(self):
+        js = eq_curve_js()
+        assert "enabled_alpha = band_cache[i].enabled ? 1.0 : 0.26;" in js
+        assert 'line2 += "  BYPASSED";' in js
+        assert 'bands[idx].enabled = bands[idx].enabled ? 0 : 1;' in js
+        assert 'outlet(0, "band_enable", idx, bands[idx].enabled ? 1 : 0);' in js
+        assert "close_node_menu();" in js
+
+
+class TestSliceOverviewEngine:
+    def test_returns_string(self):
+        js = slice_overview_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_expected_io(self):
+        js = slice_overview_js()
+        assert "inlets = 7;" in js
+        assert "outlets = 4;" in js          # +1 outlet (3): edited-bounds mirror
+        assert SLICE_OVERVIEW_INLETS == 7
+        assert SLICE_OVERVIEW_OUTLETS == 4
+
+    def test_contains_sampler_surface_handlers(self):
+        js = slice_overview_js()
+        assert "function paint()" in js
+        assert "function onclick" in js
+        assert "function ondrag" in js
+        assert "function draw_waveform" in js
+        assert "function rebuild_waveform_cache()" in js
+        assert "function register_hit()" in js
+        assert "new Buffer(BUFFER_NAME)" in js
+        assert "recent_hits" in js
+        assert "ACTIVE" in js
+        # honest empty state: centered headline, and it shows whenever real
+        # peeked audio is absent (buffer~ instantiation-bangs flip `loaded`)
+        assert "DROP A LOOP" in js
+        assert "if (!loaded || !waveform_ready) {" in js
+        assert "Math.sin((t0 * 7.0" not in js      # decorative ghost is gone
+
+    def test_contains_divider_edit_handlers(self):
+        js = slice_overview_js()
+        for fn in ("function set_editable", "function set_display_bounds",
+                   "function add_divider", "function remove_divider",
+                   "function nearest_divider", "function emit_display_bounds"):
+            assert fn in js
+
+    def test_contains_slicer_analysis_handlers(self):
+        js = slice_overview_js()
+        for fn in (
+            "function compute_onsets()",
+            "function compute_grid()",
+            "function emit_slices()",
+            "function analyze()",
+            "function set_mode(",
+            "function set_samplerate(",
+            "function set_sensitivity(",
+            "function set_min_spacing(",
+            "function set_slices(",
+            "function set_pitch(",
+        ):
+            assert fn in js, fn
+
+    def test_allows_custom_region_color(self):
+        js = slice_overview_js(region_line="1.0, 0.0, 0.0, 1.0")
+        assert "1.0, 0.0, 0.0, 1.0" in js
+
+    def test_allows_custom_buffer_name(self):
+        js = slice_overview_js(buffer_name="custombuf")
+        assert "var BUFFER_NAME = 'custombuf';" in js
+
+
+class TestSlicePatternDisplayEngine:
+    def test_returns_string(self):
+        js = slice_pattern_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_expected_io(self):
+        js = slice_pattern_display_js()
+        # v6: +7 variation inlets (vary/salt/drift/fill/bar/fill_active/scale)
+        assert "inlets = 22;" in js
+        assert "outlets = 3;" in js          # +playback outlet (trigger -> step)
+        assert SLICE_PATTERN_DISPLAY_INLETS == 22
+        assert SLICE_PATTERN_DISPLAY_OUTLETS == 3
+
+    def test_contains_pattern_helpers(self):
+        js = slice_pattern_display_js()
+        assert "function step_base_index(step)" in js
+        assert "function step_computed_index(step)" in js
+        assert "function step_index(step)" in js
+        assert "function step_chopped(step)" in js
+        assert "function step_ratchet_count(step)" in js
+        assert "function main_glitch_shift(step)" in js
+        assert "function step_direction(step)" in js
+        assert "function step_pitch(step)" in js
+        assert "function ratchet_index(step, ratchet_no)" in js
+        assert "function step_arp(step)" in js
+        assert "function onclick(x, y, but, cmd, shift, capslock, option, ctrl)" in js
+        assert "function ondrag(x, y, but, cmd, shift, capslock, option, ctrl)" in js
+        assert "function anything()" in js
+        assert "function normalize_locks()" in js
+        assert "function slice_index_from_point(y)" in js
+        assert "function direction_from_point(y)" in js
+        assert "function pitch_from_point(y)" in js
+        assert "function paint_drag_range(step, y)" in js
+        assert "function emit_scene_dump(slot)" in js
+        assert "outlet(0, 'lock', step, idx);" in js
+        assert "outlet(0, 'unlock', step);" in js
+        assert "outlet(0, 'clear');" in js
+        assert "outlet(0, 'dirlock', step, direction);" in js
+        assert "outlet(0, 'dirunlock', step);" in js
+        assert "outlet(0, 'dirclear');" in js
+        assert "outlet(0, 'pitchlock', step, semitone);" in js
+        assert "outlet(0, 'pitchunlock', step);" in js
+        assert "outlet(0, 'pitchclear');" in js
+        assert "outlet(0, 'gatelock', step, gate);" in js
+        assert "outlet(0, 'gateunlock', step);" in js
+        assert "outlet(0, 'gateclear');" in js
+        assert "outlet(0, 'ratchetlock', step, count);" in js
+        assert "outlet(0, 'ratchetunlock', step);" in js
+        assert "outlet(0, 'ratchetclear');" in js
+        assert "outlet(1, slot, 'set', i, step_locked_index(i));" in js
+        assert "outlet(1, slot, 'dirset', i, step_locked_direction(i));" in js
+        assert "outlet(1, slot, 'pitchset', i, step_locked_pitch(i));" in js
+        assert "outlet(1, slot, 'gateset', i, step_locked_gate(i));" in js
+        assert "outlet(1, slot, 'ratchetset', i, step_locked_ratchet(i));" in js
+        assert "if (inlet !== 14) return;" in js
+        assert "if (messagename === 'dumpa')" in js
+        assert "if (messagename === 'dumpb')" in js
+        assert "if (messagename === 'set' && argv.length >= 2)" in js
+        assert "if (messagename === 'unset' && argv.length >= 1)" in js
+        assert "if (messagename === 'dirset' && argv.length >= 2)" in js
+        assert "if (messagename === 'dirunset' && argv.length >= 1)" in js
+        assert "if (messagename === 'pitchset' && argv.length >= 2)" in js
+        assert "if (messagename === 'pitchunset' && argv.length >= 1)" in js
+        assert "if (messagename === 'gateset' && argv.length >= 2)" in js
+        assert "if (messagename === 'gateunset' && argv.length >= 1)" in js
+        assert "if (messagename === 'ratchetset' && argv.length >= 2)" in js
+        assert "if (messagename === 'ratchetunset' && argv.length >= 1)" in js
+        assert "function step_gate(step)" in js
+        assert "function gate_from_point(y)" in js
+        assert "function ratchet_from_point(y)" in js
+        assert "if (shift && option && !cmd && !ctrl) drag_mode = 5;" in js
+        assert "else if (cmd && option && !ctrl) drag_mode = 4;" in js
+        assert "else if (ctrl) drag_mode = option ? -3 : 3;" in js
+        assert "else if (option) drag_mode = 2;" in js
+        assert "else drag_mode = cmd ? -1 : 1;" in js
+        assert "return y < (h * 0.5) ? 1 : -1;" in js
+        assert "return y < (h * 0.5) ? 1 : 0;" in js
+        assert "return clamp(Math.round((norm * 48.0) - 24.0), -24, 24);" in js
+        assert "return clamp(Math.floor(norm * 4.0), 0, 3);" in js
+        assert "RATCHET_POSITIONS" in js
+        assert "MODE_LABELS" in js
+
+    def test_allows_custom_bar_color(self):
+        js = slice_pattern_display_js(bar_color="0.9, 0.4, 0.1, 1.0")
+        assert "0.9, 0.4, 0.1" in js
+
+    def test_no_es6_arrow_functions(self):
+        js = slice_pattern_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestLinearPhaseEqDisplayEngine:
+    def test_returns_string(self):
+        js = linear_phase_eq_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_declares_inlets(self):
+        js = linear_phase_eq_display_js()
+        assert "inlets = 3;" in js
+
+    def test_declares_outlets(self):
+        js = linear_phase_eq_display_js()
+        assert "outlets = 4;" in js
+
+    def test_inlet_count_metadata(self):
+        assert LINEAR_PHASE_EQ_DISPLAY_INLETS == 3
+
+    def test_outlet_count_metadata(self):
+        assert LINEAR_PHASE_EQ_DISPLAY_OUTLETS == 4
+
+    def test_contains_quality_and_latency_handlers(self):
+        js = linear_phase_eq_display_js()
+        assert "function set_quality_mode" in js
+        assert "function set_analyzer_mode" in js
+        assert "function set_latency_ms" in js
+        assert "draw_hud();" in js
+        assert "QUALITY_NAMES" in js
+        assert "ANALYZER_MODE_NAMES" in js
+        assert "RANGE_VALUES" in js
+        assert "var RANGE_VALUES = [15.0];" in js
+        assert "var display_range = 15.0;" in js
+
+    def test_contains_redraw_throttle_for_analyzer_updates(self):
+        js = linear_phase_eq_display_js()
+        assert "var REDRAW_INTERVAL_MS = 33;" in js
+        assert "function request_redraw()" in js
+
+    def test_contains_collision_and_empty_state_support(self):
+        js = linear_phase_eq_display_js()
+        assert "function set_collision_mode" in js
+        assert "function draw_empty_state" in js
+        assert "label_overlaps" in js
+
+    def test_contains_click_add_band_and_context_menu(self):
+        js = linear_phase_eq_display_js()
+        assert "function create_band_at" in js
+        assert "function delete_band_at(idx)" in js
+        assert "function hud_badges()" in js
+        assert "function cycle_hud_badge(key, reverse)" in js
+        assert "function draw_dynamic_handles" in js
+        assert "function dynamic_hit_test" in js
+        assert "function pointer_context_click" in js
+        assert "pointerevent.button !== undefined && pointerevent.button === 2" in js
+        assert "pointerevent.buttons !== undefined && (pointerevent.buttons & 2) !== 0" in js
+        assert "if ((but & 2) !== 0) return 1;" in js
+        assert "return ctrl ? 1 : 0;" in js
+        assert "function pointer_x" in js
+        assert "function pointer_y" in js
+        assert "function pointer_buttons" in js
+        assert "function note_pointer_press(x, y)" in js
+        assert "function should_ignore_pointer_click(x, y)" in js
+        assert "function note_pending_context_click(x, y)" in js
+        assert "function consume_pending_context_click(x, y)" in js
+        assert "function onpointerdown" in js
+        assert "function onpointermove" in js
+        assert "function onpointerup" in js
+        assert "function handle_press" in js
+        assert "function handle_double_click(x, y)" in js
+        assert "function handle_drag_at" in js
+        assert "function draw_context_menu" in js
+        assert "function ensure_curve_cache" in js
+        assert "function graph_db_to_y" in js
+        assert "function draw_tooltip" in js
+        assert "curve_dirty = 1" in js
+        assert "pointerevent.contextModifier" in js
+        assert "pointerevent.x !== undefined" in js
+        assert "pointerevent.localX !== undefined" in js
+        assert "legacy mouse handlers now receive an additional pointerevent struct" not in js
+        assert "if (cache.uses_gain && new_freq === b.freq && new_gain === b.gain) return;" in js
+        assert "if (!cache.uses_gain && new_freq === b.freq && new_q === b.q) return;" in js
+        assert '"context_type"' in js
+        assert '"context_dynamic"' in js
+        assert '"context_slope"' in js
+        assert '"context_solo"' in js
+        assert '"context_enable"' in js
+        assert '"band_dynamic_amount"' in js
+        assert '"Make Dynamic"' in js
+        assert '"add_band"' in js
+        assert '"delete_band"' in js
+        assert '"hud_quality"' in js
+        assert '"hud_analyzer"' in js
+        assert '"hud_range"' in js
+        assert "find_free_band" in js
+        assert "handle_double_click(x, y);" in js
+        assert "note_pending_context_click(x, y);" in js
+        assert "if (consume_pending_context_click(x, y)) {" in js
+        assert "if (pointer_context_click(pointerevent, ctrl, but)) {" in js
+        assert "note_pointer_press(x, y);" in js
+        assert "if (should_ignore_pointer_click(x, y)) return;" in js
+
+    def test_keeps_disabled_nodes_visible_and_selectable(self):
+        js = linear_phase_eq_display_js()
+        assert "var DEFAULT_FREQS = [30.0, 200.0, 1000.0, 5000.0, 3600.0, 7200.0, 12000.0, 18000.0];" in js
+        assert "var num_bands = MAX_BANDS;" in js
+        assert "present: 0," in js
+        assert 'band_cache[selected_band].enabled ? "" : "   Bypassed"' in js
+        assert "if (!band_cache[i].present) continue;" in js
+        assert "bands[idx].present = 0;" in js
+        assert "bands[created_idx].present = 1;" in js
+        assert "if (num_bands > 0) {" in js
+        assert "display_range = 15.0;" in js
+        assert "var compact = compact_mode();" in js
+        assert "circle_path(x, y, radius);" in js
+        assert "circle_path(x, y, radius + (compact ? 1.9 : 1.2));" in js
+        assert "mgraphics.rectangle_rounded(box_x" not in js
+
+    def test_context_menu_can_open_for_disabled_nodes(self):
+        js = linear_phase_eq_display_js()
+        assert "if (!band_cache[context_menu_band].enabled) return;" not in js
+
+    def test_paint_does_not_use_clip_state_stack(self):
+        js = linear_phase_eq_display_js()
+        assert "mgraphics.save();" not in js
+        assert "mgraphics.clip();" not in js
+        assert "mgraphics.restore();" not in js
+
+    def test_excludes_allpass(self):
+        js = linear_phase_eq_display_js()
+        assert "AllPass" not in js
+        # the shared graph_core include carries a DORMANT `case TYPE_ALLPASS:`
+        # (compares against an undefined constant — never matches); the real
+        # contract is that this EQ never DEFINES or offers the type.
+        assert "var TYPE_ALLPASS" not in js
+
+    def test_custom_badge_color(self):
+        js = linear_phase_eq_display_js(badge_color="0.1, 0.2, 0.3, 0.4")
+        assert "0.1, 0.2, 0.3, 0.4" in js
+
+    def test_can_disable_dynamic_controls(self):
+        js = linear_phase_eq_display_js(show_dynamic=False)
+        assert "var SHOW_DYNAMIC = 0;" in js
+
+    def test_can_hide_hud_badges(self):
+        js = linear_phase_eq_display_js(show_hud_badges=False)
+        assert "var SHOW_HUD_BADGES = 0;" in js
+
+    def test_can_hide_selection_readout(self):
+        js = linear_phase_eq_display_js(show_selection_readout=False)
+        assert "var SHOW_SELECTION_READOUT = 0;" in js
+
+
+class TestEnvelopeDisplayEngine:
+    def test_returns_string(self):
+        js = envelope_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_paint(self):
+        js = envelope_display_js()
+        assert "function paint()" in js
+
+    def test_contains_mgraphics_init(self):
+        js = envelope_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_inlet_count_metadata(self):
+        # ENVELOPE_INLETS is 4 (the Python constant)
+        assert ENVELOPE_INLETS == 4
+
+    def test_handles_msg_float(self):
+        js = envelope_display_js()
+        assert "function msg_float" in js
+
+    def test_handles_adsr_segments(self):
+        js = envelope_display_js()
+        assert "attack" in js.lower()
+        assert "decay" in js.lower()
+        assert "sustain" in js.lower()
+        assert "release" in js.lower()
+
+    def test_custom_line_color(self):
+        js = envelope_display_js(line_color="0.9, 0.3, 0.3, 1.0")
+        assert "0.9, 0.3, 0.3, 1.0" in js
+
+    def test_contains_build_envelope(self):
+        js = envelope_display_js()
+        assert "build_envelope" in js
+
+    def test_contains_segment_labels(self):
+        js = envelope_display_js()
+        assert '"A"' in js
+        assert '"D"' in js
+        assert '"S"' in js
+        assert '"R"' in js
+
+    def test_no_es6_let(self):
+        import re
+        js = envelope_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+
+class TestSpectrumAnalyzerEngine:
+    def test_returns_string(self):
+        js = spectrum_analyzer_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = spectrum_analyzer_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint(self):
+        js = spectrum_analyzer_js()
+        assert "function paint()" in js
+
+    def test_contains_list_handler(self):
+        js = spectrum_analyzer_js()
+        assert "function list()" in js
+
+    def test_inlet_count(self):
+        assert SPECTRUM_INLETS == 2
+
+    def test_declares_inlets(self):
+        js = spectrum_analyzer_js()
+        assert "inlets = 2;" in js
+
+    def test_custom_bar_color(self):
+        js = spectrum_analyzer_js(bar_color="0.8, 0.4, 0.2, 0.9")
+        assert "0.8, 0.4, 0.2, 0.9" in js
+
+    def test_custom_panel_color(self):
+        js = spectrum_analyzer_js(panel_color="0.2, 0.2, 0.2, 1.0")
+        assert "0.2, 0.2, 0.2, 1.0" in js
+
+    def test_gradient_true_by_default(self):
+        js = spectrum_analyzer_js()
+        assert "USE_GRADIENT = true" in js
+
+    def test_gradient_false_option(self):
+        js = spectrum_analyzer_js(gradient=False)
+        assert "USE_GRADIENT = false" in js
+
+    def test_contains_peak_tracking(self):
+        js = spectrum_analyzer_js()
+        assert "peaks" in js
+
+    def test_contains_exponential_smoothing(self):
+        js = spectrum_analyzer_js()
+        assert "smoothing" in js
+
+    def test_supports_control_messages_and_hover_readout(self):
+        js = spectrum_analyzer_js()
+        assert "function anything()" in js
+        assert 'messagename == "set_smoothing"' in js
+        assert 'messagename == "set_peak_decay"' in js
+        assert 'messagename == "set_show_peaks"' in js
+        assert 'messagename == "set_range"' in js
+        assert "function onidle(x, y)" in js
+        assert "function onidleout()" in js
+        assert "format_freq" in js
+        assert "show_peaks" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = spectrum_analyzer_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+
+class TestFftAnalyzer:
+    def test_kernel_is_valid_json_patch(self):
+        import json
+
+        from m4l_builder.engines.fft_analyzer import fft_analyzer_kernel
+
+        data = json.loads(fft_analyzer_kernel(buffer_name="t_specbuf", fft_size=2048))
+        boxes = {b["box"]["id"]: b["box"]["text"] for b in data["patcher"]["boxes"]}
+        assert boxes["fft_in"] == "fftin~ 1 blackman"
+        assert boxes["cartopol"] == "cartopol~"
+        assert boxes["spec_poke"] == "poke~ t_specbuf"
+        # 2/N normalization constant present.
+        assert "0.0009" in boxes["mag_scale"]
+        # poke~ gets value from mag_scale and index from fftin~ outlet 2.
+        lines = [ln["patchline"] for ln in data["patcher"]["lines"]]
+        assert {"source": ["mag_scale", 0], "destination": ["spec_poke", 0]} in lines
+        assert {"source": ["fft_in", 2], "destination": ["spec_poke", 1]} in lines
+
+    def test_dsp_wires_kernel_buffer_and_announce(self):
+        from m4l_builder.engines.fft_analyzer import fft_analyzer_dsp
+
+        device = AudioEffect("FFT Test", width=200, height=120, theme=MIDNIGHT)
+        device.add_v8ui("graph", [0, 0, 100, 100], js_code=eq_curve_js(),
+                        numinlets=EQ_CURVE_INLETS, numoutlets=0)
+        device.add_newobj("src", "plugin~", numinlets=1, numoutlets=2,
+                          outlettype=["signal", "signal"])
+        ids = fft_analyzer_dsp(device, "graph", "src", target_inlet=2,
+                               id_prefix="t", samplerate_handshake=True)
+        assert ids["pfft"] == "t_pfft"
+        assert ids["buffer"] == "t_buf"
+        assert "dspstate" in ids
+        texts = [
+            b["box"].get("text", "")
+            for b in device.boxes
+            if "box" in b
+        ]
+        import re as _re
+        assert any(_re.match(r"pfft~ t_analyzer_[0-9a-f]{8} 2048 4", t)
+                   for t in texts)   # content-addressed kernel
+        # per-instance-unique buffer (--- device scoping — collision fix)
+        assert "buffer~ ---t_specbuf" in texts
+        assert "sizeinsamps 2048" in texts
+        assert "set_analyzer_buffer ---t_specbuf 1024" in texts
+        assert "prepend set_samplerate" in texts
+
+    def test_eq_curve_consumes_analyzer_sources(self):
+        js = eq_curve_js()
+        assert "function fft_frame()" in js
+        assert "function set_samplerate(hz)" in js
+        assert "function set_analyzer_buffer(name, bins)" in js
+        assert "function poll_analyzer_buffer()" in js
+        assert "update_analyzer_from_fft" in js
+
+
+class TestWaveformDisplayEngine:
+    def test_returns_string(self):
+        js = waveform_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = waveform_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint(self):
+        js = waveform_display_js()
+        assert "function paint()" in js
+
+    def test_contains_list_handler(self):
+        js = waveform_display_js()
+        assert "function list()" in js
+
+    def test_inlet_count(self):
+        assert WAVEFORM_INLETS == 2
+
+    def test_declares_inlets(self):
+        js = waveform_display_js()
+        assert "inlets = 2;" in js
+
+    def test_contains_circular_buffer(self):
+        js = waveform_display_js()
+        assert "BUFFER_SIZE" in js
+        assert "buffer" in js
+
+    def test_custom_line_color(self):
+        js = waveform_display_js(line_color="0.9, 0.5, 0.2, 1.0")
+        assert "0.9, 0.5, 0.2, 1.0" in js
+
+    def test_contains_display_modes(self):
+        js = waveform_display_js()
+        assert "display_mode" in js
+
+    def test_contains_line_trace(self):
+        js = waveform_display_js()
+        assert "set_line_width(1.5)" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = waveform_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+
+class TestXYPadEngine:
+    def test_returns_string(self):
+        js = xy_pad_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = xy_pad_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = xy_pad_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = xy_pad_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = xy_pad_js()
+        assert "outlets = 2;" in js
+
+    def test_inlet_count_metadata(self):
+        assert XY_PAD_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert XY_PAD_OUTLETS == 2
+
+    def test_contains_onclick(self):
+        js = xy_pad_js()
+        assert "function onclick" in js
+
+    def test_contains_ondrag(self):
+        js = xy_pad_js()
+        assert "function ondrag" in js
+
+    def test_handles_msg_float(self):
+        js = xy_pad_js()
+        assert "function msg_float" in js
+
+    def test_custom_bg_color(self):
+        js = xy_pad_js(bg_color="0.1, 0.1, 0.1, 1.0")
+        assert "0.1, 0.1, 0.1, 1.0" in js
+
+    def test_custom_dot_color(self):
+        js = xy_pad_js(dot_color="1.0, 0.0, 0.0, 1.0")
+        assert "1.0, 0.0, 0.0, 1.0" in js
+
+    def test_contains_outlet_calls(self):
+        js = xy_pad_js()
+        assert "outlet(0" in js
+        assert "outlet(1" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = xy_pad_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = xy_pad_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+    def test_contains_mgraphics_redraw(self):
+        js = xy_pad_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_mouse_up_in_ondrag(self):
+        js = xy_pad_js()
+        assert "but === 0" in js
+
+
+class TestPianoRollEngine:
+    def test_returns_string(self):
+        js = piano_roll_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = piano_roll_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = piano_roll_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = piano_roll_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = piano_roll_js()
+        assert "outlets = 0;" in js
+
+    def test_inlet_count_metadata(self):
+        assert PIANO_ROLL_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert PIANO_ROLL_OUTLETS == 0
+
+    def test_default_rows(self):
+        js = piano_roll_js()
+        assert "NUM_ROWS = 12" in js
+
+    def test_default_cols(self):
+        js = piano_roll_js()
+        assert "NUM_COLS = 16" in js
+
+    def test_custom_rows(self):
+        js = piano_roll_js(rows=24)
+        assert "NUM_ROWS = 24" in js
+
+    def test_custom_cols(self):
+        js = piano_roll_js(cols=32)
+        assert "NUM_COLS = 32" in js
+
+    def test_contains_set_function(self):
+        js = piano_roll_js()
+        assert "function set(" in js
+
+    def test_handles_msg_int(self):
+        js = piano_roll_js()
+        assert "function msg_int" in js
+
+    def test_custom_bg_color(self):
+        js = piano_roll_js(bg_color="0.1, 0.2, 0.3, 1.0")
+        assert "0.1, 0.2, 0.3, 1.0" in js
+
+    def test_custom_note_color(self):
+        js = piano_roll_js(note_color="1.0, 0.5, 0.0, 1.0")
+        assert "1.0, 0.5, 0.0" in js
+
+    def test_contains_playhead(self):
+        js = piano_roll_js()
+        assert "playhead_pos" in js
+
+    def test_contains_velocity_alpha(self):
+        js = piano_roll_js()
+        assert "vel / 127" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = piano_roll_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = piano_roll_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+    def test_contains_mgraphics_redraw(self):
+        js = piano_roll_js()
+        assert "mgraphics.redraw()" in js
+
+
+class TestEngineImports:
+    """Test that all engines import correctly from the package."""
+
+    def test_import_from_engines_package(self):
+        from m4l_builder.engines import (
+            eq_curve_js,
+            filter_curve_js,
+            grain_display_js,
+            peaking_eq_display_js,
+            piano_roll_js,
+            resonance_bank_display_js,
+            sidechain_display_js,
+            slice_pattern_display_js,
+            spectral_display_js,
+            spectrum_analyzer_js,
+            step_grid_display_js,
+            velocity_curve_display_js,
+            wavetable_display_js,
+            xy_pad_js,
+        )
+        assert callable(filter_curve_js)
+        assert callable(eq_curve_js)
+        assert callable(spectrum_analyzer_js)
+        assert callable(xy_pad_js)
+        assert callable(piano_roll_js)
+        assert callable(velocity_curve_display_js)
+        assert callable(wavetable_display_js)
+        assert callable(resonance_bank_display_js)
+        assert callable(sidechain_display_js)
+        assert callable(spectral_display_js)
+        assert callable(peaking_eq_display_js)
+        assert callable(step_grid_display_js)
+        assert callable(grain_display_js)
+        assert callable(slice_pattern_display_js)
+
+    def test_import_constants_from_modules(self):
+        from m4l_builder.engines.envelope_display import ENVELOPE_INLETS, ENVELOPE_OUTLETS
+        from m4l_builder.engines.eq_curve import EQ_CURVE_INLETS, EQ_CURVE_OUTLETS
+        from m4l_builder.engines.filter_curve import FILTER_CURVE_INLETS, FILTER_CURVE_OUTLETS
+        from m4l_builder.engines.piano_roll import PIANO_ROLL_INLETS, PIANO_ROLL_OUTLETS
+        from m4l_builder.engines.resonance_bank_display import (
+            RESONANCE_BANK_INLETS,
+            RESONANCE_BANK_OUTLETS,
+        )
+        from m4l_builder.engines.spectrum_analyzer import SPECTRUM_INLETS, SPECTRUM_OUTLETS
+        from m4l_builder.engines.velocity_curve_display import (
+            VELOCITY_CURVE_INLETS,
+            VELOCITY_CURVE_OUTLETS,
+        )
+        from m4l_builder.engines.waveform_display import WAVEFORM_INLETS, WAVEFORM_OUTLETS
+        from m4l_builder.engines.wavetable_display import (
+            WAVETABLE_DISPLAY_INLETS,
+            WAVETABLE_DISPLAY_OUTLETS,
+        )
+        from m4l_builder.engines.xy_pad import XY_PAD_INLETS, XY_PAD_OUTLETS
+        assert isinstance(FILTER_CURVE_INLETS, int)
+        assert isinstance(EQ_CURVE_INLETS, int)
+        assert isinstance(SPECTRUM_INLETS, int)
+        assert isinstance(ENVELOPE_INLETS, int)
+        assert isinstance(WAVEFORM_INLETS, int)
+        assert FILTER_CURVE_OUTLETS == 0
+        assert EQ_CURVE_OUTLETS == 4
+        assert SPECTRUM_OUTLETS == 0
+        assert ENVELOPE_OUTLETS == 0
+        assert WAVEFORM_OUTLETS == 0
+        assert XY_PAD_INLETS == 2
+        assert XY_PAD_OUTLETS == 2
+        assert PIANO_ROLL_INLETS == 2
+        assert PIANO_ROLL_OUTLETS == 0
+        assert VELOCITY_CURVE_INLETS == 1
+        assert VELOCITY_CURVE_OUTLETS == 5
+        assert WAVETABLE_DISPLAY_INLETS == 1
+        assert WAVETABLE_DISPLAY_OUTLETS == 0
+        assert RESONANCE_BANK_INLETS == 1
+        assert RESONANCE_BANK_OUTLETS == 0
+        assert SIDECHAIN_DISPLAY_INLETS == 2
+        assert SIDECHAIN_DISPLAY_OUTLETS == 0
+        assert SPECTRAL_DISPLAY_INLETS == 2
+        assert SPECTRAL_DISPLAY_OUTLETS == 0
+        assert PEAKING_EQ_DISPLAY_INLETS == 1
+        assert PEAKING_EQ_DISPLAY_OUTLETS == 4
+        assert STEP_GRID_DISPLAY_INLETS == 2
+        assert STEP_GRID_DISPLAY_OUTLETS == 4
+        assert GRAIN_DISPLAY_INLETS == 2
+        assert GRAIN_DISPLAY_OUTLETS == 1
+
+
+class TestDeviceJsuiIntegration:
+    """Test that devices with jsui objects build correctly."""
+
+    def test_add_jsui_stores_js_code(self):
+        d = AudioEffect("Test", 300, 150, theme=MIDNIGHT)
+        d.add_jsui("display", [10, 10, 200, 80],
+                   js_code=MINIMAL_JSUI_CODE, numinlets=3)
+        assert "display.js" in d._js_files
+        assert d._js_files["display.js"] == MINIMAL_JSUI_CODE
+
+    def test_add_jsui_custom_filename(self):
+        d = AudioEffect("Test", 300, 150)
+        d.add_jsui("display", [10, 10, 200, 80],
+                   js_code=MINIMAL_JSUI_CODE, js_filename="custom.js", numinlets=1)
+        assert "custom.js" in d._js_files
+
+    def test_dependency_cache_populated(self):
+        d = AudioEffect("Test", 300, 150)
+        d.add_jsui("display", [10, 10, 200, 80],
+                   js_code=MINIMAL_JSUI_CODE, numinlets=1)
+        patcher = d.to_patcher()
+        deps = patcher["patcher"]["dependency_cache"]
+        assert any(dep["name"] == "display.js" for dep in deps)
+
+    def test_dependency_cache_type_is_text(self):
+        d = AudioEffect("Test", 300, 150)
+        d.add_jsui("display", [10, 10, 200, 80],
+                   js_code=MINIMAL_JSUI_CODE, numinlets=1)
+        patcher = d.to_patcher()
+        deps = patcher["patcher"]["dependency_cache"]
+        js_dep = next(dep for dep in deps if dep["name"] == "display.js")
+        assert js_dep["type"] == "TEXT"
+
+    def test_build_writes_js_file(self):
+        d = AudioEffect("Test", 300, 150)
+        d.add_jsui("my_display", [10, 10, 200, 80],
+                   js_code=MINIMAL_JSUI_CODE, numinlets=1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "Test.amxd")
+            d.build(amxd_path)
+            assert os.path.exists(amxd_path)
+            js_path = os.path.join(tmpdir, "my_display.js")
+            assert os.path.exists(js_path)
+            with open(js_path) as f:
+                assert f.read() == MINIMAL_JSUI_CODE
+
+    def test_build_with_custom_filename(self):
+        d = AudioEffect("Test", 300, 150)
+        d.add_jsui("display", [10, 10, 200, 80],
+                   js_code=MINIMAL_JSUI_CODE, js_filename="custom_name.js", numinlets=1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "Test.amxd")
+            d.build(amxd_path)
+            js_path = os.path.join(tmpdir, "custom_name.js")
+            assert os.path.exists(js_path)
+
+    def test_build_with_engine_code(self):
+        """Build a device using actual filter curve engine code."""
+        d = AudioEffect("Test Filter", 300, 150)
+        d.add_jsui("fc", [10, 10, 200, 80],
+                   js_code=filter_curve_js(), numinlets=3)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "TestFilter.amxd")
+            d.build(amxd_path)
+            assert os.path.exists(amxd_path)
+            js_path = os.path.join(tmpdir, "fc.js")
+            assert os.path.exists(js_path)
+            with open(js_path) as f:
+                content = f.read()
+                assert "mgraphics" in content
+                assert "function paint()" in content
+
+    def test_build_with_eq_engine_code(self):
+        """Build a device using actual EQ curve engine code."""
+        d = AudioEffect("Test EQ", 400, 200)
+        d.add_v8ui("eq", [10, 10, 300, 120],
+                   js_code=eq_curve_js(), numinlets=3, numoutlets=4)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "TestEQ.amxd")
+            d.build(amxd_path)
+            assert os.path.exists(amxd_path)
+            js_path = os.path.join(tmpdir, "eq.js")
+            assert os.path.exists(js_path)
+            with open(js_path) as f:
+                content = f.read()
+                assert "mgraphics" in content
+                assert "function paint()" in content
+
+    def test_spectrum_dsp_can_target_nonzero_inlet(self):
+        d = AudioEffect("Test EQ", 400, 200)
+        d.add_v8ui("eq", [10, 10, 300, 120],
+                   js_code=eq_curve_js(), numinlets=3, numoutlets=4)
+        spectrum_analyzer_dsp(
+            d,
+            "eq",
+            "obj-plugin",
+            source_outlet=0,
+            num_bands=4,
+            id_prefix="spec",
+            target_inlet=2,
+            min_db=-72.0,
+            max_db=0.0,
+        )
+        patcher = d.to_patcher()
+        boxes = patcher["patcher"]["boxes"]
+        lines = patcher["patcher"]["lines"]
+        clip_texts = {box["box"].get("text", "") for box in boxes}
+        assert "clip -72.0 0.0" in clip_texts
+        assert any(
+            line["patchline"]["source"] == ["spec_group", 0]
+            and line["patchline"]["destination"] == ["eq", 2]
+            for line in lines
+        )
+
+    def test_spectrum_dsp_supports_custom_resolution(self):
+        d = AudioEffect("Test EQ", 400, 200)
+        # eq_curve is a POINTER-EVENT engine: real devices host it in a v8ui
+        # (parametric_eq et al) — a classic jsui would never deliver its
+        # onpointer* gestures, and the jsui contract now rejects that combo.
+        d.add_v8ui("eq", [10, 10, 300, 120],
+                   js_code=eq_curve_js(), numinlets=3, numoutlets=4)
+        spectrum_analyzer_dsp(
+            d,
+            "eq",
+            "obj-plugin",
+            source_outlet=0,
+            num_bands=8,
+            id_prefix="specx",
+            target_inlet=2,
+            peak_window=256,
+            q_min=4.0,
+            q_max=12.0,
+        )
+        patcher = d.to_patcher()
+        texts = {box["box"].get("text", "") for box in patcher["patcher"]["boxes"]}
+        assert "zl.group 8" in texts
+        assert "peakamp~ 256" in texts
+        assert any(text.startswith("reson~ ") and " 4.0 " in text for text in texts)
+
+    def test_build_with_envelope_engine_code(self):
+        """Build a device using actual envelope display engine code."""
+        d = AudioEffect("Test Env", 300, 150)
+        d.add_jsui("env", [10, 10, 200, 80],
+                   js_code=envelope_display_js(), numinlets=4)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "TestEnv.amxd")
+            d.build(amxd_path)
+            assert os.path.exists(amxd_path)
+            js_path = os.path.join(tmpdir, "env.js")
+            assert os.path.exists(js_path)
+
+    def test_build_with_spectrum_engine_code(self):
+        """Build a device using actual spectrum analyzer engine code."""
+        d = AudioEffect("Test Spec", 300, 150)
+        d.add_jsui("spec", [10, 10, 200, 80],
+                   js_code=spectrum_analyzer_js(), numinlets=2)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "TestSpec.amxd")
+            d.build(amxd_path)
+            assert os.path.exists(amxd_path)
+            js_path = os.path.join(tmpdir, "spec.js")
+            assert os.path.exists(js_path)
+
+    def test_build_with_waveform_engine_code(self):
+        """Build a device using actual waveform display engine code."""
+        d = AudioEffect("Test Wave", 300, 150)
+        d.add_jsui("wave", [10, 10, 200, 80],
+                   js_code=waveform_display_js(), numinlets=2)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "TestWave.amxd")
+            d.build(amxd_path)
+            assert os.path.exists(amxd_path)
+            js_path = os.path.join(tmpdir, "wave.js")
+            assert os.path.exists(js_path)
+
+    def test_multiple_jsui_in_one_device(self):
+        """Multiple jsui objects can coexist in a single device."""
+        d = AudioEffect("Multi", 400, 300)
+        d.add_jsui("fc", [10, 10, 150, 80],
+                   js_code=filter_curve_js(), numinlets=3)
+        d.add_jsui("env", [170, 10, 150, 80],
+                   js_code=envelope_display_js(), numinlets=4)
+        assert "fc.js" in d._js_files
+        assert "env.js" in d._js_files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            amxd_path = os.path.join(tmpdir, "Multi.amxd")
+            d.build(amxd_path)
+            assert os.path.exists(os.path.join(tmpdir, "fc.js"))
+            assert os.path.exists(os.path.join(tmpdir, "env.js"))
+
+
+class TestVelocityCurveEngine:
+    def test_returns_string(self):
+        js = velocity_curve_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = velocity_curve_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = velocity_curve_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = velocity_curve_display_js()
+        assert "inlets = 1;" in js
+
+    def test_declares_outlets(self):
+        js = velocity_curve_display_js()
+        assert "outlets = 5;" in js
+
+    def test_inlet_count_metadata(self):
+        assert VELOCITY_CURVE_INLETS == 1
+
+    def test_outlet_count_metadata(self):
+        assert VELOCITY_CURVE_OUTLETS == 5
+
+    def test_contains_onclick(self):
+        js = velocity_curve_display_js()
+        assert "function onclick" in js
+
+    def test_contains_ondrag(self):
+        js = velocity_curve_display_js()
+        assert "function ondrag" in js
+
+    def test_contains_outlet_calls(self):
+        js = velocity_curve_display_js()
+        assert "outlet(0" in js
+        assert "outlet(4" in js
+
+    def test_custom_bg_color(self):
+        js = velocity_curve_display_js(bg_color="0.1, 0.1, 0.1, 1.0")
+        assert "0.1, 0.1, 0.1, 1.0" in js
+
+    def test_custom_curve_color(self):
+        js = velocity_curve_display_js(curve_color="1.0, 0.0, 0.5, 1.0")
+        assert "1.0, 0.0, 0.5, 1.0" in js
+
+    def test_custom_point_color(self):
+        js = velocity_curve_display_js(point_color="0.8, 0.8, 0.0, 1.0")
+        assert "0.8, 0.8, 0.0, 1.0" in js
+
+    def test_contains_control_points(self):
+        js = velocity_curve_display_js()
+        assert "pt_x1" in js
+        assert "pt_y1" in js
+        assert "pt_x2" in js
+        assert "pt_y2" in js
+
+    def test_contains_msg_list(self):
+        js = velocity_curve_display_js()
+        assert "function msg_list" in js
+
+    def test_mouse_up_in_ondrag(self):
+        js = velocity_curve_display_js()
+        assert "but === 0" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = velocity_curve_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = velocity_curve_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+    def test_no_es6_const(self):
+        import re
+        js = velocity_curve_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])const\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'const' found: {stripped}"
+
+    def test_contains_mgraphics_redraw(self):
+        js = velocity_curve_display_js()
+        assert "mgraphics.redraw()" in js
+
+
+class TestWavetableDisplayEngine:
+    def test_returns_string(self):
+        js = wavetable_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = wavetable_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = wavetable_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = wavetable_display_js()
+        assert "inlets = 1;" in js
+
+    def test_declares_outlets(self):
+        js = wavetable_display_js()
+        assert "outlets = 0;" in js
+
+    def test_inlet_count_metadata(self):
+        assert WAVETABLE_DISPLAY_INLETS == 1
+
+    def test_outlet_count_metadata(self):
+        assert WAVETABLE_DISPLAY_OUTLETS == 0
+
+    def test_contains_msg_list(self):
+        js = wavetable_display_js()
+        assert "function msg_list" in js
+
+    def test_custom_bg_color(self):
+        js = wavetable_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_custom_line_color(self):
+        js = wavetable_display_js(line_color="0.9, 0.3, 0.3, 1.0")
+        assert "0.9, 0.3, 0.3, 1.0" in js
+
+    def test_custom_fill_color(self):
+        js = wavetable_display_js(fill_color="0.9, 0.3, 0.3, 0.1")
+        assert "0.9, 0.3, 0.3, 0.1" in js
+
+    def test_contains_samples_array(self):
+        js = wavetable_display_js()
+        assert "samples" in js
+        assert "num_samples" in js
+
+    def test_contains_line_draw(self):
+        js = wavetable_display_js()
+        assert "line_to" in js
+        assert "move_to" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = wavetable_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = wavetable_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+    def test_contains_mgraphics_redraw(self):
+        js = wavetable_display_js()
+        assert "mgraphics.redraw()" in js
+
+
+class TestResonanceBankEngine:
+    def test_returns_string(self):
+        js = resonance_bank_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = resonance_bank_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = resonance_bank_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = resonance_bank_display_js()
+        assert "inlets = 1;" in js
+
+    def test_declares_outlets(self):
+        js = resonance_bank_display_js()
+        assert "outlets = 0;" in js
+
+    def test_inlet_count_metadata(self):
+        assert RESONANCE_BANK_INLETS == 1
+
+    def test_outlet_count_metadata(self):
+        assert RESONANCE_BANK_OUTLETS == 0
+
+    def test_contains_msg_list(self):
+        js = resonance_bank_display_js()
+        assert "function msg_list" in js
+
+    def test_custom_bg_color(self):
+        js = resonance_bank_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_custom_bar_color(self):
+        js = resonance_bank_display_js(bar_color="0.2, 0.6, 0.9, 1.0")
+        assert "0.2" in js
+        assert "0.6" in js
+        assert "0.9" in js
+
+    def test_custom_hot_color(self):
+        js = resonance_bank_display_js(hot_color="1.0, 0.2, 0.0, 1.0")
+        assert "1.0" in js
+        assert "0.2" in js
+
+    def test_contains_freq_and_gain_arrays(self):
+        js = resonance_bank_display_js()
+        assert "freqs" in js
+        assert "gains" in js
+        assert "num_bands" in js
+
+    def test_contains_log_scale(self):
+        js = resonance_bank_display_js()
+        assert "Math.log" in js
+
+    def test_contains_bar_drawing(self):
+        js = resonance_bank_display_js()
+        assert "mgraphics.rectangle" in js
+
+    def test_contains_color_interpolation(self):
+        js = resonance_bank_display_js()
+        assert "lerp" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = resonance_bank_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = resonance_bank_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+    def test_contains_mgraphics_redraw(self):
+        js = resonance_bank_display_js()
+        assert "mgraphics.redraw()" in js
+
+
+class TestSidechainDisplay:
+    def test_returns_string(self):
+        js = sidechain_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = sidechain_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = sidechain_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = sidechain_display_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = sidechain_display_js()
+        assert "outlets = 0;" in js
+
+    def test_inlet_count_metadata(self):
+        assert SIDECHAIN_DISPLAY_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert SIDECHAIN_DISPLAY_OUTLETS == 0
+
+    def test_handles_msg_float(self):
+        js = sidechain_display_js()
+        assert "function msg_float" in js
+
+    def test_contains_level_state(self):
+        js = sidechain_display_js()
+        assert "level" in js
+
+    def test_contains_threshold_state(self):
+        js = sidechain_display_js()
+        assert "threshold" in js
+
+    def test_custom_bg_color(self):
+        js = sidechain_display_js(bg_color="0.1, 0.1, 0.1, 1.0")
+        assert "0.1, 0.1, 0.1, 1.0" in js
+
+    def test_custom_bar_color(self):
+        js = sidechain_display_js(bar_color="0.8, 0.4, 0.2, 1.0")
+        assert "0.8, 0.4, 0.2, 1.0" in js
+
+    def test_custom_threshold_color(self):
+        js = sidechain_display_js(threshold_color="1.0, 0.0, 0.0, 0.9")
+        assert "1.0, 0.0, 0.0, 0.9" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = sidechain_display_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = sidechain_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = sidechain_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestSpectralDisplay:
+    def test_returns_string(self):
+        js = spectral_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = spectral_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = spectral_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = spectral_display_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = spectral_display_js()
+        assert "outlets = 0;" in js
+
+    def test_inlet_count_metadata(self):
+        assert SPECTRAL_DISPLAY_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert SPECTRAL_DISPLAY_OUTLETS == 0
+
+    def test_contains_msg_list(self):
+        js = spectral_display_js()
+        assert "function msg_list" in js
+
+    def test_contains_threshold(self):
+        js = spectral_display_js()
+        assert "threshold" in js
+
+    def test_contains_bins(self):
+        js = spectral_display_js()
+        assert "bins" in js
+
+    def test_custom_bg_color(self):
+        js = spectral_display_js(bg_color="0.1, 0.1, 0.1, 1.0")
+        assert "0.1, 0.1, 0.1, 1.0" in js
+
+    def test_custom_panel_color(self):
+        js = spectral_display_js(panel_color="0.2, 0.2, 0.2, 1.0")
+        assert "0.2, 0.2, 0.2, 1.0" in js
+
+    def test_custom_bar_color(self):
+        js = spectral_display_js(bar_color="0.6, 0.3, 0.9, 0.8")
+        assert "0.6, 0.3, 0.9, 0.8" in js
+
+    def test_custom_threshold_color(self):
+        js = spectral_display_js(threshold_color="1.0, 0.0, 0.0, 0.9")
+        assert "1.0, 0.0, 0.0, 0.9" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = spectral_display_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = spectral_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = spectral_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestPeakingEqDisplay:
+    def test_returns_string(self):
+        js = peaking_eq_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = peaking_eq_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = peaking_eq_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = peaking_eq_display_js()
+        assert "inlets = 1;" in js
+
+    def test_declares_outlets(self):
+        js = peaking_eq_display_js()
+        assert "outlets = 4;" in js
+
+    def test_inlet_count_metadata(self):
+        assert PEAKING_EQ_DISPLAY_INLETS == 1
+
+    def test_outlet_count_metadata(self):
+        assert PEAKING_EQ_DISPLAY_OUTLETS == 4
+
+    def test_contains_onclick(self):
+        js = peaking_eq_display_js()
+        assert "function onclick" in js
+
+    def test_contains_ondrag(self):
+        js = peaking_eq_display_js()
+        assert "function ondrag" in js
+
+    def test_contains_msg_list(self):
+        js = peaking_eq_display_js()
+        assert "function msg_list" in js
+
+    def test_contains_bands_array(self):
+        js = peaking_eq_display_js()
+        assert "bands" in js
+        assert "MAX_BANDS" in js
+
+    def test_contains_outlet_calls(self):
+        js = peaking_eq_display_js()
+        assert "outlet(0" in js
+        assert "outlet(3" in js
+
+    def test_mouse_up_in_ondrag(self):
+        js = peaking_eq_display_js()
+        assert "but === 0" in js
+
+    def test_custom_bg_color(self):
+        js = peaking_eq_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_custom_panel_color(self):
+        js = peaking_eq_display_js(panel_color="0.2, 0.2, 0.2, 1.0")
+        assert "0.2, 0.2, 0.2, 1.0" in js
+
+    def test_custom_line_color(self):
+        js = peaking_eq_display_js(line_color="0.9, 0.3, 0.3, 1.0")
+        assert "0.9, 0.3, 0.3, 1.0" in js
+
+    def test_custom_point_color(self):
+        js = peaking_eq_display_js(point_color="0.2, 0.8, 0.5, 1.0")
+        assert "0.2, 0.8, 0.5, 1.0" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = peaking_eq_display_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = peaking_eq_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = peaking_eq_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestStepGridDisplay:
+    def test_returns_string(self):
+        js = step_grid_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = step_grid_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = step_grid_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = step_grid_display_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = step_grid_display_js()
+        assert "outlets = 4;" in js
+
+    def test_inlet_count_metadata(self):
+        assert STEP_GRID_DISPLAY_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert STEP_GRID_DISPLAY_OUTLETS == 4
+
+    def test_default_steps(self):
+        js = step_grid_display_js()
+        assert "NUM_STEPS = 16" in js
+
+    def test_custom_steps(self):
+        js = step_grid_display_js(steps=32)
+        assert "NUM_STEPS = 32" in js
+
+    def test_contains_onclick(self):
+        js = step_grid_display_js()
+        assert "function onclick" in js
+
+    def test_contains_msg_list(self):
+        js = step_grid_display_js()
+        assert "function msg_list" in js
+
+    def test_contains_msg_int(self):
+        js = step_grid_display_js()
+        assert "function msg_int" in js
+
+    def test_contains_playhead(self):
+        js = step_grid_display_js()
+        assert "playhead" in js
+
+    def test_contains_outlet_calls(self):
+        js = step_grid_display_js()
+        assert "outlet(0" in js
+        assert "outlet(3" in js
+
+    def test_custom_bg_color(self):
+        js = step_grid_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_custom_active_color(self):
+        js = step_grid_display_js(active_color="0.9, 0.4, 0.1, 1.0")
+        assert "0.9, 0.4, 0.1" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = step_grid_display_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = step_grid_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = step_grid_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestGrainDisplay:
+    def test_returns_string(self):
+        js = grain_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = grain_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = grain_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = grain_display_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = grain_display_js()
+        assert "outlets = 1;" in js
+
+    def test_inlet_count_metadata(self):
+        assert GRAIN_DISPLAY_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert GRAIN_DISPLAY_OUTLETS == 1
+
+    def test_contains_msg_list(self):
+        js = grain_display_js()
+        assert "function msg_list" in js
+
+    def test_contains_msg_float(self):
+        js = grain_display_js()
+        assert "function msg_float" in js
+
+    def test_contains_onclick(self):
+        js = grain_display_js()
+        assert "function onclick" in js
+
+    def test_contains_ondrag(self):
+        js = grain_display_js()
+        assert "function ondrag" in js
+
+    def test_contains_playhead(self):
+        js = grain_display_js()
+        assert "playhead" in js
+
+    def test_contains_samples(self):
+        js = grain_display_js()
+        assert "samples" in js
+
+    def test_contains_outlet_call(self):
+        js = grain_display_js()
+        assert "outlet(0" in js
+
+    def test_mouse_up_in_ondrag(self):
+        js = grain_display_js()
+        assert "but === 0" in js
+
+    def test_custom_bg_color(self):
+        js = grain_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_custom_wave_color(self):
+        js = grain_display_js(wave_color="0.8, 0.4, 0.2, 0.7")
+        assert "0.8, 0.4, 0.2" in js
+
+    def test_custom_playhead_color(self):
+        js = grain_display_js(playhead_color="1.0, 0.0, 0.5, 0.9")
+        assert "1.0, 0.0, 0.5, 0.9" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = grain_display_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = grain_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = grain_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestGridSequencerDisplay:
+    def test_returns_string(self):
+        js = grid_sequencer_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = grid_sequencer_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = grid_sequencer_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = grid_sequencer_display_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = grid_sequencer_display_js()
+        assert "outlets = 4;" in js
+
+    def test_inlet_count_metadata(self):
+        assert GRID_SEQ_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert GRID_SEQ_OUTLETS == 4
+
+    def test_custom_rows_cols(self):
+        js = grid_sequencer_display_js(rows=8, cols=8)
+        assert "NUM_ROWS = 8" in js
+        assert "NUM_COLS = 8" in js
+
+    def test_default_rows_cols(self):
+        js = grid_sequencer_display_js()
+        assert "NUM_ROWS = 12" in js
+        assert "NUM_COLS = 16" in js
+
+    def test_contains_onclick(self):
+        js = grid_sequencer_display_js()
+        assert "function onclick" in js
+
+    def test_contains_msg_list(self):
+        js = grid_sequencer_display_js()
+        assert "function msg_list" in js
+
+    def test_contains_msg_int(self):
+        js = grid_sequencer_display_js()
+        assert "function msg_int" in js
+
+    def test_outputs_on_click(self):
+        js = grid_sequencer_display_js()
+        assert "outlet(0, col)" in js
+        assert "outlet(1, row)" in js
+        assert "outlet(2, grid_active" in js
+        assert "outlet(3, grid_velocity" in js
+
+    def test_playhead_column(self):
+        js = grid_sequencer_display_js()
+        assert "playhead_col" in js
+
+    def test_custom_active_color(self):
+        js = grid_sequencer_display_js(active_color="1.0, 0.5, 0.0, 1.0")
+        assert "1.0, 0.5, 0.0" in js
+
+    def test_custom_bg_color(self):
+        js = grid_sequencer_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = grid_sequencer_display_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = grid_sequencer_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = grid_sequencer_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestWavetableEditor:
+    def test_returns_string(self):
+        js = wavetable_editor_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = wavetable_editor_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = wavetable_editor_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = wavetable_editor_js()
+        assert "inlets = 1;" in js
+
+    def test_declares_outlets(self):
+        js = wavetable_editor_js()
+        assert "outlets = 1;" in js
+
+    def test_inlet_count_metadata(self):
+        assert WAVETABLE_EDITOR_INLETS == 1
+
+    def test_outlet_count_metadata(self):
+        assert WAVETABLE_EDITOR_OUTLETS == 1
+
+    def test_contains_onclick(self):
+        js = wavetable_editor_js()
+        assert "function onclick" in js
+
+    def test_contains_ondrag(self):
+        js = wavetable_editor_js()
+        assert "function ondrag" in js
+
+    def test_contains_msg_list(self):
+        js = wavetable_editor_js()
+        assert "function msg_list" in js
+
+    def test_outputs_samples_on_edit(self):
+        js = wavetable_editor_js()
+        assert "outlet(0, out)" in js
+
+    def test_contains_edit_at(self):
+        js = wavetable_editor_js()
+        assert "function edit_at" in js
+
+    def test_custom_wave_color(self):
+        js = wavetable_editor_js(wave_color="0.8, 0.4, 0.2, 1.0")
+        assert "0.8, 0.4, 0.2" in js
+
+    def test_custom_edit_color(self):
+        js = wavetable_editor_js(edit_color="1.0, 1.0, 0.0, 1.0")
+        assert "1.0, 1.0, 0.0, 1.0" in js
+
+    def test_custom_bg_color(self):
+        js = wavetable_editor_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = wavetable_editor_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_samples_clamped_to_range(self):
+        js = wavetable_editor_js()
+        assert "Math.max(-1, Math.min(1" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = wavetable_editor_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = wavetable_editor_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestSpectralVocoderDisplay:
+    def test_returns_string(self):
+        js = spectral_vocoder_display_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = spectral_vocoder_display_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = spectral_vocoder_display_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = spectral_vocoder_display_js()
+        assert "inlets = 2;" in js
+
+    def test_declares_outlets(self):
+        js = spectral_vocoder_display_js()
+        assert "outlets = 0;" in js
+
+    def test_inlet_count_metadata(self):
+        assert SPECTRAL_VOCODER_INLETS == 2
+
+    def test_outlet_count_metadata(self):
+        assert SPECTRAL_VOCODER_OUTLETS == 0
+
+    def test_contains_msg_list(self):
+        js = spectral_vocoder_display_js()
+        assert "function msg_list" in js
+
+    def test_handles_both_inlets(self):
+        js = spectral_vocoder_display_js()
+        assert "carrier_bands" in js
+        assert "modulator_bands" in js
+
+    def test_inlet_routing(self):
+        js = spectral_vocoder_display_js()
+        assert "inlet === 0" in js
+        assert "inlet === 1" in js
+
+    def test_custom_carrier_color(self):
+        js = spectral_vocoder_display_js(carrier_color="0.2, 0.9, 0.5, 1.0")
+        assert "0.2, 0.9, 0.5, 1.0" in js
+
+    def test_custom_modulator_color(self):
+        js = spectral_vocoder_display_js(modulator_color="0.9, 0.2, 0.2, 1.0")
+        assert "0.9, 0.2, 0.2, 1.0" in js
+
+    def test_custom_bg_color(self):
+        js = spectral_vocoder_display_js(bg_color="0.05, 0.05, 0.06, 1.0")
+        assert "0.05, 0.05, 0.06, 1.0" in js
+
+    def test_draws_bars(self):
+        js = spectral_vocoder_display_js()
+        assert "carrier_h" in js
+        assert "mod_h" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = spectral_vocoder_display_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = spectral_vocoder_display_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = spectral_vocoder_display_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+class TestLevelHistory:
+    def test_returns_string(self):
+        js = level_history_js()
+        assert isinstance(js, str)
+        assert len(js) > 100
+
+    def test_contains_mgraphics_init(self):
+        js = level_history_js()
+        assert "mgraphics.init()" in js
+
+    def test_contains_paint_function(self):
+        js = level_history_js()
+        assert "function paint()" in js
+
+    def test_declares_inlets(self):
+        js = level_history_js()
+        assert "inlets = 1;" in js
+
+    def test_declares_outlets(self):
+        js = level_history_js()
+        assert "outlets = 1;" in js
+
+    def test_inlet_count_metadata(self):
+        assert LEVEL_HISTORY_INLETS == 1
+
+    def test_outlet_count_metadata(self):
+        assert LEVEL_HISTORY_OUTLETS == 1
+
+    def test_message_handlers_present(self):
+        js = level_history_js()
+        for fn in ("function levels", "function set_range",
+                   "function set_gr_scale", "function set_seconds",
+                   "function set_rate", "function clear"):
+            assert fn in js
+
+    def test_display_only_by_default(self):
+        # Default build is display-only: the drag path is compile-time
+        # gated off (behavioral no-emission proven in test_js_behavior).
+        js = level_history_js()
+        assert "var INTERACTIVE = 0;" in js
+        assert "if (!INTERACTIVE) return;" in js
+
+    def test_interactive_kwarg_enables_threshold_drag(self):
+        js = level_history_js(interactive=True)
+        assert "var INTERACTIVE = 1;" in js
+        assert 'outlet(0, "threshold"' in js
+
+    def test_levels_handler_guards_non_finite(self):
+        # A per-frame TypeError flood wedges Max's UI thread Live-wide.
+        js = level_history_js()
+        assert "isFinite" in js
+
+    def test_ring_wrap_math(self):
+        js = level_history_js()
+        assert "(head + 1) % cap" in js
+        assert "function frame_at" in js
+
+    def test_no_task_usage(self):
+        # Legacy js Task.schedule silently no-ops in Live; redraws must be
+        # driven by the inbound levels stream.
+        js = level_history_js()
+        assert "new Task" not in js
+
+    def test_custom_gr_color(self):
+        js = level_history_js(gr_line_color="0.9, 0.1, 0.1, 1.0")
+        assert "0.9, 0.1, 0.1, 1.0" in js
+
+    def test_reference_line_defaults_off(self):
+        js = level_history_js()
+        assert "var ref_db = null;" in js
+        assert "function set_ref_db(v)" in js
+
+    def test_reference_line_kwarg(self):
+        js = level_history_js(ref_db=-0.3, ref_color="1.0, 0.2, 0.2, 0.9")
+        assert "var ref_db = -0.3;" in js
+        assert "1.0, 0.2, 0.2, 0.9" in js
+
+    def test_custom_range_defaults(self):
+        js = level_history_js(lo_db=-48.0, hi_db=12.0, gr_scale_db=12.0)
+        assert "var lo_db = -48.0;" in js
+        assert "var hi_db = 12.0;" in js
+        assert "var gr_scale_db = 12.0;" in js
+
+    def test_contains_mgraphics_redraw(self):
+        js = level_history_js()
+        assert "mgraphics.redraw()" in js
+
+    def test_no_es6_let(self):
+        import re
+        js = level_history_js()
+        pattern = re.compile(r'(?<![a-zA-Z0-9_])let\s')
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert not pattern.search(stripped), f"ES6 'let' found: {stripped}"
+
+    def test_no_es6_arrow_functions(self):
+        js = level_history_js()
+        for line in js.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('//'):
+                continue
+            assert '=>' not in stripped, f"ES6 arrow function found: {stripped}"
+
+
+def test_sonogram_overlay_is_valid_v8ui_labels_only():
+    # The spectrogram's overlay is a transparent v8ui that draws ONLY the
+    # log-frequency axis (ticks + labels) + a frame over the compiled
+    # spectroscope~ raster — no plot fill (the raster is the content).
+    from m4l_builder.engines.sonogram_overlay import (
+        SONOGRAM_OVERLAY_INLETS,
+        SONOGRAM_OVERLAY_OUTLETS,
+        sonogram_overlay_js,
+    )
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues
+
+    js = sonogram_overlay_js(freq_min=20.0, freq_max=20000.0,
+                             labels=(100, 1000, 10000))
+    assert find_v8ui_contract_issues(js) == []
+    assert SONOGRAM_OVERLAY_INLETS == 1 and SONOGRAM_OVERLAY_OUTLETS == 0
+    assert "var FREQ_LABELS = [100.0, 1000.0, 10000.0];" in js
+    assert "show_text" in js
+    assert "function log_norm(f)" in js
+    # colors are substitutable
+    js2 = sonogram_overlay_js(text_color="1.0, 0.0, 0.0, 1.0")
+    assert "var TEXT_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+
+
+def test_goniometer_graticule_is_valid_v8ui():
+    # The goniometer overlay is a transparent v8ui graticule: bounding circle,
+    # centre cross, 45-degree diagonals, and L/R/M/S labels over a compiled
+    # scope~ X-Y dot cloud. No fill.
+    from m4l_builder.engines.goniometer_graticule import (
+        GONIOMETER_GRATICULE_INLETS,
+        GONIOMETER_GRATICULE_OUTLETS,
+        goniometer_graticule_js,
+    )
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues
+
+    js = goniometer_graticule_js()
+    assert find_v8ui_contract_issues(js) == []
+    assert GONIOMETER_GRATICULE_INLETS == 1 and GONIOMETER_GRATICULE_OUTLETS == 0
+    assert "mgraphics.arc(" in js          # bounding + inner circle
+    for lab in ("'M'", "'L'", "'R'", "'+S'", "'-S'"):
+        assert lab in js
+    js2 = goniometer_graticule_js(accent="1.0, 0.0, 0.0, 1.0")
+    assert "var ACCENT_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+
+
+def test_value_readout_is_valid_v8ui_and_substitutes():
+    # A reusable labeled-numeric readout v8ui (label on top, value+unit below),
+    # transparent for overlay use; driven by msg_float or set_value.
+    from m4l_builder.engines.value_readout import (
+        VALUE_READOUT_INLETS,
+        VALUE_READOUT_OUTLETS,
+        value_readout_js,
+    )
+    from m4l_builder.jsui_contract import find_v8ui_contract_issues
+
+    js = value_readout_js(label_name="FREQ", unit="Hz", decimal_places=1)
+    assert find_v8ui_contract_issues(js) == []
+    assert VALUE_READOUT_INLETS == 1 and VALUE_READOUT_OUTLETS == 0
+    assert 'var label_text = "FREQ";' in js
+    assert 'var unit_text = "Hz";' in js
+    assert "var DECIMALS = 1;" in js
+    assert "function msg_float(v)" in js
+    assert "function set_value(label, val, u)" in js
+    assert "value.toFixed(DECIMALS)" in js
+    # colors substitute
+    js2 = value_readout_js(value_color="1.0, 0.0, 0.0, 1.0")
+    assert "var VALUE_CLR = [1.0, 0.0, 0.0, 1.0];" in js2
+    # default transparent bg (overlay)
+    assert "var BG_CLR = [0.0, 0.0, 0.0, 0.0];" in js
+
+
+def test_final_checklist_issues_flags_forbidden_nonlocal_and_fractional():
+    from m4l_builder.validation import final_checklist_issues
+    boxes = [
+        {"box": {"id": "p", "maxclass": "newobj", "text": "print debug"}},
+        {"box": {"id": "s1", "maxclass": "newobj", "text": "send myglobal"}},
+        {"box": {"id": "s2", "maxclass": "newobj", "text": "send ---local"}},
+        {"box": {"id": "ui", "maxclass": "live.dial", "presentation": 1,
+                 "presentation_rect": [10.5, 20.0, 40, 40]}},
+        {"box": {"id": "ok", "maxclass": "live.dial", "presentation": 1,
+                 "presentation_rect": [10, 20, 40, 40]}},
+    ]
+    codes = {(i.code, i.box_id) for i in final_checklist_issues(boxes)}
+    assert ("checklist/forbidden-object", "p") in codes
+    assert ("checklist/nonlocal-send", "s1") in codes
+    assert ("checklist/nonlocal-send", "s2") not in codes      # ---local is fine
+    assert ("checklist/fractional-rect", "ui") in codes
+    assert ("checklist/fractional-rect", "ok") not in codes
+
+
+class TestIconOverlay:
+    def test_glyph_embedded_and_unknown_rejected(self):
+        js = icon_overlay_js("expand")
+        assert 'draw_glyph("expand"' in js
+        assert "function draw_icon_expand(" in js
+        with pytest.raises(ValueError):
+            icon_overlay_js("nope")
+
+
+class TestUiInteractionFoundations:
+    """T27 [Q5-Q8]: the four UXI foundation mixins (node harness)."""
+
+    def _run(self, extra):
+        import json
+        import subprocess
+
+        from m4l_builder.engines.ui_interaction import ui_interaction_js
+        harness = (
+            "var out = [];\n"
+            "function outlet(o, v) { out.push(v); }\n"
+            + ui_interaction_js() + "\n" + extra
+            + "\nconsole.log(JSON.stringify({out: out, R: R}));"
+        )
+        res = subprocess.run(["node", "-e", harness], capture_output=True,
+                             text=True, check=True)
+        return json.loads(res.stdout.strip())
+
+    def test_hit_test_and_dedup(self):
+        r = self._run("""
+var xs = [10, 50, 90], ys = [20, 20, 20];
+var R = {
+  hit: dn_hit_test(52, 22, xs, ys, 3, 6),
+  miss: dn_hit_test(70, 60, xs, ys, 3, 6),
+  first: dn_emit("a", 0.5),
+  dup: dn_emit("a", 0.5),
+  change: dn_emit("a", 0.75),
+};
+""")
+        assert r["R"]["hit"] == 1 and r["R"]["miss"] == -1
+        assert r["R"]["first"] == 1 and r["R"]["dup"] == 0
+        assert r["R"]["change"] == 1
+        assert r["out"] == [["a", 0.5], ["a", 0.75]]
+
+    def test_coord_transforms_roundtrip(self):
+        r = self._run("""
+var R = {
+  x: dn_norm_to_x(0.25, 100, 200),
+  back: dn_x_to_norm(150, 100, 200),
+  y: dn_norm_to_y(1.0, 10, 100),
+  clamped: dn_x_to_norm(9999, 100, 200),
+};
+""")
+        assert r["R"]["x"] == 150 and r["R"]["back"] == 0.25
+        assert r["R"]["y"] == 10 and r["R"]["clamped"] == 1
+
+    def test_tooltip_edge_flip(self):
+        r = self._run("""
+var R = {
+  normal: tt_place(50, 60, 40, 16, 200, 100),
+  right: tt_place(190, 60, 40, 16, 200, 100),
+  top: tt_place(50, 4, 40, 16, 200, 100),
+};
+""")
+        assert r["R"]["normal"] == [60, 38]      # right of cursor, above
+        assert r["R"]["right"][0] == 140         # flipped left
+        assert r["R"]["top"][1] == 16            # flipped below
+
+    def test_edit_overlay_lifecycle(self):
+        r = self._run("""
+var d1 = eo_is_dblclick(1000);      // first click: no
+var d2 = eo_is_dblclick(1200);      // 200ms later: double
+eo_open(10, 10, "1.5", "Freq", 0, 100);
+eo_keychar(48);                     // '0' -> "1.50"
+eo_keychar(8);                      // backspace -> "1.5"
+eo_keychar(57);                     // '9' -> "1.59"
+var v = eo_commit();
+eo_open(10, 10, "", "Freq", 0, 10);
+eo_keychar(53); eo_keychar(53);     // "55" -> clamps to 10
+var v2 = eo_commit();
+eo_open(10, 10, "x", "Freq", 0, 10);
+var v3 = eo_commit();               // NaN -> null
+var R = {d1: d1, d2: d2, v: v, v2: v2, v3: v3};
+""")
+        assert r["R"]["d1"] == 0 and r["R"]["d2"] == 1
+        assert abs(r["R"]["v"] - 1.59) < 1e-9
+        assert r["R"]["v2"] == 10
+        assert r["R"]["v3"] is None
+
+    def test_modifier_math(self):
+        r = self._run("""
+var R = {
+  fine: md_apply_drag(1.0, 0.0, 1),
+  coarse: md_apply_drag(1.0, 0.0, 0),
+  lockv: md_axis_lock(2, 10),
+  lockh: md_axis_lock(10, 2),
+  nudge: md_nudge(1, 0, 0.01),
+  nudge10: md_nudge(-1, 1, 0.01),
+};
+""")
+        assert abs(r["R"]["fine"] - 0.15) < 1e-9
+        assert r["R"]["coarse"] == 1.0
+        assert r["R"]["lockv"] == 1 and r["R"]["lockh"] == 0
+        assert abs(r["R"]["nudge"] - 0.01) < 1e-9
+        assert abs(r["R"]["nudge10"] + 0.1) < 1e-9
+
+
+class TestUiMotionFoundations:
+    """T28 [Q9,Q10]: tween engine + glow palette (node harness)."""
+
+    def _run(self, extra):
+        import json
+        import subprocess
+
+        from m4l_builder.engines.ui_motion import ui_motion_js
+        harness = (
+            "var out = [];\n"
+            "function outlet(o, v) { out.push(v); }\n"
+            + ui_motion_js() + "\n" + extra
+            + "\nconsole.log(JSON.stringify({R: R}));"
+        )
+        res = subprocess.run(["node", "-e", harness], capture_output=True,
+                             text=True, check=True)
+        return json.loads(res.stdout.strip())
+
+    def test_tween_step_frame_rate_independent(self):
+        r = self._run("""
+// one 100ms step must land where four 25ms steps land (same dt/tau sum)
+var one = tw_step(0, 1, 90, 100);
+var four = 0;
+for (var i = 0; i < 4; i++) four = tw_step(four, 1, 90, 25);
+// convergence + snap-to-target under epsilon
+var snap = tw_step(0.9997, 1, 90, 33);
+var R = {one: one, four: four, snap: snap};
+""")
+        assert abs(r["R"]["one"] - r["R"]["four"]) < 1e-9
+        assert r["R"]["snap"] == 1
+
+    def test_tween_map_and_jump(self):
+        r = self._run("""
+// Task-free path: exercise the map via tw_jump + manual steps
+tw_jump("x", 0.5);
+var got = tw_get("x", -1);
+var missing = tw_get("nope", -1);
+tw_map["x"].target = 1.0;
+tw_map["x"].cur = tw_step(tw_map["x"].cur, tw_map["x"].target, 90, 90);
+var R = {got: got, missing: missing, after: tw_map["x"].cur};
+""")
+        assert r["R"]["got"] == 0.5 and r["R"]["missing"] == -1
+        # one tau covers 1-1/e of the distance
+        assert abs(r["R"]["after"] - (0.5 + 0.5 * (1 - 2.718281828 ** -1))) < 1e-6
+
+    def test_accent_states_and_heatmap(self):
+        r = self._run("""
+var acc = [0.3, 0.8, 0.84];
+var R = {
+  hover: ds_accent_state(acc, "hover")[3],
+  active: ds_accent_state(acc, "active")[3],
+  disabled: ds_accent_state(acc, "disabled")[3],
+  mid: ds_heatmap_lerp(0.5, [0.1, 0.1, 0.1], [0.3, 0.8, 0.84]),
+  clamped: ds_heatmap_lerp(9, [0, 0, 0], [1, 1, 1]),
+};
+""")
+        assert r["R"]["hover"] == 0.9 and r["R"]["active"] == 1.0
+        assert r["R"]["disabled"] == 0.25
+        assert abs(r["R"]["mid"][1] - 0.45) < 1e-9
+        assert r["R"]["clamped"][:3] == [1, 1, 1]
+
+
+class TestLiveDropBlobParam:
+    def test_param_name_registers_blob_parameter(self):
+        # widget-hardening spec: parameter_type 4 (Blob), Stored-Only, no
+        # min/max/unit/enum — the dropped path persists in the Live set.
+        from m4l_builder.ui import live_drop
+        box = live_drop("d", [0, 0, 100, 30], param_name="Sample")["box"]
+        assert box["parameter_enable"] == 1
+        vo = box["saved_attribute_attributes"]["valueof"]
+        assert vo["parameter_type"] == 4
+        assert vo["parameter_invisible"] == 1
+        assert vo["parameter_longname"] == "Sample"
+        for absent in ("parameter_mmin", "parameter_mmax",
+                       "parameter_unitstyle", "parameter_enum"):
+            assert absent not in vo
+
+    def test_without_param_name_stays_paramless(self):
+        from m4l_builder.ui import live_drop
+        box = live_drop("d", [0, 0, 100, 30])["box"]
+        assert "parameter_enable" not in box
+        assert "saved_attribute_attributes" not in box
+
+
+def test_jsui_contract_rejects_v8ui_pointer_events():
+    # v8ui pointer handlers never fire inside a classic jsui — a control
+    # wired to onpointerdown ships looking fine and ignores every click
+    # (the settings_bar dead-opener bug). The contract flags all three.
+    from m4l_builder.jsui_contract import find_jsui_contract_issues
+    base = ("mgraphics.init();\nmgraphics.relative_coords = 0;\n"
+            "mgraphics.autofill = 0;\nfunction paint() {}\n"
+            "function msg_int(v) { mgraphics.redraw(); }\n")
+    for handler in ("onpointerdown", "onpointerup", "onpointermove"):
+        bad = base + "function " + handler + "(pe) {}\n"
+        issues = find_jsui_contract_issues(bad)
+        assert any("pointer" in i for i in issues), handler
+    assert find_jsui_contract_issues(base + "function onclick(x, y) {}\n") == []
+
+
+def test_settings_bar_click_toggles_and_reports():
+    # Functional proof of the opener: onclick flips the state and emits it
+    # from outlet 0 (the parked-param drive). Runs the REAL bar js in the
+    # Node harness — the layer the dead-opener bug lived in.
+    from m4l_builder.engines.settings_bar import settings_bar_js
+    from tests.js_harness import run_jsui
+    driver = "onclick(5, 5);\nonclick(5, 5);\nonclick(5, 5);\n"
+    res = run_jsui(settings_bar_js(accent=(1, 0.5, 0.2, 1)), driver,
+                   size=(18, 168))
+    assert res.outlets == [[0, 1], [0, 0], [0, 1]]

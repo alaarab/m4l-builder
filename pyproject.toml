@@ -1,0 +1,147 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "m4l-builder"
+version = "0.8.0"
+description = "Programmatically build Max for Live (.amxd) devices"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Ala Arab", email = "ala@alaarab.com" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+
+[project.urls]
+Homepage = "https://github.com/alaarab/m4l-builder"
+Repository = "https://github.com/alaarab/m4l-builder"
+
+[tool.hatch.build]
+exclude = ["tests/"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/m4l_builder"]
+
+[dependency-groups]
+dev = [
+    # pytest 9.x dropped runtime support for Python 3.9; install it where it
+    # runs and fall back to the latest 8.x series on 3.9. Project targets 3.9+.
+    "pytest>=9; python_version >= '3.10'",
+    "pytest>=8.4,<9; python_version < '3.10'",
+    "pytest-cov>=7",
+    "ruff>=0.15.16",
+    # mypy 2.x rejects --python-version 3.9 and mypy>=1.20 dropped runtime
+    # support for Python 3.9; the project targets 3.9+, so cap below 2 and only
+    # install the newer mypy where it can run. CI type-checks on 3.12.
+    "mypy>=1.20,<2; python_version >= '3.10'",
+    "mypy>=1.19,<1.20; python_version < '3.10'",
+]
+docs = [
+    # Docs build on modern Python only — the >=3.10 marker keeps the 3.9
+    # resolution branch (and its unpatchable urllib3/requests pins; both
+    # dropped 3.9 before their security fixes) out of the lock.
+    "mkdocs-material>=9.5; python_version >= '3.10'",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.coverage.run]
+source = ["m4l_builder"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+# Measured 87% (branch) at the time this gate was added; 85 leaves headroom
+# for matrix variance (version-gated shims, platform branches). If a matrix
+# leg ever flakes near the line, move this to a single-version CLI flag.
+fail_under = 85
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E501 (line length) is deferred: the codebase has many long generated DSP/JS
+# string literals. UP031 (printf -> str.format) is deferred too -- the rewrites
+# are behavior-sensitive (%-with-tuple semantics) and not worth the risk here.
+select = ["E", "F", "W", "B", "I", "UP"]
+ignore = ["E501", "UP031"]
+
+[tool.ruff.lint.per-file-ignores]
+# Facade modules deliberately re-export names to form the public API surface;
+# the unused-import / star-import warnings there are intentional.
+"src/m4l_builder/authoring.py" = ["F401", "F403"]
+"src/m4l_builder/bridge.py" = ["F401", "F403"]
+"src/m4l_builder/reverse.py" = ["F401", "F403"]
+"src/m4l_builder/analysis.py" = ["F401", "F403"]
+"src/m4l_builder/live.py" = ["F401", "F403"]
+"src/m4l_builder/reverse_api.py" = ["F401"]
+"src/m4l_builder/analysis_api.py" = ["F401"]
+"src/m4l_builder/bridge_api.py" = ["F401"]
+# recipes.py is now a thin facade re-exporting the recipes_*.py implementation
+# modules so `from m4l_builder.recipes import X` keeps working after the split.
+"src/m4l_builder/recipes.py" = ["F401", "F403"]
+# _reverse_legacy.py is a thin facade over the _reverse_*.py split modules; the
+# split modules star-import their lower layers (F405 = name-from-star), and the
+# facade re-exports the full surface (incl. original imports like Device).
+"src/m4l_builder/_reverse_legacy.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_reverse_constants.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_reverse_helpers.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_reverse_match.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_reverse_detect.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_reverse_extract.py" = ["F401", "F403", "F405"]
+# corpus_analysis.py is a thin facade over the _corpus_*.py split modules; the
+# split modules star-import their lower layers (F405 = name-from-star), and the
+# facade re-exports the full surface (incl. original imports like iter_boxes).
+"src/m4l_builder/corpus_analysis.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_corpus_helpers.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_corpus_file.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_corpus_ranking.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_corpus_mapping.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_corpus_dossier.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_corpus_aggregate.py" = ["F401", "F403", "F405"]
+"src/m4l_builder/_corpus_markdown.py" = ["F401", "F403", "F405"]
+# Single-letter loop / unpack vars (e.g. `l`) are idiomatic in the test suite.
+"tests/**" = ["E741"]
+
+[tool.mypy]
+python_version = "3.9"
+files = ["src/m4l_builder"]
+ignore_missing_imports = true
+# Lenient baseline so CI is green today; tighten module-by-module later.
+implicit_optional = true
+
+# Remaining type-checking backlog. Everything else in the package is gated.
+#   _reverse_*:      the legacy reverse-engineering module, split out of
+#                    _reverse_legacy (P1-P7 arc) into _reverse_detect/
+#                    _extract/_helpers/_match/_constants; the type-checking
+#                    debt moved with the code and needs the same exemption.
+#   device_widgets:  relies on Device.add_* methods attached dynamically via
+#                    setattr (see device.py), which mypy cannot see statically.
+#   livemcp_bridge:  same dynamic-setattr pattern as device_widgets.
+[[tool.mypy.overrides]]
+module = [
+    "m4l_builder._reverse_legacy",
+    "m4l_builder._reverse_detect",
+    "m4l_builder._reverse_extract",
+    "m4l_builder._reverse_helpers",
+    "m4l_builder._reverse_match",
+    "m4l_builder._reverse_constants",
+    "m4l_builder.device_widgets",
+    "m4l_builder.livemcp_bridge",
+]
+ignore_errors = true

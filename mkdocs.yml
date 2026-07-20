@@ -1,0 +1,88 @@
+site_name: m4l-builder
+site_description: Build Max for Live (.amxd) devices in Python — scriptable, version-controllable, zero runtime dependencies.
+site_author: Ala Arab
+site_url: https://alaarab.github.io/m4l-builder/
+repo_url: https://github.com/alaarab/m4l-builder
+repo_name: alaarab/m4l-builder
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Ala Arab — MIT License
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+
+# Internal working notes (audits, teardowns, sprint trackers, templates) are
+# kept in the repo but excluded from the published site to keep it focused.
+exclude_docs: |
+  archive/
+  plugin_design_doc_template.md
+  ui_validation/
+
+nav:
+  - Home: index.md
+  - Getting started: getting_started.md
+  - Guides:
+      - DSP & UI catalog: catalog.md
+      - MIDI Tools (Live 12): midi_tools.md
+      - Reverse engineering: reverse_engineering.md
+      - Modulation mapping: mapping_modulation_family_notes.md
+      - Dual-surface shells: dual_surface_shell_guidance.md
+      - LiveMCP bridge: livemcp_max_bridge.md
+  - API reference: api.md
+  - Resources: resources.md
+  - Roadmap: roadmap.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/alaarab/m4l-builder
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/m4l-builder/
