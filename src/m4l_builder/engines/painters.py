@@ -3,8 +3,7 @@
 A ``jspainterfile`` is a small ES5 ``.js`` that PAINTS a *native* Live control
 (``live.dial`` / ``live.numbox`` / ``toggle`` …) — the control keeps full native
 behaviour and parameter storage (``parameter_enable: 1``); the script only draws
-it. The library leans on this hard (a synth device has 67 ``jspainterfile`` instances,
-a reference device 19, the channel strip suite one each) — it is how they get a custom look
+it. The library leans on this hard — it is how they get a custom look
 without a hidden second control. Attach one with
 :meth:`m4l_builder.device.Device.paint_control`.
 

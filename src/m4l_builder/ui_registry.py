@@ -123,7 +123,7 @@ DEVICE_WIDGET_SPECS = {
         scope,
         # live.scope~ is a display: its trace color is the BARE linecolor (the
         # color you always see), like the meter — NOT activelinecolor. Verified
-        # across the whole real-device library (SEAR etc.): only linecolor,
+        # across the whole real-device library: only linecolor,
         # gridcolor, bgcolor are ever used; activelinecolor appears nowhere, so
         # the old mapping left themed scope traces Live-default.
         theme_mapping={
@@ -169,7 +169,7 @@ DEVICE_WIDGET_SPECS = {
             "overloadcolor": "meter_over",
             # The UNLIT segments. live.gain~/meter~ have inactive twins ONLY for cold &
             # warm (no inactivehotcolor — hot/overload only show when triggered). Library
-            # (a channel strip) sets these to a mid-grey ~0.5 = the text_dim token, so the
+            # sets these to a mid-grey ~0.5 = the text_dim token, so the
             # meter track reads as a consistent dim rail instead of Live-default grey.
             "inactivecoldcolor": "text_dim",
             "inactivewarmcolor": "text_dim",
@@ -294,8 +294,8 @@ DEVICE_WIDGET_SPECS = {
     # Library-measured Blob-param sequencers (not in synced docs). step bars / lit
     # cell = accent; backdrop = bg/section; border = panel_border; grid direction
     # strip = accent2.
-    # live.step / live.grid (sequencer lanes, no synced doc — grounded on the
-    # sequencer library). Map only the SOLID (alpha=1.0) attrs to tokens:
+    # live.step / live.grid (sequencer lanes, no synced doc — grounded on measured
+    # Max device conventions). Map only the SOLID (alpha=1.0) attrs to tokens:
     # the lit step (stepcolor=accent) + second step (stepcolor2=accent2), the grid
     # direction arrow (directioncolor=accent2) and the two borders. ⚠️ The PREMIUM look
     # also uses ALPHA-FADED washes a solid token CANNOT express — the zebra (bgstepcolor

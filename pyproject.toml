@@ -25,7 +25,7 @@ Homepage = "https://github.com/alaarab/m4l-builder"
 Repository = "https://github.com/alaarab/m4l-builder"
 
 [tool.hatch.build]
-exclude = ["CLAUDE.md", ".claude/", "tests/", "FINDINGS.md"]
+exclude = ["tests/"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/m4l_builder"]

@@ -93,7 +93,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `random_walk` | Brownian motion smooth random CV signal. |
 | `receive_msg` | Create a receive object for message-domain routing without patch cords. |
 | `receive_signal` | Create a receive~ object for signal-domain routing without patch cords. |
-| `retargetable_param_sink` | The retarget sink: one ``id <n>`` stream drives |
+| `retargetable_param_sink` | the multi-target retarget sink: one ``id <n>`` stream drives |
 | `reverb_network` | Schroeder reverb network with parallel combs and series allpasses. |
 | `sample_and_hold` | Sample-and-hold modulation source. |
 | `sample_and_hold_triggered` | Sample-and-hold with external trigger signal. |
@@ -184,7 +184,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `arpeggio_quantized_stage` | Add an arpeggiator followed by pitch quantization. |
 | `bypass_wrapper` | Hard-bypass N parallel signal paths (stereo L/R by default) with ONE |
 | `convolver_controlled_stage` | Add a convolver with dry/wet mix controlled by a dial. |
-| `dial_label_cell` | A dial with a caption directly below it — the channel strip control cell. |
+| `dial_label_cell` | A dial with a caption directly below it — a premium channel-strip control cell. |
 | `dry_wet_stage` | Add a dry/wet crossfade stage: live.dial (0-100) -> scaled mix. |
 | `euclidean_sequencer_stage` | Add a Euclidean rhythm MIDI sequencer. |
 | `gain_controlled_stage` | Add a gain-controlled stage: live.dial -> dbtoa -> *~ gain cell. |
@@ -207,11 +207,11 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `switchable_bank` | A/B / multi-algorithm signal bank (F4): a ``selector~ N 1`` whose active |
 | `tempo_synced_delay` | Add a tempo-synced delay: two dials + tapin~/tapout~ with transport. |
 | `transport_sync_lfo_recipe` | Add a transport-synced LFO with depth dial and division menu. |
-| `two_panel_strip` | Two-panel channel-strip SHELL — a channel strip grammar: a wide MAIN |
+| `two_panel_strip` | Two-panel channel-strip SHELL — the classic channel-strip grammar: a wide MAIN |
 
 ## Themes (16)
 
-`AMBER`, `COOL`, `FOREST`, `GRAPHITE`, `INDUSTRIAL`, `LIGHT`, `LOFI`, `MIDNIGHT`, `NEON`, `COBALT`, `SOLAR`, `NEBULA`, `SYNTHWAVE`, `MAGMA`, `VIOLET`, `WARM`
+`AMBER`, `COBALT`, `COOL`, `FOREST`, `GRAPHITE`, `INDUSTRIAL`, `LIGHT`, `LOFI`, `MAGMA`, `MIDNIGHT`, `NEBULA`, `NEON`, `SOLAR`, `SYNTHWAVE`, `VIOLET`, `WARM`
 
 ## Engines (67)
 

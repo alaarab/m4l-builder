@@ -171,7 +171,7 @@ class TestMcPolySpine:
         device = AudioEffect("test", width=200, height=100)
         mc_poly_spine(device, "mpe", voices=8, mpe=True, gen_name="myvoice")
         texts = _box_texts(device)
-        # a reference device's MPE allocator grammar + a named .gendsp voice
+        # A premium synth's MPE allocator grammar + a named .gendsp voice
         assert "mc.noteallocator~ @mpemode 1 @voices 8 @steal 1" in texts
         assert "mc.gen~ myvoice @chans 8" in texts
         assert "mc.click~ @chans 8" in texts
@@ -181,7 +181,7 @@ class TestTwoPanelStrip:
     def test_grounded_channel_strip_geometry(self):
         device = AudioEffect("test", width=231, height=167)
         res = two_panel_strip(device, "strip")
-        # a channel strip two-panel grammar: wide main + narrow side, gap 2
+        # a premium two-panel channel-strip grammar: wide main + narrow side, gap 2
         assert res["main_rect"] == [0, 0, 174, 167]
         assert res["side_rect"] == [176, 0, 56, 167]
         assert res["total_width"] == 232
@@ -1029,7 +1029,7 @@ class TestReportLatency:
 
 
 class TestModeStack:
-    """Generator mode-stack container (dnksaus item #9): a vertical enum tab
+    """Generator mode-stack container (catalog item #9): a vertical enum tab
     swaps which pre-built editor stack is visible via the viewhide dataflow
     (`!= k` -> hidden flag) delivered over the Live-proven `script sendbox`
     thispatcher bus, with a live.thisdevice re-sync at load."""
@@ -1147,7 +1147,7 @@ class TestModeStack:
 
 
 class TestRandomizeMatrix:
-    """Per-param randomize page (dnksaus a gate device; catalog #11 + #12):
+    """Per-param randomize page (a gate device; catalog #11 + #12):
     stored-only enable chips per target, RND rolls spec-derived random values
     through each enabled control's inlet, ALL/NONE quick-set the chips, and
     every `random` is cpuclock-seeded (+k) at load so lanes decorrelate."""
@@ -1506,7 +1506,7 @@ class TestW2dMappingMath:
 
 class TestStandardChip:
     """Catalog #31/#32/#33/#37 + #63: the standard micro-chip vocabulary
-    and the five dnksaus glyphs."""
+    and the five kit glyphs."""
 
     def test_all_kinds_build_with_standard_semantics(self):
         from m4l_builder import AudioEffect
@@ -1545,7 +1545,7 @@ class TestStandardChip:
         with pytest.raises(ValueError, match="unknown kind"):
             standard_chip(device, "z", "nope", [0, 0, 24, 15])
 
-    def test_dnksaus_glyphs_registered(self):
+    def test_glyphs_registered(self):
         from m4l_builder.engines.ui_icons import ICON_NAMES, ui_icons_js
         js = ui_icons_js()
         for name in ("dice", "replay", "clear", "hamburger", "headphone"):

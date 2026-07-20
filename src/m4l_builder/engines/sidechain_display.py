@@ -107,7 +107,7 @@ def follower_cluster_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
                         threshold_color="0.95, 0.78, 0.25, 0.95",
                         return_color="0.90, 0.36, 0.60, 1.0",
                         text_color="0.62, 0.65, 0.70, 1.0"):
-    """Envelope-follower cluster (catalog #47, dnkFM's right panel): the
+    """Envelope-follower cluster (catalog #47): the
     In-level meter with a yellow THRESHOLD line over it plus a RETURN dB
     readout lane — the whole detector state in one small panel.
 

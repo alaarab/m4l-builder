@@ -1132,8 +1132,8 @@ def poly_midi_gate(device, id_prefix, x=30, y=30):
 def mc_poly_spine(device, id_prefix, *, voices=16, gen_name=None, gen_inlets=2,
                   mpe=False, steal=True, autogain=False, x=30, y=30):
     """Add the modern ``mc.*`` polyphony spine — the poly~-free voice allocator
-    that a synth device (``@voices 16``) and a reference device (``@mpemode 1 @voices 8 @steal 1``)
-    both use. Topology + port indices follow the documented objects.
+    that synths use (``@voices 16`` / ``@mpemode 1 @voices 8 @steal 1``).
+    Topology + port indices follow the documented objects.
 
     Builds and wires::
 
@@ -1156,9 +1156,9 @@ def mc_poly_spine(device, id_prefix, *, voices=16, gen_name=None, gen_inlets=2,
         voices: polyphony (``@voices``/``@chans``).
         gen_name: basename of the ``.gendsp`` the ``mc.gen~`` loads (None = bare).
         gen_inlets: inlet count of the gen voice (>=2: trigger + pitch).
-        mpe: emit ``@mpemode 1`` on the noteallocator (a reference device path).
+        mpe: emit ``@mpemode 1`` on the noteallocator (the MPE path).
         steal: emit ``@steal 1`` (voice stealing).
-        autogain: ``@autogain 1`` on the mixdown (default 0, like a synth device).
+        autogain: ``@autogain 1`` on the mixdown (default 0, like the library default).
 
     Returns:
         StageResult with the spine IDs and ports (``note_out``, ``voice_index_out``,
@@ -1301,7 +1301,7 @@ def transport_sync_lfo_recipe(device, id_prefix, x=30, y=30):
 def beat_phase_gate(device, id_prefix="bpg", *, x=30, y=30):
     """Transport beat-phase source (Q3 framework recipe) built on
     ``plugsync~`` — the M4L-native transport reporter (scheduler-rate, no
-    LiveAPI round-trip; library precedent: a sequencer device / a synth device).
+    LiveAPI round-trip; library precedent).
 
     Derives four message-rate signals every tempo-synced device builds on:
 

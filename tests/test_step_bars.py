@@ -1,4 +1,4 @@
-"""Wrapper test for Device.add_step_bars (dnksaus kit engines #7-#8).
+"""Wrapper test for Device.add_step_bars (catalog kit engines #7-#8).
 
 The engine's contract/gesture behavior is covered in test_engines.py +
 test_js_behavior.py; this file guards the DEVICE recipe — the jsui + the

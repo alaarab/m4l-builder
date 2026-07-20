@@ -213,8 +213,8 @@ def embed_gendsp(
     codebox_h: float = 560.0,
     patcher_h: float = 660.0,
 ) -> dict:
-    """Return a ``gen~`` BOX dict with the gen patcher EMBEDDED inline (the
-    a granular reverb structure) instead of referenced as an external ``.gendsp``.
+    """Return a ``gen~`` BOX dict with the gen patcher EMBEDDED inline (an
+    embedded-structure pattern) instead of referenced as an external ``.gendsp``.
 
     LIVE-VERIFIED (ZZGenFuncEmbed, output meter 0.737 on an empty monitored track):
     an EMBEDDED gen~ codebox MAY define user functions and still compile + pass

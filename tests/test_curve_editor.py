@@ -1,4 +1,4 @@
-"""Wrapper test for Device.add_curve_editor (dnksaus kit engines #2-#6).
+"""Wrapper test for Device.add_curve_editor (catalog kit engines #2-#6).
 
 The engine's contract/gesture behavior is covered in test_engines.py +
 test_js_behavior.py; this file guards the DEVICE recipe — the jsui + the

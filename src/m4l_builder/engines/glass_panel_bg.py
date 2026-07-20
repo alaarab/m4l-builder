@@ -169,7 +169,7 @@ function ds_noise_overlay(x, y, w, h, n, alpha, seed) {
 }
 
 // 8. Gradient-filled curve band: fill the region under a curve with a vertical
-// linear gradient (top color -> transparent bottom) — the premium filled-band
+// linear gradient (top color -> transparent bottom) — the premium-EQ filled-band
 // look. closed_path_fn(ctx) must lay down a CLOSED path (move_to + line_to/curve_to
 // + close_path); ctx is mgraphics so callers can build the path inline. c_top is
 // [r,g,b,a], the gradient fades to alpha 0 at y1.

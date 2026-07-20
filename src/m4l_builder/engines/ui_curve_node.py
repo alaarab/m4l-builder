@@ -1,7 +1,7 @@
 """Premium draggable curve node (v8ui) — an EQ-band-style node on a graph.
 
 A generalized two-axis node: horizontal pointer drag drives param X, vertical
-drag drives param Y (premium EQ band, compressor threshold/ratio dot, filter
+drag drives param Y (an EQ band, compressor threshold/ratio dot, filter
 freq/reso node, send/return XY). It is :func:`custom_knob_js` doubled onto two
 axes — one v8ui DRAWS the graph + node and handles the pointer, and it is backed
 by TWO hidden automatable ``live.dial`` params (see ``Device.add_drag_curve_node``).
@@ -240,7 +240,7 @@ def drag_curve_node_js(
         "function onidleout(x, y) { hover = 0; ds_set_cursor(DS_CUR_ARROW); mgraphics.redraw(); }\n"
         "function ondblclick(x, y) {\n"
         "    vx = clampx(INITX); vy = clampy(INITY);\n"
-        "    outlet(0, vx); outlet(1, vy);\n"  # EQ reset: emit BOTH so both params record
+        "    outlet(0, vx); outlet(1, vy);\n"  # premium-EQ reset: emit BOTH so both params record
         "    mgraphics.redraw();\n"
         "}\n"
         # ── pointerevent accessors (copied from eq_curve so it works in Live + Max) ──
@@ -318,7 +318,7 @@ def drag_curve_node_js(
         "    mgraphics.arc(nx, ny, r, 0, Math.PI * 2); mgraphics.fill();\n"
         "    mgraphics.set_source_rgba(0.97, 0.98, 1.0, 1.0);\n"
         "    mgraphics.arc(nx, ny, r * 0.36, 0, Math.PI * 2); mgraphics.fill();\n"
-        # hover/drag crosshair + gutter readouts (EQ style)
+        # hover/drag crosshair + gutter readouts (premium-EQ style)
         "    if (hover || dragging) {\n"
         "        var cxp = dragging ? nx : clamp(hover_x, pl, pr);\n"
         "        var cyp = dragging ? ny : clamp(hover_y, pt, pb);\n"

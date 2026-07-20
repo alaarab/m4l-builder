@@ -63,11 +63,13 @@ JS drawing ports. Bookmarked, not yet mined deeply.
 
 ## B. Goodies worth stealing (reference plugins)
 
-### EQ 4 (Dec 2024) — the EQ gold standard
-- **EQ Sketch** — draw the whole curve freehand in ONE gesture; the plugin fits
-  bands (low cut / bells / shelf) to your stroke. A marquee interactivity feature.
-- **Spectrum Grab** — grab a peak directly in the live analyzer to create/adjust a
-  band there. Direct manipulation of the spectrum itself, not the curve.
+### A late-2024 flagship EQ — the category's gold standard
+- **Freehand curve-sketch** — draw the whole curve freehand in ONE gesture; the
+  plugin fits bands (low cut / bells / shelf) to your stroke. A marquee
+  interactivity feature.
+- **Direct spectrum-grab** — grab a peak directly in the live analyzer to
+  create/adjust a band there. Direct manipulation of the spectrum itself, not
+  the curve.
 - **Multi-band selection + edit**; **collision detection** (overlapping bands
   highlighted — we already have analyzer collision in the LP engine).
 - **Character modes** — circuit-modelled saturation (Subtle/Warm) baked into an EQ.
@@ -75,7 +77,7 @@ JS drawing ports. Bookmarked, not yet mined deeply.
   freeze; per-band mid/side; dynamic EQ with attack/release + sidechain filtering.
 - **Retina, GPU, resizable, full-screen** (our pop-out is the spiritual cousin).
 
-### premium-comp — compressor displays (for Pressure / Ceiling)
+### A flagship compressor — display ideas (for Pressure / Ceiling)
 - **Live knee display** — the white transfer curve **turns green up to the current
   input level** in real time. A gorgeous, cheap-to-add "where am I on the curve"
   cue (we already stream env/GR probes — just color the curve up to the live x).
@@ -93,15 +95,15 @@ JS drawing ports. Bookmarked, not yet mined deeply.
 
 ## C. Apply to EXISTING heroes (prioritised)
 
-1. **Spectrum Grab on the EQs** — click/drag a peak in the analyzer behind the
-   curve to spawn a band at that freq/gain. We already draw the live spectrum and
-   own the node-create path (double-click-add); this just adds a hit-test on the
-   analyzer region. High wow, medium effort. *(Para + LP)*
+1. **Direct spectrum-grab on the EQs** — click/drag a peak in the analyzer behind
+   the curve to spawn a band at that freq/gain. We already draw the live spectrum
+   and own the node-create path (double-click-add); this just adds a hit-test on
+   the analyzer region. High wow, medium effort. *(Para + LP)*
 2. **Live transfer-curve highlight on Ceiling / Pressure** — color the transfer/
    knee curve green up to the current input level using the existing env probe.
    Low effort, high polish. *(Ceiling, Pressure)*
-3. **EQ Sketch** — freehand-draw a curve, fit bands to it. The flagship feature;
-   bigger build (stroke capture → band fitting). *(Para + LP)*
+3. **Freehand curve-sketch** — freehand-draw a curve, fit bands to it. The
+   flagship feature; bigger build (stroke capture → band fitting). *(Para + LP)*
 4. **SVG rail icons** — replace hand-drawn glyphs (bypass, M/S, phase, freeze) with
    `svg_render` + `mapcolor` so they're crisp at any size and theme-following.
    Broadly applicable; nothing to freeze (ship strings). *(all 7)*
@@ -125,7 +127,7 @@ JS drawing ports. Bookmarked, not yet mined deeply.
 
 ---
 
-*Sources:* a premium EQ's product page; premium-comp "Displays and
-metering" help; Cycling '74 "Custom UI Objects with JavaScript" + jsui SVG forum;
-CDM "jsui + Figma"; KVR/JUCE NanoVG vector-UI threads; Figma SVG-export guides;
-"Knobs and Nodes" (Massey U. study of audio-plugin UI).
+*Sources:* Product pages and display/metering documentation for a leading
+plugin EQ and compressor; Cycling '74 "Custom UI Objects with JavaScript" +
+jsui SVG forum; CDM "jsui + Figma"; KVR/JUCE NanoVG vector-UI threads; Figma
+SVG-export guides; "Knobs and Nodes" (Massey U. study of audio-plugin UI).

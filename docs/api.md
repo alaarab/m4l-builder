@@ -61,6 +61,7 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 
 `device.wire_chain(obj_ids, outlet=0, inlet=0)` -- Connect objects end-to-end in a chain
 `device.validate()` -- Check for duplicate IDs, broken connections, orphan boxes. Returns list of warning strings.
+`device.check_guidelines()` -- Advisory report against the static subset of Ableton's own M4L production standards (unknown/misspelled object names with typo suggestions, duplicate parameter Long/Scripting Names, auto-indexed default names, fractional pixel rects, forbidden `print`/`dac~`/`adc~`). Returns `ValidationIssue`s; never gates the build. See `m4l_builder.guidelines` and the `python -m m4l_builder.guidelines <build.py>` CLI.
 `device.assign_parameter_bank(varname, bank, position)` -- Map a parameter to Push bank layout
 
 ### Serialization

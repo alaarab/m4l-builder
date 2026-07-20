@@ -374,15 +374,15 @@ def custom_glyph_selector_js(
     initial=0,
     vertical=False,
 ) -> str:
-    """A compact row of small hand-drawn GLYPH buttons (mode selection glyphs).
+    """A compact row of small hand-drawn GLYPH buttons for mode selection.
 
     ``glyphs`` is a list of icon names (see ``ui_icons.ICON_NAMES``). The selected
     button gets a soft accent backing + accent glyph; the rest are dim. Inlet 0
     receives ``set_index <i>`` (from the hidden ``live.tab``) to redraw; clicking
     a button emits its index on outlet 0.
 
-    ``vertical=True`` stacks the cells top-to-bottom (the dnksaus left
-    icon-rail, catalog #59); output is byte-identical when False.
+    ``vertical=True`` stacks the cells top-to-bottom; output is byte-identical
+    when False.
     """
     from .ui_icons import ui_icons_js
 
@@ -578,7 +578,7 @@ def custom_slider_js(
 
     Inlet 0 receives ``set_value <v>`` (from the bound hidden ``live.dial``) to
     redraw; the pointer drives the value with ABSOLUTE positioning — the handle
-    JUMPS to the click and tracks the cursor along the axis (pro-plugin-behavior),
+    JUMPS to the click and tracks the cursor along the axis (pro-plugin behavior),
     unlike the knob's relative drag delta. Shift = fine (blends 25% toward the
     target for sub-pixel precision); double-click = reset to ``initial``. The
     fader WORKS in actual param units (``vmin``..``vmax``).

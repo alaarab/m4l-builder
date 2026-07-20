@@ -1,6 +1,6 @@
 """grain_cloud — Motes' hero: grain dots blooming over a rolling input wave.
 
-The granular-class display on the D4 viz bus. The gen GUI tick re-derives
+A granular-class display on the D4 viz bus. The gen GUI tick re-derives
 per-grain screen state from the UNTOUCHED ``data_param`` heap (progress, read
 position, stereo spread) into ``buf_motes_grains`` (``3*n + 1`` samps; the
 last samp is the freeze ramp), and keeps a rolling 128-bin input-peak history

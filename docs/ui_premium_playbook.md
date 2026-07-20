@@ -3,7 +3,7 @@
 > **Rewritten 2026-07 (UI Foundations v2).** The first edition of this doc preached
 > "NEVER bare `add_dial` — paint every knob." That thesis was tried and **reversed**:
 > painted knobs produced dim, value-less controls, while the library's actual workhorse
-> (a channel strip, a spectrum-EQ device, a reference device's rails) is a **bare native `live.dial` with an accent
+> (premium channel-strip and EQ devices' rails) is a **bare native `live.dial` with an accent
 > ring and its own persistent value**, laid out on a disciplined grid. The kit now
 > encodes that grammar as the **Surface layout engine** (`m4l_builder.surface`), and
 > the whole flagship fleet ships on it. This doc is the current law; the old edition's
@@ -11,8 +11,7 @@
 
 ## The library principles the fleet now encodes
 
-Distilled from the 16-device reference set
-(the reference notes, `STUDY_SYNTHESIS.md`):
+Distilled from a 16-device reference set:
 
 - **P2 — the value of every parameter is always legible.** Persistent native value
   under/in each knob (`shownumber=1`). Hover-only `valuepopup` knobs are the

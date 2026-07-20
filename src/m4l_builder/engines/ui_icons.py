@@ -14,7 +14,7 @@ ICON_NAMES = [
     "lowpass", "highpass", "bandpass", "notch",
     "power", "play", "pause", "loop", "bypass", "bell",
     "expand", "collapse",
-    # dnksaus micro-language (catalog #63): dice=randomize, replay=re-roll,
+    # micro-language (catalog #63): dice=randomize, replay=re-roll,
     # clear=unmap/delete, hamburger=options popover, headphone=listen
     "dice", "replay", "clear", "hamburger", "headphone",
 ]

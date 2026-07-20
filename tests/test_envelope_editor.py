@@ -1,4 +1,4 @@
-"""Wrapper test for Device.add_envelope_editor (dnksaus kit engine #1).
+"""Wrapper test for Device.add_envelope_editor (catalog kit engine #1).
 
 The engine's contract/gesture behavior is covered in test_engines.py +
 test_js_behavior.py; this file guards the DEVICE recipe — the jsui + FOUR

@@ -1,6 +1,6 @@
 """Interactive narrow crossover graph for jsui (spectrum + draggable splits).
 
-A compact, EQ-style 3-band crossover the graph *is* the device:
+A compact, pro-plugin-style 3-band crossover the graph *is* the device:
   - a LIVE input spectrum behind the bands (fed by ``fft_analyzer_dsp`` via a
     ``buffer~``; the display polls it with a Task and rebins log-x),
   - two vertical crossover splits you DRAG on the graph. Each drag outlets the

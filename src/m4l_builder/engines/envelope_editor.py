@@ -1,6 +1,6 @@
-"""Draggable ADSR envelope editor for jsui (dnksaus-catalog kit engine #1).
+"""Draggable ADSR envelope editor for jsui (catalog kit engine #1).
 
-The dnksaus a gate device / dnkFM envelope look, as an INTERACTIVE editor: a dark
+The a gate device / FM-synth envelope look, as an INTERACTIVE editor: a dark
 graph with an accent envelope polyline (attack rise 0->1, decay to the sustain
 level, fixed-width sustain plateau, release back to 0), subtle fill under the
 curve, a dim grid, square draggable nodes, and a value row beneath the plot

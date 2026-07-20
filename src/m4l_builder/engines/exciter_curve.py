@@ -1,4 +1,4 @@
-"""Harmonic-exciter band display (exciter-style hero graph).
+"""Harmonic-exciter band display (harmonic-exciter-style hero graph).
 
 A log-frequency response plot (20 Hz .. 20 kHz) of the two exciter bands — a LOW
 "body/warmth" band that lifts below its tune frequency and a HIGH "air/sparkle"

@@ -1,4 +1,4 @@
-"""Shared band-chip-row jsui — a EQ-style band overview strip used by
+"""Shared band-chip-row jsui — a premium-EQ-style band overview strip used by
 BOTH flagship EQs (Linear Phase + Parametric). Click a chip to select a
 band, opt-click to disable, shift/ctrl-click to solo; fed set_num_bands /
 set_band_state / set_selected, emits select_band / toggle_band_enable /

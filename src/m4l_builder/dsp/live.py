@@ -53,10 +53,10 @@ def tempo_sync(id_prefix: str, division: float = 1.0) -> tuple:
 def live_remote(id_prefix: str, *, normalized: int = 0) -> tuple:
     """Create a live.remote~ object for sample-accurate parameter control.
 
-    measured shape (a modulation device obj-42): **2 inlets** — value signal
+    Standard shape: **2 inlets** — value signal
     into inlet 0, ``id <n>`` into inlet 1 (RIGHT, always via ``deferlow``);
     ``id 0`` detaches. One outlet (message): reports ``mapped 0|1``.
-    ``normalized=0`` (the library default) takes values in the target param's
+    ``normalized=0`` (the default) takes values in the target param's
     NATIVE units — scale in gen from the mapper's min/max reads;
     ``normalized=1`` maps input 0..1 across the target's full range.
     ``_persistence 1`` restores the mapping on save/load.
@@ -75,7 +75,7 @@ def live_remote(id_prefix: str, *, normalized: int = 0) -> tuple:
 def live_modulate(id_prefix: str, *, depth: float = 1.0) -> tuple:
     """Create a live.modulate~ object — Live's grey modulation-ring output path.
 
-    measured shape (a modulation device obj-33): 2 inlets — modulation signal
+    Standard shape: 2 inlets — modulation signal
     (0..1, relative) into inlet 0, ``id <n>`` into inlet 1 (RIGHT, via
     ``deferlow``); one message outlet reporting ``mapped 0|1``. Unlike
     live.remote~ the user keeps control of the param; modulation is additive
@@ -96,7 +96,7 @@ def retargetable_param_sink(id_prefix: str, *, default_mode: int = 0,
     """The retarget sink: one ``id <n>`` stream drives
     EITHER live.remote~ (mode 0) or live.modulate~ (mode 1), hot-swappable.
 
-    Wiring (grounded in a modulation device its patcher):
+    Wiring:
       ``{p}_reg``    ``zl.reg id 0``  — caller wires the mapper js outlet 0 here
                      (inlet **1** stores without emitting; a bang on inlet 0
                      re-emits — the mode switch uses that to re-route);

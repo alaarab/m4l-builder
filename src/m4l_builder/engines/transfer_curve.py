@@ -436,7 +436,7 @@ function y_to_threshold(y) {
     return clamp(MIN_DB + ((plot_b() - y) / plot_h()) * (MAX_DB - MIN_DB), MIN_DB, 0.0);
 }
 
-// Shift = fine-adjust (EQ/premium-comp tactile grammar): threshold eases 15% toward
+// Shift = fine-adjust (premium-EQ/premium-comp tactile grammar): threshold eases 15% toward
 // the cursor for surgical placement; plain drag stays absolute (follows cursor).
 function apply_threshold(y, fine) {
     if (isNaN(y)) return;

@@ -276,7 +276,7 @@ def tanh_adaa(
 
     A drop-in for ``tanh(x)`` that SUPPRESSES the aliasing a naive per-sample
     waveshaper folds back into the audio band — the transparency move every
-    flagship saturator/clipper makes (a premium saturator, premium-comp/premium-limiter soft-clip)
+    flagship saturator/clipper makes (the classic soft-clip)
     but WITHOUT oversampling. Instead of sampling ``f(x)=tanh(x)`` it uses the
     average of ``f`` over each sample step via the antiderivative
     ``F(x)=ln(cosh(x))`` (Parker/Bilbao 2016)::
@@ -321,8 +321,8 @@ def hardclip_adaa(
 
     The brickwall counterpart to :func:`tanh_adaa`: a ``clamp(x, -1, 1)`` clipper
     that SUPPRESSES the aliasing a naive per-sample clipper folds back into the
-    band — the loudness-clipper move (premium-limiter / Ableton Soft Clip /
-    clipper / mastering clip) without oversampling. Unlike a soft tanh, a clipper
+    band — the loudness-clipper move (mastering / brickwall clip) without
+    oversampling. Unlike a soft tanh, a clipper
     is TRANSPARENT below the ceiling (no level loss on already-quiet signal), so
     it is the right shape for a true-peak limiter's clip stage. Uses the mean of
     ``f(x)=clamp(x,-1,1)`` over each sample step via its antiderivative
@@ -817,7 +817,7 @@ def exciter_harmonics(band: str, k: str, even: str, out: str,
         out = (odd - band) + even * sq;
 
     A harmonic exciter ADDS upper harmonics of a filtered band back to the dry
-    signal (classic harmonic exciters), and ``out`` is exactly that ADDED
+    signal (a harmonic exciter), and ``out`` is exactly that ADDED
     content (the delta, not the wet band):
 
     * ``odd - band`` — a level-matched ``tanh`` shaper (``tanh(x*k)/tanh(k)``)
@@ -1132,7 +1132,7 @@ def tilt_shelf(
 
     A tilt EQ pivots the whole spectrum about ``freq``: positive ``tilt_db``
     CUTS everything below ``freq`` and BOOSTS everything above it (the mastering
-    "tilt"/"tone" control — a premium EQ's tilt-shelf shape).
+    "tilt"/"tone" control — a tilt-shelf shape).
     Built as a complementary shelf pair on the shared runtime :func:`rbj_shelf` +
     :func:`biquad_df1`: a LOW-shelf at ``-tilt_db`` in series with a HIGH-shelf at
     ``+tilt_db``, both at cutoff ``freq``. Asymptotes: ``-tilt_db`` at DC,
@@ -1623,10 +1623,10 @@ def grain_window_lookup(
     ``index="phase"`` makes ``phase`` a 0..1 normalized position into the window
     (so the same lookup works for any buffer length), and ``interp="linear"``
     smooths between samples. ``buf`` holds the window shape (e.g. a Hann/Tukey
-    table), ``chan`` selects the window variant (a granular device stores a per-voice
+    table), ``chan`` selects the window variant (stores a per-voice
     window index, e.g. ``peek(data_winPokedIndex, 0, i)``). Multiply a grain's
     sample by ``out`` to apply the envelope; sum ``out`` across voices for the
-    normalization total (a granular device's ``totalWin``).
+    normalization total (a ``totalWin`` accumulator).
     """
     return f'{out} = peek({buf}, {phase}, {chan}, index="phase", interp="{interp}");'
 

@@ -1,7 +1,7 @@
 """Compact stereo output level meter (reusable v8ui widget).
 
 A small L/R peak meter for plugins that have an output but no meter (the EQs,
-Pressure, Heat all lack one vs EQ's prominent output meter). Two vertical
+Pressure, Heat all lack one vs a premium EQ's prominent output meter). Two vertical
 bars on a dB scale with a decaying peak-hold tick and a latching clip flag;
 click to reset the peak-hold/clip. Display-only (no gestures leave the box).
 
@@ -173,7 +173,7 @@ function levels(l, r) {
 function set_range(lo, hi) { LO_DB = lo; HI_DB = hi; mgraphics.redraw(); }
 function reset_clip() { clip = 0; peakL = -200.0; peakR = -200.0; mgraphics.redraw(); }
 
-// Click anywhere resets the latched clip flag + peak-hold (EQ meter UX).
+// Click anywhere resets the latched clip flag + peak-hold (premium-EQ meter UX).
 function onpointerdown(pe) { reset_clip(); }
 function onclick(x, y, but, cmd, shift, caps, opt, ctrl) { reset_clip(); }
 //__ONRESIZE__//

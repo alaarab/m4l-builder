@@ -603,7 +603,7 @@ function y_to_db(y) {
 function apply_ref(y, fine) {
     if (isNaN(y)) return;
     var target = clamp(y_to_db(y), lo_db, Math.min(hi_db, 0.0));
-    // Shift = fine-adjust (EQ/premium-comp tactile grammar): move only 1/5th of the
+    // Shift = fine-adjust (premium-EQ/premium-comp tactile grammar): move only 1/5th of the
     // cursor distance FROM THE PRESS POINT — a stable 5x-finer drag for surgical
     // ceiling/threshold placement (relative-to-start, so it does NOT creep back
     // to the cursor over many move events). Plain drag stays absolute.

@@ -1,8 +1,8 @@
 """Tests for freezing .amxd devices into self-contained, portable files.
 
 The frozen-footer layout these tests assert is the one produced by Max's
-"Freeze Device" and parsed by Ableton's ``maxdevtools`` reference code. The
-minimal parser below mirrors that reference (``freezing_utils.parse_footer`` /
+"Freeze Device" and parsed by an independent reference parser. The minimal
+parser below mirrors that reference (``freezing_utils.parse_footer`` /
 ``frozen_device_printer``) so the suite is self-contained.
 """
 
@@ -30,7 +30,7 @@ VALID_JSUI = (
 )
 
 
-# --- Minimal reference parser (mirrors Ableton/maxdevtools) ------------------
+# --- Minimal self-contained reference parser --------------------------------
 
 def _parse_frozen(data: bytes):
     """Parse a frozen .amxd into ``(meta_value, {filename: (type, bytes)})``."""

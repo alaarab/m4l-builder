@@ -265,7 +265,7 @@ class TestMotionHandlersEchoSafe:
 
 
 class TestEqCreateGestures:
-    """EQ-style create gestures: the band TYPE depends on WHERE you click, a
+    """Premium-EQ-style create gestures: the band TYPE depends on WHERE you click, a
     plain press on the empty graph creates + drags a band, and cmd-drag changes Q
     without lifting the mouse button (user request)."""
 
@@ -343,7 +343,7 @@ class TestEqCreateGestures:
 
 
 class TestEqGestures:
-    """Interaction P2: the EQ gesture matrix + in-graph value entry."""
+    """Interaction P2: the premium-EQ gesture matrix + in-graph value entry."""
 
     def _js(self):
         from m4l_builder.engines.eq_curve import eq_curve_js

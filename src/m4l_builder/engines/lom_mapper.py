@@ -1,6 +1,6 @@
 """lom_mapper — the E2/E3 runtime click-to-map target picker (LiveAPI js).
 
-The library signature feature (a modulation device's ``js js_LOM_mapping_3.0 #1 #2 #3``):
+The library signature feature (the ``js js_LOM_mapping_3.0 #1 #2 #3`` pattern):
 a per-slot script that arms Live's ``live_set view`` selected_parameter
 observer, guards against mapping the device's own mapping controls, reads the
 picked parameter's real range and labels, and hands the LOM id to the

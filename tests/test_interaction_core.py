@@ -185,17 +185,17 @@ class TestMigratedEnginesContainExpectedSharedBlocks:
 # future change to interaction_core.py or one of these engines is
 # INTENTIONAL, regenerate the hash; if it's not, this is the bug.
 GOLDEN_SHA256 = {
-    "ballistics_curve_js": ("06eb0182a592cc291a386ce336eccb61ecd3a52e0090d8d859c15152da493345", 12349),
-    "delay_trail_js": ("24dc90c3c8414901c30210b79d4abf64e9efc07bf275a40f7dbbcc8ec31e9f87", 37850),
-    "eq_curve_js": ("253bc9b1648db20d0f9324d1a6c32c22f0806b37a343470a478b491f69bd70b4", 130371),
-    "exciter_curve_js": ("b168c72b517ac7e2508f063784ab2ed4aa0a78b29214d4e13d2c49f8c470af06", 19570),
-    "level_history_js": ("aa5793ce518fd82ca99d3cc771833bee09113abcc56bb773b75bc514b4b25468", 24438),
-    "level_meter_js": ("f109810c23ee6287f52ddbc0f075817975679a4781331bbc799ea375bf8e1b1f", 5395),
-    "linear_phase_eq_display_js": ("9fe927b88ab16519f727de5be4bb464e392bc855f2981f56740a072153aa9f08", 93466),
-    "loop_filter_curve_js": ("8755b00ab6cae6e6af0bcbc75cb98f4bfd8d56cc88833da482a3f1c24a274cef", 10021),
-    "transfer_curve_js": ("40eba39da25720af55ad0574eacd191c7dad9e0f143e0a80cf882622d322450d", 20129),
-    "transient_history_js": ("f2581802399b7bac80119d691f1e310eb153ecff720c7e55531a71ca58ef0cfb", 11387),
-    "waveshape_curve_js": ("d3f591da5b0561b911018bb5c26ad1df3b835b83bf6106cf8a82f5c05e01c790", 44587),
+    "ballistics_curve_js": ("c51c9943187efe5551d0167632a350734c047e33ab961f21e5dd1dbf83729f46", 12357),
+    "delay_trail_js": ("db52b252ed497f14515a932eaa97b547063056f3ba36e856c4a4f53d3f098fd9", 37858),
+    "eq_curve_js": ("6b53347417b5c3c187e5b5b663e9fdf22677a1c1aec11e6226fc6ee3a2e259e9", 130435),
+    "exciter_curve_js": ("497f90e209a10514d61ee7861a1e9abc3853ad69491aeb01a98e85e8630287cc", 19581),
+    "level_history_js": ("8cbd1632e9e218efc3adefc228e4ce5949d9cb570ac6eb95b2b2b84e5abc938b", 24533),
+    "level_meter_js": ("4ae60d290ee6cec9499ab61844106a08497d26c8c40ca9a7781a1bfd81e5387c", 5408),
+    "linear_phase_eq_display_js": ("65bf26868963d743bf081bc22ab5dd041ae1f4afb3da73970000dd639c7d4ae2", 93540),
+    "loop_filter_curve_js": ("083b0e76b60ea1fd70a6780c5c336f318ea41d29887d6e1372a151ed8c4689f9", 10029),
+    "transfer_curve_js": ("2bac0c2c47f2c6fe02de8d842304a46935d5f0cd74b467f97324e110e4775d8d", 20173),
+    "transient_history_js": ("32e95da84d28f319a0b19a717b87a0652a733bfefd58202767f767847fbd03b3", 11395),
+    "waveshape_curve_js": ("c7256aa064f5e937ca0fbd1775c3869a1faa95d99bd151c0857e52e18f691d1f", 44629),
 }
 
 FACTORIES = {

@@ -5,7 +5,7 @@
 Authoritative catalog of every Max-for-Live control/input + premium-UI rule for the
 m4l-builder kit. Grounded in the **synced Max docs** (LiveMCP `search_docs` /
 `get_docs_chunk`; raw HTML at `~/.cache/livemcp/docs/raw/cycling74-max-docs/`) and
-phren memory — **never guess attributes; look them up here or in the docs.**
+these notes — **never guess attributes; look them up here or in the docs.**
 
 > Worked through by the "M4L inputs & UI mastery" loop (cron `7,27,47 * * * *`). Each
 > run documents one topic + fixes one concrete issue. Status legend: ✅ mastered ·
@@ -23,9 +23,9 @@ the Device-On-param `live.observer`, the only reliable runtime source). See
 `docs/ui_premium_playbook.md` for the API walkthrough and migration discipline.
 
 Corrections to the old text kept here for the record:
-- The extraction workflow lives at a private study folder (built by
+- The extraction workflow lives at `the device repo/_assets/extracted/` (built by
   `_assets/extract_all.py` from the owned downloads) — **study-only, never shipped**;
-  the old `extracted/` path never existed in this repo. Devices ship
+  the old `research/extracted/` path never existed in this repo. Devices ship
   ORIGINAL painters only (`engines/painters.py`).
 - `paint_control` (`jspainterfile`) remains Live-proven (Nimbus) but is the path for
   a genuinely bespoke ONE-OFF control, **not** the default knob — painters hide the
@@ -35,34 +35,38 @@ Corrections to the old text kept here for the record:
 
 **Native controls (`live.dial` / `live.tab` / `live.toggle` / `live.slider` /
 `live.numbox` / `live.menu`), sized small + laid out densely, are the premium DEFAULT**
-(validated against a device that is native). Reserve the **custom v8ui kit** for
+(validated against a native reference device). Reserve the **custom v8ui kit** for
 what native genuinely cannot do: hero curves, drag-curve nodes, XY pads, animated
 displays (LFO / spinning reel), glyph pickers, glass panels. The mistake to avoid:
 over-engineering custom v8ui for ordinary knobs/menus, **and** sizing either too large.
 Compact sizing + dense layout is what reads as premium — native or custom.
 
-## ✅ Premium device LAYOUT grammar (a channel strip / a spectrum-EQ device / a reference device — JSON ground truth)
+## ✅ Premium device LAYOUT grammar
 
 What reads as "a real device" is the LAYOUT, not bespoke knobs. Verified from the three
 reference devices' patcher JSON:
 
-- **ONE coherent dark base.** A single dark rounded `panel` fills the device — a channel strip
-  `[0.098]³` rnd 6, a spectrum-EQ device `[0.157]³` rnd 4, a reference device `[0.059]³` rnd 4. Not many nested boxes.
+- **ONE coherent dark base.** A single dark rounded `panel` fills the device — the
+  channel-strip library device `[0.098]³` rnd 6, a typical spectrum-EQ `[0.157]³`
+  rnd 4, a typical effects-rack `[0.059]³` rnd 4. Not many nested boxes.
 - **Displays are drawn DIRECTLY on the dark base** (a `jsui`/`spectroscope~`/`scope~`), or
   on a *gently* recessed screen only slightly darker than the base. ⛔ **NEVER a near-black
   box on a lighter panel** — that hard "black box" is the #1 amateur tell (the old Strip).
-- **Group CONTROLS on subtly *lighter* raised tiles**, not darker ones (a spectrum-EQ device control
-  cells `[0.529]`, a reference device side columns `[0.204]`). Light-on-dark = raised; dark-on-light = wrong.
-- **Sections split by thin `live.line` dividers** (a channel strip uses 75 of them) — structure
-  without heavy boxes.
+- **Group CONTROLS on subtly *lighter* raised tiles**, not darker ones (the spectrum-EQ
+  library device's control cells `[0.529]`, a typical effects-rack's side columns
+  `[0.204]`). Light-on-dark = raised; dark-on-light = wrong.
+- **Sections split by thin `live.line` dividers** (a typical channel-strip uses 75
+  of them) — structure without heavy boxes.
 - **Tabs are transparent, text-only**: `live.tab` `bgcolor`/`bgoncolor` **alpha 0**, grey
-  text → **accent** selected text (a channel strip `textoncolor=[1.0,0.694,0.0]` orange). No filled pill.
+  text → **accent** selected text (a typical channel-strip's
+  `textoncolor=[1.0,0.694,0.0]` orange). No filled pill.
 - **No redundant internal title** — Live's device title bar already names it; an internal
   "STRIP" comment top-left reads as garbage. Use the space for content.
-- **One vivid accent** (a channel strip/a spectrum-EQ device orange, a reference device cyan), on dial rings + the live
+- **One vivid accent** (the channel-strip and spectrum-EQ library devices use orange, the
+  effects-rack library device uses cyan), on dial rings + the live
   trace; everything else muted-dark. Density (small controls packed on an 8px grid) + a
   value under every knob + a real graph is the premium signal.
-- **Live spectrum behind a curve** = the premium spectrum-EQ look: stock `spectroscope~`
+- **Live spectrum behind a curve** = a premium spectrum-EQ look: stock `spectroscope~`
   (`device.add_compiled_ui`/`add_compiled_display`) BEHIND a transparent overlay that draws
   the grid + curve. Proven on Parametric EQ V2 and Strip v8. NEVER the non-stock `spectrumdraw~`.
 - **Usefulness > prettiness:** add a display/meter/button ONLY where it shows useful info
@@ -118,7 +122,8 @@ There are TWO valid size regimes; pick by the look you want:
   next to stock devices and should not look out of place. Constants: `ns.DIAL`, `ns.NUMBOX`, …
 - **PREMIUM-COMPACT (dense boutique)** — measured from the 15 reference devices (dial
   **41×35** `DIAL_COMPACT`, `NUMBOX_WIDE=50×15`, `VSLIDER_NATIVE=22×113`, `TAB_BAR_H=20`,
-  `ROW_PITCH_TIGHT=17`). Denser + flatter; matches the downloaded boutique devices (channel-strip). Use for a flagship/character device where dense, tightly-packed controls read as
+  `ROW_PITCH_TIGHT=17`). Denser + flatter; matches the downloaded dense boutique layouts.
+  Use for a flagship/character device where dense, tightly-packed controls read as
   premium. Constants: `ns.DIAL_COMPACT`, `ns.DIAL_RAIL`, `ns.NUMBOX_WIDE`, `ns.knob_row_fit(...)`.
 
 Within a regime, the size TIERS are: **tiny** (toggle 11×11, button 8×8, LED 10×10) → **row**
@@ -167,8 +172,8 @@ Don't mix regimes in one device — choose one and size every control from it.
     bipolar dial is ALL remainder, so it reads all-accent, then the dim filled arc grows out.
   - ⛔ **`dial_fill` token DECISION (task Q1, 2026-06): REJECTED.** The proposed token
     (`activefgdialcolor`→accent + `activedialcolor`→dim track) is **backwards** — the Lab A/B
-    shows it makes a DIM filled value + a BRIGHT empty remainder (the inverse of a EQ
-    knob). The kit already ships the correct bright-fill/dark-track premium knob via the
+    shows it makes a DIM filled value + a BRIGHT empty remainder (the inverse of a premium
+    EQ's knob). The kit already ships the correct bright-fill/dark-track premium knob via the
     default `activedialcolor`=accent. No token needed.
 - **Color anatomy (doc-verified — THREE pairs, each split by the active state):**
   - `dialcolor` / `activedialcolor` — the **FILLED value arc** (min→value), the bright
@@ -179,20 +184,21 @@ Don't mix regimes in one device — choose one and size every control from it.
   - `needlecolor` / `activeneedlecolor` — the **needle/pointer** line.
   - `tricolor` — the **reset-triangle marker** (shown when `triangle=1`; clicking it
     restores the dial's initial value). `bordercolor` / `focusbordercolor` = box border.
-  - ✅ **a channel strip ground truth (1.02) + Lab A/B 2026-06:** accent on **`activedialcolor`**
-    (the FILLED arc) + a neutral-grey **`activefgdialcolor`** (the remainder track). AS
-    Console's 24 dials: `activedialcolor=[1.0,0.694,0.0]` (orange fill) +
-    `activefgdialcolor=[0.588]×3` (grey track), `showname 0`, 41×35. The kit's
-    `recipes.dial_value_cell` follows this — `accent → activedialcolor` (filled value),
-    `activefgdialcolor` grey (track): the premium bright-fill / dark-track knob.
-  - ✅ **ONE convention, not two — the channel strip AND the Stock EQ / EQ knob are the SAME
-    mapping** (accent on the filled `activedialcolor`; they differ only in how dark the
-    remainder track is). ⚠️ **CORRECTION (Lab A/B 2026-06):** the earlier "(b) Stock EQ =
-    accent on `activefgdialcolor` + dim `activedialcolor`" recipe was BACKWARDS — that dims
-    the filled value and brightens the empty remainder. To match Stock EQ's cyan, set
-    `activedialcolor`=cyan (the fill) + a dim `activefgdialcolor`, NOT the reverse. **Para EQ
-    (#21) shipped the reversed recipe (`activefgdialcolor`=cyan) — RE-CHECK its dials.** The
-    kit default (`dial_value_cell`) is already correct: `accent → activedialcolor`.
+  - ✅ **Channel-strip library device ground truth (v1.02) + Lab A/B 2026-06:** accent on
+    **`activedialcolor`** (the FILLED arc) + a neutral-grey **`activefgdialcolor`** (the
+    remainder track). a typical channel-strip's 24 dials:
+    `activedialcolor=[1.0,0.694,0.0]` (orange fill) + `activefgdialcolor=[0.588]×3` (grey
+    track), `showname 0`, 41×35. The kit's `recipes.dial_value_cell` follows this —
+    `accent → activedialcolor` (filled value), `activefgdialcolor` grey (track): the premium
+    bright-fill / dark-track knob.
+  - ✅ **ONE convention, not two — a typical channel-strip AND the Stock EQ / premium
+    EQ knob are the SAME mapping** (accent on the filled `activedialcolor`; they differ only
+    in how dark the remainder track is). ⚠️ **CORRECTION (Lab A/B 2026-06):** the earlier "(b)
+    Stock EQ = accent on `activefgdialcolor` + dim `activedialcolor`" recipe was BACKWARDS —
+    that dims the filled value and brightens the empty remainder. To match Stock EQ's cyan,
+    set `activedialcolor`=cyan (the fill) + a dim `activefgdialcolor`, NOT the reverse. **Para
+    EQ (#21) shipped the reversed recipe (`activefgdialcolor`=cyan) — RE-CHECK its dials.**
+    The kit default (`dial_value_cell`) is already correct: `accent → activedialcolor`.
   - ⛔ **PITFALL — a `parameter_enable=0` dial shows NO value (even with `shownumber 1`)**
     (Live-confirmed 2026-06). A non-parameter `live.dial` renders the knob + arc but the
     value text stays BLANK (same as a non-param `live.numbox`). So a "follow-the-selection"
@@ -231,7 +237,7 @@ Don't mix regimes in one device — choose one and size every control from it.
     `live.dial`'s name/value text at the SAME nominal `fontsize`** (different font metrics) —
     so equal `fontsize` does NOT make them match; size the comment up deliberately, or accept
     the smaller grey caption as the intended look.
-  - **Ground truth:** a channel strip's 24 dials are `showname 0` + `shownumber 1` (default)
+  - **Ground truth:** a typical channel-strip's 24 dials are `showname 0` + `shownumber 1` (default)
     and carry **ZERO `live.comment`s** — their captions come from a **backdrop graphic**
     (fpic/jsui), not comments. The kit's `dial_value_cell` approximates that backdrop with a
     small comment caption (`label_fontsize 7.5`); for a value-matching caption instead, pass
@@ -308,13 +314,13 @@ for the unselected fill). Theme the `active*` attrs.
 
 ## ✅ Runtime THEME BUS (`live.colors`) + bypass "zombie" dim — the #1 library jewel
 
-Library-grounded (13 of 15 devices use `live.colors`; a channel strip has 19 instances; all 9
+Library-grounded (13 of 15 devices use `live.colors`; a typical channel-strip has 19 instances; all 9
 review.md reports flag it). Not in the synced Max docs — grounded from the library + `engines/
 live_theme.py`. **Premium devices never bake colors at build time** — they read the user's actual Live
 skin at load + on every theme change and broadcast it so every native control tracks the skin
 (dark/light/custom). This is the single biggest "looks like a first-party Ableton device" cue.
 
-**The color bus** (verified from a channel strip / a sequencer device / a reference device):
+**The color bus** (verified from the channel-strip, sequencer, and effects-rack library devices):
 ```
 live.thisdevice[0] (loadbang) ─┐
                                ├─► message "<skin_token>" ─► live.colors[0]
@@ -326,7 +332,7 @@ r ---<bus> ─► control[inlet]                                              //
 broadcast color into the control. One palette change repaints the whole device live; theming is data.
 **Skin slots** (`LIVE_SKIN`): `lcd_control_fg` (the ACCENT), `lcd_control_fg_zombie` (the dimmed/bypass
 accent), `lcd_bg`, `surface_bg`, `control_fg`, `assignment_text_bg`, `control_selection`. Fan ONE slot
-to many attrs at tiered alphas for a full look (a sequencer device's `an LCD knob`: `lcd_control_fg` →
+to many attrs at tiered alphas for a full look (a typical sequencer's `an LCD knob`: `lcd_control_fg` →
 `activedialcolor`@1.0, `activefgdialcolor`@0.5, `fgdialcolor`@0.25, `textcolor`@0.5, `tricolor`@1.0 …).
 
 **`live.thisdevice` — the device-lifecycle object (3 outlets, synced-maxref-verified).** Declare
@@ -348,7 +354,7 @@ NEEDED, not redundant (empirically, 2026-06):** Live does NOT dim an M4L device'
 at all (enabled vs bypassed = 0.0 pixel-diff), so to get the stock "greys when off" look you
 MUST wire it yourself. Mechanism:
 `live.thisdevice <state> ─► s ---devicestate ─► r ---devicestate ─► sel 0 1 ─► [accent msg | zombie-grey
-msg]`. a reference device emits BOTH simultaneously with complementary alphas (`!- 1.`) so enable/bypass is an
+msg]`. a typical effects-rack emits BOTH simultaneously with complementary alphas (`!- 1.`) so enable/bypass is an
 alpha crossfade. ✅ **STATE OUTLET RESOLVED (synced live.thisdevice maxref):** the enabled/disabled
 (bypass) bang comes from the **MIDDLE outlet (outlet 1)** — *"sent from the middle outlet when the Device
 is enabled or disabled"* (1=enabled, 0=disabled). NOT outlet 0 (leftmost = init/loadbang) and NOT outlet 2
@@ -480,8 +486,9 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
   bare ~12×13 checkbox: use it only for a tiny inline on/off whose meaning is obvious from
   context. For ANY on/off that benefits from a word (Bypass, HP On, Mono, M/S, AN) use
   **`live.text`** (off/on labels, `mode=1` to latch) — that is the PREMIUM library norm
-  (a channel strip builds its entire utility strip from labelled `live.text`; a sequencer device's toggles are
-  2-value enum `live.text`). Both are real automatable params; the difference is the label.
+  (a typical channel-strip builds its entire utility strip from labelled `live.text`;
+  a typical slice-sequencer's toggles are 2-value enum `live.text`). Both are real
+  automatable params; the difference is the label.
 
 ## ✅ live.text  (text button / toggle hybrid)
 
@@ -534,7 +541,7 @@ stored/automated value = the **index** (0..N-1). `add_menu(options=[...])` regis
 (`parameter_type=2`, min 0, max N-1, initial 0). Verified in the gallery: themed body +
 `Mode` param 0..3 → "WARM".
 - ⚠️ **live.menu has its OWN colour model — it does NOT share live.tab's** (NO synced doc
-  for live.menu; grounded on 25 library menus, e.g. a sequencer device). Real attrs: **`activebgcolor`**
+  for live.menu; grounded on 25 library menus, e.g. a typical sequencer). Real attrs: **`activebgcolor`**
   (the menu BODY you see, active=1; bare `bgcolor` = bypassed body), **bare `textcolor`** (item
   text — NO `activetextcolor` twin), **`hltcolor`** (the HIGHLIGHTED item's bg in the open list)
   + **`hlttextcolor`** (its text), `tricolor` (dropdown triangle), `bordercolor`/`focusbordercolor`,
@@ -647,7 +654,7 @@ list — same family as `matrixctrl` / `multislider`. The step/grid count lives 
 Blob, NOT in a count attribute (the old `nstep`/`nseq`/`loop_start`/`loop_end` stub attrs
 were **hallucinated** — removed this run; no real library box has them).
 
-**live.step** (4 library instances — a slice-sequencer device's Mod / Pan / Direction / Slice lanes):
+**live.step** (4 library instances — a typical slice-sequencer's Mod / Pan / Direction / Slice lanes):
 a multi-lane piano-roll step editor. **1 inlet / 5 outlets** (pitch, velocity, duration,
 extra1, extra2 lane data). Lanes are toggled by `pitch_active` / `velocity_active` /
 `duration_active` / `extra2_active`;
@@ -658,12 +665,14 @@ signed). `mode` selects the shown lane. Colors are TWO-SHADE gradients:
 the rulers), `extra_thickness`, `fontname` (Arial Bold). Theme injects
 `stepcolor→accent, stepcolor2→accent2, bgcolor→bg, bordercolor→panel_border` (all solid).
 
-**live.grid** (2 library instances — a 12×12 pitch map, a 32×32 sequencer):
+**live.grid** (2 library instances — a typical sequencer's 12×12 PitchMap, the
+slice-sequencer library device's 32×32 Sequencer):
 a monome-style cell sequencer. **2 inlets / 6 outlets** (the old 1/4 stub was WRONG).
 `rows`/`columns` = visible grid; `maxrows`/`maxcolumns` = resizable cap; `direction` =
 play-direction mode; `marker_horizontal`/`marker_vertical` = guide lines; `rounded`/
-`spacing` = cell shape; `link` = link lanes. Colors: `stepcolor` (the lit cell — a sequencer device
-orange, a slice-sequencer device magenta), `bgstepcolor`/`bgstepcolor2` (unlit-cell two-shade bg),
+`spacing` = cell shape; `link` = link lanes. Colors: `stepcolor` (the lit cell — the sequencer
+library device uses orange, a typical slice-sequencer uses magenta),
+`bgstepcolor`/`bgstepcolor2` (unlit-cell two-shade bg),
 `bordercolor`/`bordercolor2`, `hbgcolor` (playhead-column highlight), `directioncolor`
 (the direction-arrow strip), `amountcolor`/`freezecolor`. Theme injects
 `stepcolor→accent, bgstepcolor→section, bordercolor→panel_border, bordercolor2→panel_border,
@@ -693,14 +702,14 @@ strip, `live.step` its step lane. Two-accent theming visibly confirmed on the gr
 ## ✅ live.scope~  (waveform / signal display)
 
 A DISPLAY object (not a parameter) — 2 signal inlets (X, and Y for X/Y mode), 0 outlets.
-Grounded in the real-device library (SEAR uses it as a small waveform hero, 108×20).
+Grounded in the real-device library (reference devices use it as a small waveform hero, 108×20).
 - **Colors are the BARE attrs** (display, like the meter — there is NO active twin):
   `bgcolor` (background), `linecolor` (the trace — the color you always see),
   `gridcolor` (grid lines). **Fix this run:** the registry mapped a non-existent
   `activelinecolor` (themed traces stayed Live-default) → corrected to theme the real
   `bgcolor → scope_bgcolor`, `linecolor → scope_color`, `gridcolor → grid_color`.
 - `calccount` = samples per pixel (zoom); `mode` X/Y vs time; `range` = the amplitude
-  window. Keep it small (SEAR: 108×20) as an accent waveform, not a full-width hero.
+  window. Keep it small (e.g. 108×20) as an accent waveform, not a full-width hero.
 - **Z-ORDER GOTCHA** (from testing.md): `scope~` (compiled) renders ABOVE a v8ui, but
   `spectroscope~` renders BELOW — so a transparent v8ui overlay works on a spectroscope
   but is occluded over a scope. Plan overlays accordingly.
@@ -741,7 +750,7 @@ Rate dial at the default renders "12.5%", not "2.5 Hz"). unitstyle is independen
 
 Verified from the `live.gain~` maxref (`~/.cache/livemcp/docs/raw/.../live-gain-*.html`).
 `live.meter~` is NOT in the synced docs, so treat the `live.gain~` color model as
-authoritative for both — and the library confirms it: a channel strip's `live.meter~` sets
+authoritative for both — and the library confirms it: a typical channel-strip's `live.meter~` sets
 `inactivecoldcolor`/`inactivewarmcolor` too, so the unlit-segment attrs apply to BOTH.
 
 **The INVERTED color rule (the gotcha).** Unlike `live.dial`/`live.tab` (where the `active*`
@@ -766,7 +775,7 @@ appear in the attr index but are undocumented duplicates — do not rely on them
 **`slidercolor` fix (2026-06):** the meter's recessed BACKGROUND rail (`slidercolor`,
 gain~ maxref = "the slider background color") was un-themed on the kit `meter` (it was
 only on `live_gain`), so the channel behind the segments was Live-default grey. The library
-`live.meter~` (a channel strip, 2/2) sets it dark **`[0.098,0.098,0.098,1]`** — measurably the
+`live.meter~` (a typical channel-strip, 2/2) sets it dark **`[0.098,0.098,0.098,1]`** — measurably the
 **`surface`** token (≈0.1), NOT the accent — so the registry now maps `meter slidercolor →
 surface`. (It only takes effect when a metering device is REBUILT; installed `.amxd`s are
 unchanged until then — 6 devices use the meter, so Live-verify the rail on the next rebuild.)
@@ -779,7 +788,7 @@ display-only sibling (1 inlet, 1 outlet = peak value).
 
 **Premium usage:** lit segments use the theme `meter_*` tokens; the idle track now themes
 automatically — the registry maps `inactivecoldcolor`/`inactivewarmcolor` → `text_dim`
-(library a channel strip sets them to a mid-grey ~0.5, so the unlit rail reads as a consistent dim
+(a typical channel-strip sets them to a mid-grey ~0.5, so the unlit rail reads as a consistent dim
 strip instead of Live-default grey — fixed this run, for both `meter` and `live_gain`); the
 drag handle themes via `tricolor`/`trioncolor` → accent. Use
 `live.gain~` for an output trim with visual feedback; bare `live.meter~` for a read-only
@@ -834,10 +843,10 @@ a message), so there is nothing to theme. Measured attrs: `compatibility` (a Max
 flag), `parameter_enable`. **Niche for audio** — use for a colour-pick utility or a
 user-themeable accent control; for a normal value use a `live.*` control.
 
-## ✅ Premium SPECTRUM rendering — constant-Q smoothing (the premium spectrum-EQ look)
+## ✅ Premium SPECTRUM rendering — constant-Q smoothing (a premium spectrum-EQ look)
 
-Live-verified (2026-06, vs several premium spectrum-EQ devices + filled on a sustained chord; a spectrum device's `display.js`
-read as ground truth — see the reference notes).
+Live-verified (2026-06, vs several spectrum-EQs + filled on a sustained chord; a
+premium spectrum-EQ device's rendering source read as ground truth).
 A spectrum looking "fucked up" — sharp needles, blocky wide lows, jagged "grass" highs — starts
 from ONE root cause: **plotting raw LINEAR FFT bins on a LOG-frequency axis.** An FFT gives
 evenly-spaced bins (~23 Hz @ 2048/48k); a log axis makes each octave equal width, so:
@@ -845,24 +854,26 @@ evenly-spaced bins (~23 Hz @ 2048/48k); a log axis makes each octave equal width
 - **Highs:** 5 k–20 k is a thin slice holding ~thousands of bins → dense jagged grass.
 - A tonal source's partials become needles on top.
 
-**The fix — MAX-per-pixel-COLUMN rebin (NOT constant-Q averaging).** This is what a spectrum-EQ device,
-a spectrum display and filled actually do (verified). For each integer pixel COLUMN, forward-map
+**The fix — MAX-per-pixel-COLUMN rebin (NOT constant-Q averaging).** This is what premium
+spectrum-EQ devices, a spectrum display and filled actually do (verified). For each integer pixel COLUMN, forward-map
 every FFT bin to its column (`round(freqToPos(binF))`) and keep the **single loudest bin** in
 that column; interpolate the sparse low columns between filled neighbours. NO frequency
 averaging, NO mean blend, NO octave band.
 - ⛔ **REVERSAL of the old advice below:** an earlier constant-Q / fractional-octave rebin
   (`peak*0.8 + mean*0.2`, widen the band, spatial+temporal Avg, +4.5 dB tilt) was tried and the
-  user rejected it — it read as a **smeared "blob"** that lost filled/EQ detail. **Do NOT
+  user rejected it — it read as a **smeared "blob"** that lost filled/premium-EQ detail. **Do NOT
   octave-average a hero spectrum.** Max-per-column keeps lows smooth (≤1 bin/col → a line
   between bins) and highs honest (many bins/col → the max rides the partials).
 - **NO display tilt by default** (`slope = 0`). Tilt lifts the empty noise floor into a fake
   rising diagonal and was reverted; only add it if a device explicitly wants SPAN-style balance.
-- **Two smoothness levers are DSP-side, not averaging** (the real reason a spectrum-EQ device looks smooth):
-  1. **FFT size.** 2048 (a spectrum-EQ device, `fftSize=2048` + `overlap=4`) blurs a chord's harmonics into a
-     smooth hump; 4096 resolves each harmonic as a razor spike → a GRASSY COMB. **Use 2048 for a
-     premium-smooth look** (4096 only if you specifically need finer low-freq resolution and
-     accept the grass). Halving the FFT runs the analyzer ~+6 dB hotter — re-trim.
-  2. **Per-column fall-clip (the anti-grass trick).** Each column rises instantly but may
+- **Two smoothness levers are DSP-side, not averaging** (the real reason a premium spectrum-EQ
+  device looks smooth):
+  1. **FFT size.** 2048 (a spectrum-EQ uses `fftSize=2048` + `overlap=4`) blurs
+     a chord's harmonics into a smooth hump; 4096 resolves each harmonic as a razor spike → a
+     GRASSY COMB. **Use 2048 for a premium-smooth look** (4096 only if you specifically need
+     finer low-freq resolution and accept the grass). Halving the FFT runs the analyzer ~+6 dB
+     hotter — re-trim.
+  2. **Per-column fall-clip (the anti-grass secret).** Each column rises instantly but may
      FALL only ~2 dB/display-frame (`clipDown`), so columns BETWEEN harmonics decay slowly
      from their neighbour instead of plunging to the floor → the envelope stays smooth. (A plain
      `disp*0.82 + v*0.18` release does NOT do this — it settles each gap to the floor = grass.)
@@ -870,9 +881,9 @@ averaging, NO mean blend, NO octave band.
   body cut off / only the tops of the needles show" almost always has its dB ceiling above 0
   (e.g. `MAX_DB=+12` reserves headroom real audio never reaches). Set the top of the dB map to
   **0 dBFS** (our Spectrum Analyzer: `-78..0`) and trim so the loud low-mids land in the upper
-  third. a hotter-running FFT could use `-90..+18`.
+  third. a spectrum-EQ uses `-90..+18` but its FFT runs hot enough to reach it.
 - **Render STYLE = a thin full-alpha LINE (~1.1 px) carrying the shape + a LIGHT, FLAT fill**
-  (a spectrum-EQ device `spectFill = [1,1,1,0.05]` — a 5% white whisper, NOT a gradient and NOT a saturated
+  (a spectrum-EQ sets `spectFill = [1,1,1,0.05]` — a 5% white whisper, NOT a gradient and NOT a saturated
   blob). Build the polyline → close to just BELOW the floor (`bottom+2`, off-screen) →
   `path_roundcorners(4)` → `stroke_preserve` the line → `fill` the wash. A heavy/gradient fill
   reads crude; the line + whisper reads "airy/pro."
@@ -895,7 +906,7 @@ averaging, NO mean blend, NO octave band.
   across the Max app, so TWO instances of the same device (after `duplicate_track`, or two copies in
   a Set) bind the SAME buffer; deleting one leaves the survivor's analyzer **DEAD** (spectrum blank
   though audio is loud / output meter ~0.85). **Reload the device to recover.** Proper fix (tracked):
-  per-instance-unique name like a spectrum-EQ device's `DEVICE_UNIQUE_ID+name` (a `#0` prefix or a
+  per-instance-unique name like a premium device's `DEVICE_UNIQUE_ID+name` (a `#0` prefix or a
   `live.thisdevice`/LOM-derived suffix). Symptom signature: loud meter + totally empty analyzer = a
   dead/again-unfed buffer, not a render bug.
 - ⚠️ **`send`/`receive` need the `---` LOCAL prefix (same collision class, 2026-06).** A bare
@@ -916,15 +927,16 @@ depending on the path's angle."* Build the path (`move_to`/`line_to`/…), then 
 `mgraphics.path_roundcorners(r)` **before** `stroke`/`fill`/`stroke_preserve` and every corner
 is rounded. This turns a polyline of straight `line_to` segments into a smooth ORGANIC curve —
 the cure for the "straight lines / angular" look on ANY v8ui spectrum, EQ curve, envelope, or
-transfer graph. Cheap, native, no manual bezier math. a spectrum-EQ device uses `path_roundcorners(4)` on its
-spectrum (display.js `normal display`: build path → close to floor → `path_roundcorners(4)` →
+transfer graph. Cheap, native, no manual bezier math. a spectrum-EQ uses
+`path_roundcorners(4)` on its spectrum (its `normal display` draw routine: build path → close to
+floor → `path_roundcorners(4)` →
 `stroke_preserve` + `fill`); Live-verified in our Spectrum Analyzer at radius 4.
 
-## ✅ Native-compositing hero — a premium display with ZERO jsui (a slice-sequencer device)
+## ✅ Native-compositing hero — a premium display with ZERO jsui (a typical slice-sequencer)
 
 A premium "data-inside-data" hero can be built ENTIRELY from STOCK native objects stacked on
-ONE rect — no jsui/v8ui/`paint()`/compile step. Code-verified from a slice-sequencer device (the whole
-device has zero jsui): its "waveform inside the 32-step sequencer" hero = 5 native boxes on one
+ONE rect — no jsui/v8ui/`paint()`/compile step. Code-verified from the slice-sequencer library
+device (the whole device has zero jsui): its "waveform inside the 32-step sequencer" hero = 5 native boxes on one
 ~795×285 rect:
 - a themed **`live.grid`** at the BOTTOM of the z-stack (the sequencer matrix);
 - **4 `waveform~` overlays** stacked ON TOP, each with **`bgcolor` alpha 0** (the grid shows
@@ -965,7 +977,7 @@ v8ui drew its own spectrum (`external_spectrum=False`). Removing it (box + `scri
   Attribute** (`[int]`, grounded 2026-06) — present in EVERY object's refpage boilerplate, even
   non-UI objects like `pak`, so it is syntactically valid on `spectroscope~`/`scope~`/`waveform~`
   alike (it will set without error). What varies is the BEHAVIOR: click pass-through is
-  **library-proven for `waveform~` over a `live.grid`** (a slice-sequencer device, above) — the right tool for a
+  **library-proven for `waveform~` over a `live.grid`** (a typical slice-sequencer, above) — the right tool for a
   NON-interactive compiled DISPLAY stacked on an interactive NATIVE control — but is **unverified for
   `spectroscope~`** (the object itself is absent from the synced docs). So don't TRUST it to free an
   interactive v8ui sitting under a `spectroscope~`; go behind or remove (or Live-verify first).
@@ -999,7 +1011,7 @@ v8ui blends seamlessly instead of showing an opaque object box"*).
   JS (`SHOW_FRAME=0`) — it was the jsui's own `border 1`.
 - **Why some jsui never show it:** ones that PAINT an opaque background (drift `hero`, knocker
   `scope`) cover the inside; the 1px edge still draws but reads as an intentional framed display.
-- **Fix:** set **`border=0`** on the jsui box. Grounded: `its .json` ships `"border":0` on its
+- **Fix:** set **`border=0`** on the jsui box. Grounded: a library device's JSON ships `"border":0` on its
   jsui. **The kit `jsui()` factory now defaults `border=0`** (2026-06) — a device that wants a
   visible frame passes `border=1` (kwargs win). Latent until each device is rebuilt; at-risk display
   jsui (shard/pocket_delay/linear_phase_crossover) all sit inside panels, so losing the redundant
@@ -1039,11 +1051,11 @@ v8ui blends seamlessly instead of showing an opaque object box"*).
   patcher JSON) — extract a box's `presentation_rect`/attrs directly to see what shipped instead of
   guessing about Live/Max caches.
 
-## ✅ Modifier keys on an interactive v8ui graph (the EQ / filled node-edit scheme)
+## ✅ Modifier keys on an interactive v8ui graph (the premium-EQ / filled node-edit scheme)
 
 A draggable-node graph (EQ curve, XY pad, transfer curve) is the premium reason to reach for a v8ui
 over native controls — but it only feels pro if it honours the **modifier keys** the engineer's
-muscle memory expects from EQ / Stock EQ. Grounded two ways:
+muscle memory expects from a premium EQ / Stock EQ. Grounded two ways:
 
 - **Reading modifiers off the v8ui `PointerEvent`** (Max JS API `PointerEvent` doc — these are the
   CORRECT property names, NOT the DOM `metaKey`/`optionKey`, which are dead on a v8ui event):
@@ -1057,8 +1069,8 @@ muscle memory expects from EQ / Stock EQ. Grounded two ways:
   live. The kit wraps these in `pointer_shift_key()`/`pointer_option_key()`/`pointer_command_key()`
   helpers (in `eq_curve.py`) that fall back to the positional jsui-callback args, so the SAME engine
   works under both the v8ui `onpointer*` path and the legacy jsui `onclick`/`ondrag` path.
-- **The canonical premium mapping** (premium EQ help — `the vendor documentation`,
-  and Stock EQ agrees): the authoritative grounding when a phren note disagrees (one did — it had
+- **The canonical premium mapping** (a leading EQ plugin's help documentation, and Stock EQ
+  agrees): the authoritative grounding when a note disagrees (one did — it had
   Cmd=axis-lock / Alt=solo, both WRONG). For node dragging:
 
   | gesture | does | kit `eq_curve` status |
@@ -1072,14 +1084,15 @@ muscle memory expects from EQ / Stock EQ. Grounded two ways:
   | Cmd+Alt+click | change shape; **Alt+Shift+click** = change slope | ⬜ backlog |
   | Alt+wheel / Cmd+wheel | dynamic range / gain | ⬜ backlog |
 
-- ⚠️ **filled ≠ EQ on Alt — they CONFLICT (Ableton manual, grounded 2026-06):** Ableton's own EQ
-  Eight uses **Alt/Option + drag = Q** (its ONLY drag modifier; plain drag = freq+gain), and exposes
-  band "solo" through **Audition mode** (the headphone icon — *"clicking and holding a filter dot lets
-  you hear only that filter's effect"*), NOT a modifier-click. So a device cannot honour BOTH muscle
-  memories on Alt: EQ wants **Alt=constrain + Cmd=Q**, filled wants **Alt=Q**. The kit follows
-  **EQ** (a deliberate product choice, not a bug) — pick ONE house convention and document it on
-  the device. (This also explains the bogus "Alt+click=solo" phren note that misled an earlier pass:
-  solo is an filled *Audition-mode* feature, never a EQ modifier-click.)
+- ⚠️ **filled ≠ the premium EQ on Alt — they CONFLICT (Ableton manual, grounded 2026-06):** Ableton's
+  own Stock EQ uses **Alt/Option + drag = Q** (its ONLY drag modifier; plain drag = freq+gain), and
+  exposes band "solo" through **Audition mode** (the headphone icon — *"clicking and holding a
+  filter dot lets you hear only that filter's effect"*), NOT a modifier-click. So a device cannot
+  honour BOTH muscle memories on Alt: the premium EQ wants **Alt=constrain + Cmd=Q**, filled wants
+  **Alt=Q**. The kit follows **the premium-EQ convention** (a deliberate product choice, not a bug)
+  — pick ONE house convention and document it on the device. (This also explains the bogus
+  "Alt+click=solo" note that misled an earlier pass: solo is an filled *Audition-mode* feature,
+  never a modifier-click on the premium EQ.)
 - **Click-vs-drag disambiguation (the key pattern):** Alt is BOTH a click action (bypass) and a drag
   action (constrain). Resolve by **arming a drag on Alt-press WITHOUT firing the click action**, then
   on `onpointerup` fire the discrete action **only if the press never travelled** (`alt_moved` stays
@@ -1092,8 +1105,8 @@ muscle memory expects from EQ / Stock EQ. Grounded two ways:
 - ⚠️ **Edge-label collision (node caption vs axis scale):** when a draggable node reaches a plot edge
   its number/value caption competes with the axis scale labels for the same pixels. Observed on Para
   EQ (2026-06): a band dragged to the far RIGHT (~19 kHz) parks ON the right-edge dB scale — the node
-  occludes the `-36` label and its "4" number crowds the `-24`/`-36` zone. Premium fix (EQ does
-  this): (a) FLIP the node caption to the INNER side when it's within ~caption-width of an edge, and
+  occludes the `-36` label and its "4" number crowds the `-24`/`-36` zone. Premium fix (a premium
+  EQ does this): (a) FLIP the node caption to the INNER side when it's within ~caption-width of an edge, and
   (b) dim or skip the axis label a node currently overlaps. Draw-only (mgraphics layout) so the
   gesture test harness can't catch it — Live-eyeball a node parked at each edge.
 - ⚠️ **Filled response curve must plot EVERY point — never skip below-floor points then close to the
@@ -1258,7 +1271,7 @@ whole control — to `accent2`; single-accent themes set `accent2 == accent` so 
 
 ## ✅ live.arrows  (direction-arrow control — rotate / nudge / step)
 
-DOC-VERIFIED (live.arrows maxref) + 1 library instance (a slice-sequencer device's "rotate cell sequence").
+DOC-VERIFIED (live.arrows maxref) + 1 library instance (a typical slice-sequencer's "rotate cell sequence").
 1 inlet / 1 outlet (`[""]`). On click it sends the **symbol** `left` / `up` / `down` / `right`
 (NOT a number) — wire those to your own increment / rotate / nudge logic.
 
@@ -1278,8 +1291,8 @@ DOC-VERIFIED (live.arrows maxref) + 1 library instance (a slice-sequencer device
 
 ## ✅ function  (breakpoint / envelope / transfer-curve editor)
 
-NOT in the synced Max docs — observed (20 instances: a reference device & a synth device
-transfer curves). The native curve editor. **1 inlet / 4 outlets** `["float","","","bang"]`:
+NOT in the synced Max docs — observed (20 instances: effects-rack and
+synth-voice library device transfer curves). The native curve editor. **1 inlet / 4 outlets** `["float","","","bang"]`:
 send an x into the inlet → the curve's y at that x comes out outlet 0 (outlet 3 bangs on
 finish). In the library it is used as an **invisible curve-DATA store** (patching layer, no
 presentation, `parameter_enable 0`): you bake a shape and the DSP reads y-values from it.
@@ -1302,8 +1315,8 @@ presentation, `parameter_enable 0`): you bake a shape and the DSP reads y-values
 
 ## ✅ textedit  (editable text / numeric entry field)
 
-NOT in the synced Max docs — observed (4 instances, the sequencers,
-small numeric entry fields like a "StepsNum 32" box). 1 inlet / **4 outlets**;
+NOT in the synced Max docs — observed (4 instances, the sequencer /
+slice-sequencer library devices, small numeric entry fields like a "StepsNum 32" box). 1 inlet / **4 outlets**;
 **`outlettype ['', 'int', '', '']`** — the int is on outlet **1** (the prior stub's
 int-on-outlet-3 was wrong). On Enter the typed text/number is reported (outlet 0 = symbol/list,
 outlet 1 = int when numeric).
@@ -1314,7 +1327,7 @@ outlet 1 = int when numeric).
   flat, borderless). **`bgcolor`**,
   **`textcolor`**.
 - **`parameter_enable=1`** makes textedit a **Blob parameter** (`parameter_type 3`) that SAVES
-  its text with the device (a sequencer device stores its value this way) — pass it only when you also
+  its text with the device (a typical sequencer stores its value this way) — pass it only when you also
   wire the saved-attr blob.
 - **Kit:** `add_textedit(text=, keymode=, tabmode=, textjustification=, border=, rounded=,
   parameter_enable=)`; theme injects `textcolor → text`, `bgcolor → section`.
@@ -1353,7 +1366,7 @@ scale) and reveals the premium patterns the prior stub omitted:
   scales to the box without distorting.
 - **`hidden`** [int] (23/35): THE state-graphic trick — stack N fpics (`algo1.svg`…`algo8.svg`
   + `*Off.svg`), all `hidden 1`, and let the patch reveal the one matching the current state
-  (a channel strip's switchable algorithm diagrams; also on/off button glyphs). `background 1` (1/35)
+  (a typical channel-strip's switchable algorithm diagrams; also on/off button glyphs). `background 1` (1/35)
   drops it to the bg layer.
 - No color attrs — fpic is **not themed**.
 - **Kit:** `add_fpic(pic=, autofit=, forceaspect=, embed=, hidden=, background=)`. **Use for** a
@@ -1424,7 +1437,7 @@ scale) and reveals the premium patterns the prior stub omitted:
   alpha-0 placeholders — the runtime `live.colors` skin bus drives selection at load (so the
   library selection color = Live's skin slot, not a baked second accent). For our BUILD-TIME
   Theme the premium convention is **accent = primary draw (dials, bars, value arcs); accent2 =
-  the SELECTED/active state** (pink-on-cyan). Implemented by deriving `Theme.tab_bg_on`
+  the SELECTED/active state** (a pink-on-cyan selection). Implemented by deriving `Theme.tab_bg_on`
   (the selected-tab bgoncolor) from **accent2** instead of accent. Backward-compatible: single-
   accent themes set `accent2 == accent` in `__post_init__`, so they're visually unchanged; a
   distinct-accent2 theme (COBALT, AMBER, NEBULA, NEON, …) now renders the selected tab in
@@ -1457,7 +1470,7 @@ uikit_compare / uikit_lab. Width is the CELL (control + its label/value).
 > bar — taller than 16), `TEXT_ICON=(15,15)` (square glyph/icon live.text), `LED_DOT=(10,10)`.
 > Use `knob_row_fit(x0, y, n, width)` to spread a knob aisle to a panel width (DIAL_COMPACT).
 
-> ⚠️ **DENSE VERTICAL KNOB COLUMN (a spectrum-EQ device look) — the 4-high rule.** A knob column fits
+> ⚠️ **DENSE VERTICAL KNOB COLUMN (a premium spectrum-EQ look) — the 4-high rule.** A knob column fits
 > **4 knobs ONLY without a persistent value** in a 168px device: each cell is
 > `label(8) + knob(~21) + value(~10) ≈ 40px`, so 4 = 160px and the `live.dial` value text
 > OVERFLOWS the short cell into the label below it (the Pressure collision). FIX: set
@@ -1514,11 +1527,11 @@ authored height).
 >
 > **The rebuild-parity EXCEPTION — `allow_tall=True`.** "Never author height > 168" governs
 > ORIGINAL designs. A faithful **1:1 reproduction** of a taller original legitimately
-> exceeds it to match the source's verbatim rects — **SEAR=190** mirrors its original (and
+> exceeds it to match the source's verbatim rects — **a 190px rebuild** mirrors its original (and
 > inherits the original's own bottom-clip). Such a clone passes
 > `AudioEffect(..., allow_tall=True)` to opt out of the lint, rather than condensing (which would
 > break the structural A/B match). Re-audit 2026-06: fleet clean — every chain device ≤168 EXCEPT
-> SEAR=190 (intentional `allow_tall` clone). Rule of thumb: condense your own devices to ≤168;
+> one 190px device (intentional `allow_tall` clone). Rule of thumb: condense your own devices to ≤168;
 > reach for `allow_tall` ONLY when reproducing a taller source 1:1.
 
 > **PER-CONTROL clip lint — `control-clipped` (2026-06).** The 168 ceiling is necessary but not
@@ -1582,7 +1595,7 @@ TODO not yet hardened.
 > **bpatcher module** (F3): `device.add_bpatcher_module(subpatcher, id, rect, name=…,
 > numinlets=, numoutlets=, outlettype=)` embeds a `Subpatcher` as a VISIBLE bpatcher whose
 > presentation view renders inside the device (`embed:1`, `presentation:1`,
-> `viewvisibility:1`) — the premium self-contained DSP+UI module pattern (a channel strip).
+> `viewvisibility:1`) — the premium self-contained DSP+UI module pattern (a typical channel-strip).
 > Use `Subpatcher.to_presentation_patcher_dict()` (sets the inner `openinpresentation:1`).
 > Contrast `add_subpatcher` = an invisible `p name` box. `bpatcher()` (external `.maxpat`
 > ref) is for non-embedded reuse.
@@ -1603,7 +1616,7 @@ TODO not yet hardened.
 > `orphan-box` lint now SKIPS these maxclasses (`_DECORATION_MAXCLASSES` in `validation.py`):
 > flagging a box that can *never* be connected is noise that buries a genuinely unwired
 > FUNCTIONAL box (a `newobj`/`message` you forgot to patch). So a surviving `orphan-box` warning
-> is now a real signal — SEAR went from **5** decoration false-positives to **0**. When adding a
+> is now a real signal — the 190px rebuild went from **5** decoration false-positives to **0**. When adding a
 > new pure-decoration maxclass, extend that set. (Functional UI controls — `live.dial`/`tab`/
 > `numbox`/meters/jsui heroes — keep real I/O and stay in the check; an unwired one is a real bug.)
 
@@ -1638,7 +1651,7 @@ Default to NATIVE. Reach for a CUSTOM v8ui control only when the right column ap
 | Need                     | Native (default)            | Custom v8ui (only if…) |
 |--------------------------|-----------------------------|------------------------|
 | knob (any scalar param)  | `live.dial` (+needlemode)   | bespoke arc/glow/glyph identity, or a knob that drives a hero |
-| on/off — LABELED (Bypass, HP On, M/S) | **`live.text`** (off/on labels; the PREMIUM library norm — a channel strip's utility strip, a sequencer device's toggles; `mode=1` to latch) | bespoke glyph/LED toggle |
+| on/off — LABELED (Bypass, HP On, M/S) | **`live.text`** (off/on labels; the PREMIUM library norm — a typical channel-strip's utility strip, a typical slice-sequencer's toggles; `mode=1` to latch) | bespoke glyph/LED toggle |
 | on/off — bare inline     | `live.toggle` (tiny ~12×13 checkbox, no label) | an LED-dot/inline micro-toggle look |
 | pick 1 of N (≤4)         | `live.tab`                  | mode GLYPHS (∿ ⊓ ∧), or a 1-cell cycle/stepper to save space |
 | pick 1 of N (>4)         | `live.menu`/`umenu`         | rarely |

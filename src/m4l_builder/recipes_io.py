@@ -3,8 +3,8 @@
 from .stages import stage_result
 
 _API_ROUTING_JS = """\
-/* apirouting.js - Live IO routing chooser driver (a reference apiRouting
-   pattern, Live-proven in Pocket Delay).
+/* apirouting.js - Live IO routing chooser driver (API-routing pattern,
+   Live-proven in Pocket Delay).
    Args: 1 = audio_inputs|audio_outputs, 2 = io index (0 = plugin~ 1 2,
    1 = plugin~ 3 4, ...). Outlet 0 -> type menu, outlet 1 -> channel menu. */
 this.autowatch = 1;
@@ -134,8 +134,8 @@ def io_routing_menus(device, id_prefix, *, io="midi_inputs", io_index=0,
                      type_rect, chan_rect, type_name="Source",
                      chan_name="Channel", placeholder="No Input",
                      fontsize=8.0):
-    """Live IO routing chooser (catalog #54, dnkFM "MIDI From"; the same
-    a reference apiRouting driver Live-proven on Pocket Delay's audio REF):
+    """Live IO routing chooser (catalog #54, a MIDI-From chooser; the same
+    API-routing driver Live-proven on Pocket Delay's audio REF):
     two menus (type + channel) enumerating the set's routable sources for
     this device's ``io`` (``midi_inputs`` / ``audio_inputs`` /
     ``…_outputs``), observing ``routing_type`` and setting the choice back
@@ -201,7 +201,7 @@ def io_routing_menus(device, id_prefix, *, io="midi_inputs", io_index=0,
 
 def midi_from(device, id_prefix, *, type_rect, chan_rect, io_index=0,
               with_midiin=True, **kwargs):
-    """"MIDI From" chooser (catalog #54, dnkFM): :func:`io_routing_menus`
+    """"MIDI From" chooser (catalog #54): :func:`io_routing_menus`
     over ``midi_inputs`` plus (by default) the ``midiin`` consumer whose
     source the chooser selects — its raw byte stream leaves on
     ``midi_raw_out``.
@@ -674,7 +674,7 @@ _SAMPLE_EXPORT_JS = """/* sample_export.js - buffer~ -> wav on disk (T15, #56 ou
    `save` emits `writewave <dir>/<stem>_NNN.wav` for the wired buffer~
    (outlet 0) + a status line (outlet 1). `setdir <path...>` (re)targets
    the folder — args are re-joined so paths with spaces survive. True
-   OS-level drag-out needs the 3rd-party 11olsen `11dragfiles` external; the portable stock path is saving into
+   OS-level drag-out needs the 3rd-party `11dragfiles` external; the portable stock path is saving into
    the User Library so the file appears in Live's browser to drag from. */
 this.autowatch = 1;
 this.outlets = 2;
@@ -707,7 +707,7 @@ def sample_export(device, id_prefix, buffer_box_id, *, rect,
     (catalog #56, out-half). One SAVE click = one numbered file
     (``<stem>_001.wav`` …) written via ``buffer~``'s stock ``writewave``.
 
-    The dnksaus library does true OS drag-out with the 3rd-party 11olsen
+    The library does true OS drag-out with the 3rd-party
     ``11dragfiles`` external (a device v2.0: path → ``prepend
     drag`` → ``11dragfiles``) — a binary external the portable kit won't
     embed. Point ``default_dir`` at a User Library folder instead and the
@@ -791,7 +791,7 @@ def sample_export(device, id_prefix, buffer_box_id, *, rect,
 def sample_lfo(device, id_prefix, *, key, rate_rect, samps=None,
                rate_min=0.02, rate_max=20.0, rate_initial=1.0,
                unipolar=False, accent=None):
-    """Use an audio buffer as the LFO *shape* (catalog #56, WaveLFO v2.1):
+    """Use an audio buffer as the LFO *shape* (catalog #56):
     ``phasor~`` at the Rate param sweeps ``wave~ <key>`` so whatever the
     buffer holds — a dropped sample, a rendered curve — IS the modulation
     waveform.
@@ -848,7 +848,7 @@ def sample_lfo(device, id_prefix, *, key, rate_rect, samps=None,
 
 
 _REGION_TRANSLATE_JS = """/* region_translate.js - slide every presentation box whose origin is
-   at-or-beyond a start point (dnksaus moveUi.js, T16 #57). `setUiPos
+   at-or-beyond a start point (a region-translate primitive, T16 #57). `setUiPos
    <startX> <startY> <newX> <newY>` translates the region by (new-start);
    the library idempotence guard (a box must sit EXACTLY at the start
    origin) prevents double-moves when toggles re-fire. Outlet 0 reports
@@ -890,7 +890,7 @@ function setUiPos(startX, startY, newX, newY) {
 
 
 def region_translate(device, id_prefix):
-    """The dnksaus ``moveUi.js`` region-translate primitive (catalog #57):
+    """The region-translate primitive (catalog #57):
     a js whose ``setUiPos <startX> <startY> <newX> <newY>`` message slides
     EVERY presentation box at-or-beyond the start origin by the delta —
     reflowing panels without naming each box. The library guard (some box
@@ -984,7 +984,7 @@ def header_strip(device, id_prefix, *, title, title_w, chips=(), y=3,
     ``chips``: list of ``(width, initial_text)``. Each becomes a
     transparent ``textedit`` fed by ready ``set …`` messages on the
     returned ``chip<i>_in`` ports (mapping summaries, mode names, gain
-    readouts — the Trig Mod grammar).
+    readouts — a modulation grammar).
     """
     p = id_prefix
     tc = list(text_color) if text_color else [0.78, 0.79, 0.82, 1.0]
@@ -1024,7 +1024,7 @@ def header_strip(device, id_prefix, *, title, title_w, chips=(), y=3,
 
 def icon_rail(device, id_prefix, *, icons, rect, param_name="Page",
               labels=None, manage=None, accent="0.30, 0.80, 0.84"):
-    """Left icon-rail page tabs (catalog #59, the dnksaus viewhide bus):
+    """Left icon-rail page tabs (catalog #59, the viewhide bus):
     a slim VERTICAL glyph radio (one icon per page, accent highlight on
     the selected cell) bound to a hidden automatable ``live.tab`` enum.
 

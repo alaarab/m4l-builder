@@ -1965,7 +1965,7 @@ class TestLiveRemote:
         assert box["text"] == "live.remote~"
 
     def test_inlets_outlets(self):
-        # measured (a modulation device obj-42): 2 inlets — value signal left,
+        # measured: 2 inlets — value signal left,
         # `id <n>` on the RIGHT; one MESSAGE outlet (`mapped 0|1`), not signal
         boxes, _ = live_remote("lr")
         box = _find_box(boxes, "lr_remote")

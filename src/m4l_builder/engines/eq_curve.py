@@ -1,6 +1,6 @@
 """Parametric EQ curve display with draggable nodes for jsui.
 
-Generates JavaScript (ES5) for Max's jsui object, drawing a EQ/Stock EQ
+Generates JavaScript (ES5) for Max's jsui object, drawing a premium-EQ/Stock EQ
 style multi-band EQ with draggable nodes and composite response rendering.
 
 Communication uses 3 inlets and 4 outlets.
@@ -49,9 +49,9 @@ Mouse interaction:
     Drag cut/notch/BP nodes: frequency horizontal, Q vertical
     Drag dynamic handle: adjust per-band dynamic range
     Mouse wheel on node: adjust Q
-    Shift + drag / wheel: fine-tune (EQ)
-    Cmd/Ctrl + drag (vertical): adjust Q (EQ)
-    Alt + drag: constrain to one axis - horizontal = freq, vertical = gain/Q (EQ)
+    Shift + drag / wheel: fine-tune (premium-EQ)
+    Cmd/Ctrl + drag (vertical): adjust Q (premium-EQ)
+    Alt + drag: constrain to one axis - horizontal = freq, vertical = gain/Q (premium-EQ)
     Alt + click a node: toggle that band's bypass (a tap; an Alt+drag constrains instead)
     Right-click node: open node menu for type / Motion / Dynamic / bypass / delete
     Double-click empty graph: add first disabled band at cursor
@@ -91,7 +91,7 @@ def eq_curve_js(
     analyzer_line_color="0.32, 0.84, 0.96, 0.48",
     analyzer_peak_color="0.92, 0.96, 1.0, 0.9",
     # filled-style spectrum colour: a muted grey for the heavy solid fill + thin line
-    # used when the device flips to the "Ableton Stock EQ" look (vs the Line
+    # used when the device flips to the "Ableton Stock EQ" look (vs the crisp
     # cyan line). Selected at runtime by set_analyzer_style 0|1.
     analyzer_eq8_color="0.70, 0.73, 0.78, 1.0",
     grid_color="0.2, 0.2, 0.22, 0.5",
@@ -231,14 +231,14 @@ var ANALYZER_MIN_DB = -78.0;
 // Ceiling at 0 dBFS (matches our Spectrum Analyzer's MIN_DB=-78/MAX_DB=0, which
 // fills the body to the top). The old +12 headroom reserved 12 dB above 0 that
 // real audio never reaches, so the spectrum sat squished at the vertical centre
-// (a hotter-running FFT could use +18; ours needs the realistic 0 ceiling).
+// (a hotter-running FFT can need +18 of headroom; ours needs the realistic 0 ceiling).
 var ANALYZER_MAX_DB = 0.0;
 var ANALYZER_BINS   = 512;        // log-spaced display points (was 256 -> too blocky on a wide graph; 512 ~= 1.5px/segment, pro-plugin-smooth)
-var ANALYZER_RCORNERS = 4.0;      // path_roundcorners radius (radius 4): rounds the max-per-column polyline into a smooth line instead of Catmull-Rom grass
+var ANALYZER_RCORNERS = 4.0;      // path_roundcorners radius: rounds the max-per-column polyline into a smooth line instead of Catmull-Rom grass
 var ANALYZER_TRIM_DB = $analyzer_trim_db;
 var EXTERNAL_SPECTRUM = $external_spectrum;   // 1 = a compiled spectrum (spectroscope~) draws behind; skip jsui bg + spectrum
 var MINIMAL_GRID = $minimal_grid;   // 1 = only the 0 dB line + range labels (no interior dB lines)
-// Spectrum Grab (EQ): a plain press over an analyzer peak louder than this
+// Spectrum Grab (premium-EQ): a plain press over an analyzer peak louder than this
 // spawns a band right at that frequency and starts dragging it. The floor sits
 // near ANALYZER_MIN_DB so this cleanly distinguishes a real resonance.
 var SPECTRUM_GRAB_DB = -48.0;
@@ -257,7 +257,7 @@ var MARGIN_BOTTOM = 12;
 // ── State ────────────────────────────────────────────────────────────
 var sample_rate = DEFAULT_SR;
 var analyzer_enabled = 1;
-var ANALYZER_STYLE = 0;   // 0 = Line (thin colour line + light wash); 1 = filled (heavy grey fill, smoothed)
+var ANALYZER_STYLE = 0;   // 0 = crisp (thin colour line + light wash); 1 = filled (heavy grey fill, smoothed)
 // Display-domain spectrum tilt around a 1 kHz pivot (a premium-EQ convention):
 // +4.5 dB/oct makes pink noise read ~flat behind the curve. Pure render
 // transform — never touches the audio path. Freeze halts the ballistics and
@@ -284,7 +284,7 @@ var drag_start_freq = 0;
 var drag_start_gain = 0;
 var drag_start_q = 1.0;
 var drag_start_dynamic = 0.0;
-// EQ Alt gestures: drag_start_x/y anchor the axis-constrain; alt_drag_pending
+// premium-EQ Alt gestures: drag_start_x/y anchor the axis-constrain; alt_drag_pending
 // marks a press that began with Alt held on a node (decide bypass-toggle vs
 // constrain on release); alt_moved flips once the drag travels; constrain_axis is
 // 0 undecided / 1 horizontal (freq) / 2 vertical (gain or Q).
@@ -454,7 +454,7 @@ function analyzer_tilted_db(raw_db, tilt) {
 // across all bins is a no-signal artifact (digital-silence FFT or an unfed/
 // uninitialized analyzer buffer) — drawn through the tilt it becomes a fake
 // rising diagonal. Detect it (tiny bin-to-bin range) so the spectrum can be
-// skipped entirely (reads empty, like EQ with no audio).
+// skipped entirely (reads empty, like a premium EQ with no audio).
 function analyzer_is_flat() {
     var n = analyzer_display.length, i;
     if (n < 2) return 1;
@@ -600,7 +600,7 @@ function rebin_fft_to_columns(mags) {
         if (db > col[px]) col[px] = db;     // MAX per column
     }
     // Fill empty low columns (<1 bin/column) by linear interpolation between filled
-    // neighbours (join sparse low points with line_to).
+    // neighbours (a common technique: join sparse low points with line_to).
     var lastIdx = -1, lastVal = ANALYZER_MIN_DB;
     for (i = 0; i < ANALYZER_BINS; i++) {
         if (col[i] > -998.0) {
@@ -634,7 +634,7 @@ function update_analyzer_from_fft(mags) {
     request_redraw();
 }
 
-// ── PRE-EQ overlay (EQ 3 grammar): the dedicated pre-EQ detector buffer is
+// ── PRE-EQ overlay (premium-EQ grammar): the dedicated pre-EQ detector buffer is
 // rebinned with the SAME column algorithm and drawn as a dim neutral backdrop
 // behind the live post-EQ spectrum, so cuts/boosts read as pre-vs-post daylight.
 var pre_overlay = 1;            // set_pre_overlay 0|1 (default ON)
@@ -832,7 +832,7 @@ function set_analyzer_freeze(v) {
     force_redraw();
 }
 
-// Spectrum render style: 0 = Line (thin colour line + 5% wash, max-per-column
+// Spectrum render style: 0 = crisp (thin colour line + 5% wash, max-per-column
 // detail); 1 = Stock EQ (heavy muted-grey solid fill + smoothing → the creamy
 // filled look from Ableton's filled); 2 = Both (grey filled backdrop + the crisp
 // cyan line on top — energy AND a precise envelope, the most useful for real EQ
@@ -925,7 +925,7 @@ function update_dynamic_from_fft(mags) {
 
 // Reflect a band's live dynamic offset in the DRAWN curve: recompute its biquad
 // response at the effective gain (static + dynamic_current). The node dot stays
-// at the static gain (EQ style — the ring shows the range, the curve moves).
+// at the static gain (premium-EQ style — the ring shows the range, the curve moves).
 function apply_dyn_to_cache(i) {
     var bc = band_cache[i];
     if (!bc || !bc.present || !bc.enabled || !bc.uses_gain) return;
@@ -1087,10 +1087,10 @@ function delete_band_at(idx) {
     mgraphics.redraw();
 }
 
-// EQ-style: the TYPE of a band created by clicking the empty graph depends on
+// premium-EQ-style: the TYPE of a band created by clicking the empty graph depends on
 // WHERE you click. The far edges make pass filters (high-pass at the low end,
 // low-pass at the high end), just inside makes shelves, and the broad middle makes
-// a bell -- matching a premium plugin's create gesture so "click and it makes the right
+// a bell -- matching a pro-plugin's create gesture so "click and it makes the right
 // band". Zones are fractions of the plot width: [HP][LoShelf][--- BELL ---][HiShelf][LP].
 var CREATE_HP_FRAC   = 0.07;
 var CREATE_LOSH_FRAC = 0.18;
@@ -1125,7 +1125,7 @@ function create_band_at(x, y, btype, no_snap, bq) {
 
     created_freq = x_to_freq(x);
     // SPECTRUM GRAB: if a clear analyzer peak sits near the click, snap the new
-    // band onto it (EQ "grab the resonance"). No peak -> exact placement.
+    // band onto it (a premium EQ's "grab the resonance" move). No peak -> exact placement.
     // Skipped for sketch-created bands (no_snap) so the drawn shape is respected.
     if (!no_snap) {
         var snap_freq = analyzer_peak_near_x(x);
@@ -1177,7 +1177,7 @@ function create_band_at(x, y, btype, no_snap, bq) {
 }
 
 // ── EQ Sketch (draw-to-EQ) ───────────────────────────────────────────
-// EQ-style: turn on Sketch, drag the shape you want across the plot, and the
+// premium-EQ-style: turn on Sketch, drag the shape you want across the plot, and the
 // prominent peaks/dips of your stroke become bell bands (additive). The fit is
 // pure (no mgraphics/Buffer) so it is unit-testable in the Node harness.
 function set_sketch(v) {
@@ -1360,7 +1360,7 @@ function rebuild_band_cache() {
     emit_chip_states();
 }
 
-// Band CHIP ROW feed (EQ-style band overview, Para<->LP parity). Emits unique
+// Band CHIP ROW feed (premium-EQ-style band overview, Para<->LP parity). Emits unique
 // selectors so the existing outlet-0 band-router traffic is untouched; the product
 // routes chip_num/chip_band/chip_sel into a band_chip_row jsui. Called from
 // rebuild_band_cache (covers add/delete/toggle/drag) and set_selected (selection).
@@ -1442,7 +1442,7 @@ function paint() {
     draw_grid();
     if (!EXTERNAL_SPECTRUM) {
         draw_analyzer_snapshot();   // it173: A/B reference behind the live analyzer
-        draw_analyzer_pre();        // pre-EQ dim backdrop (EQ pre/post grammar)
+        draw_analyzer_pre();        // pre-EQ dim backdrop (premium-EQ pre/post grammar)
         draw_analyzer();
     }
     // Re-sweep each motion band's drawn coeffs so the curve moves with the LFO.
@@ -1480,7 +1480,7 @@ function gain_grid_values() {
     return vals;
 }
 
-// Spectrum-EQ grid recipe (EQ_DESIGN_TEARDOWN.md): log-decade two-tone ruler +
+// A premium EQ-grid recipe: log-decade two-tone ruler +
 // half-pixel-snapped hairlines + bg edge-fade gradients (the #1 "looks nice"
 // factor) + Ableton Sans Bold labels + bright 0 dB + dual axis (EQ-dB left /
 // spectrum-dB right).
@@ -1649,15 +1649,15 @@ function draw_analyzer() {
     // Two render styles (set_analyzer_style): both use the SAME max-per-column data
     // ROUNDED with path_roundcorners (radius 4); only the fill weight, line
     // and smoothing differ.
-    //   0 Line — thin colour line + 5% wash (stock spectrum display.js), detail kept.
+    //   0 crisp   — thin colour line + 5% wash, detail kept.
     //   1 filled     — heavy muted-grey solid fill + an extra ±3-tap smooth that lifts the
     //               inter-harmonic valleys into the creamy filled envelope of Ableton filled.
     var ai;
-    var style = ANALYZER_STYLE;        // 0 Line, 1 filled, 2 Both
+    var style = ANALYZER_STYLE;        // 0 crisp, 1 filled, 2 Both
     var filled = (style === 1);
     var both = (style === 2);
     if (filled) {
-        // Creamy filled smooth (pure filled only — Line + Both keep max-per-column
+        // Creamy filled smooth (pure filled only — crisp + Both keep max-per-column
         // detail so resonances stay visible for real EQ work).
         var sm = [], j, acc, cnt;   // box-smooth in y (= dB; the map is linear) → fill the comb gaps
         for (i = 0; i < n; i++) {
@@ -1667,7 +1667,7 @@ function draw_analyzer() {
         }
         ys = sm;
     }
-    // Fill: Line = light cyan wash; filled = heavy grey; Both = a grey backdrop
+    // Fill: crisp = light cyan wash; filled = heavy grey; Both = a grey backdrop
     // (lighter than filled) UNDER the crisp cyan line — energy + a precise envelope.
     var fc, fTopA, fBotA;
     if (filled)       { fc = ANALYZER_EQ8_CLR;  fTopA = 0.30; fBotA = 0.46; }
@@ -1685,7 +1685,7 @@ function draw_analyzer() {
     mgraphics.set_source(grad);
     mgraphics.fill();
 
-    // Envelope on top — Line = bright thin colour line; filled = a quiet grey edge
+    // Envelope on top — crisp = bright thin colour line; filled = a quiet grey edge
     // (the fill is the spectrum, not the line).
     mgraphics.move_to(xs[0], ys[0]);
     for (ai = 1; ai < n; ai++) mgraphics.line_to(xs[ai], ys[ai]);
@@ -1732,7 +1732,7 @@ function format_freq_text(freq) {
     return Math.round(freq) + " Hz";
 }
 
-// Nearest musical note for a frequency (EQ style: identify a band by pitch).
+// Nearest musical note for a frequency (premium-EQ style: identify a band by pitch).
 var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function note_name(freq) {
     if (freq <= 0.0) return "";
@@ -1761,7 +1761,7 @@ function curve_db_is_visible(db) {
 }
 
 // ── Individual band curves ───────────────────────────────────────────
-// EQ-style band shading: every active gain band tints its own
+// premium-EQ-style band shading: every active gain band tints its own
 // contribution with its band color so the EQ reads at a glance and is
 // distinct from the analyzer behind it. The selected/hovered band gets a
 // stronger fill plus its colored outline.
@@ -1782,7 +1782,7 @@ function draw_band_curves() {
         // Filled colored region from the 0 dB line to this band's response
         // (boost fills upward, cut fills downward — both tinted). it178: a
         // vertical gradient gives the lobe depth — brightest at the band's peak
-        // deviation, fading to near-transparent at the 0 dB waist (EQ "lit
+        // deviation, fading to near-transparent at the 0 dB waist (a premium-EQ "lit
         // lobe"), same anchored-at-zero pattern as the composite fill.
         var bptop = plot_top(), bpbot = plot_bottom();
         var bfz = (zero_y - bptop) / (bpbot - bptop);
@@ -1857,7 +1857,7 @@ function draw_composite_curve() {
     }
 
     if (num_bands > 0) {
-        // it178: premium gradient fill (EQ "lit curve") — brightest along the
+        // it178: premium gradient fill (a premium-EQ "lit curve") — brightest along the
         // curve's deviation from flat, fading to near-transparent at the 0 dB
         // waist. One vertical pattern anchored at zero_y: both boost and cut lobes
         // glow at the curve and fade toward the axis, so bigger moves reach the
@@ -2706,7 +2706,7 @@ function analyzer_db_at_x(x) {
     return analyzer_display[bin];
 }
 
-// SPECTRUM GRAB (EQ): find a prominent analyzer peak near plot-x and return
+// SPECTRUM GRAB (premium-EQ): find a prominent analyzer peak near plot-x and return
 // its frequency, or -1 when there's no clear resonance to grab. Used so a
 // double-click to ADD a band snaps onto the visible peak (you click the bump,
 // the band lands on it), and so the hover affordance can mark the grab target.
@@ -2822,7 +2822,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
         return;
     }
 
-    // EQ Cmd+Alt+click on a node: cycle the band type (PK->LS->HS->LP->
+    // premium-EQ Cmd+Alt+click on a node: cycle the band type (PK->LS->HS->LP->
     // HP->NT->BP->AP->PK). apply_band_type owns all the outlet plumbing.
     if (command_click && option_click && clicked_band >= 0) {
         close_node_menu();
@@ -2836,7 +2836,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     if (option_click) {
         if (dynamic_hit >= 0 || hit >= 0) {
             var opt_idx = dynamic_hit >= 0 ? dynamic_hit : hit;
-            // EQ: Alt+CLICK toggles the band bypass, Alt+DRAG constrains to one
+            // premium-EQ: Alt+CLICK toggles the band bypass, Alt+DRAG constrains to one
             // axis. We can't tell which yet, so ARM a drag now and decide on release:
             // a tap (no travel) toggles bypass in onpointerup; a move constrains.
             selected_band = opt_idx;
@@ -2853,7 +2853,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
             return;
         }
         // it173: alt/opt-click on EMPTY graph captures the live analyzer as a
-        // static A/B reference (or clears it) — a EQ-style compare. (A node
+        // static A/B reference (or clears it) — a premium-EQ-style compare. (A node
         // alt-click toggles that band, above; this only fires off a node.)
         if (x >= plot_left() && x <= plot_right() &&
                 y >= plot_top() && y <= plot_bottom()) {
@@ -2879,7 +2879,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     }
 
     if (hit < 0 && dynamic_hit < 0) {
-        // EQ create gesture: a plain press on the empty graph spawns a band at
+        // premium-EQ create gesture: a plain press on the empty graph spawns a band at
         // the click and immediately drags it — the band TYPE is chosen by WHERE you
         // clicked (band_type_for_x: far edges -> HP/LP, just inside -> shelves, the
         // middle -> bell). If a prominent analyzer peak sits under the cursor,
@@ -2936,7 +2936,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
 }
 
 function reset_band_at(idx) {
-    // EQ semantics: double-click resets the band (gain bands -> 0 dB,
+    // premium-EQ semantics: double-click resets the band (gain bands -> 0 dB,
     // gain-less types -> default Q). Delete stays on the context menu.
     if (idx < 0 || idx >= num_bands) return;
     if (!bands[idx].present) return;
@@ -2970,7 +2970,7 @@ function handle_double_click(x, y) {
         return;
     }
     // Empty double-clicks no longer create a band — a single press already does
-    // (EQ create gesture), so a double-click on empty space is a no-op.
+    // (a premium-EQ create gesture), so a double-click on empty space is a no-op.
 }
 
 function handle_drag_at(x, y, but, cmd, shift, opt) {
@@ -3018,7 +3018,7 @@ function handle_drag_at(x, y, but, cmd, shift, opt) {
     }
 
     if (uses_gain && cmd) {
-        // EQ cmd-drag: HOLD the gain so vertical now drives the Q instead, so
+        // premium-EQ cmd-drag: HOLD the gain so vertical now drives the Q instead, so
         // you can tighten or widen a bell/shelf WITHOUT lifting the mouse button.
         new_gain = drag_start_gain;
         new_q = y_to_q(y);
@@ -3053,7 +3053,7 @@ function handle_drag_at(x, y, but, cmd, shift, opt) {
         new_freq = b.freq + (new_freq - b.freq) * 0.15;
     }
 
-    // EQ Alt+drag: constrain to ONE axis, chosen by the dominant initial travel.
+    // premium-EQ Alt+drag: constrain to ONE axis, chosen by the dominant initial travel.
     // Horizontal -> frequency only (hold gain + Q); vertical -> gain/Q only (hold freq).
     if (opt && drag_mode === 1) {
         var adx = Math.abs(x - drag_start_x);
@@ -3138,7 +3138,7 @@ function clear_hover_state() {
     }
 }
 
-// EQ-style hover crosshair: faint guides from the cursor to the axes,
+// premium-EQ-style hover crosshair: faint guides from the cursor to the axes,
 // with the exact frequency in the bottom gutter and gain in the left gutter.
 function draw_hover_crosshair() {
     if (!hover_in_plot) return;
@@ -3248,7 +3248,7 @@ function onpointerup(pointerevent) {
     var y = pointer_y(pointerevent, 0);
     if (sketching) { sketch_commit(); return; }
     if (dragging) {
-        // EQ: an Alt+CLICK (armed a drag but never travelled) toggles band bypass.
+        // premium-EQ: an Alt+CLICK (armed a drag but never travelled) toggles band bypass.
         if (alt_drag_pending && !alt_moved && selected_band >= 0 && selected_band < num_bands) {
             bands[selected_band].enabled = bands[selected_band].enabled ? 0 : 1;
             rebuild_band_cache();
@@ -3299,7 +3299,7 @@ function onidleout(x, y, but, cmd, shift, caps, opt, ctrl) {
 }
 
 function onwheel(x, y, scrollx, scrolly, cmd, shift, caps, opt, ctrl) {
-    // EQ wheel matrix (Shift = fine everywhere):
+    // premium-EQ wheel matrix (Shift = fine everywhere):
     //   plain      -> Q
     //   Cmd/Ctrl   -> gain
     //   Alt        -> dynamic range (auto-enables DYN, like the menu chip)

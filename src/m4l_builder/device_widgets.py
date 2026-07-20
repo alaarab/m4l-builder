@@ -344,7 +344,7 @@ class CompositeWidgetsMixin:
         device_height: float = None,
         inset: float = 4.0,
     ) -> str:
-        """Add a compact row of hand-drawn GLYPH buttons (mode selection glyphs)
+        """Add a compact row of hand-drawn GLYPH buttons (a premium device's mode-glyphs)
         bound to a HIDDEN automatable ``live.tab``. ``glyphs`` are icon names (see
         ``engines.ui_icons.ICON_NAMES``); ``option_labels`` names the enum values
         in Live's automation lane (defaults to the glyph names, upper-cased).
@@ -468,7 +468,7 @@ class CompositeWidgetsMixin:
 
         The v8ui DRAWS the fader (recessed track + accent fill + handle cap + value
         readout) and handles the pointer with ABSOLUTE positioning (click/drag the
-        track and the handle JUMPS to and tracks the cursor — pro-plugin-behavior;
+        track and the handle JUMPS to and tracks the cursor — pro-plugin behavior;
         Shift = fine, double-click = reset). A 30×30 ``live.dial`` hidden BEHIND it
         (``presentation=0``, never renders) holds the automatable Live parameter:
         drag the drawing → the param moves (and records automation); automate the
@@ -754,7 +754,7 @@ class CompositeWidgetsMixin:
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM draggable curve node (v8ui) bound to TWO HIDDEN automatable
-        params (premium EQ band / compressor threshold-ratio dot / filter
+        params (a premium-EQ band / compressor threshold-ratio dot / filter
         freq-reso node). The v8ui DRAWS a graph + node and handles the pointer:
         horizontal drag drives ``param_x``, vertical drag drives ``param_y`` (Shift =
         fine, Cmd = lock to horizontal, Opt = lock to vertical, double-click resets
@@ -986,8 +986,8 @@ class CompositeWidgetsMixin:
         varname: str = None,
     ) -> str:
         """Add a DRAGGABLE ADSR envelope editor (jsui) bound to FOUR HIDDEN
-        automatable ``live.dial`` params (dnksaus-catalog kit engine #1 — the
-        a gate device / dnkFM envelope-editor look).
+        automatable ``live.dial`` params (catalog kit engine #1 — the
+        a gate device / FM-synth envelope-editor look).
 
         The jsui DRAWS the envelope (accent polyline + under-curve fill + dim
         grid + square nodes + an A/D/S/R value row) and owns the pointer via
@@ -1081,7 +1081,7 @@ class CompositeWidgetsMixin:
     ) -> str:
         """Add a GENERAL BREAKPOINT CURVE EDITOR (jsui) whose points/tension/
         grid/snap persist through hidden ``live.dial`` parameter hosts
-        (dnksaus-catalog kit engines #2-#6 — the Multi Shaper core widget).
+        (catalog kit engines #2-#6 — the breakpoint-curve core widget).
 
         The jsui owns the pointer (click empty = add point, drag = move with
         neighbor-clamped x, double-click = delete, endpoints undeletable) and
@@ -1096,8 +1096,8 @@ class CompositeWidgetsMixin:
         accepts the blob but never re-delivers it across track duplication in
         Live 12.4 (kit pitfalls file, headless-counter proven). The kit's
         duplication-safe pattern is per-value hidden ``live.*`` parameter
-        hosts (Parametric EQ precedent), which is ALSO exactly how dnksaus
-        ships editor state (their devices carry dozens of
+        hosts (Parametric EQ precedent), which is ALSO exactly how a boutique
+        device ships editor state (its devices carry dozens of
         ``parameter_invisible: 1`` stored-only scalar params and rebuild the
         curve display from them at load — never a blob). So: ``1 + 2*max_points``
         hidden ``live.dial`` hosts (``{id}_count`` + ``{id}_p{k}x/y``, longnames
@@ -1234,7 +1234,7 @@ class CompositeWidgetsMixin:
         funnel_id = f"{id}_funnel"
         # listfunnel emits "index value" pairs (base 0, matching spray's default
         # offset); outlettype ["list"] is the library-measured declaration
-        # (a sequencer device ships `listfunnel 1` + `spray 12` with exactly this shape).
+        # (the library ships `listfunnel 1` + `spray 12` with exactly this shape).
         self.add_newobj(funnel_id, "listfunnel", numinlets=1, numoutlets=1,
                         outlettype=["list"], patching_rect=[160, 520, 70, 20])
         spray_id = f"{id}_spray"
@@ -1295,8 +1295,8 @@ class CompositeWidgetsMixin:
         varname: str = None,
     ) -> str:
         """Add a STEP-BAR LANE EDITOR (jsui) whose bar values persist through
-        hidden ``live.dial`` parameter hosts (dnksaus-catalog kit engines
-        #7-#8 — the a gate device / Trig Rnd step lane + value-link chip).
+        hidden ``live.dial`` parameter hosts (catalog kit engines
+        #7-#8 — a gate/random step lane + value-link chip).
 
         The jsui owns the pointer (click sets the bar under the cursor,
         drag PAINTS values across every bar the pointer crosses, Cmd/Alt-click
@@ -1655,7 +1655,7 @@ class CompositeWidgetsMixin:
         Unlike ``add_subpatcher`` (an invisible ``p name`` box), this embeds the
         sub-patch as a ``bpatcher`` whose PRESENTATION view renders inside the
         device — the premium pattern for a self-contained DSP+UI module (e.g. a
-        channel-strip processor, as in a channel strip). ``embed=1`` bakes the
+        channel-strip processor, as in channel-strip devices). ``embed=1`` bakes the
         sub-patch into the .amxd. Box attrs match the real devices.
         """
         box = {
@@ -1698,7 +1698,7 @@ class CompositeWidgetsMixin:
         outlettype: list = None,
     ) -> list:
         """Stamp ONE Subpatcher component ``count`` times as embedded bpatchers —
-        the library P11 rack (GROUNDED in a modulation device: six ``bpatcher args=[i]``
+        the library P11 rack (grounded in measured device conventions: six ``bpatcher args=[i]``
         of one component whose param longnames embed ``#1``; NO
         parameter_overrides — Max's ``#1`` substitution IS the mechanism).
 
@@ -1744,14 +1744,14 @@ class CompositeWidgetsMixin:
         y: int = 2600,
     ) -> dict:
         """Wire the D4 gen->named-buffer->jsui viz bus (the library keystone for
-        live displays; viz-bus contract).
+        live displays; the standard viz-bus contract).
 
         ``buffers``: list of ``(name, samps, channels)``. For each, adds a
         ``buffer~ ---<name> -1 <chans> @samps <samps>`` box. Then ONE
         ``live.thisdevice -> deferlow -> t b b`` fires, right-first:
         (1) the gen REBIND message ``<n1> ---<n1>, <n2> ---<n2>, ...`` into
         ``gen_box_id`` inlet 0 — gen's bare ``Buffer <n>;`` decls bind to the
-        ``---``-resolved buffer~ objects (grounded in a granular device's top patcher);
+        ``---``-resolved buffer~ objects (the standard top-patcher pattern);
         (2) ``<set_msg> ---<n1> ---<n2> ...`` into ``viz_box_id`` inlet 0 —
         delivers the resolved names to the buffer_viz jsui and starts its poll
         Task (``---`` substitutes in message-box text at load).

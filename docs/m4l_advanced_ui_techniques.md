@@ -6,9 +6,6 @@ official *Max for Live Production Guidelines*, and live verification in Ableton
 12.4 on this machine. Each entry tags whether we **USE**, **DON'T USE**, or have
 a **VERIFIED** runtime fact about it.
 
-> Companion: the Live runtime pitfalls notes
-> (read-only here) holds the older hard-won runtime gotchas. This doc adds the
-> v8ui interaction surface and the parameter-visibility findings.
 
 ---
 

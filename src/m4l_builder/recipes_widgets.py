@@ -147,7 +147,7 @@ function mono(v) { M = v ? 1 : 0; grid(); }
 
 def lane_rotator(device, id_prefix, *, n, accent=None, rotate_rect=None,
                  mono_rect=None, ramp_ms=20):
-    """Rotate / Mono lane routing (catalog #23 + #24, Multi Shaper).
+    """Rotate / Mono lane routing (catalog #23 + #24).
 
     A ``matrix~ n n 0.`` sits between the engine's lane signals and the
     mapping rows: ``Rotate k`` feeds row ``j`` from lane ``(j+k) % n``;
@@ -400,7 +400,7 @@ _CHIP_KINDS = {
 
 def standard_chip(device, id_prefix, kind, rect, *, param_name=None,
                   accent=None, dim_color=None, fontsize=6.5):
-    """The dnksaus micro-chip vocabulary as one factory (catalog #31 #32
+    """The micro-chip vocabulary as one factory (catalog #31 #32
     #33 #37): tiny 2-state ``live.text`` chips with STANDARD semantics —
     ``unit_hz_note`` (f/Hz vs ♪ unit mode), ``log_lin``, ``x10`` (range
     multiplier — its ``factor_out`` port emits 1 or 10 for the engine),
@@ -483,8 +483,7 @@ function _moved(src, dst, v) {
 
 def param_link(device, id_prefix, *, a, b, mode="mirror", link_rect,
                accent=None, dim_color=None, param_name=None):
-    """Linked dual-value pair with a ⇄ chain chip (catalog #34, Inc Steps /
-    Trig Mod) — and, with ``mode="oppose"``, the GMaudio-Clipper "maximizer
+    """Linked dual-value pair with a ⇄ chain chip (catalog #34) — and, with ``mode="oppose"``, an inverse-link "maximizer
     workflow" (moving one param applies the INVERSE delta to its partner).
 
     ``a`` / ``b``: space-free VARNAMES of two existing param controls. While
@@ -615,7 +614,7 @@ def ghost_label(device, id_prefix, *, rect, text, accent, dim_color=None,
 
 def mode_pill(device, id_prefix, *, rect, modes, param_name="Mode",
               accent="0.30, 0.80, 0.84", dim_color=None):
-    """Mode pill whose icon IS the behavior (catalog #36, Clix "◠ Pump
+    """Mode pill whose icon IS the behavior (catalog #36 — "◠ Pump
     Mode"): a glyph selector where each mode's icon is a transfer-curve /
     response glyph from the shared bank (``lowpass`` ``bell`` ``fold`` …),
     with the current mode's LABEL rendered beside it. ``modes``: list of
@@ -663,7 +662,7 @@ def mode_pill(device, id_prefix, *, rect, modes, param_name="Mode",
 def display_header(device, id_prefix, *, rect, title, accent,
                    gain=False, gain_name="Out Gain", mute_name="Mute",
                    text_color=None, dim_color=None):
-    """Graph-header output strip (catalog #35, Trig Mod): a MUTE pill and an
+    """Graph-header output strip (catalog #35): a MUTE pill and an
     inline gain-dB LCD fused into a display's ~15px title row. Ports:
     ``mute_out`` (0/1) and ``gain_out`` (dB float) for the engine's output
     stage. All in one strip so the graph keeps every vertical pixel.
@@ -752,7 +751,7 @@ function msg_int(v) { msg_float(v); }
 
 def note_hz_readout(device, id_prefix, *, rect, accent, text_color=None,
                     fontsize=8.0):
-    """Live note+Hz dual readout (catalog #42, dnkFM "C#0 34.6 Hz"): feed a
+    """Live note+Hz dual readout (catalog #42, a note+Hz readout): feed a
     frequency into ``hz_in`` and the strip shows note-name · Hz; the
     ``hero_feed`` outlet carries a ready ``set <note>`` for a paired
     :func:`hero_readout`.
@@ -783,7 +782,7 @@ def note_hz_readout(device, id_prefix, *, rect, accent, text_color=None,
     )
 
 
-_PROGRESS_TICK_JS = """// progress_tick — phase dash under a display (T10, catalog #43, WaveLFO)
+_PROGRESS_TICK_JS = """// progress_tick — phase dash under a display (T10, catalog #43)
 mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
@@ -813,7 +812,7 @@ function paint() {
 
 
 def progress_tick(device, id_prefix, *, rect, accent):
-    """LFO-phase progress tick (catalog #43, WaveLFO): a tiny dash sweeping
+    """LFO-phase progress tick (catalog #43): a tiny dash sweeping
     a 3-4px strip under a display. Feed phase 0..1 floats into ``phase_in``
     at UI rate (e.g. ``phasor~ → snapshot~ 50``).
     """

@@ -5,7 +5,7 @@ DRAWS the current shape (a saw ramps, a square steps, S&H staircases, Lorenz
 loops) and CYCLES to the next on click. The automatable enum param lives in a
 parked live.menu the icon drives + reads, so automation/recall/MCP still work.
 
-Deconstructed from dnksaus_Rnd_Gen: per-lane indicator at the row start, no
+Deconstructed from a randomizer: per-lane indicator at the row start, no
 column header, self-documenting. Inlet 0 receives the current index (menu
 echo); outlet 0 emits the next index on click (into the parked menu).
 """

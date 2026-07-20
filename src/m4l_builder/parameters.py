@@ -85,7 +85,7 @@ class ParameterSpec:
     invisible: int | None = None
     # parameter_linknames: tie the box scripting name to the longname (1) —
     # REQUIRED inside stamped components so '#1'-substituted longnames stay
-    # coherent per instance (a modulation device's rack mechanism).
+    # coherent per instance (the stamped-rack mechanism).
     linknames: int | None = None
     bank: int | None = None
     position: int | None = None
@@ -96,7 +96,7 @@ class ParameterSpec:
     info: str | None = None             # parameter_info (hover-help body)
     units: str | None = None            # parameter_units printf fmt (with unitstyle=9 Custom)
     steps: int | None = None            # parameter_steps: quantize the range into N discrete steps
-    # parameter_modmode: Live 12 per-param Modulation mode (library: Clix v1.3
+    # parameter_modmode: Live 12 per-param Modulation mode (a device
     # ships 0/3/4 alongside linknames=1 — the data model behind Live 12's
     # native Mod mapping). Opt-in: None omits the key (byte-stable fleet).
     modmode: int | None = None

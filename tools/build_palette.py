@@ -2,7 +2,7 @@
 
 The kit IS the reusable library; a device is just a thin script that composes
 kit parts. This tool introspects the kit and emits a single browsable palette so
-you (and Claude) build NEW devices from proven parts instead of re-deriving
+you build NEW devices from proven parts instead of re-deriving
 cheap one-offs. Regenerate after adding engines/snippets:
 
     uv run python tools/build_palette.py

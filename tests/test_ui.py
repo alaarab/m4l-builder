@@ -1225,8 +1225,8 @@ class TestLiveText:
 
     def test_automation_labels_mirror_enum(self):
         # Live's display/automation labels for live.text come from the
-        # BOX-level automation/automationon attrs (library: a spectrum-EQ device/a channel strip/
-        # a granular device) — parameter_enum alone leaves "val1"/"val2" showing in
+        # BOX-level automation/automationon attrs (library: premium EQs/channel-strip
+        # devices) — parameter_enum alone leaves "val1"/"val2" showing in
         # Live's LOM display_value, automation lanes and MIDI map.
         result = live_text("lt-1", "bypass", [0, 0, 60, 20],
                             text_on="ACTIVE", text_off="BYPASS")
@@ -2194,7 +2194,7 @@ class TestTextedit:
         assert result["box"]["custom_attr"] == "hello"
 
     def test_library_attrs_set_when_provided(self):
-        # MEASURED a sequencer device attrs the prior stub omitted
+        # MEASURED library attrs the prior stub omitted
         box = textedit("te-1", [0, 0, 150, 25], text="0", keymode=1, tabmode=0,
                        border=0.0, rounded=0.0, textjustification=1)["box"]
         assert box["text"] == "0"
@@ -2224,7 +2224,7 @@ class TestTextedit:
 
 
 class TestLiveStep:
-    """Tests for live_step() — library-measured (a slice-sequencer device, 4 lanes)."""
+    """Tests for live_step() — library-measured (4 lanes)."""
 
     def test_returns_box_dict(self):
         result = live_step("ls-1", [0, 0, 300, 100])
@@ -2334,7 +2334,7 @@ class TestLiveStep:
 
 
 class TestLiveGrid:
-    """Tests for live_grid() — library-measured (12×12 and 32×32 grids)."""
+    """Tests for live_grid() — library-measured (12×12, 32×32)."""
 
     def test_returns_box_dict(self):
         result = live_grid("lg-1", [0, 0, 200, 100])

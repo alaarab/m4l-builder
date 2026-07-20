@@ -256,7 +256,7 @@ class TestDevice:
         assert self._height_codes(self._make(height=120)) == []
 
     def test_allow_tall_opts_out_of_height_warning(self):
-        # a faithful rebuild of a taller original (SEAR=190) suppresses the rule
+        # a faithful rebuild of a taller original (190px) suppresses the rule
         d = AudioEffect("Clone", width=280, height=190, allow_tall=True)
         assert self._height_codes(d) == []
 

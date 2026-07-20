@@ -2,11 +2,11 @@
 actual Live skin, live (including on a light/dark theme switch).
 
 THE #1 most-cited jewel from the library (13 of 15 devices use
-``live.colors``; a channel strip alone has 19 instances). Premium devices never
+``live.colors``; a premium channel strip alone has 19 instances). Premium devices never
 bake colors at build time — they read the user's Live theme at load and broadcast
 each color over a device-scoped ``---`` send bus, so every control tracks the skin.
 
-Verified wiring (traced from a channel strip, the real pattern — more nuanced
+Verified wiring (traced from a premium channel strip, the real pattern — more nuanced
 than a single route-dump): per color,
 
     live.thisdevice[0] (loadbang) ─┐

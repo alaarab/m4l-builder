@@ -1,4 +1,4 @@
-"""settings_bar — the dnksaus_Rnd_Gen LEFT sidebar opener (classic jsui).
+"""settings_bar — a randomizer's LEFT sidebar opener (classic jsui).
 
 A thin vertical bar that lives on the device's left edge and holds the
 collapsible-settings DROPDOWN affordance: a drawn accent triangle at the top
@@ -8,7 +8,7 @@ the automatable enum param lives in a parked ``live.text`` the bar drives + read
 (inlet 0 = current open state for display, outlet 0 = toggled state on click),
 so automation / recall / MCP still work.
 
-Deconstructed from dnksaus_Rnd_Gen's obj-74 (circular dropdown) + obj-76 (rotated
+Deconstructed from the randomizer's obj-74 (circular dropdown) + obj-76 (rotated
 "Settings" label) in its 19px left panel.
 """
 
@@ -23,7 +23,7 @@ __all__ = [
     "settings_bar_js",
 ]
 
-_TEMPLATE = r"""// settings_bar: left-edge dropdown opener + rotated label (Rnd_Gen idiom)
+_TEMPLATE = r"""// settings_bar: left-edge dropdown opener + rotated label (randomizer idiom)
 mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
@@ -39,7 +39,7 @@ function paint() {
     var h = mgraphics.size[1];
     // the drawn dropdown triangle near the top (always renders — no font glyph);
     // it points RIGHT in BOTH states (the column's visibility is the open/closed
-    // cue), matching the original Rnd_Gen dropdown glyph — open just brightens it
+    // cue), matching a compact dropdown glyph — open just brightens it
     var cx = w * 0.5;
     var ay = w * 0.5 + 3;
     var s = Math.max(3, w * 0.30);
@@ -49,7 +49,7 @@ function paint() {
     mgraphics.line_to(cx + s * 0.75, ay);
     mgraphics.close_path();
     mgraphics.fill();
-    // the rotated SETTINGS label (reads bottom -> top, like Rnd_Gen)
+    // the rotated SETTINGS label (reads bottom -> top)
     mgraphics.set_source_rgba(0.62, 0.64, 0.67, 0.85);
     mgraphics.select_font_face("Ableton Sans Medium");
     mgraphics.set_font_size(8);

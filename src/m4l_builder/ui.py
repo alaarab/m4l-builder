@@ -186,7 +186,7 @@ def dial(id: str, varname: str, rect: list, *,
     REAL parameter shows the value. Accent goes on ``activedialcolor`` — the FILLED value
     arc (min→value unipolar, center→value bipolar), the bright indicator — with a dim
     ``activefgdialcolor`` for the UNFILLED remainder track. This is the kit default and the
-    premium bright-fill / dark-track knob (a channel strip + Stock EQ use the SAME mapping).
+    premium bright-fill / dark-track knob (channel-strips + Stock EQ use the SAME mapping).
     Verified by the Dial Color Lab A/B at appearance 0 AND 3 (2026-06): there is NO needlemode
     "flip" — ``activedialcolor`` is the filled arc for BOTH polarities. Do NOT accent
     ``activefgdialcolor`` (the remainder): it dims the fill and brightens the empty track.
@@ -459,7 +459,7 @@ def menu(id: str, varname: str, rect: list, *, options: list,
     """Create a live.menu dropdown enum selector (automatable Enum param).
 
     live.menu has its OWN colour model — it does NOT share live.tab's (no synced doc
-    exists; 25 library menus are the ground truth, e.g. a sequencer device). The kit maps its
+    exists; 25 library menus are the ground truth). The kit maps its
     uniform colour args to live.menu's REAL attrs:
       * ``bgcolor``    -> ``bgcolor`` + ``activebgcolor`` (the menu BODY; active=1 = visible)
       * ``textcolor``  -> bare ``textcolor`` (live.menu shows the BARE attr; NO active twin)
@@ -766,8 +766,8 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
     # BOX-level ``automation`` (off state) / ``automationon`` (on state) attrs —
     # ``parameter_enum`` + ``parameter_mmax`` alone still leave live.text's
     # built-in "val1"/"val2" defaults showing in Live (LOM display_value,
-    # automation lanes, MIDI map). Library-verified: a spectrum-EQ device / a channel strip /
-    # a granular device mirror their enum labels into these two attrs on every
+    # automation lanes, MIDI map). Library-verified: premium EQs / channel-strip
+    # devices mirror their enum labels into these two attrs on every
     # custom-labelled live.text.
     auto_labels = (list(spec.enum) if getattr(spec, "enum", None)
                    and len(spec.enum) == 2 else [text_off, text_on])
@@ -832,7 +832,7 @@ def fpic(id: str, rect: list, *, pic: str = "", autofit: int = 1,
       (with ``autofit`` 1, scales to the box without distorting).
     - ``hidden`` [int]: the premium STATE-GRAPHIC pattern — stack N
       fpics (e.g. ``algo1.svg``…``algo8.svg`` + ``*Off.svg``), all ``hidden 1``, and
-      let the patch reveal the one matching the current state (a channel strip's
+      let the patch reveal the one matching the current state (a premium device's
       switchable algorithm diagrams). ``background`` 1 puts it on the bg layer.
     fpic has no color attrs (it's an image) — so it is NOT themed. **Use for** a
     logo, a textured/material backdrop, or switchable diagram graphics; for a drawn
@@ -903,7 +903,7 @@ def multislider(id: str, rect: list, *, size: int = 16, min_val: float = 0.0,
     ``setstyle`` (default 0): the bar/line/point draw style. ⚠️ The exact enum is
     UNVERIFIED — `multislider` is absent from the synced Max docs, all 5 library
     multisliders use the default (0), and the factory contents set no explicit `setstyle`;
-    a phren finding disputes the old "0=bar/1=line/2=point" labels (claiming 0=thin-line,
+    an earlier note disputes the old "0=bar/1=line/2=point" labels (claiming 0=thin-line,
     1=bars, …). So keep the default for the standard bar look and Live-VERIFY before
     relying on any non-default style. PREMIUM USAGE (measured: 4/5 library
     instances): multislider is used mostly as a NON-interactive multi-bar DISPLAY —
@@ -953,7 +953,7 @@ def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
     paints no opaque background) that renders as a stray empty rectangle around the
     control (Live-verified: the Parametric EQ "black box around the knobs"). ``v8ui``
     does not draw this, and ``add_custom_knob`` already uses v8ui to dodge it.
-    So we default ``border=0`` here (a reference device ships ``"border":0`` on its jsui); a
+    So we default ``border=0`` here (premium devices ship ``"border":0`` on their jsui); a
     device that wants a visible frame passes ``border=1`` explicitly (kwargs win).
     """
     box = {
@@ -1192,8 +1192,8 @@ def textedit(id: str, rect: list, *, fontname: str = "Ableton Sans Medium",
              patching_rect: list = None, **kwargs) -> dict:
     """Create a ``textedit`` editable text / numeric entry field.
 
-    NOT in the synced Max docs — observed (4 instances, a sequencer device /
-    a slice-sequencer device, used as small numeric entry fields). 1 inlet / 4 outlets;
+    NOT in the synced Max docs — observed (4 instances,
+    used as small numeric entry fields). 1 inlet / 4 outlets;
     **outlettype ``['', 'int', '', '']``** (the int is on outlet **1** — the prior
     stub's int-on-outlet-3 was WRONG). On Enter the typed text/number is reported.
     Measured attrs: ``text`` (initial / stored string, e.g. '0' / '127'), ``keymode``
@@ -1242,7 +1242,7 @@ def live_step(id: str, rect: list, *, mode: int = None,
     """Create a ``live.step`` multi-lane step sequencer.
 
     NOT in the synced Max docs — every attribute here is MEASURED from the real
-    library (4 instances, a slice-sequencer device's Mod/Pan/Direction/Slice lanes), not guessed.
+    library (4 instances, Mod/Pan/Direction/Slice lanes), not guessed.
     Structure: **1 inlet / 5 outlets** (pitch, velocity, duration, extra1, extra2 lane
     data). It is a **Blob parameter** (``parameter_enable=1`` + ``parameter_type=3``
     stores the WHOLE pattern as one saved/automatable list — same family as
@@ -1295,14 +1295,14 @@ def live_grid(id: str, rect: list, *, columns: int = 16, rows: int = 8,
     """Create a ``live.grid`` monome-style cell sequencer.
 
     NOT in the synced Max docs — every attribute is MEASURED from the real library
-    (2 instances: a 12×12 pitch map, a 32×32 sequencer), not
+    (2 instances: a 12×12 pitch-map grid, a 32×32 step sequencer), not
     guessed. Structure: **2 inlets / 6 outlets** (the prior stub's 1/4 was wrong). It
     is a **Blob parameter** (``parameter_enable=1`` + ``parameter_type=3`` saves the
     whole grid as one automatable list). ``rows`` / ``columns`` set the visible grid;
     ``maxrows`` / ``maxcolumns`` cap a resizable grid. ``direction`` picks the play
     direction mode; ``marker_horizontal`` / ``marker_vertical`` draw guide lines;
-    ``rounded`` rounds cells. Colors: ``stepcolor`` (the lit/active cell — a sequencer device
-    orange, a slice-sequencer device magenta), ``bgstepcolor`` / ``bgstepcolor2`` (the unlit-cell
+    ``rounded`` rounds cells. Colors: ``stepcolor`` (the lit/active cell — commonly
+    orange or magenta in the library), ``bgstepcolor`` / ``bgstepcolor2`` (the unlit-cell
     two-shade backdrop), ``bordercolor`` / ``bordercolor2``, ``hbgcolor`` (playhead-
     column highlight), ``directioncolor`` (the direction-arrow strip). Themed:
     ``stepcolor→accent``, ``bgstepcolor→section``, ``bordercolor→panel_border``,
@@ -1376,7 +1376,7 @@ def live_arrows(id: str, rect: list, *, arrowcolor: list = None,
     ``color`` (object color); ``textjustification`` aligns text. (The old
     ``arrowbgcolor`` kwarg was a non-existent attr — removed.) Supports a
     ``jspainterfile`` painter; ``parameter_enable`` opt-in. **Use for** a rotate / nudge
-    / step control (a slice-sequencer device uses it to rotate the cell sequence); for a numeric
+    / step control (seen in the library rotating a cell sequence); for a numeric
     value prefer ``live.numbox`` / ``live.dial``.
     """
     box = {
@@ -1840,8 +1840,8 @@ def function(id: str, rect: list, *, points: list = None, domain: float = None,
              patching_rect: list = None, **kwargs) -> dict:
     """Create a ``function`` — the native breakpoint / envelope / transfer-curve editor.
 
-    NOT in the synced Max docs — observed (20 instances: a reference device &
-    a synth device transfer curves). 1 inlet / **4 outlets** ``["float", "", "", "bang"]``
+    NOT in the synced Max docs — observed (20 instances: synth-voice
+    transfer curves). 1 inlet / **4 outlets** ``["float", "", "", "bang"]``
     (send an x value in → the y at that x comes out outlet 0; outlet 3 bangs on
     finish). In the library it is a **curve-DATA store** in the patching layer (no
     presentation, ``parameter_enable 0``) — you define a shape and the DSP reads it.

@@ -1,7 +1,7 @@
-"""Step-bar lane editor for jsui (dnksaus-catalog kit engines #7-#8).
+"""Step-bar lane editor for jsui (catalog kit engines #7-#8).
 
-The a gate device / Trig Rnd step lane, kit-native: N vertical bars in a dark
-plot (dnksaus ships this as a raw ``multislider`` -- a gate device's 8-slot rate
+A gate/random step lane, kit-native: N vertical bars in a dark
+plot (a boutique device ships this as a raw ``multislider`` -- a gate device's 8-slot rate
 lane), with the curve_editor's chrome idiom (same margins, dim grid, footer
 value row, drag readout) and the SIGNATURE step-editor gesture set:
 

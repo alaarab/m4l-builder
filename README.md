@@ -175,6 +175,31 @@ and **refuses** (rather than mis-evaluates) Delay/buffer/FFT kernels that need a
 live render. This is how the suite proves a compressor is transparent at ratio 1
 or a limiter never boosts — the "advertised-but-unwired" bug class — fully offline.
 
+### Validating against Ableton's standards
+
+`Device.check_guidelines()` checks a built device against the *statically
+decidable* subset of Ableton's published Max for Live device conventions
+(parameter naming, presentation geometry, forbidden objects, JavaScript style)
+— before it is ever loaded in Live:
+
+```python
+for issue in device.check_guidelines():
+    print(issue.severity, issue.code, issue.message)
+```
+
+…or over a folder of build scripts from the shell:
+
+```bash
+python -m m4l_builder.guidelines path/to/*/build.py
+```
+
+It flags **unknown / misspelled object names** — a typo like `cycl~` that would
+otherwise ship as a Max `newobj: no such object` load error, reported with a
+"did you mean `cycle~`?" suggestion — plus **duplicate parameter Long / Scripting
+Names**, auto-indexed default names (`Gain[1]`), fractional pixel rects, and
+forbidden `print`/`dac~`/`adc~`. It's **advisory** (reports, doesn't gate the
+build) and it's the pre-Live static complement to a live console audit.
+
 ### Engines (jsui visualizations)
 
 JavaScript generators for Max's jsui object. Each returns an ES5 string for mgraphics/Cairo rendering:
@@ -190,7 +215,7 @@ Dozens of generators are available: filter curves, EQ, envelopes, spectrum, wave
 
 ### Themes
 
-16 built-in color themes — `AMBER`, `COOL`, `FOREST`, `GRAPHITE`, `INDUSTRIAL`, `LIGHT`, `LOFI`, `MIDNIGHT`, `NEON`, `COBALT`, `SOLAR`, `NEBULA`, `SYNTHWAVE`, `MAGMA`, `VIOLET`, `WARM` (see the [catalog](docs/catalog.md) for the current list). Pass to the device constructor and all UI elements inherit colors automatically:
+16 built-in color themes — `AMBER`, `COBALT`, `COOL`, `FOREST`, `GRAPHITE`, `INDUSTRIAL`, `LIGHT`, `LOFI`, `MAGMA`, `MIDNIGHT`, `NEBULA`, `NEON`, `SOLAR`, `SYNTHWAVE`, `VIOLET`, `WARM` (see the [catalog](docs/catalog.md) for the current list). Pass to the device constructor and all UI elements inherit colors automatically:
 
 ```python
 from m4l_builder import AudioEffect, MIDNIGHT, WARM, COOL, LIGHT, FOREST, VIOLET, SOLAR

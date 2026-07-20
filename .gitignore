@@ -20,6 +20,12 @@ site/
 coverage.xml
 
 # large research staging (packs, extracted audio) — local only
-the reference notes
-the reference notes
-the reference notes
+research/amxd_library/_staging/
+research/amxd_library/_json/
+research/amxd_library/studies/
+
+# local AI-assistant tooling (not part of the library)
+.claude/
+AGENTS.md
+CLAUDE.md
+FINDINGS.md

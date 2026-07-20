@@ -1,4 +1,4 @@
-"""Delay tap-trail display (Timeless-style hero graph) + the TIDE.
+"""Delay tap-trail display (a premium-delay-style hero graph).
 
 Two lanes (L top, R bottom) on a time ruler. Taps are drawn at each
 feedback repeat with opacity decaying by the feedback amount and size

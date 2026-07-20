@@ -54,7 +54,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         self.device_type = device_type
         self.theme = theme
         # Opt out of the device-view height-ceiling lint (DEVICE_H). Set True only
-        # for a faithful rebuild of a taller original (e.g. SEAR=190),
+        # for a taller custom layout (e.g. 190px),
         # which reproduces the source's rects verbatim and accepts its clipping.
         self.allow_tall = allow_tall
         # Defined Latency (samples) reported to Live for plugin delay
@@ -116,6 +116,20 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         issues.extend(self._clipped_control_issues())
         issues.extend(layout_issues(self.boxes, self.width, self.height))
         return issues
+
+    def check_guidelines(self) -> list:
+        """Static Ableton production-standards report for this device (advisory).
+
+        Checks the built patcher against the decidable subset of Ableton's own
+        published Max for Live standards (unknown/misspelled object names,
+        duplicate parameter Long/Scripting Names, auto-indexed default names,
+        fractional pixel rects, forbidden print/dac~/adc~, non-local
+        send/receive). Returns :class:`ValidationIssue`s; never raises, never
+        gates the build. The pre-Live complement to the live console audit. See
+        :mod:`m4l_builder.guidelines`.
+        """
+        from .guidelines import check_guidelines
+        return check_guidelines(self)
 
     def _clipped_control_issues(self) -> list:
         """WARNING for each functional control partly off a device edge.
@@ -425,7 +439,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         **box_kwargs,
     ) -> BoxRef:
         """Turn-key EMBEDDED ``gen~`` core: the gen patcher is serialized INLINE
-        in the ``gen~`` box (the granular reverb structure) instead of shipped as
+        in the ``gen~`` box (an embedded-structure pattern) instead of shipped as
         an external ``.gendsp`` support file.
 
         This is the REQUIRED path for gen source that defines functions
@@ -487,8 +501,8 @@ class Device(CompositeWidgetsMixin, GraphContainer):
 
         Sets ``jspainterfile`` on the box ``box_id`` (a ``live.dial`` / ``live.numbox``
         / ``toggle`` …) so the control keeps full native behaviour + parameter
-        storage while the ``.js`` paints it — the library pattern (reference devices/
-        a channel strip). When ``painter_js`` is given it is bundled alongside the device
+        storage while the ``.js`` paints it — the library pattern (seen across premium
+        devices). When ``painter_js`` is given it is bundled alongside the device
         as a TEXT asset under ``painter_filename`` (via ``register_asset``); pass a
         painter from :mod:`m4l_builder.engines.painters` (e.g.
         :func:`lcd_panel_painter_js`). Returns ``painter_filename``.

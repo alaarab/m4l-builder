@@ -390,7 +390,7 @@ class TestEnvelopeEditorEngine:
         assert "var release_ms = 750.0;" in js
 
     def test_value_row_present(self):
-        # the dnksaus value row beneath the plot: A / D / S / R readout cells
+        # the value row beneath the plot: A / D / S / R readout cells
         js = envelope_editor_js()
         assert "function draw_value_row()" in js
         assert '["A", "D", "S", "R"]' in js
@@ -462,7 +462,7 @@ class TestCurveEditorEngine:
             curve_editor_js(max_points=65)
 
     def test_value_row_and_readout_present(self):
-        # the Multi Shaper footer ("N pt" / "Curve %" / "Grid" / "Snap") plus
+        # the curve-editor footer ("N pt" / "Curve %" / "Grid" / "Snap") plus
         # the drag telemetry and the loop-glyph hook, all wired into paint().
         js = curve_editor_js()
         assert "function draw_value_row()" in js
@@ -931,7 +931,7 @@ class TestEqCurveEngine:
         assert "function delete_band_at(idx)" in js
         assert "var DOUBLE_CLICK_MS = 320;" in js
         assert "var suppress_next_ondblclick_delete = 0;" in js
-        # EQ semantics (it16): double-click RESETS the band; delete
+        # premium-EQ semantics (it16): double-click RESETS the band; delete
         # stays on the context menu (behavioral coverage in
         # tests/test_js_behavior.py).
         assert "function reset_band_at(idx)" in js
@@ -939,7 +939,7 @@ class TestEqCurveEngine:
         assert "delete_band_at(clicked_band);" not in js
         assert "suppress_next_ondblclick_delete = 1;" in js
         assert "if (dynamic_hit >= 0 || hit >= 0)" in js
-        # EQ create gesture (user request): a single press on the empty graph
+        # premium-EQ create gesture (user request): a single press on the empty graph
         # creates a band whose TYPE depends on the click position; an empty
         # double-click no longer creates.
         assert "function band_type_for_x(x)" in js
@@ -1016,7 +1016,7 @@ class TestEqCurveEngine:
     def test_draws_continuous_analyzer_fill(self):
         js = eq_curve_js()
         assert "analyzer_display[i] = analyzer_display[i] * 0.55 + incoming * 0.45;" in js
-        # premium-style spectrum (display.js the default display): the
+        # A premium spectrum-EQ look (display.js the default display): the
         # max-per-column polyline ROUNDED with path_roundcorners (radius 4),
         # not Catmull-Rom grass; a light fill anchored just below the floor; a thin
         # 1.1px crisp envelope.

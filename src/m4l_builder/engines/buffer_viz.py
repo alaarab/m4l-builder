@@ -1,7 +1,6 @@
 """buffer_viz — the jsui read side of the D4 gen->named-buffer->jsui viz bus.
 
-The library keystone for live displays (a granular device's grain cloud, a modulation device's
-polar rings, a granular reverb's state ring): the gen~ engine pokes per-frame
+The library keystone for live displays: the gen~ engine pokes per-frame
 screen state into ``---``-scoped ``buffer~`` objects (see
 ``gen_stateful.viz_declares`` / ``viz_poke_block``), and THIS v8ui peeks the
 same buffers on a self-owned poll ``Task`` and redraws — zero patchcord
@@ -127,9 +126,9 @@ def multi_lane_thumbnail_js(*, key: str, samps: int, lanes: int,
                             colors: list, poll_ms: int = 50,
                             bg_color: str = DEFAULT_BG,
                             line_width: float = 1.2) -> str:
-    """Multi-curve thumbnail (dnksaus Multi Shaper, catalog #20): ALL lanes'
-    curves overlaid in their lane colors in one small square — the
-    "small multiples" summary of a multi-lane device.
+    """Multi-curve thumbnail: ALL lanes' curves overlaid in their lane colors
+    in one small square — the "small multiples" summary of a multi-lane
+    device.
 
     Reads one ``(key, samps, lanes)`` viz buffer (values normalized 0..1 per
     sample) and polylines every channel. ``colors``: one RGBA list per lane
@@ -178,9 +177,9 @@ def waveform_layers_js(*, key: str, samps: int, audio_ch: int = 0,
                        playhead: bool = False, ruler: bool = False,
                        caption: bool = False) -> str:
     """Layered buffer waveform (catalog #44 + #45 + #46): grey audio
-    history with an optional APPLIED-GAIN polyline over it (Clix pink-over-
-    grey — show what the processor DID), an optional live playhead cursor
-    (``set_playhead 0..1`` messages, a device), and an optional
+    history with an optional APPLIED-GAIN polyline over it (a pink-over-grey
+    overlay — show what the processor DID), an optional live playhead cursor
+    (``set_playhead 0..1`` messages), and an optional
     sample-count ruler + ``set_caption <name…>`` filename line (Random
     Sample Picker).
 

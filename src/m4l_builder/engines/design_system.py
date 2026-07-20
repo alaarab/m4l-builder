@@ -66,7 +66,7 @@ function ds_set_cursor(c) {
     try { setcursor(c); } catch (e) {}
 }
 
-// Soft radial-gradient halo behind a node (EQ "lit node" look). Bright color
+// Soft radial-gradient halo behind a node (a premium-EQ "lit node" look). Bright color
 // at the center fading to transparent at the rim — one pattern fill.
 function ds_node_glow(x, y, clr, radius, inner_alpha) {
     var g = mgraphics.pattern_create_radial(x, y, 0.0, x, y, radius);

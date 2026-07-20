@@ -6,10 +6,10 @@ from .stages import stage_result
 def two_panel_strip(device, id_prefix, *, main_width=174, side_width=56, height=167,
                     gap=2, bgcolor=None, side_bgcolor=None, border=1,
                     bordercolor=None, rounded=0):
-    """Two-panel channel-strip SHELL — a channel strip grammar: a wide MAIN
+    """Two-panel channel-strip SHELL — a premium channel-strip grammar: a wide MAIN
     panel for the primary controls + a narrow SIDE column for toggles/meters.
 
-    Geometry is grounded in a channel strip: main panel ``[0,0,174,167]`` + side
+    Geometry is grounded in measured premium-device proportions: main panel ``[0,0,174,167]`` + side
     panel ``[176,0,55,167]`` (gap 2). The device width should be
     ``main_width + gap + side_width`` (231 by default). Fill the panels with
     :func:`dial_label_cell` cells, a DSP module via
@@ -53,7 +53,7 @@ def two_panel_strip(device, id_prefix, *, main_width=174, side_width=56, height=
 def dial_label_cell(device, id_prefix, param_name, rect, *, label=None,
                     min_val=0.0, max_val=100.0, initial=0.0, unitstyle=1,
                     label_h=14, gap=1, **dial_kwargs):
-    """A dial with a caption directly below it — the channel strip control cell.
+    """A dial with a caption directly below it — a premium channel-strip control cell.
 
     ``rect`` is the DIAL's ``[x, y, w, h]``; a ``live.comment`` label is placed just
     below (``label`` text, defaulting to ``param_name``). The dial shows its live
@@ -92,10 +92,10 @@ def dial_value_cell(device, id_prefix, param_name, dial_rect, *, label=None,
                     label_h=10, label_gap=1, label_fontsize=7.5,
                     label_fontname="Ableton Sans Medium", appearance=0,
                     **dial_kwargs):
-    """The channel strip / a spectrum-EQ device / a reference device atomic control cell: an uppercase caption
+    """The premium channel-strip atomic control cell: an uppercase caption
     ABOVE a native ``live.dial`` whose OWN persistent value reads out BELOW the knob.
 
-    Grounded in a channel strip: its dials are 41x35, ``showname=0``, with an accent
+    Grounded in measured premium-device proportions: its dials are 41x35, ``showname=0``, with an accent
     ring (``activedialcolor``) + grey value arc (``activefgdialcolor``) and rely on
     the native value display (``shownumber=1`` — the Max ``live.dial`` reference:
     "shownumber toggles the display of the parameter value"). NO ``paint_control``:
@@ -104,7 +104,7 @@ def dial_value_cell(device, id_prefix, param_name, dial_rect, *, label=None,
     caption is placed just above it.
 
     ``accent`` -> ``activedialcolor`` (the lit ring, the device accent); ``fill`` ->
-    ``activefgdialcolor`` (the value arc; defaults to a neutral grey like a channel strip).
+    ``activefgdialcolor`` (the value arc; defaults to a neutral grey like channel-strips).
     Extra ``dial_kwargs`` pass through to ``device.add_dial`` (``parameter_exponent``,
     ``annotation_name`` …). Returns a StageResult with ``dial``/``label`` ids, the
     overall cell ``rect`` and the param.
@@ -302,7 +302,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
                              uplink_pname=False, uplink_dname=False,
                              ratio_lcd=False):
     """The E2/E3 mapping slot — ONE ``#1``-parameterized Subpatcher to stamp N
-    times via :meth:`Device.add_component_rack` (a modulation device's slot, F2+E2).
+    times via :meth:`Device.add_component_rack` (the measured slot pattern, F2+E2).
 
     Presentation is the STOCK-MODULATOR ROW (Live 12 LFO / Envelope Follower:
     the whole mapping UI is one ~15px strip — Map button, target chip, inline
@@ -321,7 +321,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
     I/O (``#1`` = instance number, standalone tokens only — Live-proven:
     ``#1`` EMBEDDED mid-symbol like ``depth_#1``/``msig_r#1`` stays LITERAL).
     Everything crosses the bpatcher boundary by inlet/outlet, the
-    measured discipline (a modulation device's slot feeds its sinks from inlet
+    measured discipline (this pattern's slot feeds its sinks from inlet
     boxes and talks to the parent through outlets). Inlets by x-position:
       inlet 0: mapper messages (``settarget``/``setid``/``unmap``/``map``,
                and the parent's ``announce N`` fan-back for exclusivity);
@@ -338,13 +338,13 @@ def modulator_slot_component(device, *, accent, text_color=None,
         at the row start (each stamped lane picks its OWN source) plus a
         ``source v`` key on the ctl uplink bus. Row becomes
         ``SRC | MAP | target | Depth% | Min% | Max% | BI`` (width ~300).
-      ``reveal``: the Rnd_Gen page idiom — the slot listens for ``lanes N`` on
+      ``reveal``: the reveal page idiom — the slot listens for ``lanes N`` on
         inlet 0 and HIDES ITSELF (message ``hidden $1`` to its own
         ``thispatcher``, which targets the bpatcher box in the parent) when
         ``N < #1``. Fan ``lanes <count>`` into every slot's inlet 0 alongside
         ``announce`` and a Lanes param + "+" button give the stock-LFO
         progressive reveal, all inline. (Deconstructed from
-        dnksaus_Rnd_Gen_v3.0: 8 same-rect pages hidden/shown exactly this way.)
+        a randomizer: 8 same-rect pages hidden/shown exactly this way.)
 
     Registers the mapper source as a device js asset (content-addressed).
     Returns ``(subpatcher, ids)``.
@@ -367,11 +367,11 @@ def modulator_slot_component(device, *, accent, text_color=None,
     device.register_asset(fname, js_code, asset_type="TEXT", category="js")
 
     sub = Subpatcher("modslot")
-    # ---- UI: ONE tight stock-modulator row (Rnd_Gen density, no headers) ----
+    # ---- UI: ONE tight stock-modulator row (compact density, no headers) ----
     # When a source_enum is given the lane leads with a clickable SHAPE ICON
     # (replaces the 52px text dropdown AND the column header — the parked menu
     # stays the automatable param). Row geometry ported from
-    # dnksaus_Rnd_Gen: 15-16px controls, ~222px total, self-documenting.
+    # the randomizer: 15-16px controls, ~222px total, self-documenting.
     icon = bool(source_enum and source_glyphs)
     if source_enum:
         from .ui import menu as _live_menu
@@ -467,7 +467,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
                                 parameter_type=2, initial=0,
                                 initial_enable=True, linknames=1)))
     # ---- optional Remote/Mod switch + "+" add chip (catalog #15/#16) --------
-    # dnksaus/Live-12 grammar: orange = Remote (live.remote~ takeover, user
+    # library/Live-12 grammar: orange = Remote (live.remote~ takeover, user
     # loses the dial), teal = Mod (live.modulate~ grey-ring, additive around
     # the dial). The chip drives the retarget sink's mode inlet, which
     # hot-swaps the stored id between sinks (measured re-emit).
@@ -558,7 +558,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
     sink_boxes, sink_lines = retargetable_param_sink(
         "slot_sink", normalized=normalized)
     sub.add_dsp(sink_boxes, sink_lines)
-    # signal delivery is by bpatcher INLET (measured: a modulation device's
+    # signal delivery is by bpatcher INLET (measured: the
     # mapping slot feeds live.remote~/live.modulate~ from inlet boxes, never
     # send~/receive~ across the bpatcher boundary) — inlet order is by
     # x-position: 0 = mapper messages, 1 = remote signal, 2 = modulate signal
@@ -743,7 +743,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
         sub.add_line("slot_source", 0, "slot_up_src", 0)
         sub.add_line("slot_up_src", 0, "slot_out", 0)
     if reveal:
-        # Rnd_Gen page idiom: "lanes N" on inlet 0 -> hide self when N < #1.
+        # reveal page idiom: "lanes N" on inlet 0 -> hide self when N < #1.
         # thispatcher inside a bpatcher addresses the BPATCHER BOX in the
         # parent, so "hidden $1" hides this stamped lane in presentation.
         sub.add_newobj("slot_lanes_route", "route lanes", numinlets=1,
@@ -799,13 +799,13 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
                      bg_id="surf_bg", content_top=6, size_row=None,
                      shift_main=False):
     """A LEFT collapsible SETTINGS COLUMN behind a drawn ▶ dropdown in a thin
-    left bar — the dnksaus_Rnd_Gen space-saver, FAITHFULLY: the opener sits in a
+    left bar — the randomizer's space-saver, FAITHFULLY: the opener sits in a
     thin bar on the LEFT edge, the settings menu slides out on the LEFT, and the
     main content (hero + mapping grid) shifts RIGHT to make room while the device
     widens (``setwidth``).
 
     A left ``setwidth`` reveal is impossible (Live only grows the RIGHT edge), so
-    — exactly like Rnd_Gen — the column appears by REFLOW: every pre-existing
+    — the column appears by REFLOW: every pre-existing
     on-canvas box is repositioned ``+panel_width`` when open, the settings column
     slides in from its parked slot, and the full-bleed background resizes. One
     automatable ``[Closed, Open]`` enum param (a parked ``live.text`` the drawn
@@ -816,7 +816,7 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
     ``controls`` is the settings content, built BY the recipe so it can reflow it,
     laid out as a SINGLE COLUMN of value rows — LABEL on the left, its live value
     (a numbox by default, or a small ``kind:'dial'`` knob) on the right, the
-    Rnd_Gen drawer idiom (a drawer shows + tweaks config, so the value reads
+    a drawer idiom (a drawer shows + tweaks config, so the value reads
     better than a knob). Keep it to a few rows so they stay roomy. Each control is
     a dict:
     ``{"id", "name", "min", "max", "init", "unit", "kind"}`` where ``kind`` is
@@ -1104,7 +1104,7 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
 
 
 def delta_listen(device, id_prefix, *, button_rect=None, x=30, y=30):
-    """Δ (delta) audition — hear ONLY wet-minus-dry (dnksaus Hologram's "Delta").
+    """Δ (delta) audition — hear ONLY wet-minus-dry (a delay device's "Delta").
 
     The classic saturation/EQ QA tool: what is the processor actually adding?
     Wire the processed signal into ``wet_in_l/r`` and the unprocessed signal into
@@ -1149,7 +1149,7 @@ def delta_listen(device, id_prefix, *, button_rect=None, x=30, y=30):
 
 def latency_readout(device, id_prefix, latency_samples, *, rect,
                     fontsize=7.5, ignoreclick=1):
-    """On-face "Latency: X ms" readout (dnksaus Hologram) — surface PDC honestly.
+    """On-face "Latency: X ms" readout (a delay device) — surface PDC honestly.
 
     ``latency_samples`` is the same fixed sample count the builder reported via
     ``device.latency``; the displayed ms tracks the LIVE samplerate through
@@ -1276,8 +1276,8 @@ def report_latency(device, id_prefix, *, samples=None, ms=None,
 
 def mode_stack(device, id_prefix, *, rect, modes, param_name="Mode",
                tab_rect=None):
-    """Generator MODE-STACK container (dnksaus-catalog kit item #9 — the
-    Trig Mod / WaveLFO architecture): a narrow VERTICAL ``live.tab`` column
+    """Generator MODE-STACK container (catalog kit item #9 — the
+    a modulation-lane architecture): a narrow VERTICAL ``live.tab`` column
     whose automatable enum param swaps which of N pre-built editor stacks is
     visible, all sharing the SAME content rect.
 
@@ -1292,7 +1292,7 @@ def mode_stack(device, id_prefix, *, rect, modes, param_name="Mode",
     (scripting name != param name, so automation is untouched — the
     settings_sidebar-proven rewrite).
 
-    **Wiring — the dnksaus viewhide dataflow on the kit's Live-proven
+    **Wiring — the viewhide dataflow on the kit's Live-proven
     scripting bus:** their ``viewhide k`` abstraction is ``r ---view ->
     != k -> prepend hidden -> control box`` (Live_Stretch pages its controls
     through box-inlet ``hidden 0/1`` messages). A jsui's inlet 0 is a JS
@@ -1421,7 +1421,7 @@ def mode_stack(device, id_prefix, *, rect, modes, param_name="Mode",
 def randomize_matrix(device, id_prefix, *, rect, targets, columns=4,
                      chip_h=15, gap=2, labels=None, seed=True,
                      variation=False):
-    """Per-param RANDOMIZE page (dnksaus a gate device) — catalog #11 + #12.
+    """Per-param RANDOMIZE page (a gate device) — catalog #11 + #12.
 
     Every entry in ``targets`` (box ids/refs of NATIVE param controls already
     on the device) gets an enable chip; the RND button rolls a fresh random
@@ -1436,7 +1436,7 @@ def randomize_matrix(device, id_prefix, *, rect, targets, columns=4,
     ``random <n_values>`` (+ offset); continuous params get
     ``random 10001 -> scale 0 10000 <min> <max>`` (uniform across the range).
     ``random`` objects are seeded at load from ``cpuclock`` (+k per lane so
-    lanes decorrelate) — the Max-8-safe equivalent of dnksaus' v8
+    lanes decorrelate) — the Max-8-safe equivalent of a v8
     ``Date.now()`` seed idiom; without it every load replays one sequence.
     No ``---disarm`` guard is used: unlike a
     set-level tempo/scale roll, device-param randomize is a plain undoable

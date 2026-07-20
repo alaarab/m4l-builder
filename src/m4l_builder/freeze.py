@@ -11,7 +11,7 @@ the way Max's "Freeze Device" button does. The patcher JSON is left byte-for-byt
 identical (still ``"filename" : "foo.js"``, ``dependency_cache`` unchanged); the
 device just gains a binary blob that Max consults first when resolving a
 filename. The format was reverse-engineered against, and conformance-tested with,
-Ableton's own ``maxdevtools`` reference parser.
+an independent reference parser for the ``.amxd`` container.
 
 Binary layout (all multi-byte values big-endian unless noted)::
 

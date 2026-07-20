@@ -171,7 +171,7 @@ var ANALYZER_MIN_DB = -78.0;
 // Headroom above 0 dBFS so a loud signal sits ~80% up as a backdrop (filled-style),
 // not pegged at the top of the plot. Matches the Parametric EQ analyzer.
 var ANALYZER_MAX_DB = 12.0;
-// Spectrum Grab (EQ): a plain press over an analyzer peak louder than this
+// Spectrum Grab (premium-EQ): a plain press over an analyzer peak louder than this
 // spawns a band right at that frequency and starts dragging it. The floor sits
 // near ANALYZER_MIN_DB so this cleanly distinguishes a real resonance.
 var SPECTRUM_GRAB_DB = -48.0;
@@ -230,7 +230,7 @@ var hover_in_plot = 0;
 var dragging = 0;
 var drag_mode = 0;
 // EQ Sketch (draw-to-EQ): with sketch_mode on, a drag records a freehand target
-// curve; on release the prominent peaks/dips become bell bands (EQ "draw").
+// curve; on release the prominent peaks/dips become bell bands (a premium-EQ "draw" gesture).
 var sketch_mode = 0;
 var sketching = 0;
 var sketch_x = [];
@@ -894,7 +894,7 @@ function draw_band_curves() {
         points = band_curve_points[i];
         if (!points || points.length < 2) continue;
 
-        // EQ-style colored fill for gain bands (peak/shelf): tints each
+        // premium-EQ-style colored fill for gain bands (peak/shelf): tints each
         // band's contribution its own color so the EQ reads at a glance and
         // stays distinct from the analyzer behind. Cuts/notch keep just the
         // line (filling a full rolloff region reads as noise).
@@ -902,7 +902,7 @@ function draw_band_curves() {
             fill_a = selected_band === i ? 0.22 : 0.12;
             // it178: vertical gradient gives the lobe depth — brightest at the
             // band's peak deviation, fading to near-transparent at the 0 dB waist
-            // (EQ "lit lobe"); mirrors eq_curve.py.
+            // (a premium-EQ "lit lobe"); mirrors eq_curve.py.
             var bptop = plot_top(), bpbot = plot_bottom();
             var bfz = (zero_y - bptop) / (bpbot - bptop);
             if (bfz < 0.04) bfz = 0.04; else if (bfz > 0.96) bfz = 0.96;
@@ -939,7 +939,7 @@ function draw_composite_curve() {
     var points = composite_curve_points;
     if (!points || points.length < 2) return;
 
-    // it178: premium gradient fill (EQ "lit curve") — brightest along the
+    // it178: premium gradient fill (a premium-EQ "lit curve") — brightest along the
     // curve's deviation from flat, fading to near-transparent at the 0 dB waist.
     // One vertical pattern anchored at zero_y so both boost and cut lobes glow at
     // the curve and fade toward the axis; matches the suite's gradient language
@@ -1375,7 +1375,7 @@ function format_freq(freq) {
     return Math.round(freq) + " Hz";
 }
 
-// Nearest musical note for a frequency (EQ style: identify a band by pitch).
+// Nearest musical note for a frequency (premium-EQ style: identify a band by pitch).
 var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function note_name(freq) {
     if (freq <= 0.0) return "";
@@ -2026,7 +2026,7 @@ function analyzer_db_at_x(x) {
     return analyzer_display[bin];
 }
 
-// SPECTRUM GRAB (EQ parity with the Parametric EQ): return the frequency of a
+// SPECTRUM GRAB (premium-EQ parity with the Parametric EQ): return the frequency of a
 // prominent analyzer peak near plot-x, or -1 when there's no clear resonance to
 // grab — so a band CREATED near a bump snaps exactly onto it (you click the
 // resonance, the band lands on it), while placement on a flat region stays exact.
@@ -2176,7 +2176,7 @@ function handle_press(x, y, but, cmd, shift, opt, ctrl, pointerevent) {
     }
 
     // it174: opt/alt-click on EMPTY graph space captures the live analyzer as a
-    // static A/B reference (or clears it) — a EQ-style compare. A node opt-click
+    // static A/B reference (or clears it) — a premium-EQ-style compare. A node opt-click
     // toggles that band (above); this only fires off a node, inside the plot.
     if (opt && point_in_plot(x, y)) {
         toggle_analyzer_snapshot();
@@ -2352,7 +2352,7 @@ function clear_hover_state() {
     }
 }
 
-// EQ-style hover crosshair (mirrors eq_curve): faint guides from the
+// premium-EQ-style hover crosshair (mirrors eq_curve): faint guides from the
 // cursor with the exact frequency in the bottom gutter + gain in the left.
 function draw_hover_crosshair() {
     if (!hover_in_plot) return;

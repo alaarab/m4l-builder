@@ -59,7 +59,7 @@ def spectrum_analyzer_js(*,
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
     gradient_js = "true" if gradient else "false"
-    # dual_layer (catalog #50, Hologram grey-vs-orange / Para EQ pre-post):
+    # dual_layer (catalog #50, grey-vs-orange / Para EQ pre-post):
     # a `ref <dB list>` message stores the INPUT spectrum, drawn as a filled
     # silhouette UNDER the main layer. Gated so existing devices' generated
     # js stays byte-identical when off.

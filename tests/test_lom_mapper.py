@@ -161,7 +161,7 @@ def test_modulator_header_row_aligns_to_columns():
 
 
 def test_parameter_modmode_serializes():
-    """Live 12 Mod data model (Clix library): parameter_modmode emits only
+    """Live 12 Mod data model: parameter_modmode emits only
     when set — the fleet stays byte-stable by default."""
     from m4l_builder.parameters import ParameterSpec
     spec = ParameterSpec(name="X", minimum=0.0, maximum=1.0, modmode=3,

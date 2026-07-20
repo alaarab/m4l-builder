@@ -3,7 +3,7 @@
 Ground truth (parsed presentation_rect from the unencrypted official devices; the
 flagship ones like LFO/Shaper are DRM-encrypted and were not touched). Use these as the
 DEFAULT sizes for native ``live.*`` controls so devices read native-grade + dense
-(Ableton style) instead of oversized. See ``docs/ui_inputs_reference.md``.
+(Ableton / premium-dense style) instead of oversized. See ``docs/ui_inputs_reference.md``.
 
     from m4l_builder import native_sizes as ns
     device.add_dial("amt", "Amount", [x, y, *ns.DIAL], ...)
@@ -24,11 +24,11 @@ TAB_H = 16               # live.tab row height (16-18)
 TAB_SEG_W = 28           # approx per-segment width → 3 segs ≈ 84
 VSLIDER = (18, 110)      # vertical fader (18 x ~101-120)
 HSLIDER = (64, 15)       # horizontal level slider
-# dnksaus Abl.Map mapping-row grammar (library-measured, Rnd_Gen v3.0:
+# a mapping-row grammar (library-measured:
 # 9 rows of 268x16 at 16px pitch = 72 destinations across 8 pages in a
 # 169px face). Use for pixel-faithful mapping tables; the modulator
 # component's dynamic row_h remains the default.
-MAP_ROW = (268, 16)      # one Abl.Map row (w, h)
+MAP_ROW = (268, 16)      # one mapping row (w, h)
 MAP_ROW_PITCH = 16       # row-to-row y pitch (rows touch)
 
 # Layout grid (measured).
@@ -53,20 +53,19 @@ TAB_BAR_H = 20            # full-width mode-bar height (the ~175x20 selector, 14
 TEXT_ICON = (15, 15)      # square glyph/icon live.text (17) — the LED/icon-toggle cell
 TEXT_SPLIT = (24, 15)     # short/split label live.text (10)
 LED_DOT = (10, 10)        # tiny status dot
-ROW_PITCH_TIGHT = 17      # measured tight row spacing (AS-suite dense grids)
+ROW_PITCH_TIGHT = 17      # measured tight row spacing (dense premium-device grids)
 LABEL_FONTSIZE_PRIMARY = 9.5  # the premium label size; LABEL_FONTSIZE 7.0 = _TINY
 
-# Remaining measured premium tiers (library synthesis C4 — sizes cited per device
-# in the reference notes a spectrum-EQ device NUMBOX_LCD, a noise-LFO device NUMBOX_HERO 72x23,
-# a spectrum-EQ device meterGainSlider 35x163, a channel strip labelled dial).
+# Remaining measured premium tiers.
 NUMBOX_LCD = (40, 17)     # appearance=4 LCD readout (the premium numbox)
 NUMBOX_HERO = (72, 23)    # big touched-value hero readout (fontsize ~18)
-METER_FADER = (35, 163)   # full-height meter+fader lane (a spectrum-EQ device, x3)
+METER_FADER = (35, 163)   # full-height meter+fader lane (seen in the library, x3)
 DIAL_LABELLED = (44, 65)  # dial with native name+number shown (showname/shownumber 1)
 
 # ── Surface cell grammar ─────────────────────────────────────────────────────
 # The vocabulary the Surface layout engine (m4l_builder.surface) composes with.
-# A VALUE CELL is the library atomic control (a channel strip / a reference device / a synth device):
+# A VALUE CELL is the library atomic control (seen across premium channel-strip
+# and synth devices):
 # uppercase caption ABOVE a bare DIAL_COMPACT dial whose native shownumber=1
 # value reads out inside the dial rect (recipes.dial_value_cell). Persistent
 # values are the fleet standard — valuepopup hover was the value-less regression.
@@ -98,7 +97,7 @@ def knob_row(x0, y, n, *, pitch=KNOB_PITCH, size=DIAL_COMPACT):
     Defaults to ``DIAL_COMPACT`` (41x35) — THE premium library workhorse — to match
     ``knob_row_fit`` and the documented preference. (The old ``DIAL`` (44,47) default
     was an un-grounded guess; ``KNOB_PITCH`` 48 gives a library-reasonable ~7px gap on
-    a 41-wide knob — a channel strip's 41-wide dials sit at pitch ~51.)
+    a 41-wide knob — premium devices' 41-wide dials sit at pitch ~51.)
     """
     w, h = size
     return [[x0 + i * pitch, y, w, h] for i in range(n)]
@@ -134,8 +133,8 @@ def knob_column(x, y0, n, *, height=DENSE_COL_H, knob_w=40, label_h=KNOB_LABEL_H
     (``valuepopup`` hover), which the fleet standard now forbids (persistent
     values, max 3 rows — see ``MAX_VALUE_ROWS``). Kept for the rebuild studies.
 
-    ``n`` dense knob CELLS stacked vertically to fill ``height`` (a spectrum-EQ device/Pressure
-    look). Returns a list of ``(label_rect, dial_rect)`` tuples — caption rect above,
+    ``n`` dense knob CELLS stacked vertically to fill ``height`` (a premium-device /
+    Pressure look). Returns a list of ``(label_rect, dial_rect)`` tuples — caption rect above,
     knob rect below — evenly spaced.
 
     ⚠️ **In a 168px device a knob COLUMN fits 4 ONLY without a persistent value.** Each

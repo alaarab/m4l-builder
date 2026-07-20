@@ -8,9 +8,9 @@ from m4l_builder.theme import (
     LIGHT,
     LOFI,
     MIDNIGHT,
+    NEBULA,
     PALETTES,
     SOLAR,
-    NEBULA,
     SYNTHWAVE,
     VIOLET,
     WARM,
@@ -605,7 +605,7 @@ class TestThemePresetsWave2:
 
 
 class TestDerivePalette:
-    """B2: HSL accent-pair derivation; B3: violet+cyan two-accent preset."""
+    """B2: HSL accent-pair derivation; B3: a violet+cyan two-accent preset."""
 
     def test_complementary_rotates_accent_180(self):
         # complementary accent2 = the hue-opposite of the accent

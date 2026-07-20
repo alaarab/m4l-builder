@@ -1,1 +1,0 @@
-~/.phren/global/skills/swarm.md

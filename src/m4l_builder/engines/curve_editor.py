@@ -1,10 +1,10 @@
-"""General breakpoint curve editor for jsui (dnksaus-catalog kit engines #2-#6).
+"""General breakpoint curve editor for jsui (catalog kit engines #2-#6).
 
-The Multi Shaper core widget: N draggable breakpoints on a dark plot with an
+A breakpoint curve editor: N draggable breakpoints on a dark plot with an
 accent curve, a dim N-division grid, square nodes, a value row beneath the plot
 ("5 pt / Curve 40% / Grid 4 / Snap"), a live "X 59 Y 60" cursor readout while
-dragging, and a loop-glyph rendering hook. Library grounding: dnksaus builds its
-curves by rebuilding a native ``[function]`` object from SCALAR Live params
+dragging, and a loop-glyph rendering hook. Library grounding: a boutique device
+builds its curves by rebuilding a native ``[function]`` object from SCALAR Live params
 (FunctionHandler.maxpat: indexed point messages like ``1 <x> <y> <curve>``,
 mid-x clamped 1..126 so ``[function]`` never renumbers its points) —
 this engine is the kit-native generalization: our own jsui editor with the SAME
@@ -134,7 +134,7 @@ var grid_n  = $init_grid;      // grid divisions (drawn always, snapped when on)
 var snap_on = $init_snap;
 var loop_on = $init_loop;      // loop-glyph rendering hook (visual only)
 
-// dnksaus FunctionHandler rule, generalized: a point must never cross its
+// a FunctionHandler rule, generalized: a point must never cross its
 // neighbors ("Point 1 should never be set to the left of point 0 or to the
 // right of point 2, otherwise [function] will renumber the points").
 var MIN_DX = 0.001;
@@ -310,7 +310,7 @@ function draw_nodes() {
     }
 }
 
-// the Multi Shaper footer: "5 pt   Curve 40%   Grid 4   Snap"
+// the curve-editor footer: "5 pt   Curve 40%   Grid 4   Snap"
 function draw_value_row() {
     var ty = mgraphics.size[1] - 4;
     var cell = (mgraphics.size[0] - MARGIN_L - MARGIN_R) / 4.0;

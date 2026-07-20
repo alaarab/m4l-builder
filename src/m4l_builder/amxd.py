@@ -16,7 +16,7 @@ from .validation import BuildValidationError, format_validation_issues
 def _parameter_banks_payload(device) -> dict[str, dict]:
     # Live/Push expect each bank's `parameters` to be a FLAT 8-slot list of param
     # LONGNAME strings, positioned by slot, with "-" placeholders for empty slots
-    # (verified against real devices, e.g. a channel strip). Emitting a
+    # (verified against real devices). Emitting a
     # list-of-dicts {index,name,visible} silently broke Push banks on every
     # multi-param device. parameter_longname == ParameterSpec.name here.
     banks: dict[str, dict] = {}

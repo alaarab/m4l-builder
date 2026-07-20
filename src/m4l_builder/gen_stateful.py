@@ -3,8 +3,7 @@ could NOT express before (granular, looper, freeze, sampler, reverb tails).
 
 ``gen_snippets.py`` holds INLINE expression snippets (``lhs = expr;`` runs); these
 are full gen FUNCTION definitions or stateful blocks that own History/Data state,
-grounded in standard codeboxes (a 100-voice granular gen~, the
-a granular reverb gen~). Place a returned function-definition string near the top of
+grounded in standard granular + reverb DSP idioms. Place a returned function-definition string near the top of
 GEN_CODE and call it; the block emitters splice into the per-sample body.
 
 Verified gen signatures (Codebox form): ``poke(data, value, channel, index)``,
@@ -31,8 +30,8 @@ __all__ = [
 ]
 
 
-# ── D4 viz bus: gen -> named buffer~ -> jsui (the library "keystone for live
-# displays"; standard idiom). The gen
+# ── D4 viz bus: gen -> named buffer~ -> jsui (a standard idiom for live
+# displays). The gen
 # side declares BARE Buffer names and pokes per-frame screen state on a
 # counter-gated GUI tick; the DEVICE binds each Buffer to a ---scoped buffer~
 # via a rebind message into gen~ inlet 0 (see Device.add_viz_bus), and a
@@ -40,7 +39,7 @@ __all__ = [
 
 def viz_declares(*buffers: str, counter: str = "his_guiCout") -> str:
     """Declarations for a viz bus: bare ``Buffer`` decls (bound at load by the
-    device-side rebind message — the viz-bus contract) plus the GUI-tick
+    device-side rebind message) plus the GUI-tick
     counter ``History``. Place with your OTHER declarations, BEFORE any
     executable statement (gen requires all decls first)."""
     lines = [f"Buffer {name};" for name in buffers]
@@ -67,7 +66,7 @@ def viz_poke_block(body: str, *, refresh_ms: float = 40.0,
 
 # One LFO voice of the Orbit cluster: phase advance + 6 analytic shapes
 # (sine / tri / saw / square / S&H / drift), all state in caller-owned Data
-# rows so ONE function serves N voices (a modulation device's polyrhythmic cluster).
+# rows so ONE function serves N voices (a polyrhythmic modulation cluster).
 LFO_VOICE_FN = """lfo_voice(data_ph, data_sh, data_dr, idx, rt, shp) {
 	ph = peek(data_ph, idx, 0);
 	ph += rt / samplerate;
@@ -223,7 +222,7 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
 
     ``draw_buffer`` (a named 128-frame, ``voices``-channel ``buffer~``)
     adds source 10 = DRAW: the lane samples its own hand-drawn wavetable
-    channel at the lane clock (the Multi Shaper function-editor feeds it
+    channel at the lane clock (the function-editor feeds it
     from the message domain via ``peek~``).
 
     ONLY the selected family computes per lane (codebox ``if/else`` — gen
@@ -477,8 +476,7 @@ def compose_gen_code(*, params=(), functions=(), body: str = "") -> str:
         )
 
     ORDER MATTERS: Live's gen compiler wants every user-function definition at the
-    TOP of the codebox (a granular reverb / a synth device both open with their function
-    defs); a ``Param``/declaration BEFORE a function def silences the whole codebox
+    TOP of the codebox; a ``Param``/declaration BEFORE a function def silences the whole codebox
     (verified: a Param-first channel strip passed no audio until reordered).
     """
     parts = [f for f in functions if f]            # function DEFS first (gen requires it)
@@ -628,7 +626,7 @@ def ring_delay(name: str, size_samps, *, input: str = "x", delay: str = "dsamps"
     old value (wrapped), advance the head. The granular/looper/delay keystone.
 
     Returns a run of statements (declarations + per-sample body) grounded in the
-    standard poke/peek/wrap idiom. ``size_samps`` is the buffer length.
+    standard poke/peek/wrap ring-buffer idiom. ``size_samps`` is the buffer length.
     The line write is denormal-flushed: when the caller closes a feedback loop
     around it (``input`` mixing the read-back ``out``), a silent tail would
     otherwise recirculate subnormals; for a plain (feed-forward) delay the
@@ -643,10 +641,10 @@ def ring_delay(name: str, size_samps, *, input: str = "x", delay: str = "dsamps"
     )
 
 
-# A saturation curve — a logistic sigmoid whose knee
+# A drive-able logistic-sigmoid saturation curve whose knee
 # is set by `sigmoid` (clamped <= -2): -2 ~= a tanh approximation, -5 ~= 'tape',
 # and you can drive it to -100 for a hard squash. `pregain`/`postgain` are in dB.
-# The single line `y = (2/(1+exp(sigmoid*x))) - 1` is the jewel.
+# The curve is the single line `y = (2/(1+exp(sigmoid*x))) - 1`.
 VARIABLE_SIGMOID_FN = """variable_sigmoid(xin, pregain, postgain, sigmoid) {
 	pregain = dbtoa(clip(pregain, -48., 48.));
 	postgain = dbtoa(clip(postgain, -96., 12.));
@@ -660,7 +658,7 @@ VARIABLE_SIGMOID_FN = """variable_sigmoid(xin, pregain, postgain, sigmoid) {
 def variable_sigmoid_fn() -> str:
     """Return the gen function-definition for
     ``variable_sigmoid(xin, pregain, postgain, sigmoid)`` — a drive-able logistic
-    saturator (pre/post gain in dB, knee set by ``sigmoid``). The curve is a logistic sigmoid: ``sigmoid``=-2 approximates tanh, -5 is tape-like."""
+    saturator (pre/post gain in dB, knee set by ``sigmoid``): ``sigmoid``=-2 approximates tanh, -5 is tape-like."""
     return VARIABLE_SIGMOID_FN
 
 
@@ -762,7 +760,7 @@ def modulated_allpass_reverb(*, in_left: str = "in1", in_right: str = "in2",
 
 
 # ===========================================================================
-# D3 — synth-voice kit
+# D3 — synth-voice kit (FM operator, wavetable LFO, envelopes, SVF)
 # ===========================================================================
 
 # ── Synth-voice primitives ──────────────────────────────────────────────────

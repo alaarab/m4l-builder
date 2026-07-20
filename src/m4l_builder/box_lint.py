@@ -56,6 +56,19 @@ def known_object_spec(name: str) -> dict | None:
     return None
 
 
+def known_object_names() -> frozenset[str]:
+    """Every object NAME the vendored maxdiff dataset knows, including aliases.
+
+    The arity dataset is measured from real Max, so its keys are a
+    high-confidence roster of valid object names. Used by
+    :func:`m4l_builder.guidelines.unknown_object_issues` as the base allowlist
+    for typo detection (it is only an *arity* reference elsewhere, never a
+    name check)."""
+    return (frozenset(_index())
+            | frozenset(object_aliases)
+            | frozenset(object_aliases.values()))
+
+
 # arity is defined by the script / embedded patcher / creation context,
 # not the object name — the dataset's single instance is not authoritative
 _SCRIPT_ARITY = frozenset({

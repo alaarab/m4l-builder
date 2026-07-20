@@ -1929,8 +1929,8 @@ function label_chip(x, y_base, txt) {
     mgraphics.show_text(txt);
 }
 
-// Always-on step-slot grid so the canvas is never an empty void (a spectrum-EQ device always
-// draws its grid). Faint vertical dividers at each step boundary, tinted from the
+// Always-on step-slot grid so the canvas is never an empty void. Faint vertical
+// dividers at each step boundary, tinted from the
 // theme fg so it adapts to any skin (light on dark, dark on light). Drawn under
 // the waveform + bars so it structures the idle screen without cluttering.
 function draw_step_grid() {

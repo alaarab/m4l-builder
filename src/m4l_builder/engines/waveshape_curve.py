@@ -308,7 +308,7 @@ function read_window() {
 // driven/clipped output reads hot. (Buffer/peek are Max-only -> no-ops in Node.)
 function set_live_scope(name) { live_scope_name = "" + name; }
 // The DRY (pre-saturation input) buffer — drawn as a faint ghost behind the wet
-// output so the saturation reads as a before/after (premium-saturator signature).
+// output so the saturation reads as a before/after (a premium-saturator signature).
 function set_live_scope_dry(name) { live_scope_dry_name = "" + name; }
 function read_scope_buf(name) {
     if (typeof Buffer === "undefined" || name === "") return [];
@@ -577,7 +577,7 @@ function draw_scope() {
 
 // Live OUTPUT oscilloscope: the recorded output waveform at TRUE amplitude,
 // rainbow-traced over a center line. This is what Heat is actually doing to the
-// audio right now (the motion-first standout-style) — drive/character/bias visibly reshape it.
+// audio right now (aggressive-distortion-style) — drive/character/bias visibly reshape it.
 function draw_live_scope() {
     var n = live_scope.length;
     if (n < 2) return;
@@ -796,7 +796,7 @@ function draw_io_dot(dx, dy, e) {
 
 // A soft luminous overlay on the portion of the curve the signal is currently
 // reaching (-e..+e), so the colored curve lights up brighter with the audio
-// (premium-comp "lit segment" feel, kept low-alpha so the palette shows through).
+// (a premium-comp "lit segment" feel, kept low-alpha so the palette shows through).
 function draw_lit_segment(transfer_is_sample, e) {
     var le = clamp(e, 0.0, 1.0), st, i, lv;
     if (le <= 0.006) return;

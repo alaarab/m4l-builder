@@ -40,7 +40,7 @@ class Theme:
     # Accent (the PRIMARY color that means "active/selected")
     accent: list[float]
 
-    # Second accent — the SELECTION/secondary color (pink-on-cyan).
+    # Second accent — the SELECTION/secondary color (a pink-on-cyan selection).
     # Two-accent devices read far more premium than one-accent ones. Defaults to
     # accent (single-accent) when omitted.
     accent2: Optional[list[float]] = None
@@ -112,7 +112,7 @@ class Theme:
             self.tab_bg = list(self.surface)
         if self.tab_bg_on is None:
             # Two-accent premium: the SELECTED tab uses accent2 (the selection
-            # color, pink-on-cyan), the primary accent stays for dials/
+            # color, a pink-on-cyan selection), the primary accent stays for dials/
             # bars. Single-accent themes set accent2 == accent above, so they are
             # visually unchanged; only a distinct-accent2 theme gets the second hue.
             self.tab_bg_on = list(self.accent2)
@@ -133,7 +133,7 @@ class Theme:
         if self.scope_bgcolor is None:
             self.scope_bgcolor = list(self.bg)
         if self.spectrum_color is None:
-            # Spectra read best NEUTRAL grey (not the accent) — the filled/EQ look.
+            # Spectra read best NEUTRAL grey (not the accent) — the filled look.
             self.spectrum_color = [0.66, 0.70, 0.74, 0.85]
         if self.grid_color is None:
             self.grid_color = alpha(self.text_dim, 0.45)
@@ -436,7 +436,7 @@ INDUSTRIAL = Theme(
 # ── Two-accent palettes (the diversity set — each device picks its OWN) ───────
 # Primary + selection accent, distinct bg character. Built for the PRO UI kit so
 # no two devices share the copy-pasted 5-constant block. accent = primary draw
-# color; accent2 = selection/secondary (pink-on-cyan).
+# color; accent2 = selection/secondary (a pink-on-cyan selection idea).
 
 COBALT = Theme(  # deep navy, cyan primary + pink selection
     bg=[0.052, 0.062, 0.082, 1.0],
@@ -528,8 +528,8 @@ GRAPHITE = Theme(
     panel_border=[0.28, 0.28, 0.30, 1.0],   # was GRAPH_BORDER
 )
 
-# One accent per device (library P5: a single disciplined accent, never a
-# rainbow). Values reused from the shipping build.py files so adopting
+# One accent per device (a single disciplined accent, never a
+# rainbow). Values carried from the shipping build.py files so adopting
 # the registry is a zero-visual-delta refactor. Secondary accents (sheen's warm
 # LOW band, aurora's ACCENT2) stay device-local.
 ACCENTS: dict[str, list[float]] = {
@@ -550,14 +550,14 @@ ACCENTS: dict[str, list[float]] = {
     "motes": [0.62, 0.75, 0.96, 1.0],        # grain blue
 }
 
-# ── Semantic color roles (catalog #60, dnksaus brand audit) ──────────────────
+# ── Semantic color roles (catalog #60, brand audit) ──────────────────
 # The library uses COLOR AS GRAMMAR, not decoration: the same four hues carry
-# the same meaning on every dnk device, so a user reads a row's function
+# the same meaning on every device, so a user reads a row's function
 # before reading its label. Keep ONE primary accent per device
 # and reserve these roles for the mapping/mode grammar:
 #
 #   remote   orange — the hands-on lane: Remote-mode mapping rows, primary
-#            macro controls, "this is yours to grab" (a gate device / Clix rows).
+#            macro controls, "this is yours to grab".
 #   mod      teal — the computed lane: Mod-mode rows, numeric readouts,
 #            meters, engine-driven values (matches modulator_slot_component's
 #            Remote/Mod pair — do not re-tint per device).
