@@ -39,8 +39,17 @@ def viz_declares(*buffers: str, counter: str = "his_guiCout") -> str:
     """Declarations for a viz bus: bare ``Buffer`` decls (bound at load by the
     device-side rebind message) plus the GUI-tick
     counter ``History``. Place with your OTHER declarations, BEFORE any
-    executable statement (gen requires all decls first)."""
+    executable statement (gen requires all decls first).
+
+    When TWO OR MORE buffers are passed (the second is a scrolling wave RING),
+    also declares the ring write-head ``History his_wvh(0.)`` that
+    :func:`viz_poke_block` advances — forgetting it makes the whole codebox
+    silently fail to compile ("failed to compile genpatcher"), a trap that cost
+    real hours. Do NOT also declare ``his_wvh`` manually (gen rejects the
+    duplicate)."""
     lines = [f"Buffer {name};" for name in buffers]
+    if len(buffers) > 1:
+        lines.append("History his_wvh(0.);")
     lines.append(f"History {counter}(0);")
     return "\n".join(lines)
 
@@ -435,6 +444,22 @@ def freeze_capture_block(*, freeze_param: str = "freezeTgt",
     )
 
 
+# GenExpr reserved words that SILENTLY break a codebox when used as a Param or
+# variable name: Live's gen compiler rejects the source and gen~ then passes its
+# input straight through (no "failed to compile" in Log.txt — the device just
+# looks transparent while the effect does nothing). `throw` is Live-verified
+# (Derail shipped inert until its gen param was renamed throw->trig); the rest
+# are C/JS-family keywords the GenExpr grammar reserves for the same reason.
+_GEN_RESERVED_PARAM_NAMES = frozenset({
+    "throw", "catch", "try", "new", "delete", "do", "break", "continue",
+    "function", "var", "let", "const", "class", "typeof", "void",
+    "if", "else", "for", "while", "return", "switch", "case", "default",
+    # C-family type keywords the GenExpr grammar reserves (same silent break)
+    "char", "int", "float", "double", "bool", "long", "short",
+    "unsigned", "signed", "enum", "struct", "union", "static", "extern",
+})
+
+
 def _param_decl(p) -> str:
     """Render one gen `Param` declaration from a string or tuple.
 
@@ -445,6 +470,11 @@ def _param_decl(p) -> str:
     if isinstance(p, str):
         return p if p.rstrip().endswith(";") else p + ";"
     name, default = p[0], p[1]
+    if str(name).lower() in _GEN_RESERVED_PARAM_NAMES:
+        raise ValueError(
+            f"gen~ Param name {name!r} is a reserved GenExpr word — it "
+            f"silently fails to compile (gen~ passes audio through untouched). "
+            f"Rename the gen param (keep the Live-facing control name as-is).")
     if len(p) >= 4:
         return f"Param {name}({default}, min={p[2]}, max={p[3]});"
     return f"Param {name}({default});"
