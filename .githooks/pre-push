@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Pre-push gate: run the same checks CI does so lint/type/test failures are
+# caught locally instead of on GitHub. Enable in a fresh clone with `make hooks`
+# (or `git config core.hooksPath .githooks`). Bypass a one-off push with
+# `git push --no-verify`.
+set -euo pipefail
+
+echo "pre-push: running 'make check' (ruff + mypy + pytest)…"
+if ! make check; then
+    echo
+    echo "pre-push: checks FAILED — push aborted. Fix the above (try 'make fix'"
+    echo "          for lint) or bypass with 'git push --no-verify'."
+    exit 1
+fi
+echo "pre-push: all checks passed."
