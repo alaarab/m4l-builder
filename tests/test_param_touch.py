@@ -1,8 +1,7 @@
 """param_touch — invisible native touch overlays for custom-UI surfaces."""
 
 from m4l_builder import AudioEffect
-from m4l_builder.param_touch import (add_touch_dial, add_touch_menu,
-                                     add_touch_slider)
+from m4l_builder.param_touch import add_touch_dial, add_touch_menu, add_touch_slider
 
 CLEAR = [0.0, 0.0, 0.0, 0.0]
 
