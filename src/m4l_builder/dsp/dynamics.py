@@ -237,6 +237,20 @@ def sidechain_detect(id_prefix: str) -> tuple:
 def multiband_compressor(id_prefix: str) -> tuple:
     """3-band mono compressor using crossover_3band and compressor blocks.
 
+    .. warning::
+       The ``crossover_3band`` split is NOT allpass-compensated: the three bands
+       do not recombine flat, so this ripples audibly at the lower crossover.
+       Do not ship it on a flagship as-is.
+
+       The corrected split is :func:`gen_snippets.multiband_split`, which
+       allpass-compensates every lower band for the higher crossovers it
+       skipped. It is NOT a drop-in here: ``multiband_split`` emits gen~ CODE
+       while this function builds a Max OBJECT graph, so adopting it means
+       moving the whole band-split + per-band dynamics into a gen~ kernel (the
+       shape ``plugins/cleaver`` and ``plugins/strata`` already use). Both this
+       function and ``crossover_3band`` currently have zero consumers, which is
+       why the ripple has never shipped.
+
     Splits signal into 3 bands via crossover, compresses each band
     independently (using the L channel of each stereo compressor),
     then sums back together.

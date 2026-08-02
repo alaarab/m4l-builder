@@ -123,18 +123,6 @@ function ds_heatmap_cell(x, y, w, h, v, bg, accent) {
     mgraphics.fill();
 }
 """
-
-
-def tween_js() -> str:
-    """The shared-Task exponential-ease smoothing engine (foundation 5)."""
-    return TWEEN_JS
-
-
-def glow_js() -> str:
-    """Accent-state palette + glow/shadow/heatmap primitives (foundation 6)."""
-    return GLOW_JS
-
-
 def ui_motion_js() -> str:
     """Both motion/theme foundations."""
     return TWEEN_JS + GLOW_JS

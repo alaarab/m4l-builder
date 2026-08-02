@@ -3782,9 +3782,26 @@ class TestPhaseVocoderSubpatcher:
         assert any("fftout~" in t for t in texts)
 
     def test_has_phase_acc(self):
+        """framedelta~ -> frameaccum~ IS the phase vocoder.
+
+        The old assertion accepted a bare `+~`, which is what the subpatcher
+        actually shipped: its right inlet was never fed, so it accumulated
+        nothing and the vocoder copied the input phase straight through —
+        spectral freeze/stretch did nothing. Assert the real chain, and that
+        the inert `+~` is gone.
+        """
         result = phase_vocoder_subpatcher()
         texts = [b["box"]["text"] for b in result["patcher"]["boxes"]]
-        assert any("+~" in t for t in texts)
+        assert any("framedelta~" in t for t in texts)
+        assert any("frameaccum~" in t for t in texts)
+        assert not any(t.strip() == "+~" for t in texts)
+        ids = {b["box"]["id"] for b in result["patcher"]["boxes"]}
+        lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0])
+                 for l in result["patcher"]["lines"]}
+        assert "pv_phase_acc" not in ids
+        assert ("pv_cartopol", "pv_framedelta") in lines
+        assert ("pv_framedelta", "pv_frameaccum") in lines
+        assert ("pv_frameaccum", "pv_poltocar") in lines
 
     def test_has_lines(self):
         result = phase_vocoder_subpatcher()

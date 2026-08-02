@@ -1579,8 +1579,16 @@ def sample_drop_target(device, id_prefix, buffer_box_id, drop_rect, *,
     p = id_prefix
 
     # param_name registers the drop as a stored Blob parameter (widget-
-    # hardening spec): the dropped path survives save/reload + duplicate and
-    # re-reports on init, so the buffer refills without user action.
+    # hardening spec): the dropped PATH survives save/reload + duplicate.
+    #
+    # It does NOT reload the buffer on its own. Live restores a registered
+    # parameter SILENTLY — it never bangs the object's outlet — so buffer~ is
+    # never told to `replace` and the deck comes back EMPTY. The CONSUMER must
+    # bang this drop from an init ring that fires AFTER Live's param restore
+    # (live.thisdevice -> deferlow); banging a live.drop just re-emits its
+    # stored path, unlike the `load` button which opens a file dialog.
+    # Reference implementations: plugins/shard/_p2.py:444-453 and
+    # plugins/heat (both hit this trap).
     drop_id = device.add_box(live_drop(
         f"{p}_drop", drop_rect, param_name=param_name,
         patching_rect=[x, y, 120, 28],

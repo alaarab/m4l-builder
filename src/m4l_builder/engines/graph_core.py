@@ -151,8 +151,3 @@ function response_db(coeffs, freq) {
     return db;
 }
 """
-
-
-def graph_core_js() -> str:
-    """Return the shared graph-math JS block (see module docstring)."""
-    return GRAPH_CORE_JS

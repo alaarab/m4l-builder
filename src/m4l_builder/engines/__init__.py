@@ -11,7 +11,6 @@ Usage:
 """
 
 from .chaos_lanes import chaos_lanes_js
-from .compressor_display import compressor_display_js
 from .crossover_display import crossover_display_js
 from .curve_editor import (
     CURVE_EDITOR_INLETS,
@@ -65,7 +64,6 @@ from .level_meter import (
     LEVEL_METER_OUTLETS,
     level_meter_js,
 )
-from .lfo_display import lfo_display_js
 from .linear_phase_eq_display import linear_phase_eq_display_js
 from .peaking_eq_display import peaking_eq_display_js
 from .performance_canvas import performance_canvas_js
@@ -174,8 +172,6 @@ __all__ = [
     "grid_sequencer_display_js",
     "wavetable_editor_js",
     "spectral_vocoder_display_js",
-    "lfo_display_js",
-    "compressor_display_js",
     "slice_overview_js",
     "slice_pattern_display_js",
     "performance_canvas_js",

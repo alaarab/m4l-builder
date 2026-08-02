@@ -17,7 +17,6 @@ DSP feeding:
     an audio signal outlet to the jsui inlet 0.
 """
 
-from ..objects import newobj
 
 WAVEFORM_INLETS = 2
 WAVEFORM_OUTLETS = 0
@@ -237,58 +236,3 @@ def waveform_display_js(*, bg_color="0.07, 0.07, 0.08, 1.0",
         "    mgraphics.stroke();\n"
         "}\n"
     )
-
-
-def waveform_display_dsp(device, jsui_id, source_id, source_outlet=0,
-                         num_samples=16, interval_ms=2, id_prefix="wave"):
-    """Add a snapshot~/zl.group chain to capture waveform data for a jsui.
-
-    Wires: source_id[source_outlet] -> snapshot~ -> zl.group -> jsui[0]
-
-    The snapshot~ samples the audio signal at ``interval_ms`` millisecond
-    intervals. zl.group accumulates ``num_samples`` values then outputs them
-    as a single list, which the jsui waveform display ingests on inlet 0.
-
-    Args:
-        device: The Device instance to add objects to.
-        jsui_id: ID of the target jsui object.
-        source_id: ID of the audio source object.
-        source_outlet: Outlet index on the source to tap (default 0).
-        num_samples: Samples collected per frame (default 16).
-        interval_ms: Snapshot poll interval in ms (default 2 = ~30 fps).
-        id_prefix: Prefix for generated object IDs.
-
-    Returns:
-        Tuple of (snapshot_id, zlgroup_id) for the created objects.
-    """
-    snap_id = f"{id_prefix}_snap"
-    zlg_id = f"{id_prefix}_zlg"
-
-    # snapshot~ samples the signal at interval_ms milliseconds
-    device.add_box(newobj(
-        snap_id,
-        f"snapshot~ {interval_ms}",
-        numinlets=1,
-        numoutlets=1,
-        outlettype=[""],
-        patching_rect=[30, 300, 80, 20],
-    ))
-
-    # zl.group collects num_samples floats then outputs as a list
-    device.add_box(newobj(
-        zlg_id,
-        f"zl.group {num_samples}",
-        numinlets=2,
-        numoutlets=2,
-        outlettype=["", ""],
-        patching_rect=[30, 330, 90, 20],
-    ))
-
-    # Wire: audio source -> snapshot~
-    device.add_line(source_id, source_outlet, snap_id, 0)
-    # Wire: snapshot~ -> zl.group
-    device.add_line(snap_id, 0, zlg_id, 0)
-    # Wire: zl.group list output -> jsui inlet 0
-    device.add_line(zlg_id, 0, jsui_id, 0)
-
-    return (snap_id, zlg_id)

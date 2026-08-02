@@ -548,6 +548,7 @@ ACCENTS: dict[str, list[float]] = {
     "nimbus": [0.80, 0.88, 0.95, 1.0],       # ice
     "orbit": [0.96, 0.70, 0.20, 1.0],        # cluster amber (cyan 2nd local)
     "motes": [0.62, 0.75, 0.96, 1.0],        # grain blue
+    "hush": [0.58, 0.68, 0.72, 1.0],         # muted slate — a quiet tool
 }
 
 # ── Semantic color roles (catalog #60, brand audit) ──────────────────

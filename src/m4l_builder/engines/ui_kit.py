@@ -130,18 +130,58 @@ def custom_knob_js(
         "function norm() { return (VMAX - VMIN) === 0 ? 0 : (value - VMIN) / (VMAX - VMIN); }\n"
         "function set_value(v) { value = clampv(v); mgraphics.redraw(); }\n"
         "function msg_float(v) { set_value(v); }\n"
-        "function onclick(x, y, but, cmd, shift) { dragging = true; drag_y0 = y; drag_v0 = value; }\n"
-        # v8ui drag = onpointermove (the but===0 guard ignores hover); jsui's ondrag is
-        # NEVER called on a v8ui box — using it left these custom controls click-only (no drag).
-        "function onpointermove(x, y, but, cmd, shift) {\n"
-        "    if (but === 0) { dragging = false; return; }\n"
+        # v8ui in Live delivers POINTER EVENT OBJECTS, not positional args, and
+        # NEVER fires onclick/ondrag (those are jsui / the Node harness only).
+        # The old handlers took (x, y, but, ...) positionally and started the
+        # drag in onclick, so drag_y0 was never set and y came through as the
+        # event object -> the knob was completely inert in Live. Same tolerant
+        # resolvers as aurora_reverb's drag hero (property names differ across
+        # runtimes: .x/.localX/.offsetX/.clientX).
+        "function pk_y(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.y !== undefined) return pe.y;\n"
+        "    if (pe.localY !== undefined) return pe.localY;\n"
+        "    if (pe.offsetY !== undefined) return pe.offsetY;\n"
+        "    if (pe.clientY !== undefined) return pe.clientY;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_buttons(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.buttons !== undefined) return pe.buttons;\n"
+        "    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_shift(pe) { return (pe && pe.shiftKey) ? 1 : 0; }\n"
+        "function onpointerdown(pe) { dragging = true; drag_y0 = pk_y(pe, 0); drag_v0 = value; }\n"
+        "function onpointermove(pe) {\n"
+        "    if (!dragging) return;\n"
+        "    if ((pk_buttons(pe, 1) & 1) === 0) { dragging = false; return; }\n"
+        "    var yy = pk_y(pe, drag_y0);\n"
         "    var span = VMAX - VMIN;\n"
-        "    var sens = shift ? 0.22 : 1.0;\n"
-        "    value = clampv(drag_v0 + (drag_y0 - y) / 130.0 * span * sens);\n"
+        "    var sens = pk_shift(pe) ? 0.22 : 1.0;\n"
+        "    value = clampv(drag_v0 + (drag_y0 - yy) / 130.0 * span * sens);\n"
         "    outlet(0, value);\n"
         "    mgraphics.redraw();\n"
         "}\n"
-        "function ondblclick(x, y) { value = clampv(" + f"{float(initial)}" + "); outlet(0, value); mgraphics.redraw(); }\n"
+        "function onpointerup(pe) { dragging = false; }\n"
+        "function onpointerleave(pe) { dragging = false; }\n"
+        "function ondblclick(pe) { value = clampv(" + f"{float(initial)}" + "); outlet(0, value); mgraphics.redraw(); }\n"
+        # wheel: tolerate BOTH an event object and jsui's positional (x,y,dx,dy)
+        "function onwheel(a, b, c, d) {\n"
+        "    var dy = 0;\n"
+        "    if (a && typeof a === 'object') {\n"
+        "        if (a.deltaY !== undefined) dy = a.deltaY;\n"
+        "        else if (a.wheelDeltaY !== undefined) dy = -a.wheelDeltaY;\n"
+        "    } else if (d !== undefined) { dy = d; } else if (c !== undefined) { dy = c; }\n"
+        "    if (!dy) return;\n"
+        "    var span = VMAX - VMIN;\n"
+        "    var step = ((a && a.shiftKey) ? 0.0025 : 0.02) * span;\n"
+        # CGEvent-verified on Hush: a scroll-DOWN event arrives with dy < 0,
+        # so dy<0 must DECREASE. The naive mapping had it backwards.
+        "    value = clampv(value + (dy > 0 ? step : -step));\n"
+        "    outlet(0, value);\n"
+        "    mgraphics.redraw();\n"
+        "}\n"
         "function paint() {\n"
         "    var w = mgraphics.size[0];\n"
         "    var h = mgraphics.size[1];\n"
@@ -153,8 +193,14 @@ def custom_knob_js(
         "        mgraphics.rectangle(0, 0, w, h); mgraphics.fill();\n"
         "    }\n"
         "    var cx = w * 0.5;\n"
-        "    var cy = h * 0.5 + 1;\n"
-        "    var R = Math.min(w * 0.42, (h - 22) * 0.5);\n"
+        # h-30 (was h-22) and cy nudged down: the label/value reserve has to
+        # grow with the type. At 9.0/10.5px the old 22px reserve let the arc
+        # collide with the LABEL. Reserve ~30px and centre the knob below it.
+        # h-34 reserve, cy +2: enough headroom for a 9px label ABOVE the arc
+        # and a clear gap between the arc bottom and the value readout (the
+        # number sat too close to the knob at the old spacing).
+        "    var cy = h * 0.5 + 2;\n"
+        "    var R = Math.min(w * 0.42, (h - 34) * 0.5);\n"
         "    var lw_px = Math.max(2.0, R * 0.16);\n"
         "    var a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;\n"
         "    var av = a0 + (a1 - a0) * norm();\n"
@@ -179,12 +225,16 @@ def custom_knob_js(
         "    mgraphics.move_to(cx + Math.cos(av) * R * 0.32, cy + Math.sin(av) * R * 0.32);\n"
         "    mgraphics.line_to(cx + Math.cos(av) * R * 0.82, cy + Math.sin(av) * R * 0.82);\n"
         "    mgraphics.stroke();\n"
+        # 9.0 / 10.5, not 6.5 / 7.5: the old sizes sat well under Ableton's own
+        # device labels (Limiter's "Ceiling"/"Lookahead" read ~9-11px) and were
+        # part of the fleet-wide sub-7px chrome smell. User-flagged on Hush.
         "    mgraphics.select_font_face(FONT);\n"
-        "    mgraphics.set_font_size(6.5);\n"
-        "    mgraphics.set_source_rgba(DIM[0], DIM[1], DIM[2], 1.0);\n"
+        "    mgraphics.set_font_size(10.5);\n"
+        # WHITE, not DIM — the knob label is the control's name, not chrome.
+        "    mgraphics.set_source_rgba(TEXT[0], TEXT[1], TEXT[2], 1.0);\n"
         "    var lw = mgraphics.text_measure(LABEL);\n"
-        "    mgraphics.move_to(cx - lw[0] * 0.5, 8); mgraphics.show_text(LABEL);\n"
-        "    mgraphics.set_font_size(7.5);\n"
+        "    mgraphics.move_to(cx - lw[0] * 0.5, 11); mgraphics.show_text(LABEL);\n"
+        "    mgraphics.set_font_size(10.5);\n"
         "    mgraphics.set_source_rgba(TEXT[0], TEXT[1], TEXT[2], 1.0);\n"
         "    var vs = value.toFixed(DECIMALS) + UNIT;\n"
         "    var vw = mgraphics.text_measure(vs);\n"
@@ -580,8 +630,9 @@ def custom_slider_js(
     redraw; the pointer drives the value with ABSOLUTE positioning — the handle
     JUMPS to the click and tracks the cursor along the axis (pro-plugin behavior),
     unlike the knob's relative drag delta. Shift = fine (blends 25% toward the
-    target for sub-pixel precision); double-click = reset to ``initial``. The
-    fader WORKS in actual param units (``vmin``..``vmax``).
+    target for sub-pixel precision); double-click = reset to ``initial``; the
+    scroll wheel nudges by 2% of the span (0.25% with Shift), like a native
+    ``live.dial``. The fader WORKS in actual param units (``vmin``..``vmax``).
 
     ``bg_top``/``bg_bot`` (``"r, g, b"`` strings) make the fader paint its OWN
     vertical-gradient background filling the whole object rect — a SLICE of the
@@ -667,14 +718,79 @@ def custom_slider_js(
         "    outlet(0, value);\n"
         "    mgraphics.redraw();\n"
         "}\n"
-        "function onclick(x, y, but, cmd, shift) { dragging = true; set_from_pointer(x, y, shift); }\n"
-        # v8ui drag = onpointermove (the but===0 guard ignores hover); jsui's ondrag is
-        # NEVER called on a v8ui box — using it left these custom controls click-only (no drag).
-        "function onpointermove(x, y, but, cmd, shift) {\n"
-        "    if (but === 0) { dragging = false; return; }\n"
+        # v8ui in Live delivers POINTER EVENT OBJECTS, not positional args, and
+        # NEVER fires onclick/ondrag (jsui / the Node harness only). The old
+        # handlers read (x, y, but, ...) positionally, so in Live x came through
+        # as the event OBJECT -> the arithmetic went NaN and the fader was inert
+        # (it still painted and tracked automation, which is why screenshots
+        # never caught it). Tolerant resolvers — property names differ across
+        # runtimes (.x/.localX/.offsetX/.clientX, .buttons/.button) — plus a
+        # held-button guard on move so hover does not drag. Same shape as
+        # custom_knob_js / aurora_reverb's drag hero.
+        "function pk_x(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.x !== undefined) return pe.x;\n"
+        "    if (pe.localX !== undefined) return pe.localX;\n"
+        "    if (pe.offsetX !== undefined) return pe.offsetX;\n"
+        "    if (pe.clientX !== undefined) return pe.clientX;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_y(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.y !== undefined) return pe.y;\n"
+        "    if (pe.localY !== undefined) return pe.localY;\n"
+        "    if (pe.offsetY !== undefined) return pe.offsetY;\n"
+        "    if (pe.clientY !== undefined) return pe.clientY;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_buttons(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.buttons !== undefined) return pe.buttons;\n"
+        "    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_shift(pe) { return (pe && pe.shiftKey) ? 1 : 0; }\n"
+        "function onpointerdown(pe) {\n"
+        "    dragging = true;\n"
+        "    var x = pk_x(pe, 0), y = pk_y(pe, 0), shift = pk_shift(pe);\n"
         "    set_from_pointer(x, y, shift);\n"
         "}\n"
-        "function ondblclick(x, y) { value = clampv(INITIAL); outlet(0, value); mgraphics.redraw(); }\n"
+        "function onpointermove(pe) {\n"
+        "    if (!dragging) return;\n"
+        "    if ((pk_buttons(pe, 1) & 1) === 0) { dragging = false; return; }\n"
+        "    var x = pk_x(pe, 0), y = pk_y(pe, 0), shift = pk_shift(pe);\n"
+        "    set_from_pointer(x, y, shift);\n"
+        "}\n"
+        "function onpointerup(pe) { dragging = false; }\n"
+        "function onpointerleave(pe) { dragging = false; }\n"
+        # Legacy jsui / Node-harness entry point. Live-checked 2026-08-01: a v8ui
+        # box DOES still fire onclick when the script defines no pointer handlers
+        # (that is how the onclick-only custom_toggle_js keeps working), and the
+        # pointer handlers take precedence when present — so this never
+        # double-applies here. The object guard is belt-and-braces: if any host
+        # hands onclick the EVENT instead of coordinates, delegate rather than let
+        # the arithmetic go NaN and push a NaN out the outlet.
+        "function onclick(x, y, but, cmd, shift) {\n"
+        "    if (x && typeof x === 'object') { onpointerdown(x); return; }\n"
+        "    dragging = true; set_from_pointer(x, y, shift);\n"
+        "}\n"
+        "function ondblclick(pe) { value = clampv(INITIAL); outlet(0, value); mgraphics.redraw(); }\n"
+        # wheel: tolerate BOTH an event object and jsui's positional (x, y, dx, dy).
+        # CGEvent-verified direction convention (custom_knob_js): a scroll-DOWN
+        # event arrives with dy < 0, so dy < 0 must DECREASE.
+        "function onwheel(a, b, c, d) {\n"
+        "    var dy = 0;\n"
+        "    if (a && typeof a === 'object') {\n"
+        "        if (a.deltaY !== undefined) dy = a.deltaY;\n"
+        "        else if (a.wheelDeltaY !== undefined) dy = -a.wheelDeltaY;\n"
+        "    } else if (d !== undefined) { dy = d; } else if (c !== undefined) { dy = c; }\n"
+        "    if (!dy) return;\n"
+        "    var span = VMAX - VMIN;\n"
+        "    var step = ((a && a.shiftKey) ? 0.0025 : 0.02) * span;\n"
+        "    value = clampv(value + (dy > 0 ? step : -step));\n"
+        "    outlet(0, value);\n"
+        "    mgraphics.redraw();\n"
+        "}\n"
         "function paint() {\n"
         "    var w = mgraphics.size[0];\n"
         "    var h = mgraphics.size[1];\n"
@@ -795,7 +911,9 @@ def custom_stepper_js(
     Draws a rounded pill: a ``-`` minus button (left) and ``+`` plus button
     (right) flanking the formatted value. Clicking a button steps the value by
     ``step`` (Shift = ``fine_step``); dragging the value field vertically scrubs
-    (when ``scrub``); double-click resets to ``initial``. The value lives in real
+    (when ``scrub``); the scroll wheel steps by 2% of the span or one ``step``,
+    whichever is larger (Shift = the fine equivalent); double-click resets to
+    ``initial``. The value lives in real
     param units (``vmin``..``vmax``), quantized to ``step`` and shown with
     ``decimals``. At the extremes the corresponding button dims (value>=vmax →
     ``+`` at 0.35 alpha). Inlet 0 receives ``set_value <v>`` (from the bound
@@ -854,7 +972,8 @@ def custom_stepper_js(
         "    var bh = mgraphics.size[1] - labtop();\n"
         "    return Math.min(bh, 18);\n"
         "}\n"
-        "function onclick(x, y, but, cmd, shift) {\n"
+        # press body shared by the v8ui pointer path and the legacy onclick.
+        "function press(x, y, shift) {\n"
         "    var top = labtop();\n"
         "    if (y < top) { return; }\n"
         "    var w = mgraphics.size[0];\n"
@@ -872,16 +991,78 @@ def custom_stepper_js(
         "        ds_set_cursor(7);\n"
         "    }\n"
         "}\n"
-        # v8ui drag = onpointermove (the but===0 guard ignores hover); jsui's ondrag is
-        # NEVER called on a v8ui box — using it left these custom controls click-only (no drag).
-        "function onpointermove(x, y, but, cmd, shift) {\n"
-        "    if (but === 0) { dragging = false; hot = 0; ds_set_cursor(1); mgraphics.redraw(); return; }\n"
+        # v8ui in Live delivers POINTER EVENT OBJECTS, not positional args, and
+        # NEVER fires onclick/ondrag (jsui / the Node harness only). The old
+        # handlers read (x, y, but, ...) positionally, so in Live x/y arrived as
+        # the event OBJECT -> the +/- hit-test and the scrub math both went NaN
+        # and the stepper was inert (it still painted, so screenshots passed).
+        # Tolerant resolvers (names differ across runtimes) + a held-button
+        # guard on move so hover does not scrub.
+        "function pk_x(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.x !== undefined) return pe.x;\n"
+        "    if (pe.localX !== undefined) return pe.localX;\n"
+        "    if (pe.offsetX !== undefined) return pe.offsetX;\n"
+        "    if (pe.clientX !== undefined) return pe.clientX;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_y(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.y !== undefined) return pe.y;\n"
+        "    if (pe.localY !== undefined) return pe.localY;\n"
+        "    if (pe.offsetY !== undefined) return pe.offsetY;\n"
+        "    if (pe.clientY !== undefined) return pe.clientY;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_buttons(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.buttons !== undefined) return pe.buttons;\n"
+        "    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_shift(pe) { return (pe && pe.shiftKey) ? 1 : 0; }\n"
+        "function release() { dragging = false; hot = 0; ds_set_cursor(1); mgraphics.redraw(); }\n"
+        # fallback -1 aborts the press when no coordinate resolves (y < labtop()).
+        "function onpointerdown(pe) { press(pk_x(pe, -1), pk_y(pe, -1), pk_shift(pe)); }\n"
+        "function onpointermove(pe) {\n"
         "    if (!dragging) { return; }\n"
+        "    if ((pk_buttons(pe, 1) & 1) === 0) { release(); return; }\n"
+        "    var y = pk_y(pe, drag_y0);\n"
+        "    var shift = pk_shift(pe);\n"
         "    var s = shift ? FINE : STEP;\n"
         "    value = clampv(quantize(drag_v0 + (drag_y0 - y) / 10.0 * s));\n"
         "    outlet(0, value); mgraphics.redraw();\n"
         "}\n"
-        "function ondblclick(x, y) { value = clampv(quantize(" + f"{float(initial)}" + ")); outlet(0, value); mgraphics.redraw(); }\n"
+        "function onpointerup(pe) { release(); }\n"
+        "function onpointerleave(pe) { release(); }\n"
+        # Legacy jsui / Node-harness entry point; the pointer handlers take
+        # precedence on a v8ui box, so this does not double-step. The object guard
+        # keeps a host that hands onclick the EVENT from going NaN.
+        "function onclick(x, y, but, cmd, shift) {\n"
+        "    if (x && typeof x === 'object') { onpointerdown(x); return; }\n"
+        "    press(x, y, shift);\n"
+        "}\n"
+        "function ondblclick(pe) { value = clampv(quantize(" + f"{float(initial)}" + ")); outlet(0, value); mgraphics.redraw(); }\n"
+        # wheel: tolerate BOTH an event object and jsui's positional (x, y, dx, dy).
+        # CGEvent-verified direction convention (custom_knob_js): a scroll-DOWN
+        # event arrives with dy < 0, so dy < 0 must DECREASE. 2% of span (0.25%
+        # with Shift), but never LESS than one STEP — on an integer stepper a 2%
+        # nudge quantizes straight back to the current value, i.e. a dead wheel.
+        "function onwheel(a, b, c, d) {\n"
+        "    var dy = 0;\n"
+        "    if (a && typeof a === 'object') {\n"
+        "        if (a.deltaY !== undefined) dy = a.deltaY;\n"
+        "        else if (a.wheelDeltaY !== undefined) dy = -a.wheelDeltaY;\n"
+        "    } else if (d !== undefined) { dy = d; } else if (c !== undefined) { dy = c; }\n"
+        "    if (!dy) return;\n"
+        "    var shift = (a && a.shiftKey) ? 1 : 0;\n"
+        "    var span = VMAX - VMIN;\n"
+        "    var step = (shift ? 0.0025 : 0.02) * span;\n"
+        "    if (step < stepfor(shift)) step = stepfor(shift);\n"
+        "    value = clampv(quantize(value + (dy > 0 ? step : -step)));\n"
+        "    outlet(0, value);\n"
+        "    mgraphics.redraw();\n"
+        "}\n"
         "function paint() {\n"
         "    var w = mgraphics.size[0];\n"
         "    var h = mgraphics.size[1];\n"
@@ -961,8 +1142,9 @@ def custom_readout_js(
 
     Inlet 0 receives ``set_value <v>`` (from the bound hidden ``live.dial``) to
     redraw; vertical pointer drag emits the new value on outlet 0 (Shift = fine,
-    double-click = reset to ``initial``). The readout WORKS in actual param units
-    (``vmin``..``vmax``) — the same drag math as :func:`custom_knob_js`.
+    double-click = reset to ``initial``, scroll wheel = 2% of the span / 0.25%
+    with Shift). The readout WORKS in actual param units (``vmin``..``vmax``) —
+    the same drag math as :func:`custom_knob_js`.
 
     ``bg_top``/``bg_bot`` (``"r, g, b"`` strings) make the readout paint its OWN
     vertical-gradient background filling the whole object rect — a SLICE of the
@@ -1005,19 +1187,70 @@ def custom_readout_js(
         "function norm() { return (VMAX - VMIN) === 0 ? 0 : (value - VMIN) / (VMAX - VMIN); }\n"
         "function set_value(v) { value = clampv(v); mgraphics.redraw(); }\n"
         "function msg_float(v) { set_value(v); }\n"
-        "function onclick(x, y, but, cmd, shift) { dragging = true; drag_y0 = y; drag_v0 = value; ds_set_cursor(DS_CUR_GRAB); }\n"
-        # v8ui drag = onpointermove (the but===0 guard ignores hover); jsui's ondrag is
-        # NEVER called on a v8ui box — using it left these custom controls click-only (no drag).
-        "function onpointermove(x, y, but, cmd, shift) {\n"
-        "    if (but === 0) { dragging = false; ds_set_cursor(DS_CUR_HAND); return; }\n"
+        # v8ui in Live delivers POINTER EVENT OBJECTS, not positional args, and
+        # NEVER fires onclick/ondrag (jsui / the Node harness only). The old
+        # handlers read (x, y, but, ...) positionally: the drag was STARTED in
+        # onclick (so drag_y0/drag_v0 were never set in Live) and y arrived as
+        # the event OBJECT -> NaN. The readout painted and tracked automation
+        # while no mouse input could move it. Tolerant resolvers (names differ
+        # across runtimes) + a held-button guard so hover does not drag.
+        "function pk_y(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.y !== undefined) return pe.y;\n"
+        "    if (pe.localY !== undefined) return pe.localY;\n"
+        "    if (pe.offsetY !== undefined) return pe.offsetY;\n"
+        "    if (pe.clientY !== undefined) return pe.clientY;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_buttons(pe, fb) {\n"
+        "    if (!pe) return fb;\n"
+        "    if (pe.buttons !== undefined) return pe.buttons;\n"
+        "    if (pe.button !== undefined) return pe.button === 2 ? 2 : 1;\n"
+        "    return fb;\n"
+        "}\n"
+        "function pk_shift(pe) { return (pe && pe.shiftKey) ? 1 : 0; }\n"
+        "function onpointerdown(pe) {\n"
+        "    dragging = true; drag_y0 = pk_y(pe, 0); drag_v0 = value;\n"
+        "    ds_set_cursor(DS_CUR_GRAB);\n"
+        "}\n"
+        "function onpointermove(pe) {\n"
+        "    if (!dragging) return;\n"
+        "    if ((pk_buttons(pe, 1) & 1) === 0) { dragging = false; ds_set_cursor(DS_CUR_HAND); return; }\n"
+        "    var y = pk_y(pe, drag_y0);\n"
+        "    var shift = pk_shift(pe);\n"
         "    var span = VMAX - VMIN;\n"
         "    var sens = shift ? 0.22 : 1.0;\n"
         "    value = clampv(drag_v0 + (drag_y0 - y) / 130.0 * span * sens);\n"
         "    outlet(0, value);\n"
         "    mgraphics.redraw();\n"
         "}\n"
-        "function ondblclick(x, y) { value = clampv(" + f"{float(initial)}" + "); outlet(0, value); mgraphics.redraw(); }\n"
+        "function onpointerup(pe) { dragging = false; ds_set_cursor(DS_CUR_HAND); }\n"
+        "function onpointerleave(pe) { dragging = false; ds_set_cursor(DS_CUR_HAND); }\n"
+        # Legacy jsui / Node-harness entry point; the pointer handlers take
+        # precedence on a v8ui box. The object guard keeps a host that hands
+        # onclick the EVENT from seeding drag_y0 with an object (-> NaN drag).
+        "function onclick(x, y, but, cmd, shift) {\n"
+        "    if (x && typeof x === 'object') { onpointerdown(x); return; }\n"
+        "    dragging = true; drag_y0 = y; drag_v0 = value; ds_set_cursor(DS_CUR_GRAB);\n"
+        "}\n"
+        "function ondblclick(pe) { value = clampv(" + f"{float(initial)}" + "); outlet(0, value); mgraphics.redraw(); }\n"
         "function onidle(x, y) { if (!dragging) ds_set_cursor(DS_CUR_HAND); }\n"
+        # wheel: tolerate BOTH an event object and jsui's positional (x, y, dx, dy).
+        # CGEvent-verified direction convention (custom_knob_js): a scroll-DOWN
+        # event arrives with dy < 0, so dy < 0 must DECREASE.
+        "function onwheel(a, b, c, d) {\n"
+        "    var dy = 0;\n"
+        "    if (a && typeof a === 'object') {\n"
+        "        if (a.deltaY !== undefined) dy = a.deltaY;\n"
+        "        else if (a.wheelDeltaY !== undefined) dy = -a.wheelDeltaY;\n"
+        "    } else if (d !== undefined) { dy = d; } else if (c !== undefined) { dy = c; }\n"
+        "    if (!dy) return;\n"
+        "    var span = VMAX - VMIN;\n"
+        "    var step = ((a && a.shiftKey) ? 0.0025 : 0.02) * span;\n"
+        "    value = clampv(value + (dy > 0 ? step : -step));\n"
+        "    outlet(0, value);\n"
+        "    mgraphics.redraw();\n"
+        "}\n"
         "function paint() {\n"
         "    var w = mgraphics.size[0];\n"
         "    var h = mgraphics.size[1];\n"

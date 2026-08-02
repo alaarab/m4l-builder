@@ -216,29 +216,6 @@ function md_draw_focus_ring(x, y, r, accent) {
     mgraphics.stroke();
 }
 """
-
-
-def draggable_node_js() -> str:
-    """The draggable-node substrate (hit-test / drag state / transforms /
-    clamp / outlet dedup)."""
-    return DRAGGABLE_NODE_JS
-
-
-def tooltip_js() -> str:
-    """Edge-aware hover/drag tooltip (primary + secondary line)."""
-    return TOOLTIP_JS
-
-
-def edit_overlay_js() -> str:
-    """Double-click detect + type-in numeric overlay."""
-    return EDIT_OVERLAY_JS
-
-
-def modifier_drag_js() -> str:
-    """Shift fine-drag, Cmd axis-lock, arrow nudge + focus ring."""
-    return MODIFIER_DRAG_JS
-
-
 def ui_interaction_js() -> str:
     """All four foundation mixins, in dependency order."""
     return (DRAGGABLE_NODE_JS + TOOLTIP_JS + EDIT_OVERLAY_JS
