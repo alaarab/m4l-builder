@@ -49,6 +49,12 @@ docs = [
     # resolution branch (and its unpatchable urllib3/requests pins; both
     # dropped 3.9 before their security fixes) out of the lock.
     "mkdocs-material>=9.5; python_version >= '3.10'",
+    # Transitive via mkdocs-material. Pinned to a floor because <=10.21.3 has a
+    # path traversal in the b64 extension (an <img src> can read files outside
+    # base_path) — GHSA, Dependabot #5. mkdocs-material's own range still
+    # permits the vulnerable line, so without this floor a future `uv lock`
+    # can silently resolve back down to it.
+    "pymdown-extensions>=11.0.0; python_version >= '3.10'",
 ]
 
 [tool.pytest.ini_options]
