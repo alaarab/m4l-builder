@@ -193,7 +193,10 @@ GOLDEN_SHA256 = {
     "level_meter_js": ("4ae60d290ee6cec9499ab61844106a08497d26c8c40ca9a7781a1bfd81e5387c", 5408),
     "linear_phase_eq_display_js": ("65bf26868963d743bf081bc22ab5dd041ae1f4afb3da73970000dd639c7d4ae2", 93540),
     "loop_filter_curve_js": ("083b0e76b60ea1fd70a6780c5c336f318ea41d29887d6e1372a151ed8c4689f9", 10029),
-    "transfer_curve_js": ("2bac0c2c47f2c6fe02de8d842304a46935d5f0cd74b467f97324e110e4775d8d", 20173),
+    # Bumped 2026-08-01: transfer_curve now carries BYPASS_DIM_JS and calls
+    # paint_bypass_scrim() at the end of paint(). Inert until a device wires
+    # Device.add_bypass_dim() — Ceiling is the first.
+    "transfer_curve_js": ("3e5dd1e2c7c6fff54c2855303cc6c258a0cd0b11f7fbd63234eacc5693d107dd", 21518),
     "transient_history_js": ("32e95da84d28f319a0b19a717b87a0652a733bfefd58202767f767847fbd03b3", 11395),
     "waveshape_curve_js": ("c7256aa064f5e937ca0fbd1775c3869a1faa95d99bd151c0857e52e18f691d1f", 44629),
 }
