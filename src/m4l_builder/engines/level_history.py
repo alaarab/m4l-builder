@@ -4,8 +4,11 @@ The signature dynamics view: input level scrolls right-to-left as a filled
 area from the bottom while gain reduction hangs from the top as a filled
 band on its own scale. A peak-GR readout tracks the deepest reduction of
 the last ~1.5 s. Display-only in V1 (no gestures, no outlets fired) — the
-inbound ~30 Hz `levels` stream drives redraws, so no Task/clock is needed
-(legacy js Task.schedule silently no-ops in Live).
+CORE redraw loop is driven by the inbound ~30 Hz `levels` stream, not a
+clock. (The old "no Task at all" rule cited the legacy ``js`` object's
+Task.schedule no-op; this engine ships as v8ui, where Task().repeat() is
+Live-proven — the bypass-dim scrim ramp uses one, and it must, because on
+a bypassed device the levels stream cannot be relied on to keep painting.)
 
 Messages in (inlet 0):
     levels <env_db> <gr_db>   push one frame (detector level dB, GR dB <= 0)
@@ -46,6 +49,7 @@ from .interaction_core import (
     POINTER_Y_JS,
     plot_geometry_short_js,
 )
+from .live_theme import BYPASS_DIM_JS
 
 LEVEL_HISTORY_INLETS = 1
 LEVEL_HISTORY_OUTLETS = 1
@@ -87,7 +91,8 @@ def level_history_js(
     ``set_lufs <db>`` and echo ``set_loudtarget <idx>`` back (no-echo rule).
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
+    # BYPASS_DIM_JS is inert until the device wires Device.add_bypass_dim().
+    return design_system_js() + "\n" + BYPASS_DIM_JS + "\n" + _JS_TEMPLATE.substitute(
         bg_color=bg_color,
         panel_color=panel_color,
         plot_border_color=plot_border_color,
@@ -428,6 +433,8 @@ function paint() {
     mgraphics.set_line_width(1.0);
     mgraphics.rectangle(plot_l() + 0.5, plot_t() + 0.5, plot_w() - 1, plot_h() - 1);
     mgraphics.stroke();
+
+    paint_bypass_scrim(mgraphics.size[0], mgraphics.size[1]);
 }
 
 // Momentary-LUFS readout + clickable loudness-target chip (top-right), drawn

@@ -3078,11 +3078,17 @@ class TestLevelHistory:
         assert "(head + 1) % cap" in js
         assert "function frame_at" in js
 
-    def test_no_task_usage(self):
-        # Legacy js Task.schedule silently no-ops in Live; redraws must be
-        # driven by the inbound levels stream.
+    def test_no_task_driven_core_redraw(self):
+        # The CORE redraw loop must be driven by the inbound levels stream, not
+        # a clock — the original ban cited "Task silently no-ops in Live", but
+        # that pitfall is the legacy `js` object; this engine ships as v8ui,
+        # where Task().repeat() is Live-PROVEN (2026-08-01: the bypass-dim
+        # scrim ramp visibly faded Ceiling's displays, and that ramp runs
+        # entirely inside a v8ui Task callback). The one allowed Task is that
+        # scrim ramp; the levels path stays clock-free.
         js = level_history_js()
-        assert "new Task" not in js
+        assert js.count("new Task") == 1
+        assert "new Task(_dim_step, this)" in js
 
     def test_custom_gr_color(self):
         js = level_history_js(gr_line_color="0.9, 0.1, 0.1, 1.0")
