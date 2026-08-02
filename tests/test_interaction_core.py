@@ -189,7 +189,9 @@ GOLDEN_SHA256 = {
     "delay_trail_js": ("db52b252ed497f14515a932eaa97b547063056f3ba36e856c4a4f53d3f098fd9", 37858),
     "eq_curve_js": ("6b53347417b5c3c187e5b5b663e9fdf22677a1c1aec11e6226fc6ee3a2e259e9", 130435),
     "exciter_curve_js": ("497f90e209a10514d61ee7861a1e9abc3853ad69491aeb01a98e85e8630287cc", 19581),
-    "level_history_js": ("8cbd1632e9e218efc3adefc228e4ce5949d9cb570ac6eb95b2b2b84e5abc938b", 24533),
+    # Bumped 2026-08-01: level_history carries BYPASS_DIM_JS + the paint scrim
+    # (same treatment as transfer_curve; inert until add_bypass_dim is wired).
+    "level_history_js": ("3280e3b501b0cb7b68085cac3198fe2bf5cff61f1f89409054941a9dfb4df965", 25910),
     "level_meter_js": ("4ae60d290ee6cec9499ab61844106a08497d26c8c40ca9a7781a1bfd81e5387c", 5408),
     "linear_phase_eq_display_js": ("65bf26868963d743bf081bc22ab5dd041ae1f4afb3da73970000dd639c7d4ae2", 93540),
     "loop_filter_curve_js": ("083b0e76b60ea1fd70a6780c5c336f318ea41d29887d6e1372a151ed8c4689f9", 10029),
