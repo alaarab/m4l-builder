@@ -65,8 +65,12 @@ def add_bridge_probe_runtime(device, *, runtime_file: str, server_file: str,
     runtime <-> node.script server) on ``device``. ``y`` is the row's rect Y.
     """
     k = {"hidden": 1}
-    device.add_newobj("bridge_thisdevice", "live.thisdevice", numinlets=1, numoutlets=2,
-                      outlettype=["bang", ""], patching_rect=[20, y, 90, 20],
+    # live.thisdevice has THREE outlets — 0 bang (loaded), 1 int (enabled /
+    # disabled), 2 int. Declaring 2 tripped the box-declaration lint and made
+    # every bridge-probe build fail outright, so the probe variant of any
+    # device using this could not be built at all.
+    device.add_newobj("bridge_thisdevice", "live.thisdevice", numinlets=1, numoutlets=3,
+                      outlettype=["bang", "int", "int"], patching_rect=[20, y, 90, 20],
                       varname="bridge_thisdevice", **k)
     device.add_newobj("bridge_defer", "deferlow", numinlets=1, numoutlets=1,
                       outlettype=[""], patching_rect=[118, y, 52, 20],
