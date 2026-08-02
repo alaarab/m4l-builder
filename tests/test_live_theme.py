@@ -239,3 +239,41 @@ class TestApplyStockTheme:
         assert card == "g1" and label == "g1_label"
         assert "textcolor" not in self._box(d, label)   # skin-native label
         d.apply_stock_theme(cards=[card])               # id round-trips
+
+
+class TestNativeControlColors:
+    """The "default Ableton" sweep: no baked colors on native controls."""
+
+    @staticmethod
+    def _device():
+        from m4l_builder import AudioEffect
+
+        d = AudioEffect("nat", width=300, height=168)
+        d.add_dial("amt", "Amt", [10, 10, 41, 35])
+        d.add_comment("lbl", [10, 50, 60, 12], "COMP",
+                      textcolor=[0.5, 0.5, 0.52, 1.0])
+        d.add_panel("card", [100, 10, 80, 80], bgcolor=[0.1, 0.1, 0.12, 1.0])
+        return d
+
+    def _box(self, d, box_id):
+        return next(e["box"] for e in d.boxes if e["box"].get("id") == box_id)
+
+    def test_strips_every_color_attr_from_native_controls(self):
+        d = self._device()
+        dial = self._box(d, "amt")
+        dial["activedialcolor"] = [0.9, 0.5, 0.1, 1.0]
+        dial["bordercolor"] = [0.2, 0.2, 0.2, 1.0]
+        n = d.native_control_colors()
+        assert n >= 3   # two dial colors + the comment textcolor
+        assert not [k for k in self._box(d, "amt") if k.endswith("color")]
+        assert "textcolor" not in self._box(d, "lbl")
+
+    def test_panels_and_canvases_are_left_alone(self):
+        d = self._device()
+        d.native_control_colors()
+        assert self._box(d, "card")["bgcolor"] == [0.1, 0.1, 0.12, 1.0]
+
+    def test_exclude_keeps_a_deliberate_color(self):
+        d = self._device()
+        d.native_control_colors(exclude=["lbl"])
+        assert "textcolor" in self._box(d, "lbl")
