@@ -36,6 +36,7 @@ from .interaction_core import (
     POINTER_Y_JS,
     plot_geometry_short_js,
 )
+from .live_theme import BYPASS_DIM_JS
 
 TRANSFER_CURVE_INLETS = 1
 TRANSFER_CURVE_OUTLETS = 1
@@ -76,7 +77,10 @@ def transfer_curve_js(
     ``knee <db>``) — the premium-comp "shape the knee on the curve" move.
     """
     panel_color = resolve_graph_panel_color(bg_color, panel_color)
-    return design_system_js() + "\n" + _JS_TEMPLATE.substitute(
+    # BYPASS_DIM_JS is inert until the device wires Device.add_bypass_dim() —
+    # _dev_active starts at 1, so paint_bypass_scrim() (last call in paint())
+    # composites nothing and this display looks exactly as it did before.
+    return design_system_js() + "\n" + BYPASS_DIM_JS + "\n" + _JS_TEMPLATE.substitute(
         ratio_drag=1 if ratio_drag else 0,
         knee_drag=1 if knee_drag else 0,
         bg_color=bg_color,
@@ -406,6 +410,8 @@ function paint() {
         mgraphics.move_to(rx, ry);
         mgraphics.show_text("MU " + (makeup >= 0 ? "+" : "") + (Math.round(makeup * 10) / 10) + " dB");
     }
+
+    paint_bypass_scrim(w, h);
 }
 
 // ── Messages ─────────────────────────────────────────────────────────

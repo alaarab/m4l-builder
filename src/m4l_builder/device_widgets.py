@@ -1890,6 +1890,48 @@ class CompositeWidgetsMixin:
                 ry += 30
         return {"thisdevice": f"{id_prefix}_td", "bus": bus}
 
+    def add_bypass_dim(
+        self,
+        targets,
+        *,
+        bus: str = "devicestate",
+        selector: str = "set_device_active",
+        id_prefix: str = "bypdim",
+        x: int = 700,
+        y: int = 2400,
+    ) -> str:
+        """Feed the device's enabled state to CUSTOM jsui/v8ui displays.
+
+        Native ``live.*`` controls grey out on bypass for free — their
+        ``active=0`` / bare colors handle it. A custom display does not: a
+        curve, graph or spectrum keeps painting at full brightness on a
+        bypassed device. That mismatch is the "bypass zombie" look, and it is
+        the only part of the dim story the theme buses do not already cover
+        (:meth:`add_brand_dim` handles the native controls).
+
+        ``targets``: jsui/v8ui box ids, fanned from ONE ``r ---<bus>``. Each
+        receives ``<selector> 1`` on enable and ``<selector> 0`` on bypass, so
+        the script needs a function of that name — a bare int would land on
+        ``msg_int`` and collide with the script's other numeric input.
+        MAX-VALIDATION L2 (:mod:`m4l_builder.jsui_coverage`) fails the build if
+        the handler is missing, and :data:`BYPASS_DIM_JS` is a drop-in one.
+
+        Tracks runtime Activator clicks, not just the load state — see
+        :func:`engines.live_theme.live_device_active_state` for why that
+        distinction is not academic. Returns the bus name.
+        """
+        from .engines.live_theme import live_bypass_state
+
+        boxes, lines = live_bypass_state(bus, selector=selector,
+                                         id_prefix=id_prefix, x=x, y=y)
+        self.add_dsp(boxes, lines)
+        rx = f"{id_prefix}_rx"
+        self.add_newobj(rx, f"r ---{bus}", numinlets=0, numoutlets=1,
+                        outlettype=[""], patching_rect=[x, y + 250, 90, 20])
+        for tid in targets:
+            self.add_line(rx, 0, tid, 0)
+        return bus
+
     def add_brand_dim(
         self,
         brand_rgba,
