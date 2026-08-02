@@ -92,6 +92,25 @@ def apply_validation_policy(device, policy) -> None:
                             severity="error")
             for msg in lint_boxes(device.boxes)
         ]
+        # MAX-VALIDATION L2: a message routed into a jsui/v8ui whose script
+        # defines no handler for it. Max logs "js: no function <name>" and
+        # drops it silently — the box, the wire and the script all exist, so
+        # every structural check passes and the control just does nothing.
+        # Gated at error severity: the check is deliberately narrow (only
+        # statically-determinable selectors, no ---bus tracing) and swept the
+        # whole fleet with ZERO findings before promotion.
+        from .jsui_coverage import jsui_coverage_issues
+        blocking += [
+            ValidationIssue(
+                code="jsui-handler-missing",
+                message=(f"{dest} (jsui/v8ui): message {sel!r} is routed in "
+                         f"from {src}, but its script defines neither a "
+                         f"function {sel}() nor anything() — Max will log "
+                         f"'js: no function {sel}' and drop it"),
+                severity="error")
+            for dest, sel, src in jsui_coverage_issues(
+                device.boxes, device.lines, getattr(device, "_support_files", {}))
+        ]
         if blocking:
             raise BuildValidationError(blocking)
         return
