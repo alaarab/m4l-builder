@@ -57,6 +57,11 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         # for a taller custom layout (e.g. 190px),
         # which reproduces the source's rects verbatim and accepts its clipping.
         self.allow_tall = allow_tall
+        # Runtime one-at-a-time visibility switchers (pagers, mode_stack tabs),
+        # each a list of name sets. Feeds the ``control-overlap`` lint so a
+        # paged layout's deliberate coordinate sharing is not reported as a
+        # collision. See :meth:`declare_exclusive_visibility`.
+        self.exclusive_visibility: list[list[list[str]]] = []
         # Defined Latency (samples) reported to Live for plugin delay
         # compensation — the patcher-level "latency" key.
         self.latency = 0
@@ -114,8 +119,33 @@ class Device(CompositeWidgetsMixin, GraphContainer):
                 severity="warning",
             ))
         issues.extend(self._clipped_control_issues())
-        issues.extend(layout_issues(self.boxes, self.width, self.height))
+        issues.extend(layout_issues(self.boxes, self.width, self.height,
+                                    exclusive_groups=self.exclusive_visibility))
         return issues
+
+    def declare_exclusive_visibility(self, *name_sets) -> None:
+        """Declare that only ONE of these name sets is ever visible at a time.
+
+        A pager or a ``live.tab`` mode switcher stacks its pages on the same
+        coordinates BY DESIGN — that is the whole point of paging. Without this
+        declaration the ``control-overlap`` lint reports every cross-page pair
+        as a collision, which is why it could never be promoted from warning to
+        a hard gate: the two devices that page (Shard, 32 pairs; UIKit Stack,
+        11) are both correct, and failing them would block valid builds.
+
+        Names may be scripting names (``varname``) or box ids — a pager
+        addresses boxes by scripting name, while the linter reports ids.
+        :func:`~m4l_builder.recipes.mode_stack` registers its own managed sets,
+        so only hand-rolled pagers need to call this.
+
+            device.declare_exclusive_visibility(PLAY_VARNAMES, SEQ_VARNAMES)
+        """
+        sets = [list(names) for names in name_sets]
+        if len(sets) < 2:
+            raise ValueError(
+                "declare_exclusive_visibility needs at least 2 name sets — one "
+                "set is not mutually exclusive with anything")
+        self.exclusive_visibility.append(sets)
 
     def check_guidelines(self) -> list:
         """Static Ableton production-standards report for this device (advisory).

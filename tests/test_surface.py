@@ -252,6 +252,51 @@ class TestLayoutLint:
         assert "control-overlap" in codes
 
 
+class TestExclusiveVisibility:
+    """Paged layouts stack controls on purpose — one page is shown at a time."""
+
+    @staticmethod
+    def _paged():
+        d = AudioEffect("paged", width=200, height=168, theme=GRAPHITE)
+        d.add_dial("a", "PA", [20, 20, 41, 35], min_val=0, max_val=1, initial=0)
+        d.add_dial("b", "PB", [20, 20, 41, 35], min_val=0, max_val=1, initial=0)
+        return d
+
+    def test_different_pages_are_exempt(self):
+        d = self._paged()
+        d.declare_exclusive_visibility(["a"], ["b"])
+        assert "control-overlap" not in {i.code for i in d.lint()}
+
+    def test_same_page_still_flagged(self):
+        """The exemption is per-switcher, not a blanket mute."""
+        d = self._paged()
+        d.declare_exclusive_visibility(["a", "b"], ["other"])
+        assert "control-overlap" in {i.code for i in d.lint()}
+
+    def test_undeclared_control_still_flagged(self):
+        """A box in no page collides with every page — it is always on screen."""
+        d = self._paged()
+        d.add_dial("c", "PC", [20, 20, 41, 35], min_val=0, max_val=1, initial=0)
+        d.declare_exclusive_visibility(["a"], ["b"])
+        messages = " ".join(i.message for i in d.lint()
+                            if i.code == "control-overlap")
+        assert "c" in messages
+
+    def test_matches_on_varname_not_only_id(self):
+        """Pagers address boxes by scripting name; the linter reports ids."""
+        d = self._paged()
+        for entry in d.boxes:
+            if entry["box"].get("id") == "b":
+                entry["box"]["varname"] = "Page Two Dial"
+        d.declare_exclusive_visibility(["a"], ["Page Two Dial"])
+        assert "control-overlap" not in {i.code for i in d.lint()}
+
+    def test_single_set_is_rejected(self):
+        d = self._paged()
+        with pytest.raises(ValueError, match="at least 2 name sets"):
+            d.declare_exclusive_visibility(["a"])
+
+
 class TestBrandDimHelper:
     def test_add_brand_dim_wires_bus_and_fanout(self):
         d = AudioEffect("bd", width=300, height=168, theme=GRAPHITE)

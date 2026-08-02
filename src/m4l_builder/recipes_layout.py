@@ -1405,6 +1405,12 @@ def mode_stack(device, id_prefix, *, rect, modes, param_name="Mode",
     device.add_line(thisdev, 0, init, 0)
     device.add_line(init, 0, tab, 0)
 
+    # Every mode's content is authored at the SAME rect and only one mode is
+    # ever visible, so cross-mode rect sharing is the design. Register it so
+    # the control-overlap lint does not read the stack as a pile of collisions
+    # (UIKit Stack reported 11 such pairs, all legitimate).
+    device.declare_exclusive_visibility(*[list(names) for _, names in modes])
+
     return stage_result(
         {
             "tab": tab,
