@@ -335,7 +335,28 @@ def _onscreen_rect(payload: dict, width: float, height: float):
     return x, y, w, h
 
 
-def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIssue]:
+def _exclusive_pair(names_a: set, names_b: set, switchers) -> bool:
+    """True if some switcher puts these two boxes in DIFFERENT visible sets.
+
+    A "switcher" is one runtime control that shows exactly one of its name sets
+    at a time (a pager, a ``mode_stack`` tab). Two boxes in different sets of
+    the same switcher are never on screen together, so sharing coordinates is
+    the design rather than a collision. Membership matches either the box's
+    ``varname`` or its id, because pagers address boxes by scripting name while
+    the linter reports ids.
+    """
+    for sets in switchers:
+        index_a = next((i for i, s in enumerate(sets) if names_a & s), None)
+        if index_a is None:
+            continue
+        index_b = next((i for i, s in enumerate(sets) if names_b & s), None)
+        if index_b is not None and index_b != index_a:
+            return True
+    return False
+
+
+def layout_issues(boxes: list, width: float, height: float,
+                  exclusive_groups=None) -> list[ValidationIssue]:
     """Device-level layout rules (all WARNING except ``setwidth-mismatch``):
 
     * ``control-overlap`` — two INTERACTIVE controls' rects intersect by more
@@ -349,11 +370,19 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
       (ERROR: a width-collapse FULL wider than the layout re-creates the dead
       zone at runtime).
 
+    ``exclusive_groups`` is a list of SWITCHERS, each a list of name sets that
+    are shown one-at-a-time (see :meth:`Device.declare_exclusive_visibility`).
+    Controls in different sets of the same switcher are exempt from
+    ``control-overlap`` — a paged device deliberately stacks its pages on the
+    same coordinates, and without this the check reports one false positive per
+    cross-page pair (43 across the fleet, all of them legitimate).
+
     Pure function over the box list so it can lint a live ``Device`` (via
     ``Device.lint()``) or a reverse-loaded .amxd alike.
     """
+    switchers = [[set(s) for s in sets] for sets in (exclusive_groups or [])]
     issues: list[ValidationIssue] = []
-    interactive: list[tuple[str, str, tuple[float, float, float, float]]] = []
+    interactive: list[tuple[str, str, tuple[float, float, float, float], set]] = []
     content_spans: list[tuple[float, float]] = []
     content_right = 0.0
 
@@ -419,7 +448,9 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
         if (maxclass in _INTERACTIVE_MAXCLASSES
                 and not _alpha0_bg(payload)
                 and not payload.get("ignoreclick")):
-            interactive.append((payload.get("id") or "?", maxclass, rect))
+            names = {n for n in (payload.get("id"), payload.get("varname"))
+                     if n is not None}
+            interactive.append((payload.get("id") or "?", maxclass, rect, names))
         # dead-live-text: a VISIBLE live.text with parameter_enable=0 renders
         # but NEVER receives clicks in Live (proven on Para EQ's ANALYZER/
         # ACTIVE, Linear Phase EQ's ANALYZER, Spectrum Analyzer's mode chips).
@@ -438,13 +469,15 @@ def layout_issues(boxes: list, width: float, height: float) -> list[ValidationIs
                 severity="error", box_id=payload.get("id")))
 
     # control-overlap
-    for i, (id_a, cls_a, ra) in enumerate(interactive):
+    for i, (id_a, cls_a, ra, names_a) in enumerate(interactive):
         ax, ay, aw, ah = ra
-        for id_b, cls_b, rb in interactive[i + 1:]:
+        for id_b, cls_b, rb, names_b in interactive[i + 1:]:
             bx, by, bw, bh = rb
             ox = min(ax + aw, bx + bw) - max(ax, bx)
             oy = min(ay + ah, by + bh) - max(ay, by)
             if ox > 4.0 and oy > 4.0:
+                if switchers and _exclusive_pair(names_a, names_b, switchers):
+                    continue  # different pages of the same switcher
                 issues.append(ValidationIssue(
                     code="control-overlap",
                     message=(f"interactive controls overlap by {ox:g}x{oy:g}px: "
