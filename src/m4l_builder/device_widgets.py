@@ -197,7 +197,8 @@ class CompositeWidgetsMixin:
         self.add_v8ui(
             id, rect,
             js_code=custom_knob_js(
-                label=(shortname or param_name).upper(), accent=accent,
+                # Title Case, not ALL CAPS — matches Ableton stock device labels.
+                label=(shortname or param_name), accent=accent,
                 vmin=vmin, vmax=vmax, initial=initial, unit=unit, decimals=decimals,
                 bg_top=bg_top, bg_bot=bg_bot, bipolar=bipolar,
             ),
@@ -514,7 +515,8 @@ class CompositeWidgetsMixin:
         self.add_v8ui(
             id, rect,
             js_code=custom_slider_js(
-                label=(shortname or param_name).upper(), accent=accent,
+                # Title Case, not ALL CAPS — matches Ableton stock device labels.
+                label=(shortname or param_name), accent=accent,
                 vmin=vmin, vmax=vmax, initial=initial, unit=unit, decimals=decimals,
                 orientation=orientation, bg_top=bg_top, bg_bot=bg_bot, bipolar=bipolar,
             ),
@@ -1930,6 +1932,18 @@ class CompositeWidgetsMixin:
         (not global across the Live set).
 
         ``stages`` is the ordered list of bus names (``stages[0]`` fires first).
+
+        .. warning::
+           **Never bang a ``live.text`` from an init ring.** The common idiom is
+           to bang every parameter so it re-emits its RESTORED value — that is
+           correct for ``live.dial`` / ``live.numbox`` / ``live.menu`` /
+           ``live.tab``, but a ``live.text`` treats bang as *toggle* ("A bang
+           message will toggle the state of the object", per its refpage), so
+           banging one FLIPS the control on every device load. Send it
+           ``outputvalue`` instead, which re-emits without changing state.
+           Caught 2026-08-01 when this idiom would have flipped Shard's DICE
+           PATTERN and Voices on every load; see ``plugins/shard/_p1.py`` and
+           ``_p4.py`` for the working pattern.
         ``defer=True`` routes the load bang through ``deferlow`` (low-priority queue,
         after the patch finishes loading — the Ableton-recommended init timing, so a
         ``loadbang`` race can't read half-built state). Returns

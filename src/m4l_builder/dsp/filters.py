@@ -98,7 +98,13 @@ def tilt_eq(id_prefix: str, freq: float = 1000.) -> tuple:
 
 
 def crossover_3band(id_prefix: str) -> tuple:
-    """Create a 3-band crossover using two cross~ objects.
+    """NOT allpass-compensated — the bands do NOT sum flat.
+
+    Use :func:`gen_snippets.multiband_split` for any band-split that has to
+    reconstruct flat; this one ripples at the lower crossover. Kept as a
+    simple object-graph split for non-critical uses.
+
+    Create a 3-band crossover using two cross~ objects.
 
     cross~ inlets: (signal, freq_hz); outlets: (LP, HP).
     First cross~ splits at low freq; its HP feeds the second cross~ at high freq.

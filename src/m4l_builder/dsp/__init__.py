@@ -125,6 +125,8 @@ from .routing import (
 )
 from .spectral import (
     phase_vocoder_subpatcher,
+    pitch_shift_gizmo,
+    pitch_shift_gizmo_subpatcher,
     spectral_crossover,
     spectral_crossover_subpatcher,
     spectral_gate,
@@ -226,6 +228,8 @@ __all__ = [
     "pattr_system",
     "peaking_eq",
     "phase_vocoder_subpatcher",
+    "pitch_shift_gizmo",
+    "pitch_shift_gizmo_subpatcher",
     "pitch_quantize",
     "pitchbend_in",
     "poly_voices",

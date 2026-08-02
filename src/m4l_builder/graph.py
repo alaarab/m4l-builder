@@ -345,24 +345,31 @@ class GraphContainer:
         ref = self.add_box({"box": box})
 
         feeds = self._normalize_signal_feeds(signal_src)
-        gated_first = False
+        gated = set()
         if gate_src is not None and feeds:
             # selector~ 1 1: inlet 0 = control (toggle), inlet 1 = live signal.
             # Control 1 passes the signal, 0 emits silence — the gate.
-            primary = feeds[0]
-            gate_id = f"{id}_gate"
+            #
+            # EVERY feed is gated, not just feeds[0]. Gating only the first left
+            # multi-feed displays still fully live on their remaining inputs, so
+            # the "off" toggle saved no CPU and the display kept drawing — the
+            # exact symptom on stereo_field's goniometer, whose scope~ takes a
+            # side feed AND a mid feed.
             base_rect = list(patching_rect) if patching_rect else list(presentation_rect)
-            self.add_newobj(
-                gate_id, "selector~ 1 1", numinlets=2, numoutlets=1,
-                outlettype=["signal"],
-                patching_rect=[base_rect[0], max(base_rect[1] - 28, 0), 90, 22],
-            )
-            self.add_line(primary[0], primary[1], gate_id, 1)
-            self.add_line(gate_src[0], gate_src[1], gate_id, 0)
-            self.add_line(gate_id, 0, id, primary[2])
-            gated_first = True
+            for i, (src_id, src_outlet, dest_inlet) in enumerate(feeds):
+                gate_id = f"{id}_gate" if i == 0 else f"{id}_gate{i}"
+                self.add_newobj(
+                    gate_id, "selector~ 1 1", numinlets=2, numoutlets=1,
+                    outlettype=["signal"],
+                    patching_rect=[base_rect[0] + i * 96,
+                                   max(base_rect[1] - 28, 0), 90, 22],
+                )
+                self.add_line(src_id, src_outlet, gate_id, 1)
+                self.add_line(gate_src[0], gate_src[1], gate_id, 0)
+                self.add_line(gate_id, 0, id, dest_inlet)
+                gated.add(i)
         for i, (src_id, src_outlet, dest_inlet) in enumerate(feeds):
-            if i == 0 and gated_first:
+            if i in gated:
                 continue
             self.add_line(src_id, src_outlet, id, dest_inlet)
         return ref

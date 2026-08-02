@@ -234,6 +234,14 @@ def stft_phase_vocoder(id_prefix: str) -> tuple:
     """Phase vocoder using pfft~ for time-stretch/pitch-shift.
 
     Points to phase_vocoder_sub.maxpat as the subpatcher.
+
+    CONSUMER MUST REGISTER THE SUBPATCHER. This host only emits the ``pfft~``
+    box; nothing writes ``phase_vocoder_sub.maxpat``, so a device using this
+    as-is loads a pfft~ with no patcher and passes silence. Register it with
+    ``device.register_asset("phase_vocoder_sub.maxpat",
+    json.dumps(phase_vocoder_subpatcher()), asset_type="TEXT", category="js")``
+    — the support-file path, NOT an embedded ``patcher`` key (a stereo pfft~
+    with an embedded patcher loads dead; Live-proven 2026-08-01 on Hush).
     Wire audio into {prefix}_pfft inlet 0.
     Output from {prefix}_pfft outlet 0.
     """
@@ -260,10 +268,21 @@ def phase_vocoder_subpatcher() -> dict:
                  "numinlets": 2, "numoutlets": 2,
                  "outlettype": ["signal", "signal"],
                  "patching_rect": [30, 80, 80, 20]}},
-        {"box": {"id": "pv_phase_acc", "maxclass": "newobj", "text": "+~",
-                 "numinlets": 2, "numoutlets": 1,
+        # framedelta~ -> frameaccum~ IS the phase vocoder. framedelta~ gives the
+        # phase DEVIATION between successive frames; frameaccum~ integrates it
+        # back into a continuous phase. The old `+~` here accumulated nothing
+        # (its right inlet was never fed), so the "vocoder" just copied the
+        # input phase through and spectral freeze/stretch did nothing at all.
+        {"box": {"id": "pv_framedelta", "maxclass": "newobj",
+                 "text": "framedelta~",
+                 "numinlets": 1, "numoutlets": 1,
                  "outlettype": ["signal"],
-                 "patching_rect": [120, 80, 30, 20]}},
+                 "patching_rect": [120, 80, 90, 20]}},
+        {"box": {"id": "pv_frameaccum", "maxclass": "newobj",
+                 "text": "frameaccum~",
+                 "numinlets": 1, "numoutlets": 1,
+                 "outlettype": ["signal"],
+                 "patching_rect": [120, 110, 90, 20]}},
         {"box": {"id": "pv_poltocar", "maxclass": "newobj", "text": "poltocar~",
                  "numinlets": 2, "numoutlets": 2,
                  "outlettype": ["signal", "signal"],
@@ -276,8 +295,9 @@ def phase_vocoder_subpatcher() -> dict:
         {"patchline": {"source": ["pv_fftin", 0], "destination": ["pv_cartopol", 0]}},
         {"patchline": {"source": ["pv_fftin", 1], "destination": ["pv_cartopol", 1]}},
         {"patchline": {"source": ["pv_cartopol", 0], "destination": ["pv_poltocar", 0]}},
-        {"patchline": {"source": ["pv_cartopol", 1], "destination": ["pv_phase_acc", 0]}},
-        {"patchline": {"source": ["pv_phase_acc", 0], "destination": ["pv_poltocar", 1]}},
+        {"patchline": {"source": ["pv_cartopol", 1], "destination": ["pv_framedelta", 0]}},
+        {"patchline": {"source": ["pv_framedelta", 0], "destination": ["pv_frameaccum", 0]}},
+        {"patchline": {"source": ["pv_frameaccum", 0], "destination": ["pv_poltocar", 1]}},
         {"patchline": {"source": ["pv_poltocar", 0], "destination": ["pv_fftout", 0]}},
         {"patchline": {"source": ["pv_poltocar", 1], "destination": ["pv_fftout", 1]}},
     ]
