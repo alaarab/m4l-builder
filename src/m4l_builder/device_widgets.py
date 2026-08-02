@@ -1914,6 +1914,46 @@ class CompositeWidgetsMixin:
             ry += 30
         return result
 
+    # Box classes whose colors native_control_colors() resets to Live defaults.
+    # Native live.* controls with NO color attributes render in the user's
+    # skin colors and re-tint on a theme switch — that IS "default Ableton".
+    # panel / jsui / v8ui are deliberately absent: shells ride the
+    # apply_stock_theme buses and graph CONTENT keeps its data colors (stock
+    # devices color their curves too — EQ Eight's bands are not grey).
+    _NATIVE_COLOR_MAXCLASSES = frozenset({
+        "live.dial", "live.slider", "live.tab", "live.text", "live.menu",
+        "live.numbox", "live.button", "live.toggle", "live.gain~",
+        "live.meter~", "live.comment", "textbutton", "number", "flonum",
+    })
+
+    def native_control_colors(self, *, exclude=()):
+        """Strip every baked color from native controls so they render in the
+        user's Live skin — the "default Ableton" look.
+
+        Removes every attribute ending in ``color`` from the maxclasses in
+        :data:`_NATIVE_COLOR_MAXCLASSES` (dial arcs, tab fills, toggle
+        on-states, comment text, numbox chrome, ...). A native control with no
+        color attributes takes the skin's defaults and follows a light/dark
+        theme switch with no wiring at all — which also makes the runtime
+        theme buses unnecessary for those controls.
+
+        Call it LAST, after every control exists. ``exclude``: box ids to
+        leave untouched (a deliberately colored readout that encodes meaning).
+        Returns the number of attributes stripped.
+        """
+        excluded = set(exclude)
+        stripped = 0
+        for entry in self.boxes:
+            payload = entry["box"]
+            if payload.get("maxclass") not in self._NATIVE_COLOR_MAXCLASSES:
+                continue
+            if payload.get("id") in excluded:
+                continue
+            for key in [k for k in payload if k.endswith("color")]:
+                del payload[key]
+                stripped += 1
+        return stripped
+
     def add_stock_card(self, card_id, rect, *, title=None, title_rect=None,
                        title_id=None, fontsize: float = 8.0, rounded: int = 3,
                        **panel_kwargs):
