@@ -1796,6 +1796,153 @@ class CompositeWidgetsMixin:
             "thisdevice": f"{p}_td",
         }
 
+    # Standard canvas selectors for apply_stock_theme's canvases group. A jsui
+    # receiving these must define same-named handlers — MAX-VALIDATION L2 fails
+    # the build otherwise, which is the guard that keeps this from silently
+    # posting "js: no function theme_bg" (the dead-control class).
+    STOCK_CANVAS_SPECS = (
+        ("lcd_bg", "theme_bg"),
+        ("lcd_control_fg", "theme_fg"),
+        ("control_selection", "theme_glow"),
+        ("lcd_control_fg_zombie", "theme_dim"),
+    )
+
+    def apply_stock_theme(
+        self,
+        *,
+        backdrop=None,
+        cards=(),
+        insets=(),
+        canvases=(),
+        labels=(),
+        id_prefix: str = "stock",
+        x: int = 700,
+        y: int = 3000,
+    ):
+        """Re-base this device on the user's ACTUAL Live skin in one call — the
+        stock-theme recipe the corpus devices hand-wire (derail, strata, cleave,
+        cleaver, oracle, overtone, tapeworm each invented their own selector
+        names for the same four tokens; this standardizes it).
+
+        The recipe, per group:
+
+        * ``backdrop`` — the full-bleed background panel goes TRANSPARENT
+          (bgcolor alpha 0, static). Live then draws its own skin-aware device
+          face behind the layout, exactly like a stock device. The kit writes
+          no patcher-level bgcolor, so nothing else needs resetting.
+        * ``cards`` — section/card panels subscribe to ``surface_bg`` (the
+          Live device-panel token) via the live.colors bus. On the default
+          skins this reads FLAT against the native face — which is the stock
+          look (EQ Eight groups with dividers, not contrasting cards).
+        * ``insets`` — LCD wells (graph/readout backdrops) subscribe to
+          ``lcd_bg``, staying dark against the face the way stock displays do.
+        * ``canvases`` — jsui/v8ui displays receive the four standard
+          selectors in :data:`STOCK_CANVAS_SPECS` (``theme_bg`` /
+          ``theme_fg`` / ``theme_glow`` / ``theme_dim``, each ``R G B A``).
+          Their scripts must handle them; the L2 jsui-coverage gate enforces
+          it at build time, so a missing handler is a build failure rather
+          than a silent console error.
+        * ``labels`` — section-label ``live.comment`` boxes get their baked
+          ``textcolor`` REMOVED (static). An unset live.comment textcolor
+          follows the Live skin natively, which IS the stock treatment — no
+          bus needed. Only pass true section labels; accent readouts keep
+          their color by staying off this list.
+
+        Everything dynamic rides ONE shared distributor (one
+        ``live.thisdevice`` + one ``live.colors``), re-fired on load and on a
+        skin switch. The authored theme colors remain the static appearance in
+        the patcher editor; the bus overrides at load — the corpus pattern
+        ("premium devices never bake colors" means never SHIP baked, not never
+        author defaults).
+
+        Returns ``{"buses": [...], "colors": ..., "thisdevice": ...}`` (empty
+        dict if every group was empty).
+        """
+        by_id = {}
+        for entry in self.boxes:
+            payload = entry["box"]
+            if payload.get("id") is not None:
+                by_id[payload["id"]] = payload
+
+        def _need(box_id, group):
+            box = by_id.get(box_id)
+            if box is None:
+                raise ValueError(
+                    f"apply_stock_theme: no box with id {box_id!r} ({group}) — "
+                    f"build every group's boxes before calling")
+            return box
+
+        if backdrop is not None:
+            box = _need(backdrop, "backdrop")
+            color = list(box.get("bgcolor") or [0.0, 0.0, 0.0, 1.0])
+            color[3] = 0.0
+            box["bgcolor"] = color
+
+        for label_id in labels:
+            _need(label_id, "labels").pop("textcolor", None)
+
+        p = id_prefix
+        specs = []
+        fans = []  # (bus, box_id)
+        if cards:
+            specs.append(("surface_bg", "bgcolor", f"{p}_card"))
+            fans += [(f"{p}_card", _need(c, "cards") and c) for c in cards]
+        if insets:
+            specs.append(("lcd_bg", "bgcolor", f"{p}_inset"))
+            fans += [(f"{p}_inset", _need(i, "insets") and i) for i in insets]
+        if canvases:
+            for token, selector in self.STOCK_CANVAS_SPECS:
+                specs.append((token, selector, f"{p}_canvas"))
+            fans += [(f"{p}_canvas", _need(c, "canvases") and c) for c in canvases]
+
+        if not specs:
+            return {}
+
+        result = self.add_theme_bus(specs, id_prefix=f"{p}_bus", x=x, y=y)
+        from .engines.live_theme import live_theme_receiver
+
+        seen_rx = set()
+        ry = y + 260
+        for bus, box_id in fans:
+            key = (bus, box_id)
+            if key in seen_rx:
+                continue
+            seen_rx.add(key)
+            rx_boxes, rx_lines = live_theme_receiver(
+                bus, box_id, id_prefix=f"{p}_rx_{box_id}", x=x, y=ry)
+            self.add_dsp(rx_boxes, rx_lines)
+            ry += 30
+        return result
+
+    def add_stock_card(self, card_id, rect, *, title=None, title_rect=None,
+                       title_id=None, fontsize: float = 8.0, rounded: int = 3,
+                       **panel_kwargs):
+        """Group-card factory for the stock theme: one call adds a card panel
+        (plus an optional section label with NO baked textcolor, so it follows
+        the Live skin natively). Returns ``(card_id, label_id_or_None)`` —
+        collect these and pass them to :meth:`apply_stock_theme` as ``cards``
+        (the label needs no wiring at all).
+
+        The panel is authored with a neutral dark placeholder; the bus
+        overrides it at load, and the placeholder only ever shows in the
+        patcher editor.
+        """
+        self.add_panel(card_id, list(rect),
+                       bgcolor=panel_kwargs.pop("bgcolor", [0.11, 0.11, 0.12, 1.0]),
+                       rounded=rounded, **panel_kwargs)
+        label_id = None
+        if title is not None:
+            label_id = title_id or f"{card_id}_label"
+            lr = title_rect or [rect[0] + 6, rect[1] + 3, max(40, rect[2] - 12), 13]
+            self.add_comment(label_id, lr, title, fontsize=fontsize)
+            # comment() always bakes a textcolor default; strip it so the
+            # label follows the Live skin natively (the stock treatment).
+            for entry in self.boxes:
+                if entry["box"].get("id") == label_id:
+                    entry["box"].pop("textcolor", None)
+                    break
+        return card_id, label_id
+
     def add_theme_bus(
         self,
         specs,
