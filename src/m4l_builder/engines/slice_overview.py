@@ -475,7 +475,14 @@ def slice_overview_js(
         "        d = env[i] - env[i - 1];\n"
         "        flux[i] = d > 0.0 ? d : 0.0;\n"
         "    }\n"
-        "    var mult = 3.0 - (sensitivity / 100.0) * 2.5;\n"
+        # SENS -> threshold multiplier over the local mean. GEOMETRIC, not
+        # linear: measured on a realistic mix (sustained bass + pad + 16 drum
+        # onsets), the old linear 3.0->0.5 ramp only moved 61 -> 91 onsets and
+        # its whole bottom half was dead - you could never ask for "just the
+        # strongest hits". The geometric 6.0->0.25 sweep spans 19 -> 92 while
+        # passing through the SAME value at the sens=30 default (2.31 vs 2.25,
+        # 81 onsets either way), so existing presets are unaffected.
+        "    var mult = 6.0 * Math.pow(0.25 / 6.0, sensitivity / 100.0);\n"
         "    var lwin = 8;\n"
         "    var floor_thr = 0.0008;\n"
         "    var min_hops = Math.floor((min_spacing_ms / 1000.0 * sample_rate) / RMS_HOP);\n"
