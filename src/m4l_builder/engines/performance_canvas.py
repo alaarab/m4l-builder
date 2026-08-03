@@ -1067,15 +1067,12 @@ function step_base_index(step) {
     var seed = Math.max(0, Math.round(pattern_seed));
     var rnd = pseudo(seed, step, 23) % slices;
     var base = (step * dist) % slices;
-    if (mode <= 0) return apply_focus(base, slices);
-    if (mode === 1) return apply_focus(rnd, slices);
+    if (mode <= 0) return base;
+    if (mode === 1) return rnd;
     if (mode === 2) {
-        return apply_focus(
-            ((step * (((seed % 5) + 1) * dist)) + ((step * step) * ((seed % 3) + 1)) + (seed % slices)) % slices,
-            slices);
+        return ((step * (((seed % 5) + 1) * dist)) + ((step * step) * ((seed % 3) + 1)) + (seed % slices)) % slices;
     }
-    return apply_focus(
-        (base + Math.floor((clamp(jump_amount, 0.0, 100.0) / 100.0) * rnd)) % slices, slices);
+    return (base + Math.floor((clamp(jump_amount, 0.0, 100.0) / 100.0) * rnd)) % slices;
 }
 
 function step_glitch_level(step) {
@@ -1184,7 +1181,14 @@ function main_glitch_shift(step) {
 }
 
 function step_computed_index(step) {
-    return wrap_index(step_base_index(step) + main_glitch_shift(step) + mut_index_shift(step));
+    // SPAN is folded LAST: the glitch and mutation shifts are added after the
+    // base pick, so folding earlier allowed a high Glitch/Vary to throw hits
+    // back outside the window. Locked (user-pinned) steps bypass this via
+    // step_index — an explicit per-step choice outranks the window.
+    return apply_focus(
+        wrap_index(step_base_index(step) + main_glitch_shift(step)
+                   + mut_index_shift(step)),
+        Math.max(1, Math.round(slice_count)));
 }
 
 function step_index(step) {
