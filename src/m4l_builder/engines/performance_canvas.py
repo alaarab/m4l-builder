@@ -575,7 +575,16 @@ function slice_pinned(k) {
 
 function eff_shape(k) {
     if (slice_pinned(k)) return shape_ovr[String(k)];
-    return [g_attack, g_decay, g_sustain, g_release];
+    return [g_attack, g_decay, g_sustain, g_release, g_atk_curve, g_rel_curve];
+}
+
+// Curves are -1..1; pack the pair into one float for its Stored-Only host.
+// A/D and S/R use *2001 bases (their maxima are 2000); curves quantise to
+// 0..1000 each, so *1001 keeps the pair unambiguous and well inside the
+// host dial's 4.1e6 ceiling.
+function shape_pack_cv(ac, rc) {
+    return Math.round((clamp(ac, -1.0, 1.0) + 1.0) * 500) * 1001
+         + Math.round((clamp(rc, -1.0, 1.0) + 1.0) * 500);
 }
 
 function shape_pack_ad(a, d) {
@@ -689,6 +698,8 @@ function push_shape_to_dials(k) {
     outlet(4, 'shape', 'decay', o[1]);
     outlet(4, 'shape', 'sustain', o[2]);
     outlet(4, 'shape', 'release', o[3]);
+    if (o.length > 4) outlet(4, 'shape', 'attackcurve', o[4]);
+    if (o.length > 5) outlet(4, 'shape', 'releasecurve', o[5]);
 }
 
 function enter_hit_view(k) {
@@ -713,8 +724,11 @@ function exit_hit_view() {
 
 function emit_shape_pin(k) {
     var o = shape_ovr[String(k)];
-    outlet(0, 'shapecoll', k, o[0], o[1], o[2], o[3]);
-    outlet(0, 'shapelock', k, shape_pack_ad(o[0], o[1]), shape_pack_sr(o[2], o[3]));
+    var ac = o.length > 4 ? o[4] : g_atk_curve;
+    var rc = o.length > 5 ? o[5] : g_rel_curve;
+    outlet(0, 'shapecoll', k, o[0], o[1], o[2], o[3], ac, rc);
+    outlet(0, 'shapelock', k, shape_pack_ad(o[0], o[1]), shape_pack_sr(o[2], o[3]),
+           shape_pack_cv(ac, rc));
 }
 
 function set_attack(v) {
@@ -1418,7 +1432,10 @@ function hv_set_shape(a, d, s, r) {
     s = clamp(s, 0.0, 100.0);
     r = clamp(r, 1.0, 2000.0);
     if (slice_pinned(inspect_k)) {
-        shape_ovr[String(inspect_k)] = [a, d, s, r];
+        var prev = shape_ovr[String(inspect_k)];
+        shape_ovr[String(inspect_k)] = [a, d, s, r,
+                                        prev.length > 4 ? prev[4] : g_atk_curve,
+                                        prev.length > 5 ? prev[5] : g_rel_curve];
         emit_shape_pin(inspect_k);
     } else {
         // global edit: move the real params; their echo refreshes g_*
@@ -1483,7 +1500,8 @@ function hv_click(x, y) {
             delete shape_ovr[String(inspect_k)];
             outlet(0, 'shapeunlock', inspect_k);
         } else {
-            shape_ovr[String(inspect_k)] = [g_attack, g_decay, g_sustain, g_release];
+            shape_ovr[String(inspect_k)] = [g_attack, g_decay, g_sustain, g_release,
+                                           g_atk_curve, g_rel_curve];
             emit_shape_pin(inspect_k);
         }
         announce_hit_target();   // routing changed -> tell the host
@@ -1756,31 +1774,60 @@ function anything() {
         mgraphics.redraw();
         return;
     }
-    if ((messagename === 'shapesetA' || messagename === 'shapesetB') && argv.length >= 2) {
-        // host restore, two packed hosts per slice:
-        // A-host = round(a*10)*2001 + round(d); B-host = round(s*10)*2001 + round(r)
+    if ((messagename === 'shapesetA' || messagename === 'shapesetB'
+         || messagename === 'shapesetC') && argv.length >= 2) {
+        // host restore, THREE packed hosts per slice:
+        // A = round(a*10)*2001 + round(d);  B = round(s*10)*2001 + round(r);
+        // C = round((ac+1)*500)*1001 + round((rc+1)*500)   [the two curves]
         var sk = Math.max(0, Math.round(argv[0]));
         var packed = Math.round(argv[1]);
         var kk = String(sk);
         if (packed >= 0) {
             if (!shape_ovr.hasOwnProperty(kk)) {
-                shape_ovr[kk] = [g_attack, g_decay, g_sustain, g_release];
+                shape_ovr[kk] = [g_attack, g_decay, g_sustain, g_release,
+                                 g_atk_curve, g_rel_curve];
             }
-            var hi = Math.floor(packed / 2001) / 10.0;
-            var lo = packed % 2001;
-            if (messagename === 'shapesetA') {
-                shape_ovr[kk][0] = clamp(hi, 0.5, 200.0);
-                shape_ovr[kk][1] = clamp(lo, 1.0, 2000.0);
+            if (messagename === 'shapesetC') {
+                shape_ovr[kk][4] = clamp(Math.floor(packed / 1001) / 500.0 - 1.0,
+                                         -1.0, 1.0);
+                shape_ovr[kk][5] = clamp((packed % 1001) / 500.0 - 1.0, -1.0, 1.0);
             } else {
-                shape_ovr[kk][2] = clamp(hi, 0.0, 100.0);
-                shape_ovr[kk][3] = clamp(lo, 1.0, 2000.0);
+                var hi = Math.floor(packed / 2001) / 10.0;
+                var lo = packed % 2001;
+                if (messagename === 'shapesetA') {
+                    shape_ovr[kk][0] = clamp(hi, 0.5, 200.0);
+                    shape_ovr[kk][1] = clamp(lo, 1.0, 2000.0);
+                } else {
+                    shape_ovr[kk][2] = clamp(hi, 0.0, 100.0);
+                    shape_ovr[kk][3] = clamp(lo, 1.0, 2000.0);
+                }
             }
             outlet(0, 'shapecoll', sk, shape_ovr[kk][0], shape_ovr[kk][1],
-                   shape_ovr[kk][2], shape_ovr[kk][3]);
+                   shape_ovr[kk][2], shape_ovr[kk][3],
+                   shape_ovr[kk][4], shape_ovr[kk][5]);
         } else if (messagename === 'shapesetA') {
             delete shape_ovr[kk];
         }
         mgraphics.redraw();
+        return;
+    }
+    if (messagename === 'dialshape' && argv.length >= 6) {
+        // The face A/D/S/R+curve dials, sent on EVERY move. THIS object
+        // decides whether the edit is per-slice: only when a hit view is
+        // open on a PINNED slice. Deciding here (rather than gating device
+        // side on an announced pin flag) removes the ordering hazard that
+        // made a later GLOBAL edit leak into the pinned row — the state that
+        // decides and the state being edited are now the same object.
+        if (view !== 1 || !slice_pinned(inspect_k)) return;
+        var pk = inspect_k;
+        if (true) {
+            shape_ovr[String(pk)] = [
+                clamp(argv[0], 0.5, 200.0), clamp(argv[1], 1.0, 2000.0),
+                clamp(argv[2], 0.0, 100.0), clamp(argv[3], 1.0, 2000.0),
+                clamp(argv[4], -1.0, 1.0), clamp(argv[5], -1.0, 1.0)];
+            emit_shape_pin(pk);
+            mgraphics.redraw();
+        }
         return;
     }
     if (messagename === 'shapeunset' && argv.length >= 1) {
