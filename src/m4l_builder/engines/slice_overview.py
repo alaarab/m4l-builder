@@ -42,6 +42,8 @@ Outlets:
     3 -- edited normalized boundary list (editor instance -> set_display_bounds)
 """
 
+from m4l_builder.engines.flux_detector import FLUX_DETECTOR_JS
+
 SLICE_OVERVIEW_INLETS = 7
 SLICE_OVERVIEW_OUTLETS = 4
 
@@ -452,70 +454,7 @@ def slice_overview_js(
         "    return b;\n"
         "}\n"
         "\n"
-        "function compute_onsets() {\n"
-        "    var frame_count = buffer_frames();\n"
-        "    if (frame_count <= 0) return compute_grid();\n"
-        "    var buf, ch_count;\n"
-        "    try {\n"
-        "        buf = new Buffer(BUFFER_NAME);\n"
-        "        ch_count = buf.channelcount();\n"
-        "    } catch (e) {\n"
-        "        return compute_grid();\n"
-        "    }\n"
-        "    if (!ch_count || ch_count <= 0) ch_count = 1;\n"
-        "    var env = [], w = 0, start;\n"
-        "    for (start = 0; start + RMS_WIN <= frame_count; start += RMS_HOP) {\n"
-        "        env[w] = window_rms(buf, ch_count, start, RMS_WIN, frame_count);\n"
-        "        w++;\n"
-        "    }\n"
-        "    if (env.length < 3) return compute_grid();\n"
-        "    var flux = [], i, d;\n"
-        "    flux[0] = 0.0;\n"
-        "    for (i = 1; i < env.length; i++) {\n"
-        "        d = env[i] - env[i - 1];\n"
-        "        flux[i] = d > 0.0 ? d : 0.0;\n"
-        "    }\n"
-        # SENS -> threshold multiplier over the local mean. GEOMETRIC, not
-        # linear: measured on a realistic mix (sustained bass + pad + 16 drum
-        # onsets), the old linear 3.0->0.5 ramp only moved 61 -> 91 onsets and
-        # its whole bottom half was dead - you could never ask for "just the
-        # strongest hits". The geometric 6.0->0.25 sweep spans 19 -> 92 while
-        # passing through the SAME value at the sens=30 default (2.31 vs 2.25,
-        # 81 onsets either way), so existing presets are unaffected.
-        "    var mult = 6.0 * Math.pow(0.25 / 6.0, sensitivity / 100.0);\n"
-        "    var lwin = 8;\n"
-        "    var floor_thr = 0.0008;\n"
-        "    var min_hops = Math.floor((min_spacing_ms / 1000.0 * sample_rate) / RMS_HOP);\n"
-        "    if (min_hops < 1) min_hops = 1;\n"
-        "    var onsets = [];\n"
-        "    var last_idx = -1000000;\n"
-        "    for (i = 1; i < flux.length - 1; i++) {\n"
-        "        var lo = i - lwin; if (lo < 0) lo = 0;\n"
-        "        var hi = i + lwin; if (hi > flux.length - 1) hi = flux.length - 1;\n"
-        "        var sum = 0.0, c = 0, j;\n"
-        "        for (j = lo; j <= hi; j++) { sum += flux[j]; c++; }\n"
-        "        var local_mean = c > 0 ? sum / c : 0.0;\n"
-        "        var thr = local_mean * mult + floor_thr;\n"
-        "        if (flux[i] > thr && flux[i] >= flux[i - 1] && flux[i] > flux[i + 1]) {\n"
-        "            if (i - last_idx >= min_hops) {\n"
-        "                onsets.push({ pos: (i * RMS_HOP) / frame_count, str: flux[i] });\n"
-        "                last_idx = i;\n"
-        "            }\n"
-        "        }\n"
-        "    }\n"
-        "    if (onsets.length > 63) {\n"
-        "        onsets.sort(function (a, b2) { return b2.str - a.str; });\n"
-        "        onsets = onsets.slice(0, 63);\n"
-        "    }\n"
-        "    onsets.sort(function (a, b2) { return a.pos - b2.pos; });\n"
-        "    var bounds = [0.0];\n"
-        "    for (i = 0; i < onsets.length; i++) {\n"
-        "        var p = clamp(onsets[i].pos, 0.0, 1.0);\n"
-        "        if (p > 0.0005 && p < 0.9995) bounds.push(p);\n"
-        "    }\n"
-        "    bounds.push(1.0);\n"
-        "    return bounds;\n"
-        "}\n"
+        + FLUX_DETECTOR_JS +
         "\n"
         "function emit_slices() {\n"
         "    var n = slice_boundaries.length - 1;\n"
