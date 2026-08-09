@@ -311,7 +311,19 @@ function nearest_divider(pos) {
         d = Math.abs(pos - slice_boundaries[i]) * iw;
         if (d < bestd) { bestd = d; best = i; }
     }
-    if (best >= 1 && bestd <= GRAB_PX) return best;
+    if (best < 1) return -1;
+    // density-aware grab radius: with 60+ slices the dividers sit a few px
+    // apart, and a fixed 6 px halo would swallow the whole wave zone (no
+    // click could ever reach the slice underneath to open the hit view).
+    // Shrink the halo to a fraction of the local gap so dense grids need
+    // deliberate aim -- the hover highlight shows exactly when you have it.
+    var gapl = (slice_boundaries[best] - slice_boundaries[best - 1]) * iw;
+    var gapr = (slice_boundaries[best + 1] - slice_boundaries[best]) * iw;
+    var gmin = gapl < gapr ? gapl : gapr;
+    var halo = gmin * 0.3;
+    if (halo > GRAB_PX) halo = GRAB_PX;
+    if (halo < 1.2) halo = 1.2;
+    if (bestd <= halo) return best;
     return -1;
 }
 
@@ -420,6 +432,85 @@ function set_min_spacing(v) {
     if (loaded && slice_mode === 0) analyze();
 }
 
+function lapi_dequote(s) {
+    return String(s).replace(/"/g, '');
+}
+
+function lapi_num(v) {
+    return Number((v instanceof Array) ? v[0] : v);   // get() returns ARRAYS
+}
+
+function export_midi(base) {
+    // Slice-to-MIDI: write one note per slice (Base+k, at the slice's own
+    // time mapped through the CURRENT tempo) into this track's first empty
+    // session slot -- playing that clip replays the sample through Shard.
+    if (!loaded || slice_boundaries.length < 2) {
+        post('shard: load a sample before exporting slices\n');
+        return;
+    }
+    var fc = buffer_frames();
+    if (fc <= 0 || sample_rate <= 0) return;
+    var song = new LiveAPI(null, 'live_set');
+    if (!song || song.id == 0) {
+        post('shard: LiveAPI unavailable\n');
+        return;
+    }
+    var tempo = lapi_num(song.get('tempo'));
+    if (!(tempo > 0)) tempo = 120.0;
+    var len_ms = (fc / sample_rate) * 1000.0;
+    var ms2b = tempo / 60000.0;
+    var total_beats = Math.max(1.0, Math.ceil(len_ms * ms2b * 4.0) / 4.0);
+    var trk = new LiveAPI(null, 'this_device canonical_parent');
+    var guard = 0;
+    while (trk && trk.id != 0 && String(trk.type).indexOf('Track') < 0
+           && guard++ < 6) {
+        trk = new LiveAPI(null, lapi_dequote(trk.path) + ' canonical_parent');
+    }
+    if (!trk || trk.id == 0 || String(trk.type).indexOf('Track') < 0) {
+        post('shard: could not resolve the host track\n');
+        return;
+    }
+    var tpath = lapi_dequote(trk.path);
+    var n_slots = trk.getcount('clip_slots');
+    var slot = null, si;
+    for (si = 0; si < n_slots; si++) {
+        var s = new LiveAPI(null, tpath + ' clip_slots ' + si);
+        if (s && s.id != 0 && lapi_num(s.get('has_clip')) === 0) {
+            slot = s;
+            break;
+        }
+    }
+    if (!slot) {
+        post('shard: no empty session slot on this track\n');
+        return;
+    }
+    slot.call('create_clip', total_beats);
+    var clip = new LiveAPI(null, lapi_dequote(slot.path) + ' clip');
+    if (!clip || clip.id == 0) {
+        post('shard: clip creation failed\n');
+        return;
+    }
+    var bn = Math.max(0, Math.min(127, Math.round(base)));
+    var n = Math.min(slice_boundaries.length - 1, 64);
+    var notes = [], k;
+    for (k = 0; k < n && bn + k <= 127; k++) {
+        var st = slice_boundaries[k] * len_ms * ms2b;
+        var en = slice_boundaries[k + 1] * len_ms * ms2b;
+        notes.push({
+            pitch: bn + k,
+            start_time: Math.round(st * 1000.0) / 1000.0,
+            duration: Math.max(0.05, Math.round((en - st) * 1000.0) / 1000.0),
+            velocity: 100,
+            mute: 0
+        });
+    }
+    var nd = new Dict;
+    nd.parse(JSON.stringify({ notes: notes }));
+    clip.call('add_new_notes', nd);
+    clip.set('name', 'Shard Slices');
+    post('shard: exported ' + notes.length + ' slice notes to a new clip\n');
+}
+
 function set_pitch(v) {
     // pitch is a trigger-time dur multiply in the host patch; stored only,
     // must NOT analyze (that wiped manual slice edits on every pitch move)
@@ -460,63 +551,7 @@ function compute_grid() {
     return b;
 }
 
-function compute_onsets() {
-    var frame_count = buffer_frames();
-    if (frame_count <= 0) return compute_grid();
-    var buf, ch_count;
-    try {
-        buf = new Buffer(BUFFER_NAME);
-        ch_count = buf.channelcount();
-    } catch (e) {
-        return compute_grid();
-    }
-    if (!ch_count || ch_count <= 0) ch_count = 1;
-    var env = [], w = 0, start;
-    for (start = 0; start + RMS_WIN <= frame_count; start += RMS_HOP) {
-        env[w] = window_rms(buf, ch_count, start, RMS_WIN, frame_count);
-        w++;
-    }
-    if (env.length < 3) return compute_grid();
-    var flux = [], i, d;
-    flux[0] = 0.0;
-    for (i = 1; i < env.length; i++) {
-        d = env[i] - env[i - 1];
-        flux[i] = d > 0.0 ? d : 0.0;
-    }
-    var mult = 3.0 - (sensitivity / 100.0) * 2.5;
-    var lwin = 8;
-    var floor_thr = 0.0008;
-    var min_hops = Math.floor((min_spacing_ms / 1000.0 * sample_rate) / RMS_HOP);
-    if (min_hops < 1) min_hops = 1;
-    var onsets = [];
-    var last_idx = -1000000;
-    for (i = 1; i < flux.length - 1; i++) {
-        var lo = i - lwin; if (lo < 0) lo = 0;
-        var hi = i + lwin; if (hi > flux.length - 1) hi = flux.length - 1;
-        var sum = 0.0, c = 0, j;
-        for (j = lo; j <= hi; j++) { sum += flux[j]; c++; }
-        var local_mean = c > 0 ? sum / c : 0.0;
-        var thr = local_mean * mult + floor_thr;
-        if (flux[i] > thr && flux[i] >= flux[i - 1] && flux[i] > flux[i + 1]) {
-            if (i - last_idx >= min_hops) {
-                onsets.push({ pos: (i * RMS_HOP) / frame_count, str: flux[i] });
-                last_idx = i;
-            }
-        }
-    }
-    if (onsets.length > 63) {
-        onsets.sort(function (a, b2) { return b2.str - a.str; });
-        onsets = onsets.slice(0, 63);
-    }
-    onsets.sort(function (a, b2) { return a.pos - b2.pos; });
-    var bounds = [0.0];
-    for (i = 0; i < onsets.length; i++) {
-        var p = clamp(onsets[i].pos, 0.0, 1.0);
-        if (p > 0.0005 && p < 0.9995) bounds.push(p);
-    }
-    bounds.push(1.0);
-    return bounds;
-}
+@FLUX_DETECTOR@
 
 function emit_slices() {
     var n = slice_boundaries.length - 1;
@@ -573,9 +608,21 @@ function slice_pinned(k) {
     return shape_ovr.hasOwnProperty(String(k));
 }
 
+function norm_row(o) {
+    // rows are 9-wide: [a, d, s, r, ac, rc, pit_st, rev, lvl]. Sets saved by
+    // older builds restore 6-wide rows -- pad with the neutral play values.
+    while (o.length < 9) o.push(o.length === 8 ? 1.0 : 0.0);
+    return o;
+}
+
+function pin_defaults() {
+    return [g_attack, g_decay, g_sustain, g_release, g_atk_curve, g_rel_curve,
+            0.0, 0.0, 1.0];
+}
+
 function eff_shape(k) {
-    if (slice_pinned(k)) return shape_ovr[String(k)];
-    return [g_attack, g_decay, g_sustain, g_release, g_atk_curve, g_rel_curve];
+    if (slice_pinned(k)) return norm_row(shape_ovr[String(k)]);
+    return pin_defaults();
 }
 
 // Curves are -1..1; pack the pair into one float for its Stored-Only host.
@@ -593,6 +640,15 @@ function shape_pack_ad(a, d) {
 
 function shape_pack_sr(s, r) {
     return Math.round(clamp(s, 0.0, 100.0) * 10) * 2001 + Math.round(clamp(r, 1.0, 2000.0));
+}
+
+// bank D: play overrides. pitch -24..24 st (integer), reverse flag, level
+// 0..150 % -- ((pit+24)*2 + rev) * 1001 + lvl_pct tops out at 97247, far
+// inside the host ceiling, and % / floor unpack cleanly.
+function shape_pack_pl(pit, rev, lvl) {
+    var pi = Math.round(clamp(pit, -24.0, 24.0)) + 24;
+    var rv = rev >= 0.5 ? 1 : 0;
+    return (pi * 2 + rv) * 1001 + Math.round(clamp(lvl, 0.0, 1.5) * 100.0);
 }
 
 function lfo_mod_at(t_ms) {
@@ -723,12 +779,12 @@ function exit_hit_view() {
 }
 
 function emit_shape_pin(k) {
-    var o = shape_ovr[String(k)];
-    var ac = o.length > 4 ? o[4] : g_atk_curve;
-    var rc = o.length > 5 ? o[5] : g_rel_curve;
-    outlet(0, 'shapecoll', k, o[0], o[1], o[2], o[3], ac, rc);
+    var o = norm_row(shape_ovr[String(k)]);
+    var ac = o[4], rc = o[5];
+    outlet(0, 'shapecoll', k, o[0], o[1], o[2], o[3], ac, rc,
+           o[6], o[7], o[8]);
     outlet(0, 'shapelock', k, shape_pack_ad(o[0], o[1]), shape_pack_sr(o[2], o[3]),
-           shape_pack_cv(ac, rc));
+           shape_pack_cv(ac, rc), shape_pack_pl(o[6], o[7], o[8]));
 }
 
 function set_attack(v) {
@@ -1436,14 +1492,12 @@ function hv_set_shape(a, d, s, r) {
         // touch (same rule as the face dials; the old fall-through silently
         // edited the GLOBALS, which is the confusion that started all this)
         if (!slice_pinned(inspect_k)) {
-            shape_ovr[String(inspect_k)] = [g_attack, g_decay, g_sustain,
-                                            g_release, g_atk_curve, g_rel_curve];
+            shape_ovr[String(inspect_k)] = pin_defaults();
             announce_hit_target();
         }
-        var prev = shape_ovr[String(inspect_k)];
-        shape_ovr[String(inspect_k)] = [a, d, s, r,
-                                        prev.length > 4 ? prev[4] : g_atk_curve,
-                                        prev.length > 5 ? prev[5] : g_rel_curve];
+        var prev = norm_row(shape_ovr[String(inspect_k)]);
+        shape_ovr[String(inspect_k)] = [a, d, s, r, prev[4], prev[5],
+                                        prev[6], prev[7], prev[8]];
         emit_shape_pin(inspect_k);
     } else {
         // global edit: move the real params; their echo refreshes g_*
@@ -1494,6 +1548,32 @@ function hv_set_release_curve(x, y) {
     mgraphics.redraw();
 }
 
+var hv_chip_y0 = 0;      // vertical-drag anchors for the PIT / LVL chips
+var hv_chip_base = 0.0;
+
+function hv_set_play(pit, rev, lvl) {
+    // per-slice play overrides (bank D): auto-pin on first touch, exactly
+    // like the envelope handles -- one pin rule everywhere.
+    if (!slice_pinned(inspect_k)) {
+        shape_ovr[String(inspect_k)] = pin_defaults();
+        announce_hit_target();
+    }
+    var o = norm_row(shape_ovr[String(inspect_k)]);
+    o[6] = clamp(Math.round(pit), -24.0, 24.0);
+    o[7] = rev >= 0.5 ? 1.0 : 0.0;
+    o[8] = clamp(lvl, 0.0, 1.5);
+    shape_ovr[String(inspect_k)] = o;
+    emit_shape_pin(inspect_k);
+    shape_dirty = 1;
+    mgraphics.redraw();
+}
+
+function hv_chip_rect(i) {
+    // 0=PIT 1=REV 2=LVL, a compact stack on the hit view's left edge
+    var f = hv_frame();
+    return [PAD + 3, f[0] + 4 + i * 16, 48, 13];
+}
+
 function hv_click(x, y) {
     var w = mgraphics.size[0];
     if (x < PAD + 40 && y < PAD + 13) { exit_hit_view(); return; }   // BACK
@@ -1508,13 +1588,33 @@ function hv_click(x, y) {
             delete shape_ovr[String(inspect_k)];
             outlet(0, 'shapeunlock', inspect_k);
         } else {
-            shape_ovr[String(inspect_k)] = [g_attack, g_decay, g_sustain, g_release,
-                                           g_atk_curve, g_rel_curve];
+            shape_ovr[String(inspect_k)] = pin_defaults();
             emit_shape_pin(inspect_k);
         }
         announce_hit_target();   // routing changed -> tell the host
         mgraphics.redraw();
         return;
+    }
+    if (hv_page === 0) {
+        // play-override chips (left stack): PIT drags +/-24 st, REV toggles,
+        // LVL drags 0..150 % -- checked before the env handles so a tiny
+        // attack can't shadow them.
+        var oc = eff_shape(inspect_k);
+        var ci, cr;
+        for (ci = 0; ci < 3; ci++) {
+            cr = hv_chip_rect(ci);
+            if (x >= cr[0] && x <= cr[0] + cr[2] &&
+                y >= cr[1] - 2 && y <= cr[1] + cr[3] + 2) {
+                if (ci === 1) {
+                    hv_set_play(oc[6], oc[7] >= 0.5 ? 0.0 : 1.0, oc[8]);
+                    return;
+                }
+                drag_shape = ci === 0 ? 6 : 7;
+                hv_chip_y0 = y;
+                hv_chip_base = ci === 0 ? oc[6] : oc[8];
+                return;
+            }
+        }
     }
     var ah = hv_attack_handle();
     if (Math.abs(x - ah[0]) < 8 && Math.abs(y - ah[1]) < 10) { drag_shape = 1; return; }
@@ -1556,6 +1656,10 @@ function hv_drag(x, y) {
         hv_set_attack_curve(x, y);
     } else if (drag_shape === 5) {
         hv_set_release_curve(x, y);
+    } else if (drag_shape === 6) {
+        hv_set_play(hv_chip_base + (hv_chip_y0 - y) * 0.25, o[7], o[8]);
+    } else if (drag_shape === 7) {
+        hv_set_play(o[6], o[7], hv_chip_base + (hv_chip_y0 - y) * 0.01);
     }
 }
 
@@ -1599,10 +1703,35 @@ function onclick(x, y, but, cmd, shift, capslock, option, ctrl) {
         return;
     }
     var step = seg_at_point(x, y);
-    if (step < 0 && (shift || option || ctrl || cmd)) {
-        // A per-step gesture modifier is held but the narrow bar was missed --
-        // snap to the nearest step by x so the gesture lands (chance, pitch,
-        // dir, erase, cond...) instead of opening the slice-ENV editor.
+    var lane_top = PAD + inner_h() * 0.68;
+    if (step < 0 && y < lane_top && !shift && !cmd) {
+        // WAVE zone slice surgery (the bar lane keeps pattern gestures):
+        // near a divider, plain press grabs it for a drag and option/ctrl
+        // deletes it; option on empty wave plants a NEW divider there.
+        var ddx = nearest_divider(x_to_pos(x));
+        if (ddx >= 1) {
+            if (option || ctrl) {
+                if (remove_divider(ddx)) after_edit();
+                return;
+            }
+            drag_band = 1;
+            drag_index = ddx;
+            return;
+        }
+        if (option && !ctrl) {
+            if (add_divider(x_to_pos(x))) {
+                drag_index = nearest_divider(x_to_pos(x));
+                drag_band = drag_index >= 1 ? 1 : 0;
+                after_edit();
+            }
+            return;
+        }
+    }
+    if (step < 0 && (shift || option || ctrl || cmd || y >= lane_top)) {
+        // Snap to the nearest step column when a per-step gesture modifier
+        // is held anywhere, OR on any plain press in the bottom lane (the
+        // bars' home strip). Short/muted bars are tiny targets -- without
+        // the lane, a near-miss fell through and opened the slice editor.
         step = step_at_x(x);
     }
     if (step >= 0) {
@@ -1649,7 +1778,9 @@ function ondrag(x, y, but, cmd, shift, capslock, option, ctrl) {
         return;
     }
     if (drag_band === 1) {
-        if (!editable) return;
+        // drag_band is only ever armed intentionally (editor surface, or the
+        // inline near-divider grab), so no editable gate here -- the guard
+        // lives at press time.
         if (drag_index < 1 || drag_index > slice_boundaries.length - 2) return;
         var pos = x_to_pos(x);
         var lo = slice_boundaries[drag_index - 1] + MIN_GAP;
@@ -1783,19 +1914,26 @@ function anything() {
         return;
     }
     if ((messagename === 'shapesetA' || messagename === 'shapesetB'
-         || messagename === 'shapesetC') && argv.length >= 2) {
-        // host restore, THREE packed hosts per slice:
+         || messagename === 'shapesetC' || messagename === 'shapesetD')
+        && argv.length >= 2) {
+        // host restore, FOUR packed hosts per slice:
         // A = round(a*10)*2001 + round(d);  B = round(s*10)*2001 + round(r);
         // C = round((ac+1)*500)*1001 + round((rc+1)*500)   [the two curves]
+        // D = ((pit+24)*2 + rev)*1001 + lvl_pct            [play overrides]
         var sk = Math.max(0, Math.round(argv[0]));
         var packed = Math.round(argv[1]);
         var kk = String(sk);
         if (packed >= 0) {
             if (!shape_ovr.hasOwnProperty(kk)) {
-                shape_ovr[kk] = [g_attack, g_decay, g_sustain, g_release,
-                                 g_atk_curve, g_rel_curve];
+                shape_ovr[kk] = pin_defaults();
             }
-            if (messagename === 'shapesetC') {
+            norm_row(shape_ovr[kk]);
+            if (messagename === 'shapesetD') {
+                var q = Math.floor(packed / 1001);
+                shape_ovr[kk][6] = clamp((q >> 1) - 24, -24.0, 24.0);
+                shape_ovr[kk][7] = q % 2;
+                shape_ovr[kk][8] = clamp((packed % 1001) / 100.0, 0.0, 1.5);
+            } else if (messagename === 'shapesetC') {
                 shape_ovr[kk][4] = clamp(Math.floor(packed / 1001) / 500.0 - 1.0,
                                          -1.0, 1.0);
                 shape_ovr[kk][5] = clamp((packed % 1001) / 500.0 - 1.0, -1.0, 1.0);
@@ -1812,7 +1950,8 @@ function anything() {
             }
             outlet(0, 'shapecoll', sk, shape_ovr[kk][0], shape_ovr[kk][1],
                    shape_ovr[kk][2], shape_ovr[kk][3],
-                   shape_ovr[kk][4], shape_ovr[kk][5]);
+                   shape_ovr[kk][4], shape_ovr[kk][5],
+                   shape_ovr[kk][6], shape_ovr[kk][7], shape_ovr[kk][8]);
         } else if (messagename === 'shapesetA') {
             delete shape_ovr[kk];
         }
@@ -1830,16 +1969,17 @@ function anything() {
         // removes the ordering hazard that once leaked a global edit in.
         if (view !== 1) return;
         if (!slice_pinned(inspect_k)) {
-            shape_ovr[String(inspect_k)] = [g_attack, g_decay, g_sustain,
-                                            g_release, g_atk_curve, g_rel_curve];
+            shape_ovr[String(inspect_k)] = pin_defaults();
             announce_hit_target();
         }
         var pk = inspect_k;
         if (true) {
+            var dprev = norm_row(shape_ovr[String(pk)]);
             shape_ovr[String(pk)] = [
                 clamp(argv[0], 0.5, 200.0), clamp(argv[1], 1.0, 2000.0),
                 clamp(argv[2], 0.0, 100.0), clamp(argv[3], 1.0, 2000.0),
-                clamp(argv[4], -1.0, 1.0), clamp(argv[5], -1.0, 1.0)];
+                clamp(argv[4], -1.0, 1.0), clamp(argv[5], -1.0, 1.0),
+                dprev[6], dprev[7], dprev[8]];
             emit_shape_pin(pk);
             mgraphics.redraw();
         }
@@ -2150,15 +2290,34 @@ function paint() {
 
         draw_waveform(PAD, PAD, iw, ih);
 
-        // slice dividers: quiet, neutral -- color belongs to the pattern
+        // slice dividers: quiet, neutral -- color belongs to the pattern.
+        // The one under the pointer (wave zone only) brightens with grip
+        // ticks: it is grabbable -- drag moves it, option-click deletes.
+        var hov_div = -1;
+        if (hover_on && hover_y < PAD + ih * 0.68) {
+            hov_div = nearest_divider(x_to_pos(hover_x));
+        }
+        if (drag_band === 1) hov_div = drag_index;
         if (slice_boundaries.length > 1) {
             for (i = 1; i < slice_boundaries.length - 1; i++) {
                 var bdx = norm_to_x(slice_boundaries[i]);
-                mgraphics.set_source_rgba(@DIVIDER@);
-                mgraphics.set_line_width(0.8);
+                if (i === hov_div) {
+                    mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2], 0.9);
+                    mgraphics.set_line_width(1.6);
+                } else {
+                    mgraphics.set_source_rgba(@DIVIDER@);
+                    mgraphics.set_line_width(0.8);
+                }
                 mgraphics.move_to(bdx, PAD + 6);
                 mgraphics.line_to(bdx, PAD + ih - 4);
                 mgraphics.stroke();
+                if (i === hov_div) {
+                    mgraphics.set_source_rgba(ACCENT[0], ACCENT[1], ACCENT[2], 0.9);
+                    mgraphics.rectangle(bdx - 2.5, PAD + ih * 0.5 - 4, 5, 1.2);
+                    mgraphics.rectangle(bdx - 2.5, PAD + ih * 0.5 - 0.6, 5, 1.2);
+                    mgraphics.rectangle(bdx - 2.5, PAD + ih * 0.5 + 2.8, 5, 1.2);
+                    mgraphics.fill();
+                }
             }
         }
 
@@ -2598,6 +2757,37 @@ function paint_hit_view() {
         mgraphics.move_to(PAD + lxs[i], bot + 9);
         mgraphics.show_text(labels[i]);
     }
+
+    // play-override chips (ENV page, left stack): PIT / REV / LVL. Value
+    // text brightens when the override differs from neutral, so a glance
+    // shows which slices carry play surgery.
+    if (hv_page === 0) {
+        var chip_txt = [
+            'PIT ' + (o[6] > 0 ? '+' : '') + Math.round(o[6]),
+            'REV',
+            'LVL ' + Math.round(o[8] * 100) + '%'
+        ];
+        var chip_hot = [Math.round(o[6]) !== 0, o[7] >= 0.5,
+                        Math.round(o[8] * 100) !== 100];
+        mgraphics.set_font_size(6.5);
+        for (i = 0; i < 3; i++) {
+            var cr2 = hv_chip_rect(i);
+            mgraphics.set_source_rgba(0.10, 0.10, 0.12, 0.85);
+            mgraphics.rectangle_rounded(cr2[0], cr2[1], cr2[2], cr2[3], 2, 2);
+            mgraphics.fill();
+            if (chip_hot[i]) mgraphics.set_source_rgba(@GLITCH_RGB@, 0.95);
+            else mgraphics.set_source_rgba(0.72, 0.74, 0.78, 0.6);
+            mgraphics.move_to(cr2[0] + 4, cr2[1] + cr2[3] - 3);
+            mgraphics.show_text(chip_txt[i]);
+            if (i === 1 && chip_hot[1]) {   // reversed: chevron tail
+                mgraphics.move_to(cr2[0] + cr2[2] - 12, cr2[1] + 2.5);
+                mgraphics.line_to(cr2[0] + cr2[2] - 17, cr2[1] + cr2[3] * 0.5);
+                mgraphics.line_to(cr2[0] + cr2[2] - 12, cr2[1] + cr2[3] - 2.5);
+                mgraphics.set_line_width(1.1);
+                mgraphics.stroke();
+            }
+        }
+    }
 }
 
 """
@@ -2621,8 +2811,11 @@ def performance_canvas_js(
     def rgb(color):
         return ", ".join(part.strip() for part in color.split(",")[:3])
 
+    from m4l_builder.engines.flux_detector import FLUX_DETECTOR_JS
+
     return (
         _TEMPLATE
+        .replace("@FLUX_DETECTOR@", FLUX_DETECTOR_JS)
         .replace("@BUFNAME@", buffer_name)
         .replace("@BG@", bg_color)
         .replace("@GRID@", grid_color)
