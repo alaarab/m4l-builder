@@ -1431,7 +1431,15 @@ function hv_set_shape(a, d, s, r) {
     d = clamp(d, 1.0, 2000.0);
     s = clamp(s, 0.0, 100.0);
     r = clamp(r, 1.0, 2000.0);
-    if (slice_pinned(inspect_k)) {
+    if (true) {
+        // handle drags on an open slice edit THAT slice — auto-pin on first
+        // touch (same rule as the face dials; the old fall-through silently
+        // edited the GLOBALS, which is the confusion that started all this)
+        if (!slice_pinned(inspect_k)) {
+            shape_ovr[String(inspect_k)] = [g_attack, g_decay, g_sustain,
+                                            g_release, g_atk_curve, g_rel_curve];
+            announce_hit_target();
+        }
         var prev = shape_ovr[String(inspect_k)];
         shape_ovr[String(inspect_k)] = [a, d, s, r,
                                         prev.length > 4 ? prev[4] : g_atk_curve,
@@ -1813,12 +1821,19 @@ function anything() {
     }
     if (messagename === 'dialshape' && argv.length >= 6) {
         // The face A/D/S/R+curve dials, sent on EVERY move. THIS object
-        // decides whether the edit is per-slice: only when a hit view is
-        // open on a PINNED slice. Deciding here (rather than gating device
-        // side on an announced pin flag) removes the ordering hazard that
-        // made a later GLOBAL edit leak into the pinned row — the state that
-        // decides and the state being edited are now the same object.
-        if (view !== 1 || !slice_pinned(inspect_k)) return;
+        // decides whether the edit is per-slice: whenever a hit view is
+        // open, the edit targets THAT slice — auto-pinning it on the first
+        // touch. That makes the intuitive reading true (open a slice, turn
+        // a dial, only that slice changes); the PIN chip remains as the
+        // explicit un/pin. Closed hit view -> dials edit the globals as
+        // always. Deciding here (not device-side on an announced flag)
+        // removes the ordering hazard that once leaked a global edit in.
+        if (view !== 1) return;
+        if (!slice_pinned(inspect_k)) {
+            shape_ovr[String(inspect_k)] = [g_attack, g_decay, g_sustain,
+                                            g_release, g_atk_curve, g_rel_curve];
+            announce_hit_target();
+        }
         var pk = inspect_k;
         if (true) {
             shape_ovr[String(pk)] = [
