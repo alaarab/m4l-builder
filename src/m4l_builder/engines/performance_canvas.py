@@ -200,6 +200,7 @@ var drag_band = 0;       // 1 = wave divider drag (editor instances only)
 var hover_on = 0;
 var hover_x = -1;
 var hover_y = -1;
+var hover_last = "";        // derived hover state of the last painted frame
 var seg_x = [];          // per-drawn-segment hit rects (rebuilt every paint)
 var seg_y = [];
 var seg_w = [];
@@ -1801,10 +1802,26 @@ function ondrag(x, y, but, cmd, shift, capslock, option, ctrl) {
     apply_gesture(drag_step, x, y);
 }
 
+// Mouse motion emits far more events than it produces distinct frames: the
+// hover parts of the frame are a pure function of the DERIVED state (which
+// divider, which slice, which step), not of the raw pixel. Recomputing that
+// key is a handful of comparisons; the repaint it saves is the whole canvas,
+// which is what made passive hover feel heavy on slower graphics paths.
+// Dragging is unaffected -- ondrag has its own redraw.
+function hover_key(x, y) {
+    var slc = slice_from_pos(x_to_pos(x));
+    if (view === 1) return "1:" + seg_at_point(x, y) + ":" + slc;
+    var div = y < PAD + inner_h() * 0.68 ? nearest_divider(x_to_pos(x)) : -1;
+    return "0:" + div + ":" + slc;
+}
+
 function onidle(x, y, but, cmd, shift, capslock, option, ctrl) {
     hover_on = 1;
     hover_x = x;
     hover_y = y;
+    var k = hover_key(x, y);
+    if (k === hover_last) return;      // identical frame -- don't redraw it
+    hover_last = k;
     mgraphics.redraw();
 }
 
@@ -1812,6 +1829,7 @@ function onidleout(x, y, but, cmd, shift, capslock, option, ctrl) {
     hover_on = 0;
     hover_x = -1;
     hover_y = -1;
+    hover_last = "";
     mgraphics.redraw();
 }
 
