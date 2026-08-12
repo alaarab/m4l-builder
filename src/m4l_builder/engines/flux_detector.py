@@ -28,6 +28,28 @@ FLUX_DETECTOR_JS = """\
 var FLUX_FFT = 1024;
 var FLUX_BINS = 513;
 var flux_win_tab = null;
+// The flux curve depends ONLY on the audio, never on SENS or SPACE - those
+// two just re-threshold it. Caching it is the difference between a knob that
+// drags smoothly and one that re-runs ~1400 FFTs per mouse tick.
+var flux_cache = null;
+var flux_starts = null;
+var flux_sig = "";
+
+function flux_signature(buf, ch_count, frame_count) {
+    // Cheap identity for "the same audio": length + rate + name, plus a
+    // 12-point content probe so a DIFFERENT sample of identical length and
+    // rate still invalidates. 12 peeks, versus a full re-analysis.
+    var s = frame_count + ":" + sample_rate + ":" + BUFFER_NAME;
+    var i, fr, v;
+    for (i = 0; i < 12; i++) {
+        fr = Math.floor((i + 0.5) * frame_count / 12);
+        v = buf.peek(1, fr);
+        if (v === null || v === undefined) v = 0;
+        if (v instanceof Array) v = v.length ? v[0] : 0;
+        s += ":" + Math.round(v * 100000);
+    }
+    return s;
+}
 
 function flux_window() {
     if (flux_win_tab) return flux_win_tab;
@@ -115,25 +137,38 @@ function compute_onsets() {
         return compute_grid();
     }
     if (!ch_count || ch_count <= 0) ch_count = 1;
-    var win = flux_window();
-    var re = [], im = [], mag = [], prev = [], flux = [];
-    var w = 0, start, i, kb;
-    for (start = 0; start + RMS_WIN <= frame_count; start += RMS_HOP) {
-        var seg = flux_frame_mono(buf, ch_count, start, frame_count);
-        for (i = 0; i < FLUX_FFT; i++) { re[i] = seg[i] * win[i]; im[i] = 0.0; }
-        flux_fft_mag(re, im, mag);
-        if (w === 0) {
-            flux[0] = 0.0;
-        } else {
-            var acc = 0.0;
-            for (kb = 0; kb < FLUX_BINS; kb++) {
-                var db = mag[kb] - prev[kb];
-                if (db > 0.0) acc += db;
+    var flux, starts_arr;
+    var sig = flux_signature(buf, ch_count, frame_count);
+    if (flux_cache !== null && sig === flux_sig) {
+        flux = flux_cache;                 // same audio: re-threshold only
+        starts_arr = flux_starts;
+    } else {
+        var win = flux_window();
+        var re = [], im = [], mag = [], prev = [];
+        var w = 0, start, i, kb;
+        flux = [];
+        starts_arr = [];
+        for (start = 0; start + RMS_WIN <= frame_count; start += RMS_HOP) {
+            var seg = flux_frame_mono(buf, ch_count, start, frame_count);
+            for (i = 0; i < FLUX_FFT; i++) { re[i] = seg[i] * win[i]; im[i] = 0.0; }
+            flux_fft_mag(re, im, mag);
+            if (w === 0) {
+                flux[0] = 0.0;
+            } else {
+                var acc = 0.0;
+                for (kb = 0; kb < FLUX_BINS; kb++) {
+                    var db = mag[kb] - prev[kb];
+                    if (db > 0.0) acc += db;
+                }
+                flux[w] = acc / FLUX_BINS;
             }
-            flux[w] = acc / FLUX_BINS;
+            starts_arr[w] = start;
+            var swap = prev; prev = mag; mag = swap;
+            w++;
         }
-        var swap = prev; prev = mag; mag = swap;
-        w++;
+        flux_cache = flux;
+        flux_starts = starts_arr;
+        flux_sig = sig;
     }
     if (flux.length < 3) return compute_grid();
     // geometric SENS curve (measured 2026-08-03), rescaled by 0.53 so the
@@ -154,7 +189,7 @@ function compute_onsets() {
         var thr = local_mean * mult + floor_thr;
         if (flux[i] > thr && flux[i] >= flux[i - 1] && flux[i] > flux[i + 1]) {
             if (i - last_idx >= min_hops) {
-                onsets.push({ pos: (i * RMS_HOP) / frame_count, str: flux[i] });
+                onsets.push({ pos: starts_arr[i] / frame_count, str: flux[i] });
                 last_idx = i;
             }
         }
