@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 import struct
 import warnings
 
+from .artifact_io import write_artifacts
 from .constants import DEVICE_TYPE_CODES
-from .container import build_amxd, write_amxd
+from .container import build_amxd
 from .patcher import build_patcher
 from .validation import BuildValidationError, format_validation_issues
 
@@ -57,6 +57,35 @@ WIRING_INTEGRITY_CODES = frozenset(
 )
 
 
+def collect_build_issues(device) -> list:
+    """Collect the same build checks regardless of their reporting policy."""
+    from .box_lint import lint_boxes
+    from .jsui_coverage import jsui_coverage_issues
+    from .validation import ValidationIssue
+
+    issues = list(device.lint(device_type=device.device_type))
+    issues.extend(
+        ValidationIssue(code="box-declaration-mismatch", message=msg, severity="error")
+        for msg in lint_boxes(device.boxes)
+    )
+    scripts = {
+        asset.filename: {"content": (
+            asset.content.decode(asset.encoding)
+            if isinstance(asset.content, bytes) else asset.content
+        )}
+        for asset in device.assets() if asset.filename.endswith(".js")
+    }
+    issues.extend(
+        ValidationIssue(
+            code="jsui-handler-missing", severity="error",
+            message=(f"{dest} (jsui/v8ui): message {sel!r} is routed in from {src}, "
+                     f"but its script defines neither {sel}() nor anything()"),
+        )
+        for dest, sel, src in jsui_coverage_issues(device.boxes, device.lines, scripts)
+    )
+    return issues
+
+
 def apply_validation_policy(device, policy) -> None:
     """Apply build validation semantics to a device-like object.
 
@@ -66,58 +95,18 @@ def apply_validation_policy(device, policy) -> None:
     """
     if policy is False:
         return
+    if policy not in {None, "warn", "error"}:
+        raise ValueError("validate must be one of None, False, 'warn', or 'error'")
+    issues = collect_build_issues(device)
     if policy is None:
-        issues = device.lint(device_type=device.device_type)
-        # T26/Q46: the default build gate enforces wiring integrity AND the
-        # LAYOUT error class (setwidth-mismatch — the runtime dead-zone bug).
-        # STYLE errors (sig~ etc.) and layout WARNINGS stay advisory at the
-        # default; opt into them with validate="warn"/"error".
-        blocking = [
-            issue for issue in issues
-            if issue.code in WIRING_INTEGRITY_CODES
-            or issue.code == "setwidth-mismatch"
-            # expr-ternary: `?:` in a Max expr is a silent parse-error (dead
-            # object); zero false positives, so gate it like wiring integrity.
-            or issue.code == "expr-ternary"
-        ]
-        # Dataset-backed declaration check (the queued fleet-audit kit item):
-        # every emitted box's numinlets/numoutlets/outlettype must match
-        # Ableton's measured maxdiff dataset. Caught in the wild twice
-        # (transport 1-in/7-out recipe; mpeparse outlettype) — both shipped
-        # as wrong declarations before this gate existed.
-        from .box_lint import lint_boxes
-        from .validation import ValidationIssue
-        blocking += [
-            ValidationIssue(code="box-declaration-mismatch", message=msg,
-                            severity="error")
-            for msg in lint_boxes(device.boxes)
-        ]
-        # MAX-VALIDATION L2: a message routed into a jsui/v8ui whose script
-        # defines no handler for it. Max logs "js: no function <name>" and
-        # drops it silently — the box, the wire and the script all exist, so
-        # every structural check passes and the control just does nothing.
-        # Gated at error severity: the check is deliberately narrow (only
-        # statically-determinable selectors, no ---bus tracing) and swept the
-        # whole fleet with ZERO findings before promotion.
-        from .jsui_coverage import jsui_coverage_issues
-        blocking += [
-            ValidationIssue(
-                code="jsui-handler-missing",
-                message=(f"{dest} (jsui/v8ui): message {sel!r} is routed in "
-                         f"from {src}, but its script defines neither a "
-                         f"function {sel}() nor anything() — Max will log "
-                         f"'js: no function {sel}' and drop it"),
-                severity="error")
-            for dest, sel, src in jsui_coverage_issues(
-                device.boxes, device.lines, getattr(device, "_support_files", {}))
-        ]
+        default_codes = WIRING_INTEGRITY_CODES | {
+            "setwidth-mismatch", "expr-ternary", "box-declaration-mismatch",
+            "jsui-handler-missing",
+        }
+        blocking = [issue for issue in issues if issue.code in default_codes]
         if blocking:
             raise BuildValidationError(blocking)
         return
-    if policy not in {"warn", "error"}:
-        raise ValueError("validate must be one of None, False, 'warn', or 'error'")
-
-    issues = device.lint(device_type=device.device_type)
     if not issues:
         return
 
@@ -158,9 +147,8 @@ def device_to_patcher(device, *, profile=None) -> dict:
 
 def device_to_bytes(device, *, validate=None) -> bytes:
     """Build an AMXD binary for a device-like authoring object."""
-    apply_validation_policy(device, validate)
-    type_code = DEVICE_TYPE_CODES[device.device_type]
-    return build_amxd(device_to_patcher(device), type_code)
+    patcher = prepare_device_patcher(device, validate=validate)
+    return build_amxd(patcher, DEVICE_TYPE_CODES[device.device_type])
 
 
 def _assert_sidecars_registered(device, patcher) -> None:
@@ -202,22 +190,18 @@ def _assert_sidecars_registered(device, patcher) -> None:
         )
 
 
-def build_device(device, output_path: str, *, validate=None) -> int:
-    """Write an AMXD file and any sidecar assets for a device-like object."""
+def prepare_device_patcher(device, *, validate=None) -> dict:
+    """Validate graph and required scripts for every serialization path."""
     apply_validation_policy(device, validate)
-    type_code = DEVICE_TYPE_CODES[device.device_type]
     patcher = device_to_patcher(device)
     _assert_sidecars_registered(device, patcher)
-    result = write_amxd(patcher, output_path, type_code)
-    output_dir = os.path.dirname(output_path)
-    for asset in device.assets():
-        try:
-            asset.write_to(output_dir)
-        except OSError as exc:
-            raise OSError(
-                f"Cannot write sidecar file {os.path.join(output_dir, asset.filename)}: {exc}"
-            ) from exc
-    return result
+    return patcher
+
+
+def build_device(device, output_path: str, *, validate=None) -> int:
+    """Stage the complete device and sidecars, then install them together."""
+    data = device_to_bytes(device, validate=validate)
+    return write_artifacts(output_path, data, assets=device.assets())
 
 
 def device_from_amxd(path: str):
