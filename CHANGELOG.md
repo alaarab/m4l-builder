@@ -15,6 +15,18 @@
 
 ### Added
 
+- `Device.bind_gen_param`: validated control -> prepend -> gen~ wiring for
+  embedded and registered external GenExpr cores.
+- `gen_snippets.peak_hold`: constant-duration peak decay across sample rates.
+- Content fingerprints for comparing installed patchers and assets with current
+  factories, plus shared device-directory discovery including MIDI Tools.
+- Build validation now checks custom UI handlers from the canonical asset registry,
+  including nested patchers, and runs the same checks in default/error policies.
+  Required scripts are checked for byte, file, frozen and unfrozen output.
+- Build output is staged before replacement and rolled back on write failures.
+  Freezing fails on missing dependencies by default (`allow_missing=True` is an
+  explicit opt-out); exporting an already-frozen input now copies it to the
+  requested destination.
 - `sysex_out` recipe: send MIDI system exclusive messages via `sxformat` -> `midiout`,
   with optional auto 0xF0/0xF7 framing and per-byte dynamic inlets.
 - `cc_mapper_lane` (+ `_ui_lines` / `_mpe_lines` wiring helpers) and `mpe_io_chain`:

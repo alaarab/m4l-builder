@@ -500,6 +500,17 @@ class Device(CompositeWidgetsMixin, GraphContainer):
     ) -> BoxRef:
         return super().add_newobj(id, text, numinlets=numinlets, numoutlets=numoutlets, **kwargs)
 
+    def bind_gen_param(self, source, target, parameter: str, *, id: str,
+                       source_outlet: int = 0, **kwargs) -> BoxRef:
+        """Connect a control to a declared gen~ Param through a validated prepend.
+
+        Register the source and gen~ core first. See ``gen_binding.bind_gen_param``.
+        """
+        from .gen_binding import bind_gen_param
+
+        return bind_gen_param(self, source, target, parameter, id=id,
+                              source_outlet=source_outlet, **kwargs)
+
     def add_subpatcher(
         self,
         subpatcher,
@@ -638,11 +649,10 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         dependencies embedded) and no sidecar files are emitted.
         """
         if freeze:
-            from pathlib import Path
+            from .artifact_io import write_artifacts
 
             data = self.to_bytes(validate=validate, freeze=True)
-            Path(output_path).write_bytes(data)
-            return len(data)
+            return write_artifacts(output_path, data)
         return build_device(self, output_path, validate=validate)
 
 

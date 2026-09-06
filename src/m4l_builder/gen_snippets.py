@@ -34,6 +34,7 @@ __all__ = [
     "hardclip_adaa",
     "square_adaa",
     "peak_follower",
+    "peak_hold",
     "isp_catmull_4x",
     "kweight_coeffs_bs1770",
     "exp_pole",
@@ -82,6 +83,27 @@ def flush(x: str) -> str:
     ``flush("y")`` -> ``fixdenorm(y)``.
     """
     return f"fixdenorm({x})"
+
+
+def peak_hold(
+    peak: str,
+    history: str,
+    *,
+    coefficient: float = 0.99997,
+    reference_rate: float = 48000.0,
+) -> str:
+    """Instant attack with exponential decay of constant duration at every SR.
+
+    The caller declares ``History history(0)``. ``coefficient`` is the decay
+    per sample at ``reference_rate``; this preserves an existing meter's hold
+    exactly at its reference rate while correcting other sample rates.
+    """
+    if not math.isfinite(coefficient) or not 0.0 < coefficient < 1.0:
+        raise ValueError("coefficient must be finite and between 0 and 1")
+    if not math.isfinite(reference_rate) or reference_rate <= 0.0:
+        raise ValueError("reference_rate must be finite and positive")
+    return (f"{history} = max({peak}, {history} * "
+            f"pow({coefficient}, {float(reference_rate)} / samplerate));")
 
 
 def ms_encode(left: str, right: str, mid: str, side: str) -> str:

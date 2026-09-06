@@ -63,6 +63,7 @@ def device_output_path(
     device_type: str = "audio_effect",
     *,
     subfolder: Optional[str] = None,
+    create_dirs: bool = True,
 ) -> str:
     """Return the full output path for a device .amxd file.
 
@@ -71,6 +72,7 @@ def device_output_path(
         device_type: One of "audio_effect", "instrument", "midi_effect",
             "note_transformation", "note_generator".
         subfolder: Optional relative subfolder beneath the device-type directory.
+        create_dirs: False for read-only discovery and freshness checks.
     """
     try:
         subdir = _DEVICE_TYPE_SUBDIRS[device_type]
@@ -82,8 +84,15 @@ def device_output_path(
     if validated_subfolder is not None:
         path = path / validated_subfolder
     path = path / f"{name}.amxd"
-    os.makedirs(path.parent, exist_ok=True)
+    if create_dirs:
+        os.makedirs(path.parent, exist_ok=True)
     return str(path)
+
+
+def device_output_directories() -> tuple[Path, ...]:
+    """All supported device directories, without creating any of them."""
+    root = user_library()
+    return tuple(root / subdir for subdir in _DEVICE_TYPE_SUBDIRS.values())
 
 
 def _is_wsl():

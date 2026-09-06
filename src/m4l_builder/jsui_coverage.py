@@ -79,7 +79,7 @@ def _selector_from_box(payload: dict):
 
 
 def jsui_coverage_issues(boxes: list, lines: list, support_files: dict = None):
-    """Return ``(box_id, selector)`` pairs routed into a jsui with no handler.
+    """Return ``(box_id, selector, source_id)`` for missing handlers.
 
     ``support_files`` maps filename -> {"content": str}; the jsui's script is
     looked up by its ``filename`` attribute.
@@ -105,10 +105,17 @@ def jsui_coverage_issues(boxes: list, lines: list, support_files: dict = None):
             continue
         targets[box_id] = _declared_handlers(js)
 
-    if not targets:
-        return []
-
-    findings = []
+    findings: list[tuple[str, str, str]] = []
+    # IDs are local to each patcher. Recurse separately so a parent or sibling
+    # with the same ID cannot hide a defect inside an embedded patcher.
+    for box_id, payload in by_id.items():
+        sub = payload.get("patcher")
+        if isinstance(sub, dict):
+            findings.extend(
+                (f"{box_id}::{dest}", selector, f"{box_id}::{src}")
+                for dest, selector, src in jsui_coverage_issues(
+                    sub.get("boxes", []), sub.get("lines", []), support_files)
+            )
     for line in lines:
         patch = line.get("patchline", line)
         src, dest = patch.get("source"), patch.get("destination")

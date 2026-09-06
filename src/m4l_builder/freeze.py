@@ -48,6 +48,8 @@ import os
 import struct
 from pathlib import Path
 
+from .artifact_io import write_artifacts
+
 # meta-section value that marks a device as frozen (unfrozen devices use 0).
 _FROZEN_META = 7
 # flag value Max writes on the device's own JSON entry; dependencies use 0.
@@ -232,11 +234,10 @@ def device_to_frozen_bytes(device, *, validate=None) -> bytes:
     Embeds every registered asset (``jsui`` scripts, ``gen~`` patchers, support
     files) so the single file is portable to other machines with no sidecars.
     """
-    from .amxd import apply_validation_policy, device_to_patcher
+    from .amxd import prepare_device_patcher
     from .constants import DEVICE_TYPE_CODES
 
-    apply_validation_policy(device, validate)
-    patcher = device_to_patcher(device)
+    patcher = prepare_device_patcher(device, validate=validate)
     device_json = json.dumps(patcher, indent="\t").encode("utf-8") + b"\n\x00"
     deps = [(asset.filename, _asset_bytes(asset)) for asset in device.assets()]
     return assemble_frozen_amxd(
@@ -272,13 +273,14 @@ def freeze_amxd_file(
     *,
     search_dirs: list[str] | None = None,
     output_path: str | None = None,
+    allow_missing: bool = False,
 ) -> dict:
     """Freeze an already-built ``.amxd`` in place (or to ``output_path``).
 
     Reads the device's ``dependency_cache``, loads each listed file from the
     ``.amxd``'s own directory (and any extra ``search_dirs``), embeds them, and
-    rewrites the file frozen. Dependencies that cannot be found are skipped and
-    reported (these are typically Max factory files present on every install).
+    rewrites the file frozen. Missing dependencies fail before writing anything.
+    ``allow_missing=True`` explicitly permits external factory dependencies.
 
     Returns a summary dict: ``{embedded: [...], missing: [...], bytes: int,
     already_frozen: bool}``.
@@ -286,7 +288,18 @@ def freeze_amxd_file(
     device_type_code, payload, is_frozen = _read_amxd(amxd_path)
     dest = output_path or amxd_path
     if is_frozen:
-        return {"embedded": [], "missing": [], "bytes": 0, "already_frozen": True}
+        contents = extract_frozen_amxd(Path(amxd_path).read_bytes())
+        device_json = next(iter(contents.values()))
+        patcher = _patcher_dict_from_payload(device_json)
+        frozen_missing = [d["name"] for d in patcher.get("patcher", {}).get("dependency_cache", [])
+                   if d.get("name") and d["name"] not in contents]
+        if frozen_missing and not allow_missing:
+            raise FileNotFoundError("Missing frozen dependencies: " + ", ".join(frozen_missing))
+        data = Path(amxd_path).read_bytes()
+        if Path(dest).resolve() != Path(amxd_path).resolve():
+            write_artifacts(dest, data)
+        return {"embedded": list(contents)[1:], "missing": frozen_missing,
+                "bytes": len(data), "already_frozen": True}
 
     patcher = _patcher_dict_from_payload(payload)
     dep_names = [
@@ -309,13 +322,16 @@ def freeze_amxd_file(
         else:
             missing.append(name)
 
+    if missing and not allow_missing:
+        raise FileNotFoundError("Missing dependencies: " + ", ".join(missing))
+
     frozen = assemble_frozen_amxd(
         device_type_code,
         f"{Path(amxd_path).stem}.amxd",
         payload,
         embedded,
     )
-    Path(dest).write_bytes(frozen)
+    write_artifacts(dest, frozen)
     return {
         "embedded": [n for n, _ in embedded],
         "missing": missing,

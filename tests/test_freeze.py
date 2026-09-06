@@ -230,8 +230,37 @@ class TestFreezeAmxdFile:
         out = tmp_path / "Missing.amxd"
         dev.build(str(out))
         (tmp_path / "missing_v1.js").unlink()  # simulate lost sidecar
-        res = freeze_amxd_file(str(out))
+        import pytest
+        original = out.read_bytes()
+        with pytest.raises(FileNotFoundError, match="missing_v1.js"):
+            freeze_amxd_file(str(out))
+        assert out.read_bytes() == original
+        res = freeze_amxd_file(str(out), allow_missing=True)
         assert res["missing"] == ["missing_v1.js"]
+
+    def test_frozen_source_is_copied_to_new_destination(self, tmp_path):
+        from m4l_builder import AudioEffect
+
+        src, dest = tmp_path / "Original.amxd", tmp_path / "export" / "Copy.amxd"
+        AudioEffect("Original", 200, 120).build(str(src), freeze=True)
+        res = freeze_amxd_file(str(src), output_path=str(dest))
+        assert res["already_frozen"]
+        assert dest.read_bytes() == src.read_bytes()
+
+    def test_incomplete_frozen_source_is_not_exported_as_portable(self, tmp_path):
+        import pytest
+
+        from m4l_builder import AudioEffect
+
+        device = AudioEffect("Incomplete", 200, 120)
+        device.register_asset("lost.js", "source")
+        src, dest = tmp_path / "Incomplete.amxd", tmp_path / "Copy.amxd"
+        device.build(str(src))
+        (tmp_path / "lost.js").unlink()
+        freeze_amxd_file(str(src), allow_missing=True)
+        with pytest.raises(FileNotFoundError, match="lost.js"):
+            freeze_amxd_file(str(src), output_path=str(dest))
+        assert not dest.exists()
 
 
 def test_public_api_exports():
