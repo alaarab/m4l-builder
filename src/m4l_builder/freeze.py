@@ -77,11 +77,15 @@ _FOOTER_TYPE_BY_EXT = {
     ".aif": "AIFF",
     ".aiff": "AIFF",
     ".txt": "TEXT",
+    ".mxo": "iLaX",
+    ".mxe64": "mx64",
 }
 
 
 def footer_type_for(filename: str) -> str:
     """Return the frozen-footer ``type`` tag for a dependency filename."""
+    if Path(filename).name in {"zipfile", "executable", "plist"} and "/" in filename:
+        return "\0\0\0\0"
     return _FOOTER_TYPE_BY_EXT.get(Path(filename).suffix.lower(), "TEXT")
 
 

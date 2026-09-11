@@ -59,7 +59,7 @@ WIRING_INTEGRITY_CODES = frozenset(
 
 def collect_build_issues(device) -> list:
     """Collect the same build checks regardless of their reporting policy."""
-    from .box_lint import lint_boxes
+    from .box_lint import lint_boxes, lint_boxes_with_args
     from .jsui_coverage import jsui_coverage_issues
     from .validation import ValidationIssue
 
@@ -67,6 +67,16 @@ def collect_build_issues(device) -> list:
     issues.extend(
         ValidationIssue(code="box-declaration-mismatch", message=msg, severity="error")
         for msg in lint_boxes(device.boxes)
+    )
+    # Advisory, never blocking. An argument-carrying box can only be checked on
+    # outlet SHORTFALL, and the fleet's existing instances sit in a protected
+    # device (Shard) and a SHA-pinned verification candidate (Foundry) whose
+    # source must not change to satisfy a lint. Deliberately kept out of
+    # default_codes so it reports without failing a build.
+    issues.extend(
+        ValidationIssue(code="box-outlets-under-declared", message=msg,
+                        severity="warning")
+        for msg in lint_boxes_with_args(device.boxes)
     )
     scripts = {
         asset.filename: {"content": (

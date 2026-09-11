@@ -193,7 +193,9 @@ GOLDEN_SHA256 = {
     # (same treatment as transfer_curve; inert until add_bypass_dim is wired).
     "level_history_js": ("3280e3b501b0cb7b68085cac3198fe2bf5cff61f1f89409054941a9dfb4df965", 25910),
     "level_meter_js": ("4ae60d290ee6cec9499ab61844106a08497d26c8c40ca9a7781a1bfd81e5387c", 5408),
-    "linear_phase_eq_display_js": ("65bf26868963d743bf081bc22ab5dd041ae1f4afb3da73970000dd639c7d4ae2", 93540),
+    # Updated 2026-09-11: added the missing DISPLAY_FLOOR and TYPE_ALLPASS
+    # declarations that graph_core requires (both were ReferenceErrors).
+    "linear_phase_eq_display_js": ("8e94b6d0def7a5584a68cef6f0ea9552db5d77368482d9bd062ef9ca945bf84a", 94476),
     "loop_filter_curve_js": ("083b0e76b60ea1fd70a6780c5c336f318ea41d29887d6e1372a151ed8c4689f9", 10029),
     # Bumped 2026-08-01: transfer_curve now carries BYPASS_DIM_JS and calls
     # paint_bypass_scrim() at the end of paint(). Inert until a device wires

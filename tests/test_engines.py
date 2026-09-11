@@ -1358,11 +1358,19 @@ class TestLinearPhaseEqDisplayEngine:
 
     def test_excludes_allpass(self):
         js = linear_phase_eq_display_js()
+        # The contract is that this EQ never OFFERS allpass: it is absent from the
+        # selectable type names.
         assert "AllPass" not in js
-        # the shared graph_core include carries a DORMANT `case TYPE_ALLPASS:`
-        # (compares against an undefined constant — never matches); the real
-        # contract is that this EQ never DEFINES or offers the type.
-        assert "var TYPE_ALLPASS" not in js
+        # But the constant MUST be defined. The shared graph_core include carries
+        # `case TYPE_ALLPASS:`, and this test previously asserted the constant was
+        # absent on the theory that an undefined constant "never matches". That is
+        # not how JavaScript behaves: evaluating a case expression whose identifier
+        # is undefined throws a ReferenceError, aborting response_db() — which is
+        # on the per-point curve-draw path. a downstream app's parameter soak surfaced
+        # it as a live console error. The value sits outside this device's 0..6
+        # range so the branch stays unreachable.
+        assert "var TYPE_ALLPASS = 7;" in js
+        assert '"BPass"]' in js  # type list still ends at bandpass
 
     def test_custom_badge_color(self):
         js = linear_phase_eq_display_js(badge_color="0.1, 0.2, 0.3, 0.4")

@@ -75,15 +75,43 @@ _SCRIPT_ARITY = frozenset({
     "jsui", "v8ui", "js", "v8", "gen~", "bpatcher", "poly~", "pfft~",
 })
 
+# Objects whose inlet/outlet COUNT is set by their creation arguments, so the
+# dataset's bare instance says nothing about an argument-carrying box: [unpack]
+# has 2 outlets, [unpack f f f] has 3. Everything NOT listed keeps a fixed arity
+# regardless of arguments — [maximum 40] has the same two outlets as bare
+# [maximum] — so argument-carrying boxes of those ARE checkable. Skipping every
+# box with a space (the previous rule) left 462 of the fleet's calls unchecked
+# and hid four real wrong declarations.
+_ARGS_VARY_ARITY = frozenset({
+    "unpack", "pack", "unpackjoin", "packjoin",
+    "t", "trigger", "route", "routepass", "sel", "select",
+    "gate", "switch", "ggate", "gswitch", "spray",
+    "matrix~", "mc.unpack~", "mc.pack~", "mc.gen~", "mc.target~",
+    "gate~", "selector~", "gswitch~", "ggate~",
+})
 
-def lint_box(box: dict) -> list[str]:
-    """Issues for one box dict (the ``{"box": {...}}`` inner dict)."""
+
+def lint_box(box: dict, *, with_args: bool = False) -> list[str]:
+    """Issues for one box dict (the ``{"box": {...}}`` inner dict).
+
+    ``with_args=False`` (the default) keeps the long-standing BLOCKING contract:
+    only argument-free boxes are checked, where the dataset's bare instance is
+    authoritative. ``with_args=True`` instead returns ONLY the advisory
+    under-declared-outlet findings for argument-carrying boxes — reported as a
+    non-blocking warning, because the fleet has pre-existing instances in
+    protected devices (Shard) and in a SHA-pinned verification candidate
+    (Foundry) whose source must not change to satisfy a lint.
+    """
     maxclass = box.get("maxclass", "")
+    has_args = False
     if maxclass == "newobj":
         text = str(box.get("text", "")).strip()
-        if not text or " " in text:
-            return []          # creation args -> arity may differ; skip
-        key = text
+        if not text:
+            return []
+        key = text.split()[0]
+        has_args = " " in text
+        if has_args and key in _ARGS_VARY_ARITY:
+            return []          # creation args change OUTLET count here; skip
     elif maxclass in ("message", "comment"):
         return []              # fixed shapes the kit already hard-codes
     else:
@@ -93,8 +121,32 @@ def lint_box(box: dict) -> list[str]:
     spec = known_object_spec(key)
     if spec is None:
         return []
+    # A 0-inlet/0-outlet dataset entry means that object FAILED TO INSTANTIATE
+    # bare when the dataset was captured (bare [expr] is invalid, so Max made a
+    # dead 0/0 box). That is an absence of information, not a claim of zero
+    # outlets — treating it as a spec would "fix" 21 correct expr declarations
+    # into broken ones.
+    if spec.get("numinlets") == 0 and spec.get("numoutlets") == 0:
+        return []
+    if has_args != with_args:
+        return []
     issues = []
     bid = box.get("id", "?")
+    if has_args:
+        # An argument-carrying box can only be checked on OUTLET COUNT, and only
+        # for UNDER-declaration. Measured across the fleet: numinlets produces
+        # 206 false positives (an argument CONSUMES the matching inlet — [pak
+        # 1 2 3 4] has 4 inlets, bare [pak] has 2; [r name] has 0, bare [r] has
+        # 1) and outlettype produces 127 (output TYPE follows argument type —
+        # [+ 1.] is float where bare [+] is int). Over-declaring outlets
+        # relative to a Max-8.6 dataset usually means Max 9 ADDED outlets
+        # (live.adsr~, info~), not a mistake, so only a shortfall is reported.
+        want = spec.get("numoutlets")
+        got = box.get("numoutlets")
+        if want is not None and got is not None and got < want:
+            issues.append(
+                f"{bid} ({key}): numoutlets={got}, dataset says {want}")
+        return issues
     for field in ("numinlets", "numoutlets"):
         want = spec.get(field)
         got = box.get(field)
@@ -110,10 +162,25 @@ def lint_box(box: dict) -> list[str]:
 
 
 def lint_boxes(boxes: list[dict]) -> list[str]:
-    """Issues across a device's box list (``device.boxes`` shape)."""
+    """Blocking issues across a device's box list (``device.boxes`` shape)."""
     issues: list[str] = []
     for box in iter_boxes(boxes):
         issues.extend(lint_box(box))
+    return issues
+
+
+def lint_boxes_with_args(boxes: list[dict]) -> list[str]:
+    """Advisory under-declared-outlet findings for argument-carrying boxes.
+
+    Separate from :func:`lint_boxes` because these are reported as warnings, not
+    build errors: Max uses its own object definition at load, so a short outlet
+    declaration mis-wires nothing as long as the patch only cords the outlets it
+    declared. Real instances found in the fleet: maximum, minimum, change,
+    buffer~, opendialog.
+    """
+    issues: list[str] = []
+    for box in iter_boxes(boxes):
+        issues.extend(lint_box(box, with_args=True))
     return issues
 
 

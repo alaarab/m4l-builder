@@ -65,15 +65,24 @@ def test_chaos_voice_sources_and_macros():
 
 
 def test_draw_source_reads_the_full_wavetable():
-    # ORBIT DRAW (#78): the DRAW branch advances a phase wrapped to [0,1), but
-    # gen sample() indexes in SAMPLES — so the read MUST scale by the table
-    # length (dim), else it only interpolates frames 0..1 of the 128-frame
-    # table (a near-DC drone, not the drawn wave). dim() is the GenExpr
-    # buffer-length operator (Cycling '74); buf_odraw is 128 frames.
+    # ORBIT DRAW (#78): the DRAW branch advances a phase wrapped to [0,1) and
+    # reads it with gen sample().
+    #
+    # This test previously asserted the OPPOSITE, on the premise that "gen
+    # sample() indexes in SAMPLES" and so the read had to be scaled by (dim - 1).
+    # That premise is wrong, and it is what produced the bug. Measured in Live
+    # 2026-09-11 against a 128-cell Data ramp: sample() defaults to @index PHASE
+    # and maps 0..1 across the buffer as phase * (frames - 1) exactly
+    # (0.25 -> 31.75, 0.5 -> 63.5, 0.996 -> 126.492, 1.0 -> 127), with
+    # @boundmode ignore returning 0 outside that range.
+    #
+    # Pre-scaling therefore SQUARED the index: phd * 127 * 127 = phd * 16129,
+    # which leaves the 0..1 domain for any phd > 1/127 and returns 0. The lane
+    # was silent for 99.2% of every cycle -- not a near-DC drone, no output.
     code = poly_mod_engine(voices=8, draw_buffer="orbit_draw_x")
     assert lint_genexpr(code, 1, 16) == []
     assert 'Buffer buf_odraw("orbit_draw_x");' in code
-    assert "v_1 = sample(buf_odraw, phd_1 * (dim(buf_odraw) - 1), 0);" in code
-    assert "v_8 = sample(buf_odraw, phd_8 * (dim(buf_odraw) - 1), 7);" in code
-    # the near-DC bug form (unscaled 0..1 phase into a samples-mode read) is gone
-    assert "sample(buf_odraw, phd_1, 0)" not in code
+    assert "v_1 = sample(buf_odraw, phd_1, 0);" in code
+    assert "v_8 = sample(buf_odraw, phd_8, 7);" in code
+    # the squared-index form must not come back
+    assert "dim(buf_odraw)" not in code

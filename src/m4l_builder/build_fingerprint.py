@@ -56,5 +56,14 @@ def file_fingerprint(path) -> str:
     for dependency in patcher.get("patcher", {}).get("dependency_cache", []):
         name = dependency.get("name")
         if name:
-            assets[name] = bundled[name] if frozen else (path.parent / name).read_bytes()
+            dependency_path = path.parent / name
+            if not frozen and dependency.get("type") == "iLaX" and dependency_path.is_dir():
+                executable = dependency_path / "Contents/MacOS" / dependency_path.stem
+                if not executable.is_file():
+                    raise FileNotFoundError(f"Native external executable missing: {executable}")
+                # Max's collective marker is four zero bytes; source-addressed
+                # native dependencies carry their build manifest separately.
+                assets[name] = b"\0" * 4
+            else:
+                assets[name] = bundled[name] if frozen else dependency_path.read_bytes()
     return _fingerprint(patcher, assets)

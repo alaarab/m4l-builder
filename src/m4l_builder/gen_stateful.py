@@ -283,7 +283,13 @@ def poly_mod_engine(*, voices: int = 8, gui_refresh_ms: float = 40.0,
                 f"phd_{i} = wrap(peek(data_phd, {k}, 0) + rt_{i}"
                 f" / samplerate, 0., 1.);",
                 f"poke(data_phd, phd_{i}, {k}, 0);",
-                f"v_{i} = sample(buf_odraw, phd_{i} * (dim(buf_odraw) - 1), {k});",
+                # sample() defaults to @index phase, which ALREADY maps 0..1 across
+                # the buffer as phase*(frames-1) -- measured exactly. Pre-scaling by
+                # (dim-1) therefore squared the index: with dim 128 the effective
+                # position was phd*16129, out of range for any phd > 1/127, and
+                # @boundmode ignore returned 0. The lane was silent for 99.2% of
+                # every cycle. phd is already wrapped to 0..1 just above.
+                f"v_{i} = sample(buf_odraw, phd_{i}, {k});",
                 "}",
             ]
         else:
