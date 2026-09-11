@@ -153,6 +153,11 @@ var TYPE_LOWCUT = 3;
 var TYPE_HIGHCUT = 4;
 var TYPE_NOTCH = 5;
 var TYPE_BANDPASS = 6;
+// graph_core's response_db() switches on TYPE_ALLPASS. This device exposes only
+// types 0-6, so the value sits outside that range and the branch stays
+// unreachable -- but the identifier must EXIST, because evaluating an undefined
+// case expression throws a ReferenceError. Matches eq_curve's value.
+var TYPE_ALLPASS = 7;
 
 var TYPE_NAMES = ["Peak", "LShelf", "HShelf", "LCut", "HCut", "Notch", "BPass"];
 var QUALITY_NAMES = ["Short", "Medium", "High"];
@@ -164,7 +169,15 @@ var MIN_FREQ = 20;
 var MAX_FREQ = 20000;
 var MIN_GAIN = -30;
 var MAX_GAIN = 30;
-var GRAPH_FLOOR = -180;
+// The floor graph_core's response_db() clamps to. It was declared here as
+// GRAPH_FLOOR and never referenced by anything, while graph_core -- a shared
+// include this engine pulls in -- reads DISPLAY_FLOOR, which nothing defined:
+// every response_db() call threw a ReferenceError and aborted the curve draw.
+// -180 rather than eq_curve's -30 because band_response_db() MULTIPLIES a cut's
+// response by its slope-stage count, so a shallow floor would flatten the skirt
+// and then scale the flattened value, drawing the wrong slope. graph_db_to_y()
+// already handles values far below the display range.
+var DISPLAY_FLOOR = -180;
 var MIN_Q = 0.1;
 var MAX_Q = 30.0;
 var ANALYZER_MIN_DB = -78.0;

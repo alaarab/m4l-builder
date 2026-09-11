@@ -1,0 +1,6 @@
+History n(0); Delay left(64); Delay right(128); Data table(32,3);
+n=n+1; left.write((n%16)*0.0625+in1); right.write((n%8)*-0.125);
+limit=n%16-2; i=0; age=77;
+for(i=-2;i<limit;i+=1) { age=limit-i; poke(table,right.read(age),i,0); poke(table,left.read(age),i,2); }
+out1=peek(table,0,0); out2=peek(table,4,2); out3=i; out4=age;
+out5=peek(table,12,0); out6=left.read(2); out7=right.read(3); out8=peek(table,1,1);

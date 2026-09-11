@@ -1,0 +1,1 @@
+Data tab(8,2);for(i=0;i<8;i+=1){poke(tab,i+1,i,0);poke(tab,-i-1,i,1);}out1=peek(tab,in1,0,index="phase");out2=peek(tab,in1,1,index="phase");out3=peek(tab,in1,in2,index="phase");out4=peek(tab,in1*8,0);out5=peek(tab,in1*7,0);out6=peek(tab,1,0,index="phase");out7=in1;out8=in2;

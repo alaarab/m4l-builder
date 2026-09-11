@@ -1,0 +1,1 @@
+gen_skip(x){loopTotal=0.;loopVisits=0;for(i=0;i<6;i+=1){if(i==2){i+=1;continue;}for(j=0;j<4;j+=1){if(j==1){j+=1;continue;}loopTotal+=x+i+j;loopVisits+=1;}}return loopTotal,loopVisits;}total,visits=gen_skip(in1);bound=0;for(k=0;k<10;k+=1){if(k==2){k+=8;continue;}bound+=k;}out1=total;out2=visits;out3=in1;out4=in2;out5=bound;out6=k;out7=in1;out8=in2;

@@ -1,0 +1,34 @@
+{
+  "gen-tuple-safe-max": {
+    "captureSHA256": "ec8d15a152565256b7e2d6633d1759b3d6d1b57104b8f2650e337c0c2038b5c4",
+    "sourceSHA256": "b5e5f0c38c4ac45e8da5b13a9371f653f6e21915ba118842b27501bd4abaff47",
+    "inputChannelsZeroBased": [
+      1,
+      3
+    ]
+  },
+  "gen-storage-functions-max": {
+    "captureSHA256": "37c728364cc61e10eb375de65d086670d9eefe604548c85b0fa9db17e5cefd86",
+    "sourceSHA256": "33956bbe5a03f4ba5ec1c59320ad0a502a42ddaf26c858e7547faf52a0f355e7",
+    "inputChannelsZeroBased": [
+      1,
+      4
+    ]
+  },
+  "gen-phase-peek-max": {
+    "captureSHA256": "07e3b0f0991ce21794a3d69e5a7d4b51d700c3b2a613f8c55708d5ff1bd387b7",
+    "sourceSHA256": "26237877cd0d0245e0c2a9d8669a651881fca289e5fbfe4413d3110db7960bf0",
+    "inputChannelsZeroBased": [
+      6,
+      7
+    ]
+  },
+  "gen-continue-bounded2-max": {
+    "captureSHA256": "57531a8d74d77258de82d5f0d9beb3380a4e7031eebb4878cf963a43afd2ea64",
+    "sourceSHA256": "c1ee829138a3a55290837f122c4385bfc8ef745164cfa8cf3a0e25d36164f877",
+    "inputChannelsZeroBased": [
+      6,
+      7
+    ]
+  }
+}

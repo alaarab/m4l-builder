@@ -1,0 +1,12 @@
+{
+  "gen-state-valid-max": "228d471f0d43c62c2b5345f9f1faa9d1eaf8d52d739ac77c20807bb6c096bc85",
+  "gen-state-input-trace-max": "c80cf398e681cae7424faa79e024a3333f768af975018531446cc878683fe0c0",
+  "gen-state-graph-max": "8e842925e91bf3a740e639ed90f905f7502a539ce57b405c3754a0c1e7fe22a6",
+  "gen-mod-max": "99535481084f6bb5e436235423225ca38844c755cc0a8fc3b6d381cabf5b0a18",
+  "gen-constant-mod-max": "56925c6aa6743e6156f23179e4bf8d71b5996aeb66d874f5ca7b63e65b388e9e",
+  "gen-tiny-scale-max": "cc3112460b89444c64b57628ef763da27a3547b331f92eff5e4273a295c047a2",
+  "tinyDivisorReconstruction": {
+    "residual": -5.88418203051333e-15,
+    "divisor": 4.4408920985006e-16
+  }
+}

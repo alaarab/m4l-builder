@@ -1,0 +1,1 @@
+gen_pair(x){History h(0);prev=h;h=x;return prev,x;}gen_nested(x){a,b=gen_pair(x);return b,a;}a,b=gen_pair(in1);c,d=gen_pair(in2);nestedNow,nestedPrev=gen_nested(in1+in2);g=gen_pair(in1*0.5);out1=a;out2=b;out3=c;out4=d;out5=nestedNow;out6=nestedPrev;out7=g;out8=b+d;

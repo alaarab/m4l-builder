@@ -1,0 +1,14 @@
+{
+  "rawSHA256": "0b8c95c38e9d5dd2724fe8b8602858046b3cb90c2e98831877b043e59f8e409e",
+  "source": {
+    "path": "/Users/squidbot/.phren/objectstudio/reference/all68-runtime-20260910/gen-snapshot-loop-binary.genexpr",
+    "sha256": "6ca73c789df38b5b03fb99d9ab886dc8b482e50ff4b6dd457d6c480b7abb08e4",
+    "scope": "Original Gen section, not complete device compatibility",
+    "rootProgram": true,
+    "inputs": 1,
+    "outputs": 8
+  },
+  "sampleRate": 44100,
+  "scope": "Original Max Gen delay-to-table snapshot loop with dyadic inputs, eight outputs, repeated reset",
+  "separatePrecisionGap": "gen-snapshot-loop-max non-dyadic modulo expressions differ at sub-1e-15 residuals; not fixed or counted as exact"
+}
