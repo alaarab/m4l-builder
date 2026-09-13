@@ -10,7 +10,8 @@
 namespace m4l_builder::live_compat {
 
 // Original instrument-bundle owner, not replacement DSP or device approval.
-// Setup/destruction require a quiescent control thread. enqueueMidi/process
+// Setup/destruction require a quiescent control thread. enqueueMidi/process and
+// applyParameterChanges
 // share ONE serialized processing owner; UI threads need an external queue.
 // The caller must retain the original module's code until destruction finishes.
 // Actual original callback allocation/locking needs its own runtime audit.
@@ -64,6 +65,37 @@ public:
     BundleInstance& operator=(const BundleInstance&) = delete;
     BundleInstance(BundleInstance&&) = delete;
     BundleInstance& operator=(BundleInstance&&) = delete;
+
+    // One serialized processing owner, never the UI thread. The caller must
+    // independently establish source domains and the original setter's realtime
+    // safety. Validate/copy the ENTIRE ordered packet before calling foreign
+    // code; coupled parameters cannot partially apply because a later input is
+    // invalid. A throwing original setter faults this instance permanently.
+    // parameterValue() still reports the immutable initialized bank, not a
+    // mutable original getter. The host owns acknowledged current state.
+    bool applyParameterChanges(const ParameterValue* values, std::size_t count) noexcept {
+        if (faulted()) return false;
+        if (!values || !count || count > parameterCount_)
+            return fail("Invalid original bundle parameter packet");
+        std::array<ParameterValue, maximumParameterStateSize> changes{};
+        std::array<bool, maximumParameterStateSize> seen{};
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto value = values[i];
+            if (value.index < 0 || static_cast<std::size_t>(value.index) >= parameterCount_ ||
+                !std::isfinite(value.value) || seen[static_cast<std::size_t>(value.index)])
+                return fail("Invalid original bundle parameter index or value");
+            seen[static_cast<std::size_t>(value.index)] = true;
+            changes[i] = value;
+        }
+        OriginalFPEnvironment environment;
+        try {
+            for (std::size_t i = 0; i < count; ++i)
+                api_.setParameter(instance_, changes[i].index, changes[i].value);
+        } catch (...) {
+            return fail("Original bundle parameter update threw an exception");
+        }
+        return true;
+    }
 
     bool enqueueMidi(std::int64_t sampleOffset, std::uint8_t status,
                      std::uint8_t data1, std::uint8_t data2) noexcept {

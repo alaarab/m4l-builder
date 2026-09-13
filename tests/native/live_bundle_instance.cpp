@@ -23,11 +23,11 @@ void operator delete[](void* value, std::size_t) noexcept { ::operator delete(va
 
 struct Engine { int marker = 1234; };
 enum class Failure { none, createNull, createThrow, setterThrow, rateReject, rateThrow,
-                     resetThrow, nonfinite, leadingGuard, trailingGuard, renderThrow };
+                     resetThrow, nonfinite, leadingGuard, trailingGuard, renderThrow, updateThrow };
 struct Probe {
     int creates = 0, destroys = 0, setters = 0, rates = 0, resets = 0, renders = 0;
     int live = 0, orderCount = 0;
-    std::array<int, 1030> order{};
+    std::array<int, 4096> order{};
     std::array<float, 1024> values{};
     std::array<MidiEvent, 1024> received{};
     std::int64_t eventCount = 0, rate = 0, result = 0;
@@ -65,6 +65,7 @@ static void setParameter(void* object, std::int64_t index, float value) {
     ++probe.setters; probe.order[probe.orderCount++] = static_cast<int>(index);
     probe.values[static_cast<std::size_t>(index)] = value;
     if (probe.failure == Failure::setterThrow && probe.setters == 2) throw 8;
+    if (probe.failure == Failure::updateThrow && probe.setters == 5) throw 13;
 }
 static std::int32_t setRate(void*, std::int64_t rate) {
     expectFP(); ++probe.rates; probe.rate = rate; probe.order[probe.orderCount++] = -2;
@@ -313,6 +314,9 @@ static void testProcessingAllocationsAndFP() {
 #endif
     auditAllocations = true;
     for (int block = 0; block < 1000; ++block) {
+        // Exact dyadic inputs keep the test's own arithmetic from setting FPSR.
+        const ParameterValue changes[]={{2,float(block)/1024},{0,-.25f}};
+        assert(instance.applyParameterChanges(changes,2));
         assert(instance.enqueueMidi(17, block % 2 ? 0x80 : 0x90, 60, 100));
         assert(instance.enqueueMidi(0, 0xb0, 1, 64));
         assert(instance.process(left.data(), right.data(), 512, validTime));
@@ -325,17 +329,52 @@ static void testProcessingAllocationsAndFP() {
     assert(controlBefore == controlAfter && statusBefore == statusAfter);
 #endif
 }
+static void testParameterPackets() {
+    for(int defect=0;defect<6;++defect) {
+        clear();BundleInstance instance(api(),bank,3,3,48000);
+        ParameterValue changes[]={{2,.5f},{0,.75f}};const ParameterValue* values=changes;size_t count=2;
+        if(defect==0)values=nullptr;
+        if(defect==1)count=0;
+        if(defect==2)count=4;
+        if(defect==3)changes[1].index=3;
+        if(defect==4)changes[1].index=2;
+        if(defect==5)changes[1].value=std::numeric_limits<float>::quiet_NaN();
+        assert(!instance.applyParameterChanges(values,count));assert(instance.faulted());
+        assert(probe.setters==3 && probe.values[2]==.75f && probe.values[0]==-.5f);
+        assert(!instance.applyParameterChanges(bank,3) && probe.setters==3);
+    }
+    clear();
+    {
+        BundleInstance instance(api(),bank,3,3,48000);
+        const ParameterValue changes[]={{2,.5f},{0,.75f}};
+        assert(instance.applyParameterChanges(changes,2));
+        assert(probe.setters==5 && probe.order[6]==2 && probe.order[7]==0);
+        assert(probe.values[2]==.5f && probe.values[0]==.75f);
+        assert(instance.parameterValue(2)==.75f && instance.parameterValue(0)==-.5f);
+    }
+    clear();
+    {
+        BundleInstance instance(api(),bank,3,3,48000);probe.failure=Failure::updateThrow;
+        const ParameterValue changes[]={{2,.5f},{0,.75f}};
+        assert(!instance.applyParameterChanges(changes,2));assert(instance.faulted());
+        assert(probe.setters==5 && std::strstr(instance.faultReason(),"parameter update"));
+        std::array<float,64> left{},right{};
+        assert(!instance.process(left.data(),right.data(),64,validTime));assert(probe.renders==0);
+    }
+}
 int main() {
     static_assert(!std::is_copy_constructible_v<BundleInstance>);
     static_assert(!std::is_move_constructible_v<BundleInstance>);
     static_assert(noexcept(std::declval<BundleInstance&>().enqueueMidi(0, 0x90, 60, 100)));
     static_assert(noexcept(std::declval<BundleInstance&>().process(nullptr, nullptr, 64, validTime)));
+    static_assert(noexcept(std::declval<BundleInstance&>().applyParameterChanges(nullptr,0)));
     testSetupValidation();
     testSetupOrderOwnershipAndCleanup();
     testMidiAndOriginalStatus();
     testRejectedProcessAndStickyFaults();
     testOriginalOutputFailureContainment();
     testProcessingAllocationsAndFP();
+    testParameterPackets();
     assert(probe.live == 0);
     std::puts("{\"passed\":true,\"synthetic_callbacks_only\":true,\"steady_render_blocks\":1000,\"observed_cpp_callback_allocations\":0,\"original_device_parity\":false}");
 }
