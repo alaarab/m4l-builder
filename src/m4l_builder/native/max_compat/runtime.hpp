@@ -480,7 +480,12 @@ private:
             op==Op::metro || op==Op::pipe || op==Op::randomInt || op==Op::accum || op==Op::split || op==Op::stripNote || op==Op::adsr || op==Op::clipSignal || op==Op::onePole || op==Op::indexSignal || op==Op::poke || op==Op::reverseDivide || op==Op::speedlim || op==Op::zlGroup;
     }
     void emit(int source, const Message& message, int depth,int outlet=0) noexcept {
-        if(!message.valid(symbols_.size())) { faultBecause("emitted message failed validation (atom count/type or symbol table)");return; }
+        if(!message.valid(symbols_.size())) {
+            const bool before=fault_.load(std::memory_order_relaxed);
+            faultBecause("emitted message failed validation (atom count/type or symbol table)");
+            if(!before)attributeFault(source,outlet,int(message.kind),message.selector,true);
+            return;
+        }
         if(trace_) trace_(traceContext_,source,outlet,sampleTime_,message);
         for (const auto& edge : nodes_[source].messages) if(edge.outlet==outlet) deliver(edge.destination, edge.inlet, message, depth + 1);
     }
@@ -1963,15 +1968,25 @@ private:
             default:return false;
         }
     }
-    // First fault attribution for diagnostics: which node, inlet and message
-    // kind tripped it. Written once; read when initialization is rejected.
-    int faultNode_=-1,faultInlet_=-1,faultKind_=-1;Symbol faultSelector_=0;
+    // One renderer/control owner writes a first-fault record exactly once.
+    // Publish its location LAST: diagnostic readers may run concurrently with
+    // audio and cannot use fault_ (which trips before attribution) as a fence.
+    // -1: no record; -2: final output mix; -3: host render contract.
+    static_assert(std::atomic<int>::is_always_lock_free,"Fault publication must be lock-free");
+    std::atomic<int> faultNode_{-1};
+    int faultInlet_=-1,faultKind_=-1;Symbol faultSelector_=0;
+    bool faultOutlet_=false;
     const char* faultReason_=nullptr;   // set at a few fault sites for diagnostics
     void faultBecause(const char* why) noexcept {if(!fault_.load(std::memory_order_relaxed))faultReason_=why;fault_=true;}
+    void attributeFault(int node,int port,int kind,Symbol selector=0,bool outlet=false) noexcept {
+        if(faultNode_.load(std::memory_order_relaxed)!=-1)return;
+        faultInlet_=port;faultKind_=kind;faultSelector_=selector;faultOutlet_=outlet;
+        faultNode_.store(node,std::memory_order_release);
+    }
     void deliver(int index, int inlet, Message message, int depth) noexcept {
         const bool before=fault_.load(std::memory_order_relaxed);
         deliverInner(index,inlet,message,depth);
-        if(!before && fault_.load(std::memory_order_relaxed) && faultNode_<0) {faultNode_=index;faultInlet_=inlet;faultKind_=int(message.kind);faultSelector_=message.selector;}
+        if(!before && fault_.load(std::memory_order_relaxed))attributeFault(index,inlet,int(message.kind),message.selector);
     }
     void deliverInner(int index, int inlet, Message message, int depth) noexcept {
         if (--*dispatchBudget_ < 0 || depth > 64) { fault_.store(true, std::memory_order_relaxed); return; }
@@ -2846,9 +2861,7 @@ public:
         for(const auto& r:restoreQueue_)deliver(r.node,r.inlet,r.message,0);
         restoreQueue_.clear();restoreQueue_.shrink_to_fit();
         if (fault_) {
-            std::string why="Unsupported initialization messages";
-            if(faultNode_>=0) why+=" (node "+std::to_string(faultNode_)+" op "+std::to_string(int(nodes_[size_t(faultNode_)].definition.op))+" inlet "+std::to_string(faultInlet_)+" message kind "+std::to_string(faultKind_)+" selector '"+symbols_.name(faultSelector_)+"')";
-            throw std::invalid_argument(why);
+            throw std::invalid_argument("Unsupported initialization messages ("+faultDescription()+")");
         }
         for(int i:parameterNodes_) parameterValues_[i].store(nodes_[i].values[0]);
         initialized_=true;
@@ -2951,13 +2964,25 @@ public:
 private:
     void queueExternal(int node,int inlet,const Message& message) noexcept {
         const unsigned write=eventWrite_.load(std::memory_order_relaxed),next=(write+1)%externalEvents_.size();
-        if(next==eventRead_.load(std::memory_order_acquire)){faultBecause("script event queue full");return;}
+        if(next==eventRead_.load(std::memory_order_acquire)){
+            const bool before=fault_.load(std::memory_order_relaxed);
+            faultBecause("script event queue full");
+            if(!before)attributeFault(node,inlet,int(message.kind),message.selector);
+            return;
+        }
         externalEvents_[write]={node,inlet,sampleTime_,message};eventWrite_.store(next,std::memory_order_release);
     }
 public:
     void render(const float* left, const float* right, float* outLeft, float* outRight, int frames) noexcept {
-        if(frames<0 || (frames>0 && (!outLeft || !outRight))) {fault_=true;return;}
-        if(!initialized_) {fault_=true;if(frames>0){std::fill(outLeft,outLeft+frames,0);std::fill(outRight,outRight+frames,0);}return;}
+        if(frames<0 || (frames>0 && (!outLeft || !outRight))) {
+            const bool before=fault_.load(std::memory_order_relaxed);
+            faultBecause("invalid signal render buffers or frame count");if(!before)attributeFault(-3,-1,-2);return;
+        }
+        if(!initialized_) {
+            const bool before=fault_.load(std::memory_order_relaxed);
+            faultBecause("signal rendering requested before initialization");if(!before)attributeFault(-3,-1,-2);
+            if(frames>0){std::fill(outLeft,outLeft+frames,0);std::fill(outRight,outRight+frames,0);}return;
+        }
         budget_ = budgetPerBlock_;
         // Service only the prior low-priority batch. A deferlow encountered here
         // is guaranteed another service turn, including in a feedback loop.
@@ -3014,7 +3039,9 @@ public:
                     (next<0 || nodes_[i].due<nodes_[next].due || (nodes_[i].due==nodes_[next].due && nodes_[i].serial<nodes_[next].serial))) next=int(i);
                 if(next<0)break;
                 nodes_[next].delayActive=false;nextDelay();
-                if(--*dispatchBudget_<0) {fault_=true;break;}
+                if(--*dispatchBudget_<0) {
+                    faultBecause("scheduled message budget exhausted");attributeFault(next,-1,-4);break;
+                }
                 if(nodes_[next].definition.op==Op::speedlim) {nodes_[next].lastOutput=sampleTime_;emit(next,nodes_[next].pending,0,0);}
                 else if(nodes_[next].definition.op==Op::pipe) firePipe(next);
                 else if(nodes_[next].definition.op==Op::metro) {
@@ -3032,7 +3059,7 @@ public:
                     auto& n = nodes_[index];
                     if(n.muted) {std::fill(n.output.begin(),n.output.end(),0.);continue;}
                     const bool faultedBefore=fault_.load(std::memory_order_relaxed);
-                    struct RenderFaultScope { Runtime& rt;int node;bool before;~RenderFaultScope(){if(!before && rt.fault_.load(std::memory_order_relaxed) && rt.faultNode_<0){rt.faultNode_=node;rt.faultInlet_=-1;rt.faultKind_=-2;}} } renderFaultScope{*this,index,faultedBefore};
+                    struct RenderFaultScope { Runtime& rt;int node;bool before;~RenderFaultScope(){if(!before && rt.fault_.load(std::memory_order_relaxed))rt.attributeFault(node,-1,-2);} } renderFaultScope{*this,index,faultedBefore};
                     switch (n.definition.op) {
                         case Op::polyIn:
                             n.output[0]=(n.signalInputs[0].empty() && n.spectralSlot>=0 && size_t(frameIndex_)<spectralIn_[size_t(n.spectralSlot)].real.size())?spectralIn_[size_t(n.spectralSlot)].real[size_t(frameIndex_)]:input(n,0);break;
@@ -3288,7 +3315,12 @@ public:
                     }
                 }
             }
-            if (!std::isfinite(l) || !std::isfinite(r) || std::abs(l) > 3.4e38 || std::abs(r) > 3.4e38) { fault_ = true; l = r = 0; }
+            if (!std::isfinite(l) || !std::isfinite(r) || std::abs(l) > 3.4e38 || std::abs(r) > 3.4e38) {
+                const bool before=fault_.load(std::memory_order_relaxed);
+                faultBecause("non-finite or out-of-range mixed stereo output");
+                if(!before)attributeFault(-2,-1,-2);
+                l = r = 0;
+            }
             outLeft[frame] = float(l); outRight[frame] = float(r);
             ++sampleTime_;
         }
@@ -3338,14 +3370,30 @@ public:
     // Control-thread diagnostic: which node first tripped the fault (message
     // kind -2 = during signal rendering), or the child pfft~ that did.
     std::string faultDescription() const {
-        if(faultNode_>=0) {
-            const auto& d=nodes_[size_t(faultNode_)].definition;
-            std::string why="node "+std::to_string(faultNode_)+" op "+std::to_string(int(d.op));
+        const int node=faultNode_.load(std::memory_order_acquire);
+        if(node>=0) {
+            const auto& d=nodes_[size_t(node)].definition;
+            std::string why="node "+std::to_string(node)+" op "+std::to_string(int(d.op));
             if(faultKind_==-2)why+=" during signal rendering";
-            else why+=" inlet "+std::to_string(faultInlet_)+" message kind "+std::to_string(faultKind_)+" selector '"+symbols_.name(faultSelector_)+"'";
+            else if(faultKind_==-4)why+=" during scheduled message dispatch";
+            else {
+                why+=(faultOutlet_?" outlet ":" inlet ")+std::to_string(faultInlet_)+" message kind "+std::to_string(faultKind_)+" selector '";
+                why+=faultSelector_<symbols_.size()?symbols_.name(faultSelector_):"unprepared symbol "+std::to_string(faultSelector_);
+                why+="'";
+            }
             if(faultReason_)why+=std::string(": ")+faultReason_;
             return why;
         }
+        if(node==-2) {
+            // Only the final sum was invalid. Naming an arbitrary contributing
+            // node as its cause would misdiagnose cancellation and valid routing.
+            std::string why=faultReason_;why+=" (";bool first=true;
+            for(size_t i=0;i<nodes_.size();++i)if(nodes_[i].definition.op==Op::output) {
+                if(!first)why+=", ";first=false;why+="node "+std::to_string(i)+" op "+std::to_string(int(Op::output));
+            }
+            why+=")";return why;
+        }
+        if(node==-3)return std::string("host render contract: ")+faultReason_;
         for(size_t i=0;i<nodes_.size();++i)if(nodes_[i].spectral)for(const auto& c:nodes_[i].spectral->copies)if(c->faulted())return "pfft~ node "+std::to_string(i)+": "+c->faultDescription();
         return "unattributed";
     }
