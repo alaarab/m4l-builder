@@ -313,6 +313,9 @@ private:
     std::array<std::atomic<double>, 4096> meters_{};
     std::array<std::atomic<double>, 4096> parameterValues_{};
     std::vector<int> parameterNodes_;
+    // Prepared live.remote~ node indices. The owning session uses this
+    // immutable list to allocate its cross-device bridge before rendering.
+    std::vector<int> liveRemoteNodes_;
     double sampleRate_;
     int budget_ = 0;
     Symbols symbols_;
@@ -862,8 +865,9 @@ private:
         // when a mapping was held (reporting on change only is NOT
         // measured). A non-zero id is forwarded to the host, which
         // decides whether the target exists in this session. The left
-        // inlet carries the controlling value and is ignored while
-        // unmapped — a mapping in this session is a host feature.
+        // inlet carries the normalized controlling value. The owning session
+        // installs the target and consumes the render-owned signal sample;
+        // while unmapped the value remains inert.
         if(inlet==1) {
             if(m.kind!=Message::Kind::anything || symbols_.name(m.selector)!="id" || m.count!=1 || !m.atoms[0].numeric()) {fault_=true;return true;}
             Atom target;if(!converted(m.atoms[0],Atom::Type::integer,target))return true;
@@ -2634,6 +2638,7 @@ public:
             if(definition.op==Op::signalRecord)node.values.fill(0);
             nodes_.push_back(std::move(node));
             if(definition.op==Op::dial) parameterNodes_.push_back(int(nodes_.size()-1));
+            if(definition.op==Op::liveRemote) liveRemoteNodes_.push_back(int(nodes_.size()-1));
         }
         std::vector<int> degrees(nodes_.size());
         std::vector<std::vector<int>> downstream(nodes_.size());
@@ -3292,6 +3297,13 @@ public:
                             n.output[0]=std::min(std::max(input(n,0),lo),hi);break;
                         }
                         case Op::signal: n.output[0] = n.values[0]; break;
+                        case Op::liveRemote:
+                            // The session consumes the most recent normalized
+                            // signal once per bounded render vector. Mapping
+                            // state is renderer-owned and no host callback is
+                            // made from here.
+                            if(n.hasHeld)n.target=input(n,0);
+                            break;
                         case Op::boundary: if(n.signalOutlet) n.output[0]=input(n,0);break;
                         case Op::line:
                             n.output[0] = n.values[0];
@@ -3347,7 +3359,35 @@ public:
     // 'setcurve' as interned for this graph's function objects (0 without one).
     Symbol functionSetcurveSymbol() const noexcept { return functionSetcurve_; }
     const std::vector<int>& parameterNodes() const noexcept { return parameterNodes_; }
+    const std::vector<int>& liveRemoteNodes() const noexcept { return liveRemoteNodes_; }
     double parameterValue(int node) const noexcept { return node>=0 && size_t(node)<nodes_.size() && nodes_[node].definition.op==Op::dial ? parameterValues_[node].load() : NAN; }
+    // Renderer-owned live.remote~ hooks. A host first installs the mapping on
+    // the session command queue; the callback then toggles the source and
+    // emits Max's mapped notification without crossing into Swift/ObjC.
+    bool setLiveRemoteMappedNow(int node,bool mapped) noexcept {
+        if(node<0 || size_t(node)>=nodes_.size() || nodes_[size_t(node)].definition.op!=Op::liveRemote || !initialized_)return false;
+        auto& remote=nodes_[size_t(node)];
+        if(remote.hasHeld==mapped)return !fault_.load(std::memory_order_relaxed);
+        remote.hasHeld=mapped;
+        Message out=Message::anything(mappedSymbol_);out.count=1;out.atoms[0]=Atom::integral(mapped?1:0);
+        emit(node,out,0,0);
+        return !fault_.load(std::memory_order_relaxed);
+    }
+    bool liveRemoteValue(int node,double& value) const noexcept {
+        if(node<0 || size_t(node)>=nodes_.size())return false;
+        const auto& remote=nodes_[size_t(node)];
+        if(remote.definition.op!=Op::liveRemote || !remote.hasHeld || !std::isfinite(remote.target))return false;
+        value=remote.target;return true;
+    }
+    // A mapped signal is normalized, like Live's remote parameter protocol.
+    // Deliver rawfloat on the render owner so the target dial applies its own
+    // exponent, step count and range and routes the resulting value normally.
+    bool setParameterNormalizedNow(int node,double normalized) noexcept {
+        if(node<0 || size_t(node)>=nodes_.size() || nodes_[size_t(node)].definition.op!=Op::dial || !std::isfinite(normalized) || !initialized_)return false;
+        Message value=Message::anything(sym::rawfloat);value.count=1;value.atoms[0]=Atom::real(std::clamp(normalized,0.,1.));
+        deliver(node,0,value,0);
+        return !fault_.load(std::memory_order_relaxed);
+    }
     unsigned rejected() const noexcept { return rejected_.load(std::memory_order_relaxed); }
     double meter(int node) const noexcept { return node >= 0 && size_t(node) < nodes_.size() ? meters_[node].load(std::memory_order_relaxed) : 0; }
     // Test hook: a node's current signal outlet value (not for hosts).
