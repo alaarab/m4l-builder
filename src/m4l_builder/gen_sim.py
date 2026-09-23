@@ -21,13 +21,17 @@ never silently mis-evaluates and reports a false green):
   right-associative — reproduced exactly, NOT via Python's ``a if c else b``).
 * comparison / logic ``> < >= <= == != && || !`` inside conditions.
 * the pure scalar function table in :data:`_FUNCS`.
+* ``Delay name(size);`` lines with ``name.write(expr);`` statements and
+  ``name.read(taps)`` / ``name.read(taps, interp="linear")`` in expressions. A read
+  before the sample's write sees past input only (``read(1)`` = previous sample),
+  matching gen's read-then-write idiom; a read after the write sees it at tap 0.
 
-Explicitly NOT modelled (refused): ``Delay``/``Buffer``/``Data`` and any
-``.read``/``.write``/``peek``/``poke``/``index``/``pfft``/``filtercoeff``/
-``biquad`` ring access, indexed history ``h[n]``, and ``for``/``while``/function
-definitions. Those kernels (delay lines, FFT, LUFS integration windows) need the
-live render path; the simulator refuses them so a delay-dependent path is never
-reported as passing.
+Explicitly NOT modelled (refused): ``Buffer``/``Data`` and
+``peek``/``poke``/``index``/``pfft``/``filtercoeff``/``biquad`` access, other
+``Delay`` interpolation modes, indexed history ``h[n]``, and
+``for``/``while``/function definitions. Those kernels (FFT, LUFS integration
+windows) need the live render path; the simulator refuses them so such a path is
+never reported as passing.
 """
 
 from __future__ import annotations
@@ -103,10 +107,42 @@ _FUNCS = {
 
 # Tokens that put a kernel outside the supported subset.
 _REFUSE_TOKENS = (
-    "Delay", "Buffer", "Data", "buffer", "peek", "poke", "index",
+    "Buffer", "Data", "buffer", "peek", "poke", "index",
     "pfft", "filtercoeff", "biquad", "cycle", "noise", "sah",
-    ".read", ".write",
 )
+
+
+class _DelayLine:
+    """A gen ``Delay``: a ring of ``size`` past samples with integer/linear reads."""
+
+    def __init__(self, size: int):
+        self.buf = [0.0] * max(int(size), 1)
+        self.pos = 0            # slot the current sample writes into
+        self.written = False
+
+    def advance(self) -> None:
+        self.pos = (self.pos + 1) % len(self.buf)
+        self.written = False
+
+    def write(self, value: float) -> float:
+        self.buf[self.pos] = float(value)
+        self.written = True
+        return value
+
+    def _tap(self, k: int) -> float:
+        if k == 0 and not self.written:
+            k = len(self.buf)   # nothing written yet this sample: oldest sample
+        k = min(max(k, 0), len(self.buf) - 1 + (0 if self.written else 1))
+        return self.buf[(self.pos - k) % len(self.buf)]
+
+    def read(self, taps: float, interp: str = "none") -> float:
+        if interp not in ("none", "linear"):
+            raise UnsupportedKernel(f"Delay interp {interp!r} is not simulated")
+        if interp == "none":
+            return self._tap(int(math.floor(taps)))
+        whole = math.floor(taps)
+        frac = taps - whole
+        return self._tap(int(whole)) * (1 - frac) + self._tap(int(whole) + 1) * frac
 
 
 def _strip_outer_parens(expr: str) -> str:
@@ -214,6 +250,9 @@ class GenKernel:
         body = "\n".join(_strip_comments(code))
         self._refuse_unsupported(body)
         self.histories, self.params = self._parse_decls(body)
+        import re as _re
+        self.delays = {name: int(float(size)) for name, size in
+                       _re.findall(r"Delay\s+([A-Za-z_]\w*)\s*\(\s*([\d.]+)\s*\)", body)}
         self.nodes = self._parse_block(body, 0, top=True)
         self.num_outs = self._count_outs(self.nodes)
 
@@ -282,7 +321,12 @@ class GenKernel:
                 raise UnsupportedKernel(f"statement without ';': {body[pos:pos + 40]!r}")
             stmt = body[pos:semi].strip()
             pos = semi + 1
-            if not stmt or stmt.startswith(("History ", "Param ")):
+            if not stmt or stmt.startswith(("History ", "Param ", "Delay ")):
+                continue
+            write = re.fullmatch(r"([A-Za-z_]\w*)\.write\((.*)\)", stmt, re.S)
+            if write:
+                expr = _ternary_to_py(_logic_to_py(write.group(2).strip()))
+                nodes.append(("write", write.group(1), compile(expr, "<gen>", "eval")))
                 continue
             nodes.append(self._parse_assign(stmt))
         if top:
@@ -347,6 +391,8 @@ class GenKernel:
         import re
         num = 0
         for node in nodes:
+            if node[0] == "write":
+                continue
             if node[0] == "assign":
                 m = re.fullmatch(r"out(\d+)", node[1])
                 if m:
@@ -361,7 +407,9 @@ class GenKernel:
     @staticmethod
     def _exec_nodes(nodes, ns) -> None:
         for node in nodes:
-            if node[0] == "assign":
+            if node[0] == "write":
+                ns[node[1]].write(eval(node[2], {"__builtins__": {}}, ns))  # noqa: S307
+            elif node[0] == "assign":
                 ns[node[1]] = eval(node[2], {"__builtins__": {}}, ns)  # noqa: S307
             else:  # ("if", branches, else_nodes)
                 for cond_code, block in node[1]:
@@ -390,8 +438,10 @@ class GenKernel:
             pvals.update({k: float(v) for k, v in params.items()})
 
         outs = {f"out{k}": [0.0] * num_samples for k in range(1, self.num_outs + 1)}
+        delays = {name: _DelayLine(size) for name, size in self.delays.items()}
         for n in range(num_samples):
             ns = dict(_FUNCS)
+            ns.update(delays)
             ns.update(hist)
             ns.update(pvals)
             ns["samplerate"] = float(samplerate)
@@ -400,6 +450,8 @@ class GenKernel:
             self._exec_nodes(self.nodes, ns)
             for h in hist:
                 hist[h] = ns[h]
+            for line in delays.values():
+                line.advance()
             for k in range(1, self.num_outs + 1):
                 outs[f"out{k}"][n] = ns[f"out{k}"]
         return outs

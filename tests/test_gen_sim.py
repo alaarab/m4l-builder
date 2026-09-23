@@ -182,14 +182,36 @@ def test_and_condition_with_double_bound():
 
 # ── refusal of the out-of-subset constructs (never a false green) ────────────
 @pytest.mark.parametrize("code,label", [
-    ("Delay d(512);\nout1 = d.read(10);", "Delay/.read"),
+    ("Delay d(512);\nout1 = d.read(10, interp=\"cubic\");\nd.write(in1);", "Delay cubic interp"),
     ("History h(0.);\nh = peek(buf, 3);\nout1 = h;", "peek"),
     ("out1 = in1; for (i = 0; i < 3; i = i + 1) { out1 = out1 + 1.; }", "for-loop"),
     ("out1 = data[3];", "indexed access"),
 ])
 def test_refuses_unsupported_constructs(code, label):
     with pytest.raises(UnsupportedKernel):
-        GenKernel(code)
+        GenKernel(code).run({"in1": [1.0, 0.0]})
+
+
+def test_delay_read_before_write_sees_the_past():
+    k = "Delay d(64);\nout1 = d.read(3);\nd.write(in1);"
+    assert simulate(k, {"in1": [1., 0., 0., 0., 0.]})["out1"] == [0., 0., 0., 1., 0.]
+
+
+def test_delay_read_after_write_sees_the_current_sample_at_tap_zero():
+    k = "Delay d(8);\nd.write(in1);\nout1 = d.read(0);"
+    assert simulate(k, {"in1": [.5, .25]})["out1"] == [.5, .25]
+
+
+def test_delay_linear_read_interpolates_between_taps():
+    k = "Delay d(16);\nout1 = d.read(2.25, interp=\"linear\");\nd.write(in1);"
+    assert simulate(k, {"in1": [1., 0., 0., 0., 0.]})["out1"] == pytest.approx([0., 0., .75, .25, 0.])
+
+
+def test_delay_feedback_comb_decays_by_its_feedback():
+    k = ("Delay d(32);\nHistory y(0.);\n"
+         "y = in1 + 0.5 * d.read(4);\nd.write(y);\nout1 = y;")
+    out = simulate(k, {"in1": [1.] + [0.] * 12})["out1"]
+    assert out[0] == 1. and out[4] == .5 and out[8] == .25 and out[12] == .125
 
 
 def test_num_outs_autodetected():
