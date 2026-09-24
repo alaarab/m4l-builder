@@ -2768,9 +2768,18 @@ public:
                && nodes_[e.source].definition.atoms[0].type==Atom::Type::symbol) {
                 const auto& selector=symbols_.name(nodes_[e.source].definition.atoms[0].value.symbol);
                 const bool colour=selector.size()>=5 && selector.compare(selector.size()-5,5,"color")==0;
+                // A UI-state attribute on a presentation control greys it out
+                // or hides it. The control never answers one with its value, so
+                // the cord carries nothing back and is not a synchronous hop -
+                // a device that pages its controls closes exactly this ring
+                // (Adjacent Utility). Guarded on the destination being a
+                // presentation control: `active` on snapshot~ is a different
+                // message that does change what that object does.
+                const bool uiState=(selector=="active" || selector=="hidden");
                 // 'set' into a control stores silently (no output): not a hop.
                 const bool silentSet=dst==Op::dial || dst==Op::accum || dst==Op::integer || dst==Op::floating || dst==Op::message || dst==Op::pack || dst==Op::counter || dst==Op::zlRegister;
-                attributeOnly=(nodes_[e.destination].definition.presentation && colour) || (silentSet && selector=="set");
+                attributeOnly=(nodes_[e.destination].definition.presentation && (colour || uiState))
+                    || (silentSet && selector=="set");
             }
             // A gate whose data inlet only ever carries static 'set' messages
             // forwards nothing a control answers, so gate -> dial is not a hop
