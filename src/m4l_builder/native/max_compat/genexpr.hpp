@@ -720,7 +720,7 @@ private:
     };
 public:
     Expression(const std::string& text,double rate,std::vector<ValueInfo> inputs={},bool constantParameters=false,
-               std::map<std::string,double> defaults={},size_t delayBudget=8388608,bool prepareDelayStorage=true,const BufferRegistry* buffers=nullptr,size_t tableBudget=8388608,std::shared_ptr<Noise> noise={},bool optimizeSnapshots=true):optimizeSnapshots_(optimizeSnapshots),noise_(std::move(noise)),buffers_(buffers),tableBudget_(tableBudget),inputInfo_(std::move(inputs)),constantParameters_(constantParameters),parameterDefaults_(std::move(defaults)),delayBudget_(delayBudget),prepareDelayStorage_(prepareDelayStorage),rate_(rate) {
+               std::map<std::string,double> defaults={},size_t delayBudget=8388608,bool prepareDelayStorage=true,const BufferRegistry* buffers=nullptr,size_t tableBudget=8388608,std::shared_ptr<Noise> noise={},bool optimizeSnapshots=true):optimizeSnapshots_(optimizeSnapshots),inputInfo_(std::move(inputs)),constantParameters_(constantParameters),parameterDefaults_(std::move(defaults)),noise_(std::move(noise)),buffers_(buffers),tableBudget_(tableBudget),delayBudget_(delayBudget),prepareDelayStorage_(prepareDelayStorage),rate_(rate) {
         if(!std::isfinite(rate) || rate<8000 || rate>384000)throw std::invalid_argument("Invalid Gen sample rate");
         inputs_.fill(-1);outputs_.fill(-1);Compiler compiler(*this,text);registers_=initial_;
     }
