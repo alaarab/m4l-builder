@@ -46,8 +46,9 @@ int main() {
         assert(sink.calls == 3);
     }
     values.back().value = 0.5f;
-    for (const std::int64_t invalid : {-1LL, 3LL, 1024LL,
-                                      std::numeric_limits<std::int64_t>::max()}) {
+    for (const std::int64_t invalid :
+         {std::int64_t{-1}, std::int64_t{3}, std::int64_t{1024},
+          std::numeric_limits<std::int64_t>::max()}) {
         values.back().index = invalid;
         assert(apply() == Status::invalidIndex);
         assert(sink.calls == 3);

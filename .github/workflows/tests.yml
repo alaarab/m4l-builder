@@ -36,11 +36,6 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
-      - name: Diagnose Arch clang native compile (temporary CI-migration diagnostic)
-        run: |
-          set -x
-          clang++ --version || true
-          clang++ -std=c++17 -Wall -Wextra -Werror tests/native/live_parameter_state.cpp -o /tmp/lps || true
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
