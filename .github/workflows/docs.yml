@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linuxbox]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

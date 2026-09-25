@@ -12,7 +12,7 @@ concurrency:
 jobs:
   lint:
     name: lint & type-check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linuxbox]
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -29,7 +29,7 @@ jobs:
 
   test:
     name: pytest (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linuxbox]
     strategy:
       fail-fast: false
       matrix:
