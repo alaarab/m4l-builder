@@ -23,13 +23,12 @@ jobs:
     runs-on: [self-hosted, linuxbox]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - name: Install docs dependencies
-        run: pip install mkdocs-material
+      # actions/setup-python cannot resolve a prebuilt Python on the Arch
+      # linuxbox runner (omarchy); use uv instead and run mkdocs from an
+      # ephemeral tool environment.
+      - uses: astral-sh/setup-uv@v7
       - name: Build site
-        run: mkdocs build --strict
+        run: uv tool run --with mkdocs-material mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
