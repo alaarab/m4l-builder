@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    { name = "Ala Arab", email = "ala@alaarab.com" },
+    { name = "Ala Arab" },
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
