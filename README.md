@@ -294,34 +294,11 @@ device.build("path/to/modified.amxd")
 
 ## Reverse engineering
 
-Capture an existing `.amxd` (yours or a third party's) into a Python rebuild
-script, at increasing levels of abstraction -- from an exact structural
-mirror up through a version that collapses recognized patterns back into
-`m4l-builder` recipe/helper calls:
-
-```python
-from m4l_builder import snapshot_from_amxd, generate_semantic_python_from_snapshot
-
-snapshot = snapshot_from_amxd("path/to/device.amxd")
-source = generate_semantic_python_from_snapshot(snapshot)
-```
-
-The same pipeline can mine a whole directory of external devices into a
-structured corpus report -- ranked rebuild candidates, motif/object
-frequencies, family groupings for versioned variants, and generated
-per-device fixtures (snapshot, knowledge, and all four codegen tiers) for
-batch analysis:
-
-```python
-from m4l_builder import analyze_amxd_corpus, corpus_report_markdown
-
-report = analyze_amxd_corpus("/path/to/amxd-corpus")
-markdown = corpus_report_markdown(report)
-```
-
-See [docs/reverse_engineering.md](docs/reverse_engineering.md) for the full
-pipeline (live-bridge snapshots, corpus mining, family/lane comparisons,
-mapping-product briefs) and the `tools/` scripts that wrap it.
+Studying existing `.amxd` devices (snapshots, pattern detection, Python
+regeneration, corpus mining) lives in the separate
+[m4l-research](https://github.com/alaarab/m4l-research) package, which depends
+on m4l-builder. This repo builds devices; `from_amxd` above is the only reader
+it keeps.
 
 ## LiveMCP bridge (optional)
 
@@ -379,9 +356,9 @@ themselves:
 implementation of the box/line traversal dance (`iter_boxes`, `boxes_by_id`,
 `iter_patchlines`, `unwrap_box`) that used to be hand-rolled independently
 throughout the library. It accepts a live `Device`/`GraphContainer`, a raw
-patcher/snapshot dict, or an already-extracted list of wrapper entries, so the
-same functions serve live authoring code and reverse-engineering/corpus code
-alike.
+patcher dict, or an already-extracted list of wrapper entries, so the same
+functions serve live authoring code and code that reads existing patchers
+(including m4l-research).
 
 ### `idioms.py` and `bridge_probe.py`
 
@@ -401,17 +378,12 @@ after two EQ devices each hand-copied the same ~76 lines.
 hand-maintain their own export lists — both build their public surface from
 shared metadata in [`_exports.py`](src/m4l_builder/_exports.py) and resolve
 names lazily via module-level `__getattr__`/`__dir__`, so importing
-`m4l_builder` doesn't eagerly load reverse-engineering or corpus-analysis
-tooling.
+`m4l_builder` only loads the modules a caller touches.
 
-Several large modules are themselves thin facades that re-export from a set
-of split implementation modules, so existing `from m4l_builder.X import Y`
-code keeps working unchanged: `recipes.py` (from `recipes_stages.py`,
-`recipes_layout.py`, `recipes_widgets.py`, `recipes_io.py`), `reverse.py`
-(from `reverse_snapshot.py`, `reverse_patterns.py`, `reverse_analysis.py`,
-`reverse_codegen.py`), and `corpus_analysis.py` (from `_corpus_helpers.py`,
-`_corpus_file.py`, `_corpus_ranking.py`, `_corpus_mapping.py`,
-`_corpus_dossier.py`, `_corpus_aggregate.py`, `_corpus_markdown.py`).
+`recipes.py` is a thin facade that re-exports from its split implementation
+modules (`recipes_stages.py`, `recipes_layout.py`, `recipes_widgets.py`,
+`recipes_io.py`), so existing `from m4l_builder.recipes import Y` code keeps
+working unchanged.
 
 ## Development
 

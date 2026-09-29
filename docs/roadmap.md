@@ -24,18 +24,9 @@ device in Live to confirm behavior before relying on it.
   added; the shipped package still has zero runtime dependencies, so end users
   are unaffected. Identify the package from the repo's security tab and pin or
   patch it (`uv lock --upgrade <pkg>`).
-- **mypy backlog.** The `_reverse_*` modules and
-  `livemcp_bridge` (relies on `Device.add_*` methods attached dynamically via
-  `setattr`, invisible to mypy) remain excluded in `pyproject.toml`.
 - **ruff `UP031`.** The printf-style → `str.format` rewrites are deferred
   because `%`-with-tuple semantics are behavior-sensitive; enable with manual
   review.
-- **Large legacy functions.** A few functions in `_reverse_detect.py`/`_reverse_extract.py` (e.g.
-  `_detect_live_api_helper_matches` ~580 lines, `_live_api_helper_call_from_snapshot`
-  ~460) and `corpus_analysis.py` remain large; decompose them incrementally with
-  the reverse/corpus test suites as the safety net. (`dsp` was split into a
-  categorized package; the JS-string generators in `engines/` and
-  `livemcp_bridge.py` are intentionally template-shaped and left as-is.)
 
 ## Nice to have
 

@@ -29,7 +29,7 @@ All three must pass before a change is merged. CI
   class-based `TestXxx`). Bug fixes are most valuable as a regression test that
   fails before the fix and passes after.
 - **Keep the public API stable.** Public names are re-exported through the
-  facade modules (`authoring.py`, `reverse.py`, …) and listed in `_exports.py`.
+  facade modules (`authoring.py`, `bridge.py`, …) and listed in `_exports.py`.
   If you change them, update `_exports.py` and the `tests/test_architecture.py`
   import contract.
 - **Type new code.** New modules are type-checked by mypy. A documented backlog

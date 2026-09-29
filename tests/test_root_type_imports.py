@@ -65,7 +65,7 @@ def test_static_imports_resolve_to_the_runtime_objects():
             value = importlib.import_module(f"{module_name}.{attribute}")
         if name in ROOT_NAMESPACE_MODULES:
             # Compare with the lazy table, not getattr: importing a same-named
-            # submodule (m4l_builder/reverse.py) shadows the lazy `reverse`.
+            # submodule can shadow the lazy namespace entry.
             expected = importlib.import_module(ROOT_NAMESPACE_MODULES[name])
         else:
             expected = getattr(m4l_builder, name)
