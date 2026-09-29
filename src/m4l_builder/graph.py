@@ -218,8 +218,13 @@ class GraphContainer:
         for line in lines:
             self.lines.append(line)
 
-    def add_newobj(self, id: str = None, text: str = "", *, numinlets: int, numoutlets: int, **kwargs) -> BoxRef:
-        """Add a raw Max object and return its typed handle."""
+    def add_newobj(self, id: str = None, text: str = "", *, numinlets: int | None = None,
+                   numoutlets: int | None = None, **kwargs) -> BoxRef:
+        """Add a raw Max object and return its typed handle.
+
+        Leave out ``numinlets``/``numoutlets``/``outlettype`` to infer them
+        from ``text`` (see :mod:`m4l_builder.object_io`).
+        """
         if id is None:
             base = text or "obj"
             id = self.unique_id(base)

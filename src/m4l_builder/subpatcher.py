@@ -1,5 +1,7 @@
 """Subpatcher: a nested patcher that can be embedded inside a Device."""
 
+from __future__ import annotations
+
 from .graph import BoxRef, GraphContainer
 from .profiles import DEFAULT_PATCHER_PROFILE
 
@@ -16,8 +18,8 @@ class Subpatcher(GraphContainer):
         self.name = name
         self.profile = profile or DEFAULT_PATCHER_PROFILE
 
-    def add_newobj(self, id: str = None, text: str = "", *, numinlets: int, numoutlets: int,
-                   **kwargs) -> BoxRef:
+    def add_newobj(self, id: str = None, text: str = "", *, numinlets: int | None = None,
+                   numoutlets: int | None = None, **kwargs) -> BoxRef:
         return super().add_newobj(id, text, numinlets=numinlets,
                                   numoutlets=numoutlets, **kwargs)
 

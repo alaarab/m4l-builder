@@ -494,8 +494,8 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         id: str = None,
         text: str = "",
         *,
-        numinlets: int,
-        numoutlets: int,
+        numinlets: int | None = None,
+        numoutlets: int | None = None,
         **kwargs,
     ) -> BoxRef:
         return super().add_newobj(id, text, numinlets=numinlets, numoutlets=numoutlets, **kwargs)

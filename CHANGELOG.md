@@ -15,6 +15,15 @@
 
 ### Added
 
+- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
+  optional and inferred from the object text (`m4l_builder.object_io`).
+  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
+  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
+  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
+  other objects use the vendored maxdiff dataset (bare, or with arguments
+  for objects whose shape doesn't depend on them). Unknown or
+  context-dependent objects raise `UnknownObjectIO`. Explicit values always
+  win and existing calls build byte-identical output.
 - `Device.bind_gen_param`: validated control -> prepend -> gen~ wiring for
   embedded and registered external GenExpr cores.
 - `gen_snippets.peak_hold`: constant-duration peak decay across sample rates.
@@ -87,6 +96,15 @@
 
 ### Added
 
+- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
+  optional and inferred from the object text (`m4l_builder.object_io`).
+  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
+  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
+  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
+  other objects use the vendored maxdiff dataset (bare, or with arguments
+  for objects whose shape doesn't depend on them). Unknown or
+  context-dependent objects raise `UnknownObjectIO`. Explicit values always
+  win and existing calls build byte-identical output.
 **Live 12 MIDI Tools**
 - `MidiTransformation` and `MidiGenerator` device types (`.amxd` device-type
   codes `natt` / `nagg`, reverse-engineered and byte-verified against shipping
@@ -122,6 +140,15 @@
 
 ### Added
 
+- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
+  optional and inferred from the object text (`m4l_builder.object_io`).
+  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
+  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
+  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
+  other objects use the vendored maxdiff dataset (bare, or with arguments
+  for objects whose shape doesn't depend on them). Unknown or
+  context-dependent objects raise `UnknownObjectIO`. Explicit values always
+  win and existing calls build byte-identical output.
 **New JS Engines**
 - `lfo_display_js()` — animated LFO waveform with sweeping playhead; inlets: shape, phase, depth
 - `compressor_display_js()` — transfer curve with live gain-reduction dot riding the curve; inlets: threshold, ratio, gr
@@ -162,6 +189,15 @@
 
 ### Added
 
+- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
+  optional and inferred from the object text (`m4l_builder.object_io`).
+  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
+  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
+  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
+  other objects use the vendored maxdiff dataset (bare, or with arguments
+  for objects whose shape doesn't depend on them). Unknown or
+  context-dependent objects raise `UnknownObjectIO`. Explicit values always
+  win and existing calls build byte-identical output.
 **Recipes (#91-#100)**
 - `convolver_controlled_stage` — convolver + wet/dry dial
 - `sidechain_compressor_recipe` — sidechain_routing + compressor + display + 2 dials
@@ -211,6 +247,15 @@
 
 ### Added
 
+- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
+  optional and inferred from the object text (`m4l_builder.object_io`).
+  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
+  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
+  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
+  other objects use the vendored maxdiff dataset (bare, or with arguments
+  for objects whose shape doesn't depend on them). Unknown or
+  context-dependent objects raise `UnknownObjectIO`. Explicit values always
+  win and existing calls build byte-identical output.
 **Device methods**
 - `device.validate()` — static analysis returning list of warnings (duplicate IDs, bad patchlines, missing plugin~/plugout~, orphan boxes)
 - `device.to_json(indent=2)` — patcher dict as formatted JSON string for inspection/diffing
@@ -245,6 +290,15 @@
 
 ### Added
 
+- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
+  optional and inferred from the object text (`m4l_builder.object_io`).
+  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
+  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
+  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
+  other objects use the vendored maxdiff dataset (bare, or with arguments
+  for objects whose shape doesn't depend on them). Unknown or
+  context-dependent objects raise `UnknownObjectIO`. Explicit values always
+  win and existing calls build byte-identical output.
 **DSP blocks (#50-61, #66-69)**
 - `auto_gain` — RMS-based loudness normalization with soft-knee makeup gain
 - `midi_clock_out` — send MIDI clock (24 ppqn) + start/stop synced to Live transport
@@ -285,6 +339,15 @@
 
 ### Added
 
+- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
+  optional and inferred from the object text (`m4l_builder.object_io`).
+  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
+  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
+  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
+  other objects use the vendored maxdiff dataset (bare, or with arguments
+  for objects whose shape doesn't depend on them). Unknown or
+  context-dependent objects raise `UnknownObjectIO`. Explicit values always
+  win and existing calls build byte-identical output.
 **Layout system**
 - `Row`, `Column`, `Grid` layout helpers for auto-positioning UI elements
 
