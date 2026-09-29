@@ -18,7 +18,7 @@ class Subpatcher(GraphContainer):
         self.name = name
         self.profile = profile or DEFAULT_PATCHER_PROFILE
 
-    def add_newobj(self, id: str = None, text: str = "", *, numinlets: int | None = None,
+    def add_newobj(self, id: str | None = None, text: str = "", *, numinlets: int | None = None,
                    numoutlets: int | None = None, **kwargs) -> BoxRef:
         return super().add_newobj(id, text, numinlets=numinlets,
                                   numoutlets=numoutlets, **kwargs)
@@ -39,7 +39,7 @@ class Subpatcher(GraphContainer):
 
     def to_box(self, id: str, rect: list, *,
                numinlets: int = 1, numoutlets: int = 1,
-               outlettype: list = None) -> dict:
+               outlettype: list | None = None) -> dict:
         """Return a full box dict ready for device.add_box().
 
         The box is a newobj with text "p {name}" and an embedded patcher.

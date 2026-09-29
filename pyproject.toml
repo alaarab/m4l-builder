@@ -126,6 +126,6 @@ ignore = ["E501", "UP031"]
 python_version = "3.9"
 files = ["src/m4l_builder"]
 ignore_missing_imports = true
-# Lenient baseline so CI is green today; tighten module-by-module later.
-implicit_optional = true
+implicit_optional = false
+
 

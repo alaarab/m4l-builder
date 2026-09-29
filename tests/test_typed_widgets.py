@@ -79,8 +79,7 @@ def test_layout_proxies_are_declared_for_registry_widgets():
 
 
 _SNIPPET = textwrap.dedent('''
-    from m4l_builder.device import AudioEffect
-    from m4l_builder.graph import BoxRef
+    from m4l_builder import AudioEffect, BoxRef
 
     d = AudioEffect("T", width=100, height=100)
     ok: BoxRef = d.add_dial("g", "Gain", [0, 0, 40, 40], min_val=-70.0)
@@ -106,5 +105,5 @@ def test_mypy_sees_widget_signatures(tmp_path):
     errors = [line for line in stdout.splitlines() if ": error:" in line]
     error_lines = sorted(int(line.split(":")[1]) for line in errors)
     # min_val="loud", add_meter without rect, layout initial="x".
-    assert error_lines == [9, 10, 14], stdout
+    assert error_lines == [8, 9, 13], stdout
     assert status == 1

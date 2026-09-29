@@ -6,8 +6,8 @@ from .object_io import resolve_newobj_io
 
 
 def newobj(id: str, text: str, *, numinlets: int | None = None,
-           numoutlets: int | None = None, outlettype: list = None,
-           patching_rect: list = None, **kwargs) -> dict:
+           numoutlets: int | None = None, outlettype: list | None = None,
+           patching_rect: list | None = None, **kwargs) -> dict:
     """Create a Max newobj box dict with a "box" key.
 
     Omitted ``numinlets``/``numoutlets``/``outlettype`` are inferred from
@@ -38,8 +38,8 @@ def message(
     *,
     numinlets: int = 2,
     numoutlets: int = 1,
-    outlettype: list = None,
-    patching_rect: list = None,
+    outlettype: list | None = None,
+    patching_rect: list | None = None,
     **kwargs,
 ) -> dict:
     """Create a Max message box dict with a "box" key."""
