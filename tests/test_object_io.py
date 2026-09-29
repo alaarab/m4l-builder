@@ -132,9 +132,6 @@ MAX9 = "Max 9 saves this shape; the vendored Max 8.6 dataset differs"
 FIXTURE = "synthetic test fixture, not a Max shape"
 
 KNOWN_COUNT_DISAGREEMENTS = {
-    ("cycle~", 2, 2): MAX9,
-    ("noise~", 0, 1): MAX9,
-    ("midiparse", 1, 7): MAX9,
     ("buffer~ b_smp", 1, 1): FIXTURE,
     ("buffer~ mybuf_smp", 1, 1): FIXTURE,
     ("live.thisdevice", 1, 2): FIXTURE,
@@ -147,9 +144,7 @@ KNOWN_COUNT_DISAGREEMENTS = {
 GENERIC = "declared a generic '' outlet where Max types it"
 TYPED = "declared a typed outlet where Max saves ''"
 KNOWN_TYPE_DISAGREEMENTS = {
-    ("* 60.", ("",)): GENERIC,
     ("+ 1", ("",)): GENERIC,
-    ("/ 1000.", ("",)): GENERIC,
     ("/ 2.5", ("",)): GENERIC,
     ("i", ("",)): GENERIC,
     ("i 248", ("",)): GENERIC,

@@ -111,14 +111,14 @@ def noise_source(id_prefix: str, color: str = "white") -> tuple:
     p = id_prefix
     if color == "white":
         boxes = [
-            newobj(f"{p}_noise", "noise~", numinlets=0, numoutlets=1,
-                   outlettype=["signal"], patching_rect=[30, 120, 50, 20]),
+            newobj(f"{p}_noise", "noise~",
+                   patching_rect=[30, 120, 50, 20]),
         ]
         return (boxes, [])
     elif color == "pink":
         boxes = [
-            newobj(f"{p}_noise", "noise~", numinlets=0, numoutlets=1,
-                   outlettype=["signal"], patching_rect=[30, 120, 50, 20]),
+            newobj(f"{p}_noise", "noise~",
+                   patching_rect=[30, 120, 50, 20]),
             newobj(f"{p}_lp", "onepole~ 0.95", numinlets=2, numoutlets=1,
                    outlettype=["signal"], patching_rect=[30, 150, 90, 20]),
         ]

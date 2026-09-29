@@ -21,8 +21,7 @@ def lfo(id_prefix: str, waveform: str = "sine") -> tuple:
 
     if waveform == "sine":
         # cycle~ outputs -1 to 1, convert to 0 to 1
-        boxes.append(newobj(f"{p}_osc", "cycle~", numinlets=2, numoutlets=2,
-                            outlettype=["signal", "signal"],
+        boxes.append(newobj(f"{p}_osc", "cycle~",
                             patching_rect=[30, 120, 50, 20]))
         boxes.append(newobj(f"{p}_scale", "*~ 0.5", numinlets=2, numoutlets=1,
                             outlettype=["signal"],
@@ -132,8 +131,7 @@ def sample_and_hold(id_prefix: str) -> tuple:
     noise~ feeds sah~ signal input. Trigger input comes via sah~ inlet.
     """
     boxes = [
-        newobj(f"{id_prefix}_noise", "noise~", numinlets=0, numoutlets=1,
-               outlettype=["signal"]),
+        newobj(f"{id_prefix}_noise", "noise~"),
         newobj(f"{id_prefix}_sah", "sah~", numinlets=2, numoutlets=1,
                outlettype=["signal"]),
     ]
@@ -282,7 +280,6 @@ def random_walk(id_prefix: str, step_size: float = 0.01) -> tuple:
     p = id_prefix
     boxes = [
         newobj(f"{p}_noise", "noise~",
-               numinlets=0, numoutlets=1, outlettype=["signal"],
                patching_rect=[30, 30, 60, 20]),
         newobj(f"{p}_scale", f"*~ {step_size}",
                numinlets=2, numoutlets=1, outlettype=["signal"],

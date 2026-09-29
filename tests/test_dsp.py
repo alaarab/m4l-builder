@@ -3918,10 +3918,21 @@ class TestMidiClockIn:
         b = _find_box(boxes, "mci_midiin")
         assert "midiin" in b["text"]
 
-    def test_has_midiparse(self):
-        boxes, _ = midi_clock_in("mci")
-        b = _find_box(boxes, "mci_midiparse")
-        assert "midiparse" in b["text"]
+    def test_wiring(self):
+        _, lines = midi_clock_in("mci")
+        edges = {(ln["patchline"]["source"][0][4:], ln["patchline"]["source"][1],
+                  ln["patchline"]["destination"][0][4:], ln["patchline"]["destination"][1])
+                 for ln in lines}
+        assert edges == {
+            ("midiin", 0, "clockdet", 0),     # raw bytes, 248 = timing clock
+            ("clockdet", 0, "counter", 0),
+            ("counter", 2, "beat", 0),        # carry flag: 1 once per 24 clocks
+            ("beat", 0, "beat_trig", 0),
+            ("beat_trig", 1, "timer", 0),     # report elapsed ms first,
+            ("beat_trig", 0, "timer", 1),     # then restart the timer
+            ("timer", 0, "bpm", 0),
+            ("bpm", 0, "bpm_scale", 0),
+        }
 
     def test_has_clockdet(self):
         boxes, _ = midi_clock_in("mci")
@@ -4697,7 +4708,7 @@ class TestMidiChannelFilter:
         mp = _find_box(boxes, "mcf_midiparse")
         assert mp["text"] == "midiparse"
         assert mp["numinlets"] == 1
-        assert mp["numoutlets"] == 7
+        assert mp["numoutlets"] == 8
 
     def test_sel_uses_channel(self):
         boxes, _ = midi_channel_filter("mcf", channel=5)
