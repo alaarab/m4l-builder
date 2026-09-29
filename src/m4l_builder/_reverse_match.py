@@ -282,7 +282,7 @@ def _match_svf_filter(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) -> 
     right = boxes_by_id.get(right_id)
     out_left = boxes_by_id.get(out_left_id)
     out_right = boxes_by_id.get(out_right_id)
-    if not all((left, right, out_left, out_right)):
+    if not (left and right and out_left and out_right):
         return None
 
     if left.get("text") != "svf~" or right.get("text") != "svf~":
@@ -411,7 +411,7 @@ def _match_transport_lfo(prefix: str, boxes_by_id: dict, line_keys: set[tuple]) 
     bpm = boxes_by_id.get(bpm_id)
     rate = boxes_by_id.get(rate_id)
     osc = boxes_by_id.get(osc_id)
-    if not all((poll, transport, bpm, rate, osc)):
+    if not (poll and transport and bpm and rate and osc):
         return None
 
     if poll.get("text") != "metro 100 @active 1":
@@ -528,27 +528,25 @@ def _match_feedback_delay(prefix: str, boxes_by_id: dict, line_keys: set[tuple])
     lp_id = f"{prefix}_lp"
     fb_id = f"{prefix}_fb"
 
-    boxes = {
-        sum_id: boxes_by_id.get(sum_id),
-        tapin_id: boxes_by_id.get(tapin_id),
-        tapout_id: boxes_by_id.get(tapout_id),
-        sat_id: boxes_by_id.get(sat_id),
-        lp_id: boxes_by_id.get(lp_id),
-        fb_id: boxes_by_id.get(fb_id),
-    }
-    if not all(boxes.values()):
+    sum_box = boxes_by_id.get(sum_id)
+    tapin_box = boxes_by_id.get(tapin_id)
+    tapout_box = boxes_by_id.get(tapout_id)
+    sat_box = boxes_by_id.get(sat_id)
+    lp_box = boxes_by_id.get(lp_id)
+    fb_box = boxes_by_id.get(fb_id)
+    if not (sum_box and tapin_box and tapout_box and sat_box and lp_box and fb_box):
         return None
 
-    max_delay_tapin = _text_int(str(boxes[tapin_id].get("text", "")), "tapin~ ")
-    max_delay_tapout = _text_int(str(boxes[tapout_id].get("text", "")), "tapout~ ")
-    lp_freq = _text_float(str(boxes[lp_id].get("text", "")), "onepole~ ")
-    fb_amount = _text_float(str(boxes[fb_id].get("text", "")), "*~ ")
+    max_delay_tapin = _text_int(str(tapin_box.get("text", "")), "tapin~ ")
+    max_delay_tapout = _text_int(str(tapout_box.get("text", "")), "tapout~ ")
+    lp_freq = _text_float(str(lp_box.get("text", "")), "onepole~ ")
+    fb_amount = _text_float(str(fb_box.get("text", "")), "*~ ")
     if (
-        boxes[sum_id].get("text") != "+~"
+        sum_box.get("text") != "+~"
         or max_delay_tapin is None
         or max_delay_tapout is None
         or max_delay_tapin != max_delay_tapout
-        or boxes[sat_id].get("text") != "tanh~"
+        or sat_box.get("text") != "tanh~"
         or lp_freq is None
         or fb_amount is None
     ):
@@ -569,12 +567,12 @@ def _match_feedback_delay(prefix: str, boxes_by_id: dict, line_keys: set[tuple])
     if (
         float(lp_freq) == 3000.0
         and float(fb_amount) == 0.5
-        and _rect_matches(boxes[sum_id], [30, 120, 30, 20])
-        and _rect_matches(boxes[tapin_id], [30, 150, 100, 20])
-        and _rect_matches(boxes[tapout_id], [30, 180, 100, 20])
-        and _rect_matches(boxes[sat_id], [30, 210, 45, 20])
-        and _rect_matches(boxes[lp_id], [30, 240, 90, 20])
-        and _rect_matches(boxes[fb_id], [30, 270, 50, 20])
+        and _rect_matches(sum_box, [30, 120, 30, 20])
+        and _rect_matches(tapin_box, [30, 150, 100, 20])
+        and _rect_matches(tapout_box, [30, 180, 100, 20])
+        and _rect_matches(sat_box, [30, 210, 45, 20])
+        and _rect_matches(lp_box, [30, 240, 90, 20])
+        and _rect_matches(fb_box, [30, 270, 50, 20])
     ):
         helper_kwargs = {}
         if max_delay_tapin != 5000:
@@ -612,7 +610,7 @@ def _match_gain_controlled_recipe(
     dbtoa = boxes_by_id.get(dbtoa_id)
     gain = boxes_by_id.get(gain_id)
     smooth = pattern_index.get(("param_smooth", f"{prefix}_smooth"))
-    if not all((dial, dbtoa, gain, smooth)):
+    if not (dial and dbtoa and gain and smooth):
         return None
 
     if not _box_parameter_matches(
@@ -700,7 +698,7 @@ def _match_dry_wet_recipe(
     dry_gain = boxes_by_id.get(dry_gain_id)
     wet_smooth = pattern_index.get(("param_smooth", f"{prefix}_wet_smooth"))
     dry_smooth = pattern_index.get(("param_smooth", f"{prefix}_dry_smooth"))
-    if not all((dial, scale, trig, inv, wet_gain, dry_gain, wet_smooth, dry_smooth)):
+    if not (dial and scale and trig and inv and wet_gain and dry_gain and wet_smooth and dry_smooth):
         return None
 
     if not _box_parameter_matches(
@@ -800,7 +798,7 @@ def _match_tempo_synced_delay_recipe(
     delay = pattern_index.get(("delay_line", f"{prefix}_delay"))
     time_smooth = pattern_index.get(("param_smooth", f"{prefix}_time_smooth"))
     fb_smooth = pattern_index.get(("param_smooth", f"{prefix}_fb_smooth"))
-    if not all((time_dial, fb_dial, transport, loadbang, fb_scale, fb_mul, total_sum, delay, time_smooth, fb_smooth)):
+    if not (time_dial and fb_dial and transport and loadbang and fb_scale and fb_mul and total_sum and delay and time_smooth and fb_smooth):
         return None
 
     if not _box_parameter_matches(
@@ -919,7 +917,7 @@ def _match_midi_note_gate_recipe(
     notein = boxes_by_id.get(notein_id)
     stripnote = boxes_by_id.get(stripnote_id)
     kslider = boxes_by_id.get(kslider_id)
-    if not all((notein, stripnote, kslider)):
+    if not (notein and stripnote and kslider):
         return None
 
     notein_text = str(notein.get("text", ""))
@@ -1000,7 +998,7 @@ def _match_transport_sync_lfo_recipe(
     depth_mul = boxes_by_id.get(depth_mul_id)
     menu = boxes_by_id.get(menu_id)
     transport_lfo = pattern_index.get(("transport_lfo", f"{prefix}_lfo"))
-    if not all((depth_dial, depth_mul, menu, transport_lfo)):
+    if not (depth_dial and depth_mul and menu and transport_lfo):
         return None
 
     if not _box_parameter_matches(

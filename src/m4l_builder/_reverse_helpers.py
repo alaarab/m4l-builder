@@ -8,7 +8,7 @@ import os
 import pprint
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ._reverse_constants import *  # noqa: F401,F403
 from .constants import AMXD_TYPE, AUDIO_EFFECT, INSTRUMENT, MIDI_EFFECT
@@ -401,7 +401,7 @@ def _text_int(text: str, prefix: str) -> int | None:
 
 
 def _parse_live_api_message_text(text: str) -> dict[str, list[str]]:
-    parsed = {
+    parsed: dict[str, list[str]] = {
         "paths": [],
         "properties": [],
         "gets": [],
@@ -514,8 +514,8 @@ def _relevant_box_components(
             relevant_ids.add(box_id)
             labels_by_id[box_id] = label
 
-    adjacency = {box_id: set() for box_id in relevant_ids}
-    full_adjacency = {box_id: set() for box_id in boxes_by_id}
+    adjacency: dict[str, set[str]] = {box_id: set() for box_id in relevant_ids}
+    full_adjacency: dict[str, set[str]] = {box_id: set() for box_id in boxes_by_id}
     for patchline in iter_patchlines(snapshot):
         source = patchline.get("source", [None, 0])
         destination = patchline.get("destination", [None, 0])
@@ -794,8 +794,8 @@ def _adjacent_probe_message_box(
 
 def _line_source_outlet_to_destination(
     snapshot: dict,
-    source_id: str,
-    destination_id: str,
+    source_id: str | None,
+    destination_id: str | None,
 ) -> int | None:
     matches = []
     for patchline in iter_patchlines(snapshot):
@@ -810,9 +810,9 @@ def _line_source_outlet_to_destination(
 
 def _line_attrs_from_snapshot(
     snapshot: dict,
-    source_id: str,
+    source_id: str | None,
     source_outlet: int,
-    destination_id: str,
+    destination_id: str | None,
     destination_inlet: int,
 ) -> dict:
     for patchline in iter_patchlines(snapshot):
@@ -875,7 +875,7 @@ def _live_api_helper_call_from_snapshot(
             operator_ids.setdefault(operator, []).append(box_id)
 
     helper_kwargs: dict[str, Any] = {}
-    consume_box_ids = list(ordered_component_ids)
+    consume_box_ids: list[str | None] = list(ordered_component_ids)
 
     if helper_name in {"live_object_path", "live_set_control", "live_observer", "live_parameter_probe"}:
         path_id = operator_ids.get("live.path", [None])[0]
@@ -935,7 +935,7 @@ def _live_api_helper_call_from_snapshot(
                     ["id", "maxclass", "text", "patching_rect"],
                 )
                 helper_kwargs["route_selectors"] = route_text
-                if message_box is not None and box_indices.get(route_id, 10 ** 9) < box_indices.get(message_box.get("id"), 10 ** 9):
+                if message_box is not None and box_indices.get(route_id or "", 10 ** 9) < box_indices.get(message_box.get("id") or "", 10 ** 9):
                     helper_kwargs["route_before_message"] = True
                 if object_box is not None and object_id:
                     helper_kwargs["route_line_attrs"] = _line_attrs_from_snapshot(
@@ -989,15 +989,15 @@ def _live_api_helper_call_from_snapshot(
                 consume_box_ids.append(trigger_id)
             order_pairs = []
             if path_box is not None:
-                order_pairs.append((box_indices.get(path_id, 10 ** 9), "path"))
+                order_pairs.append((box_indices.get(path_id or "", 10 ** 9), "path"))
             if trigger_box is not None and trigger_id:
                 order_pairs.append((box_indices.get(trigger_id, 10 ** 9), "trigger"))
             if object_box is not None:
-                order_pairs.append((box_indices.get(object_id, 10 ** 9), "object"))
+                order_pairs.append((box_indices.get(object_id or "", 10 ** 9), "object"))
             if route_box is not None:
-                order_pairs.append((box_indices.get(route_id, 10 ** 9), "route"))
+                order_pairs.append((box_indices.get(route_id or "", 10 ** 9), "route"))
             if message_box is not None and message_box.get("id"):
-                order_pairs.append((box_indices.get(message_box.get("id"), 10 ** 9), "message"))
+                order_pairs.append((box_indices.get(message_box.get("id") or "", 10 ** 9), "message"))
             helper_kwargs["box_order"] = [name for _idx, name in sorted(order_pairs)]
         helper_kwargs["include_default_style"] = _live_api_include_default_style(
             *(
@@ -1221,7 +1221,7 @@ def _live_api_helper_call_from_snapshot(
         helper_kwargs["line_order"] = [name for _idx, name in sorted(line_order_pairs)]
 
         order_pairs = []
-        for box_id, name in [
+        for ordered_id, name in [
             (device_id, "device"),
             (init_trigger_id, "init_trigger"),
             (path_id, "path"),
@@ -1230,8 +1230,8 @@ def _live_api_helper_call_from_snapshot(
             (value_trigger_id, "value_trigger"),
             (selector_id, "selector"),
         ]:
-            if box_id:
-                order_pairs.append((box_indices.get(box_id, 10 ** 9), name))
+            if ordered_id:
+                order_pairs.append((box_indices.get(ordered_id, 10 ** 9), name))
         helper_kwargs["box_order"] = [name for _idx, name in sorted(order_pairs)]
         helper_kwargs["include_default_style"] = _live_api_include_default_style(
             *(box for box in (device_box, init_trigger_box, path_box, observer_box, value_trigger_box, selector_box) if box is not None)
@@ -1302,7 +1302,7 @@ def _live_api_helper_call_from_snapshot(
             *(box for box in (prepend_box, device_box) if box is not None)
         )
 
-    consume_box_ids = _ordered_box_ids(
+    ordered_consume_ids = _ordered_box_ids(
         [box_id for box_id in consume_box_ids if box_id],
         box_indices,
     )
@@ -1310,8 +1310,8 @@ def _live_api_helper_call_from_snapshot(
         "name": helper_name,
         "positional": [prefix],
         "kwargs": helper_kwargs,
-        "consume_box_ids": consume_box_ids,
-        "line_keys": _component_internal_line_keys(snapshot, consume_box_ids),
+        "consume_box_ids": ordered_consume_ids,
+        "line_keys": _component_internal_line_keys(snapshot, ordered_consume_ids),
     }
 
 
@@ -1390,13 +1390,14 @@ def _canonical_recipe_subset(
     kwargs: dict[str, Any],
 ) -> tuple[dict[str, dict], set[tuple]]:
     recipe_device = Device("Recipe Check", 10, 10, device_type="audio_effect")
-    recipe_fn = {
+    recipe_fns: dict[str, Callable[..., Any]] = {
         "gain_controlled_stage": gain_controlled_stage,
         "dry_wet_stage": dry_wet_stage,
         "midi_note_gate": midi_note_gate,
         "tempo_synced_delay": tempo_synced_delay,
         "transport_sync_lfo_recipe": transport_sync_lfo_recipe,
-    }[recipe_name]
+    }
+    recipe_fn = recipe_fns[recipe_name]
     recipe_fn(recipe_device, prefix, *positional, **kwargs)
     recipe_boxes = _boxes_by_id(recipe_device)
     recipe_lines = {_line_key_from_wrapped(line) for line in recipe_device.lines}
@@ -2199,7 +2200,7 @@ def _box_builder_statement(box: dict, support_files_by_name: dict[str, dict] | N
 
     if maxclass == "jsui":
         filename = box.get("filename")
-        support = support_files_by_name.get(filename)
+        support = support_files_by_name.get(filename or "")
         if support is not None:
             kwargs = _base_box_kwargs(
                 box,
@@ -2230,7 +2231,7 @@ def _box_builder_statement(box: dict, support_files_by_name: dict[str, dict] | N
 
     if maxclass == "v8ui":
         filename = box.get("filename")
-        support = support_files_by_name.get(filename)
+        support = support_files_by_name.get(filename or "")
         if support is not None:
             kwargs = _base_box_kwargs(
                 box,

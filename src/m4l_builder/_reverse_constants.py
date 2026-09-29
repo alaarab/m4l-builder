@@ -100,7 +100,7 @@ BRIDGE_TEXT_MARKERS = (
     "livemcp_bridge_server.js",
 )
 
-BUS_OPERATOR_SPECS = {
+BUS_OPERATOR_SPECS: dict[str, dict[str, Any]] = {
     "s": {"signal": False, "direction": "send"},
     "send": {"signal": False, "direction": "send"},
     "r": {"signal": False, "direction": "receive"},

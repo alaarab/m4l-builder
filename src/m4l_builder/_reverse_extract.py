@@ -78,8 +78,8 @@ def extract_live_api_normalization_candidates(snapshot: dict) -> list[dict]:
             snapshot,
             boxes_by_id,
             box_indices,
-            helper_name=entry.get("helper_name"),
-            prefix=entry.get("prefix"),
+            helper_name=entry["helper_name"],
+            prefix=entry["prefix"],
             box_ids=entry.get("box_ids", []),
             params=entry.get("params", {}),
         )
@@ -581,7 +581,7 @@ def extract_presentation_widget_cluster_candidates(snapshot: dict) -> list[dict]
     if len(eligible_box_ids) < 4:
         return []
 
-    adjacency = {box_id: set() for box_id in eligible_box_ids}
+    adjacency: dict[str, set[str]] = {box_id: set() for box_id in eligible_box_ids}
     eligible_set = set(eligible_box_ids)
     for box_id in eligible_box_ids:
         rect = _presentation_rect(boxes_by_id.get(box_id, {}))
@@ -622,9 +622,9 @@ def extract_presentation_widget_cluster_candidates(snapshot: dict) -> list[dict]
             continue
         component.sort(key=lambda item: box_indices.get(item, 10 ** 9))
         rects = [
-            _presentation_rect(boxes_by_id[box_id])
+            rect
             for box_id in component
-            if _presentation_rect(boxes_by_id[box_id]) is not None
+            if (rect := _presentation_rect(boxes_by_id[box_id])) is not None
         ]
         if not rects:
             continue
@@ -955,7 +955,7 @@ def extract_first_party_abstraction_host_candidates(snapshot: dict) -> list[dict
         if host_id in visited_host_ids:
             continue
 
-        component_box_ids = {host_id}
+        component_box_id_set = {host_id}
         pending_host_ids = [host_id]
         component_host_ids = set()
 
@@ -965,7 +965,7 @@ def extract_first_party_abstraction_host_candidates(snapshot: dict) -> list[dict
                 continue
             component_host_ids.add(current_host_id)
             visited_host_ids.add(current_host_id)
-            component_box_ids.add(current_host_id)
+            component_box_id_set.add(current_host_id)
             connected_ids = _connected_box_ids(snapshot, {current_host_id})
             for neighbor_id in sorted(connected_ids, key=lambda item: box_indices.get(item, 10 ** 9)):
                 if neighbor_id in DEFAULT_AUDIO_IO_BOXES:
@@ -974,7 +974,7 @@ def extract_first_party_abstraction_host_candidates(snapshot: dict) -> list[dict
                 operator = _box_operator(neighbor or {})
                 neighbor_maxclass = (neighbor or {}).get("maxclass")
                 if neighbor_id in host_ids:
-                    component_box_ids.add(neighbor_id)
+                    component_box_id_set.add(neighbor_id)
                     if neighbor_id not in component_host_ids:
                         pending_host_ids.append(neighbor_id)
                     continue
@@ -986,13 +986,13 @@ def extract_first_party_abstraction_host_candidates(snapshot: dict) -> list[dict
                     or operator in LIVE_API_CORE_OPERATORS
                     or operator in LIVE_API_HELPER_OPERATORS
                 ):
-                    component_box_ids.add(neighbor_id)
+                    component_box_id_set.add(neighbor_id)
                     for second_neighbor_id in _connected_box_ids(snapshot, {neighbor_id}):
                         if second_neighbor_id in host_ids and second_neighbor_id not in component_host_ids:
-                            component_box_ids.add(second_neighbor_id)
+                            component_box_id_set.add(second_neighbor_id)
                             pending_host_ids.append(second_neighbor_id)
 
-        component_box_ids = sorted(component_box_ids, key=lambda item: box_indices.get(item, 10 ** 9))
+        component_box_ids: list[str] = sorted(component_box_id_set, key=lambda item: box_indices.get(item, 10 ** 9))
         if not component_box_ids:
             continue
 
@@ -1031,9 +1031,10 @@ def extract_first_party_abstraction_host_candidates(snapshot: dict) -> list[dict
             if str(boxes_by_id.get(box_id, {}).get("text") or "").strip()
         ][:5]
         attached_controller_ops = sorted({
-            _box_operator(boxes_by_id[box_id])
+            operator
             for box_id in attached_box_ids
-            if _box_operator(boxes_by_id.get(box_id, {})) in CONTROLLER_DISPATCH_OPERATORS | SCHEDULER_OPERATORS
+            if (operator := _box_operator(boxes_by_id.get(box_id, {}))) is not None
+            and operator in CONTROLLER_DISPATCH_OPERATORS | SCHEDULER_OPERATORS
         })
         evidence = [
             "first-party abstraction host cluster",
@@ -1235,7 +1236,7 @@ def _collect_embedded_patcher_summaries_from_box(box: dict, depth: int = 1) -> l
         "live_api_archetypes": _classify_live_api_component_archetypes(nested_live_api_params),
         "named_bus_count": len(nested_named_bus_entries),
         "named_bus_names": sorted({
-            entry.get("name")
+            entry["name"]
             for entry in nested_named_bus_entries
             if entry.get("name")
         }),
@@ -1366,7 +1367,7 @@ def _embedded_target_snapshots(snapshot: dict) -> dict[str, list[dict]]:
 
 def extract_behavior_hints(snapshot: dict) -> list[dict]:
     """Return product-level behavioral hints inferred from structure."""
-    hints = []
+    hints: list[dict[str, Any]] = []
     embedded_by_target = _embedded_target_snapshots(snapshot)
     poly_editor_banks = extract_poly_editor_bank_candidates(snapshot)
 
@@ -1541,6 +1542,8 @@ def extract_mapping_behavior_traces(snapshot: dict) -> list[dict]:
     control_bank_box_ids: list[str] = []
     control_labels: list[str] = []
     for box_id, spec in parameter_specs.items():
+        if box_id is None:
+            continue
         box = boxes_by_id.get(box_id)
         if not box or box.get("maxclass") != "live.dial":
             continue
@@ -1599,7 +1602,7 @@ def extract_mapping_behavior_traces(snapshot: dict) -> list[dict]:
         ])
         for entry in embedded_by_target.get("MIDILogic", []):
             host_box_id = entry.get("host_box_id")
-            if host_box_id in boxes_by_id:
+            if host_box_id is not None and host_box_id in boxes_by_id:
                 trigger_box_ids.add(host_box_id)
     metro_ids = [
         box_id
@@ -1826,7 +1829,7 @@ def extract_mapping_behavior_traces(snapshot: dict) -> list[dict]:
         lifecycle_box_ids: set[str] = set()
         for entry in embedded_by_target.get("qm", []):
             host_box_id = entry.get("host_box_id")
-            if host_box_id in boxes_by_id:
+            if host_box_id is not None and host_box_id in boxes_by_id:
                 lifecycle_box_ids.add(host_box_id)
         add_trace(
             "mapping_session_lifecycle",
@@ -1886,7 +1889,7 @@ def extract_mapping_behavior_traces(snapshot: dict) -> list[dict]:
             "hidden_mapping_engine",
             box_ids=sorted(
                 {
-                    entry.get("host_box_id")
+                    entry["host_box_id"]
                     for target in ("MIDILogic", "qm", "UiScripting")
                     for entry in embedded_by_target.get(target, [])
                     if entry.get("host_box_id") in boxes_by_id
@@ -2272,7 +2275,7 @@ def extract_snapshot_knowledge(snapshot: dict) -> dict:
     control_box_ids = set(analysis.get("parameter_box_ids", []))
     controls = []
     displays = []
-    display_groups = {
+    display_groups: dict[str, list[Any]] = {
         "labels": [],
         "monitors": [],
         "custom_ui": [],
