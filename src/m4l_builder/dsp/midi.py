@@ -1,5 +1,7 @@
 """MIDI processing."""
 
+from __future__ import annotations
+
 from ..objects import message, newobj, patchline
 
 # mpeparse / midiformat CC stream indices (MPE-aware MIDI effect devices).
@@ -29,7 +31,7 @@ def noteout(id_prefix: str, channel: int = 0) -> tuple:
     return (boxes, [])
 
 
-def ctlin(id_prefix: str, cc: int = None, channel: int = 0) -> tuple:
+def ctlin(id_prefix: str, cc: int | None = None, channel: int = 0) -> tuple:
     """Receive MIDI continuous controller messages."""
     parts = ["ctlin"]
     if cc is not None:
@@ -243,7 +245,7 @@ def arpeggiator(id_prefix: str, mode: str = "up") -> tuple:
     return (boxes, lines)
 
 
-def chord(id_prefix: str, intervals: list = None) -> tuple:
+def chord(id_prefix: str, intervals: list | None = None) -> tuple:
     """Transpose MIDI pitch into a chord using + objects for each interval.
 
     Default intervals=[4, 7] gives a major triad (root, maj3rd, P5th).

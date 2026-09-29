@@ -1,6 +1,6 @@
 """Snapshot pattern/motif detectors for the legacy-device reverse tool.
 
-Extracted from _reverse_legacy.py (god-file split); re-exported by it."""
+Part of the _reverse_* split."""
 from __future__ import annotations
 
 import copy
@@ -8,7 +8,7 @@ import os
 import pprint
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ._reverse_constants import *  # noqa: F401,F403
 from ._reverse_helpers import *  # noqa: F401,F403
@@ -337,8 +337,8 @@ def _detect_live_api_component_motifs(snapshot: dict, boxes_by_id: dict, box_ind
             relevant_ids.add(box_id)
             operators_by_id[box_id] = operator
 
-    adjacency = {box_id: set() for box_id in relevant_ids}
-    full_adjacency = {box_id: set() for box_id in boxes_by_id}
+    adjacency: dict[str, set[str]] = {box_id: set() for box_id in relevant_ids}
+    full_adjacency: dict[str, set[str]] = {box_id: set() for box_id in boxes_by_id}
     for wrapped in snapshot.get("lines", []):
         patchline = wrapped.get("patchline", {})
         source = patchline.get("source", [None, 0])
@@ -499,7 +499,7 @@ def _detect_sample_buffer_toolchain_motifs(snapshot: dict, boxes_by_id: dict, bo
     file_ops = {"date", "opendialog", "regexp", "relativepath", "sprintf", "strippath"}
     for component in merged_components:
         label_counts: dict[str, int] = {}
-        buffer_targets = []
+        buffer_target_names: list[str] = []
         drop_varnames = []
         for box_id in component:
             label = labels_by_id[box_id]
@@ -508,11 +508,11 @@ def _detect_sample_buffer_toolchain_motifs(snapshot: dict, boxes_by_id: dict, bo
             if label == "buffer~":
                 target = _buffer_target_name(box)
                 if target:
-                    buffer_targets.append(target)
+                    buffer_target_names.append(target)
             elif label in {"info~", "peek~", "poke~", "play~", "record~", "groove~", "waveform~", "polybuffer~"}:
                 target = _buffer_target_name(box)
                 if target:
-                    buffer_targets.append(target)
+                    buffer_target_names.append(target)
             elif label == "live.drop" and box.get("varname"):
                 drop_varnames.append(str(box.get("varname")))
 
@@ -554,7 +554,7 @@ def _detect_sample_buffer_toolchain_motifs(snapshot: dict, boxes_by_id: dict, bo
                     if label_counts.get(name)
                 ],
                 "has_live_drop": has_live_drop,
-                "buffer_targets": sorted(set(buffer_targets)),
+                "buffer_targets": sorted(set(buffer_target_names)),
                 "drop_varnames": sorted(set(drop_varnames)),
                 "file_operators": [
                     name
@@ -705,7 +705,7 @@ def _detect_live_api_helper_matches(snapshot: dict, motifs: list[dict] | None = 
                     ["_path", "_obj", "_observer"],
                 )
                 path = path_text[len("live.path "):].strip()
-                prop = observer_text[len("live.observer "):].strip()
+                prop: str | None = observer_text[len("live.observer "):].strip()
                 match = _canonical_live_api_helper_match(
                     snapshot,
                     boxes_by_id,
@@ -766,7 +766,7 @@ def _detect_live_api_helper_matches(snapshot: dict, motifs: list[dict] | None = 
             ]
             if path_text.startswith("live.path "):
                 prefix = _infer_helper_prefix(
-                    [path_id, observer_id] + [box.get("id") for box in property_messages if box.get("id")],
+                    [path_id, observer_id] + [box["id"] for box in property_messages if box.get("id")],
                     ["_path", "_observer", "_property"],
                 )
                 path = path_text[len("live.path "):].strip()
@@ -800,7 +800,8 @@ def _detect_live_api_helper_matches(snapshot: dict, motifs: list[dict] | None = 
                         property_box,
                         ["id", "maxclass", "text", "patching_rect"],
                     )
-                    box_ids.append(property_box.get("id"))
+                    if property_box.get("id"):
+                        box_ids.append(property_box["id"])
                 if prop:
                     helper_kwargs["include_default_style"] = _live_api_include_default_style(
                         path_box,
@@ -836,13 +837,13 @@ def _detect_live_api_helper_matches(snapshot: dict, motifs: list[dict] | None = 
             and len(operator_ids.get("sel", [])) == 1
             and len(operator_ids.get("t", [])) == 2
         ):
-            property_box = _adjacent_property_message_box(
+            state_property_box = _adjacent_property_message_box(
                 snapshot,
                 component_ids,
                 boxes_by_id,
             )
-            if property_box is not None:
-                helper_box_ids = list(component_ids) + [property_box.get("id")]
+            if state_property_box is not None:
+                helper_box_ids = list(component_ids) + [state_property_box.get("id")]
                 prefix = _infer_helper_prefix(
                     helper_box_ids,
                     ["_device", "_init", "_path", "_property", "_observer", "_value", "_selector"],
@@ -850,7 +851,7 @@ def _detect_live_api_helper_matches(snapshot: dict, motifs: list[dict] | None = 
                 params = {
                     "archetypes": motif.get("params", {}).get("archetypes", []),
                     "path": str(boxes_by_id[live_path_ids[0]].get("text", "")).strip()[len("live.path "):].strip(),
-                    "prop": str(property_box.get("text", "")).strip()[len("property "):].strip(),
+                    "prop": str(state_property_box.get("text", "")).strip()[len("property "):].strip(),
                 }
                 helper_call = _live_api_helper_call_from_snapshot(
                     snapshot,
@@ -898,11 +899,11 @@ def _detect_live_api_helper_matches(snapshot: dict, motifs: list[dict] | None = 
                 probe_message = _adjacent_probe_message_box(snapshot, [path_id, object_id], boxes_by_id)
                 prefix_box_ids = [path_id, object_id]
                 if probe_message is not None and probe_message.get("id"):
-                    prefix_box_ids.append(probe_message.get("id"))
+                    prefix_box_ids.append(probe_message["id"])
                 prefix = _infer_helper_prefix(prefix_box_ids, ["_path", "_obj", "_message"])
                 path = path_text[len("live.path "):].strip()
                 helper_name = None
-                helper_fn = None
+                helper_fn: Callable[..., Any] | None = None
                 helper_kwargs = {
                     "path": path,
                     "path_id": path_id,

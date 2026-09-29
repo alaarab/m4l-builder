@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Generic
 
+from .graph import GraphContainer
+from .parameters import ParameterSpec
 from .ui import (
     adsrui,
     bpatcher,
@@ -355,3 +358,119 @@ DEVICE_WIDGET_SPECS = {
     ),
     "nslider": DeviceWidgetSpec(nslider),
 }
+
+
+# --- Statically typed widget methods ---------------------------------------
+#
+# Each `add_*` wrapper is declared in a class body as ``add_dial =
+# device_widget(dial)``. At runtime that is exactly the function built by
+# `make_device_widget_method`; for type checkers it is a descriptor whose
+# bound signature is the factory's minus the returned dict, e.g.
+# ``(id: str, varname: str, rect: list, *, min_val: float = 0.0, ...) -> BoxRef``.
+# ParamSpec/Concatenate are only needed by the checker, so the package keeps
+# zero runtime dependencies on Python 3.9.
+
+if TYPE_CHECKING:
+    from typing_extensions import Concatenate, ParamSpec
+
+    from .graph import BoxRef
+
+    _P = ParamSpec("_P")
+
+    class WidgetMethod(Generic[_P]):
+        """Checker-only view of a generated `add_*` method."""
+
+        def __get__(self, obj: Any, owner: Any) -> Callable[Concatenate[str, _P], BoxRef]: ...
+
+    class VarnameWidgetMethod(Generic[_P]):
+        """Checker-only view of a layout proxy that keeps ``varname``."""
+
+        def __get__(self, obj: Any, owner: Any) -> Callable[Concatenate[str, str, _P], BoxRef]: ...
+
+
+# `tab`/`menu` declare `options` keyword-only, but their device wrappers also
+# accept it positionally (`keyword_only_args`). These shims carry the wrapper's
+# real call signature for type checkers; tests keep them in sync with ui.py.
+def _tab_call(id: str, varname: str, rect: list, options: list, *,
+              bgcolor: list | None = None, bgoncolor: list | None = None,
+              textcolor: list | None = None, textoncolor: list | None = None,
+              patching_rect: list | None = None, rounded: float = 0.0,
+              spacing_x: float = 0.0, multiline: int = 0, appearance: int = 0,
+              parameter: ParameterSpec | None = None,
+              **kwargs: Any) -> dict:
+    raise NotImplementedError  # signature shim only
+
+
+def _menu_call(id: str, varname: str, rect: list, options: list, *,
+               shortname: str | None = None, patching_rect: list | None = None,
+               bgcolor: list | None = None, bgoncolor: list | None = None,
+               textcolor: list | None = None, textoncolor: list | None = None,
+               parameter: ParameterSpec | None = None,
+               **kwargs: Any) -> dict:
+    raise NotImplementedError  # signature shim only
+
+
+POSITIONAL_SIGNATURE_SHIMS: dict[str, Callable[..., dict]] = {
+    "tab": _tab_call,
+    "menu": _menu_call,
+}
+
+_WIDGET_NAMES: dict[Callable[..., dict], str] = {
+    **{spec.factory: name for name, spec in DEVICE_WIDGET_SPECS.items()},
+    **{shim: name for name, shim in POSITIONAL_SIGNATURE_SHIMS.items()},
+}
+
+
+def widget_name(factory: Callable[..., dict]) -> str:
+    """Registry name of a ui.py factory (or signature shim)."""
+    return _WIDGET_NAMES[factory]
+
+
+def device_widget(factory: Callable[Concatenate[str, _P], dict]) -> WidgetMethod[_P]:
+    """Declare `Device.add_<factory>`, typed after its ui.py factory."""
+    name = widget_name(factory)
+    return make_device_widget_method(name, DEVICE_WIDGET_SPECS[name])  # type: ignore[return-value]
+
+
+class DeviceWidgetMethods(GraphContainer):
+    """The registry-driven `add_*` widget wrappers, mixed into Device."""
+
+    add_panel = device_widget(panel)
+    add_dial = device_widget(dial)
+    add_tab = device_widget(_tab_call)
+    add_toggle = device_widget(toggle)
+    add_comment = device_widget(comment)
+    add_scope = device_widget(scope)
+    add_plot = device_widget(plot)
+    add_filtergraph = device_widget(filtergraph)
+    add_function = device_widget(function)
+    add_waveform = device_widget(waveform)
+    add_spectrumdraw = device_widget(spectrumdraw)
+    add_meter = device_widget(meter)
+    add_menu = device_widget(_menu_call)
+    add_number_box = device_widget(number_box)
+    add_slider = device_widget(slider)
+    add_button = device_widget(button)
+    add_live_text = device_widget(live_text)
+    add_fpic = device_widget(fpic)
+    add_pictctrl = device_widget(pictctrl)
+    add_live_gain = device_widget(live_gain)
+    add_multislider = device_widget(multislider)
+    add_adsrui = device_widget(adsrui)
+    add_live_drop = device_widget(live_drop)
+    add_bpatcher = device_widget(bpatcher)
+    add_swatch = device_widget(swatch)
+    add_textedit = device_widget(textedit)
+    add_live_step = device_widget(live_step)
+    add_live_grid = device_widget(live_grid)
+    add_live_line = device_widget(live_line)
+    add_live_arrows = device_widget(live_arrows)
+    add_rslider = device_widget(rslider)
+    add_kslider = device_widget(kslider)
+    add_textbutton = device_widget(textbutton)
+    add_umenu = device_widget(umenu)
+    add_radiogroup = device_widget(radiogroup)
+    add_nodes = device_widget(nodes)
+    add_matrixctrl = device_widget(matrixctrl)
+    add_ubutton = device_widget(ubutton)
+    add_nslider = device_widget(nslider)

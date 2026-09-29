@@ -59,12 +59,10 @@ markdown_extensions:
 plugins:
   - search
 
-# Internal working notes (audits, teardowns, sprint trackers, templates) are
+# Internal working notes (templates) are
 # kept in the repo but excluded from the published site to keep it focused.
 exclude_docs: |
-  archive/
   plugin_design_doc_template.md
-  ui_validation/
 
 nav:
   - Home: index.md

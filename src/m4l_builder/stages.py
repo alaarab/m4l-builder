@@ -12,14 +12,14 @@ class StageResult(dict):
 
     def __init__(
         self,
-        mapping: Mapping[str, Any] = None,
+        mapping: Mapping[str, Any] | None = None,
         *,
-        name: str = None,
-        params: Mapping[str, Any] = None,
-        ports: Mapping[str, Any] = None,
-        assets: Iterable[str] = None,
-        validators: Iterable[Callable[..., Any]] = None,
-        metadata: Mapping[str, Any] = None,
+        name: str | None = None,
+        params: Mapping[str, Any] | None = None,
+        ports: Mapping[str, Any] | None = None,
+        assets: Iterable[str] | None = None,
+        validators: Iterable[Callable[..., Any]] | None = None,
+        metadata: Mapping[str, Any] | None = None,
     ):
         super().__init__(mapping or {})
         self.name = name or "stage"
@@ -49,14 +49,14 @@ class Stage(ABC):
 
 
 def stage_result(
-    mapping: Mapping[str, Any] = None,
+    mapping: Mapping[str, Any] | None = None,
     *,
-    name: str = None,
-    params: Mapping[str, Any] = None,
-    ports: Mapping[str, Any] = None,
-    assets: Iterable[str] = None,
-    validators: Iterable[Callable[..., Any]] = None,
-    metadata: Mapping[str, Any] = None,
+    name: str | None = None,
+    params: Mapping[str, Any] | None = None,
+    ports: Mapping[str, Any] | None = None,
+    assets: Iterable[str] | None = None,
+    validators: Iterable[Callable[..., Any]] | None = None,
+    metadata: Mapping[str, Any] | None = None,
 ) -> StageResult:
     """Convenience constructor for StageResult."""
     return StageResult(
@@ -70,7 +70,7 @@ def stage_result(
     )
 
 
-def coerce_stage_result(result: Any, *, name: str = None) -> StageResult:
+def coerce_stage_result(result: Any, *, name: str | None = None) -> StageResult:
     """Normalize mapping-like stage results."""
     if isinstance(result, StageResult):
         if name and not result.name:

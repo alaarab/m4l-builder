@@ -29,3 +29,8 @@ research/amxd_corpus/studies/
 AGENTS.md
 CLAUDE.md
 FINDINGS.md
+
+# local scratch / generated artifacts
+tmp/
+examples/build/
+*.asd

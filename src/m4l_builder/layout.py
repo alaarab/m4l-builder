@@ -1,5 +1,19 @@
 """Context manager-based layout containers for placing UI elements."""
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+from . import ui
+
+if TYPE_CHECKING:
+    from typing_extensions import Concatenate, ParamSpec
+
+    from .ui_registry import VarnameWidgetMethod, WidgetMethod
+
+    _P = ParamSpec("_P")
+
 
 def snap_rect(rect):
     """Snap a rect to whole-integer pixels (official-adopt 4, Ableton's
@@ -31,6 +45,49 @@ def inset_rect(
     inner_w = max(0, w - left - right)
     inner_h = max(0, h - top - bottom)
     return [x + left, y + top, inner_w, inner_h]
+
+
+def _make_simple_proxy(widget_name):
+    def method(self, id, *, width=None, height=None, **kw):
+        rect = self._next_rect(width, height)
+        return getattr(self._device, f"add_{widget_name}")(id, rect, **kw)
+
+    method.__name__ = f"add_{widget_name}"
+    method.__qualname__ = f"_LayoutContainer.add_{widget_name}"
+    method.__doc__ = f"Add a `{widget_name}` widget at the next layout slot."
+    return method
+
+
+def _make_varname_proxy(widget_name):
+    def method(self, id, varname, *, width=None, height=None, **kw):
+        rect = self._next_rect(width, height)
+        return getattr(self._device, f"add_{widget_name}")(id, varname, rect, **kw)
+
+    method.__name__ = f"add_{widget_name}"
+    method.__qualname__ = f"_LayoutContainer.add_{widget_name}"
+    method.__doc__ = f"Add a `{widget_name}` widget at the next layout slot."
+    return method
+
+
+# Proxy declarations are typed after the ui.py factory (minus ``rect``, which
+# the container computes); ``width``/``height`` ride in the factory's
+# ``**kwargs``. Names are collected in declaration order for the tables below.
+_simple_proxy_names: list[str] = []
+_varname_proxy_names: list[str] = []
+
+
+def _layout_widget(factory: Callable[Concatenate[str, list, _P], dict]) -> WidgetMethod[_P]:
+    """Proxy for a device wrapper shaped (id, rect, **kw)."""
+    _simple_proxy_names.append(factory.__name__)
+    return _make_simple_proxy(factory.__name__)  # type: ignore[return-value]
+
+
+def _layout_varname_widget(
+    factory: Callable[Concatenate[str, str, list, _P], dict],
+) -> VarnameWidgetMethod[_P]:
+    """Proxy for a device wrapper shaped (id, varname, rect, **kw)."""
+    _varname_proxy_names.append(factory.__name__)
+    return _make_varname_proxy(factory.__name__)  # type: ignore[return-value]
 
 
 class _LayoutContainer:
@@ -68,8 +125,42 @@ class _LayoutContainer:
         return snap_rect(rect)
 
     # Proxies whose shape is uniform — (id, rect, **kw) or (id, varname,
-    # rect, **kw) — are generated below the class body; only widgets with
+    # rect, **kw) — are declared from their factory; only widgets with
     # unique signatures are defined inline.
+    add_panel = _layout_widget(ui.panel)
+    add_scope = _layout_widget(ui.scope)
+    add_plot = _layout_widget(ui.plot)
+    add_filtergraph = _layout_widget(ui.filtergraph)
+    add_function = _layout_widget(ui.function)
+    add_waveform = _layout_widget(ui.waveform)
+    add_spectrumdraw = _layout_widget(ui.spectrumdraw)
+    add_meter = _layout_widget(ui.meter)
+    add_fpic = _layout_widget(ui.fpic)
+    add_pictctrl = _layout_widget(ui.pictctrl)
+    add_multislider = _layout_widget(ui.multislider)
+    add_adsrui = _layout_widget(ui.adsrui)
+    add_live_drop = _layout_widget(ui.live_drop)
+    add_swatch = _layout_widget(ui.swatch)
+    add_textedit = _layout_widget(ui.textedit)
+    add_live_step = _layout_widget(ui.live_step)
+    add_live_grid = _layout_widget(ui.live_grid)
+    add_live_line = _layout_widget(ui.live_line)
+    add_live_arrows = _layout_widget(ui.live_arrows)
+    add_rslider = _layout_widget(ui.rslider)
+    add_kslider = _layout_widget(ui.kslider)
+    add_nodes = _layout_widget(ui.nodes)
+    add_matrixctrl = _layout_widget(ui.matrixctrl)
+    add_ubutton = _layout_widget(ui.ubutton)
+    add_nslider = _layout_widget(ui.nslider)
+    add_umenu = _layout_widget(ui.umenu)
+    add_radiogroup = _layout_widget(ui.radiogroup)
+    add_dial = _layout_varname_widget(ui.dial)
+    add_toggle = _layout_varname_widget(ui.toggle)
+    add_slider = _layout_varname_widget(ui.slider)
+    add_button = _layout_varname_widget(ui.button)
+    add_number_box = _layout_varname_widget(ui.number_box)
+    add_live_text = _layout_varname_widget(ui.live_text)
+    add_live_gain = _layout_varname_widget(ui.live_gain)
 
     # Pattern C: (id, rect, text, **kw)
     def add_comment(self, id, text, *, width=None, height=None, **kw):
@@ -105,76 +196,8 @@ class _LayoutContainer:
         return self._device.add_bpatcher(id, rect, patcher_name, **kw)
 
 
-# Widgets whose device wrapper takes (id, rect, **kw).
-_SIMPLE_PROXY_WIDGETS = (
-    "panel",
-    "scope",
-    "plot",
-    "filtergraph",
-    "function",
-    "waveform",
-    "spectrumdraw",
-    "meter",
-    "fpic",
-    "pictctrl",
-    "multislider",
-    "adsrui",
-    "live_drop",
-    "swatch",
-    "textedit",
-    "live_step",
-    "live_grid",
-    "live_line",
-    "live_arrows",
-    "rslider",
-    "kslider",
-    "nodes",
-    "matrixctrl",
-    "ubutton",
-    "nslider",
-    "umenu",
-    "radiogroup",
-)
-
-# Widgets whose device wrapper takes (id, varname, rect, **kw).
-_VARNAME_PROXY_WIDGETS = (
-    "dial",
-    "toggle",
-    "slider",
-    "button",
-    "number_box",
-    "live_text",
-    "live_gain",
-)
-
-
-def _make_simple_proxy(widget_name):
-    def method(self, id, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return getattr(self._device, f"add_{widget_name}")(id, rect, **kw)
-
-    method.__name__ = f"add_{widget_name}"
-    method.__qualname__ = f"_LayoutContainer.add_{widget_name}"
-    method.__doc__ = f"Add a `{widget_name}` widget at the next layout slot."
-    return method
-
-
-def _make_varname_proxy(widget_name):
-    def method(self, id, varname, *, width=None, height=None, **kw):
-        rect = self._next_rect(width, height)
-        return getattr(self._device, f"add_{widget_name}")(id, varname, rect, **kw)
-
-    method.__name__ = f"add_{widget_name}"
-    method.__qualname__ = f"_LayoutContainer.add_{widget_name}"
-    method.__doc__ = f"Add a `{widget_name}` widget at the next layout slot."
-    return method
-
-
-for _widget_name in _SIMPLE_PROXY_WIDGETS:
-    setattr(_LayoutContainer, f"add_{_widget_name}", _make_simple_proxy(_widget_name))
-for _widget_name in _VARNAME_PROXY_WIDGETS:
-    setattr(_LayoutContainer, f"add_{_widget_name}", _make_varname_proxy(_widget_name))
-del _widget_name
+_SIMPLE_PROXY_WIDGETS = tuple(_simple_proxy_names)
+_VARNAME_PROXY_WIDGETS = tuple(_varname_proxy_names)
 
 
 class Row(_LayoutContainer):
@@ -190,7 +213,7 @@ class Row(_LayoutContainer):
         self._cursor_x = x
         self._items = 0
 
-    def __enter__(self):
+    def __enter__(self) -> Row:
         return self
 
     def __exit__(self, *args):
@@ -232,7 +255,7 @@ class Column(_LayoutContainer):
         self._cursor_y = y
         self._items = 0
 
-    def __enter__(self):
+    def __enter__(self) -> Column:
         return self
 
     def __exit__(self, *args):
@@ -278,7 +301,7 @@ class Grid(_LayoutContainer):
         self._current_row = 0
         self._items = 0
 
-    def __enter__(self):
+    def __enter__(self) -> Grid:
         return self
 
     def __exit__(self, *args):
@@ -334,7 +357,7 @@ class Columns(_LayoutContainer):
         self._cursor_cols = 0.0
         self._items = 0
 
-    def __enter__(self):
+    def __enter__(self) -> Columns:
         return self
 
     def __exit__(self, *args):

@@ -9,8 +9,10 @@ import re
 import struct
 from typing import Any
 
-from ._reverse_legacy import (
+from ._reverse_constants import (
     TYPE_CODE_TO_DEVICE_TYPE,
+)
+from ._reverse_helpers import (
     _bridge_dependencies_from_support_files,
     _coerce_flag,
     _dedupe_dependencies,

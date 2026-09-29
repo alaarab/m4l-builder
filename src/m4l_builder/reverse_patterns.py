@@ -1,9 +1,11 @@
 """Pattern, motif, and normalization candidate helpers."""
 
-from ._reverse_legacy import (
+from ._reverse_detect import (
     detect_snapshot_motifs,
     detect_snapshot_patterns,
     detect_snapshot_recipes,
+)
+from ._reverse_extract import (
     extract_building_block_candidates,
     extract_controller_shell_candidates,
     extract_embedded_ui_shell_candidates,

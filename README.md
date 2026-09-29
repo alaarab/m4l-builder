@@ -37,11 +37,14 @@ device.add_dial("gain", "Gain", [10, 6, 50, 90],
                 min_val=-70.0, max_val=6.0, initial=0.0,
                 unitstyle=4, annotation_name="Gain")
 
-device.add_newobj("mul_l", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
-device.add_newobj("mul_r", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
-device.add_newobj("db2a", "dbtoa", numinlets=1, numoutlets=1, outlettype=[""])
-device.add_newobj("pk", "pack f 20", numinlets=2, numoutlets=1, outlettype=[""])
-device.add_newobj("ln", "line~", numinlets=2, numoutlets=2, outlettype=["signal", "bang"])
+# Inlet/outlet counts and outlet types are inferred from the object text.
+# Objects whose shape can't be known from text (gen~, poly~, p, js, ...) raise
+# and need numinlets=/numoutlets= passed explicitly; explicit values always win.
+device.add_newobj("mul_l", "*~ 1.")
+device.add_newobj("mul_r", "*~ 1.")
+device.add_newobj("db2a", "dbtoa")
+device.add_newobj("pk", "pack f 20")
+device.add_newobj("ln", "line~")
 
 device.add_line("obj-plugin", 0, "mul_l", 0)   # stereo in
 device.add_line("obj-plugin", 1, "mul_r", 0)

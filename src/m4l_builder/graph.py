@@ -141,7 +141,7 @@ class GraphContainer:
         """Return registered assets."""
         return tuple(self._assets.values())
 
-    def register_parameter(self, spec: ParameterSpec, *, box_id: str = None) -> ParameterSpec:
+    def register_parameter(self, spec: ParameterSpec, *, box_id: str | None = None) -> ParameterSpec:
         """Register a first-class parameter spec on this graph."""
         stored = spec.copy()
         self._parameter_specs[stored.name] = stored
@@ -218,8 +218,13 @@ class GraphContainer:
         for line in lines:
             self.lines.append(line)
 
-    def add_newobj(self, id: str = None, text: str = "", *, numinlets: int, numoutlets: int, **kwargs) -> BoxRef:
-        """Add a raw Max object and return its typed handle."""
+    def add_newobj(self, id: str | None = None, text: str = "", *, numinlets: int | None = None,
+                   numoutlets: int | None = None, **kwargs) -> BoxRef:
+        """Add a raw Max object and return its typed handle.
+
+        Leave out ``numinlets``/``numoutlets``/``outlettype`` to infer them
+        from ``text`` (see :mod:`m4l_builder.object_io`).
+        """
         if id is None:
             base = text or "obj"
             id = self.unique_id(base)
@@ -270,14 +275,14 @@ class GraphContainer:
         maxclass: str,
         presentation_rect: list,
         *,
-        attrs: dict = None,
-        varname: str = None,
+        attrs: dict | None = None,
+        varname: str | None = None,
         numinlets: int = 1,
         numoutlets: int = 1,
-        outlettype: list = None,
-        patching_rect: list = None,
+        outlettype: list | None = None,
+        patching_rect: list | None = None,
         signal_src=None,
-        gate_src: tuple = None,
+        gate_src: tuple | None = None,
         theme=None,
     ) -> BoxRef:
         """Add a BUILT-IN **compiled** Max UI object (e.g. ``spectroscope~``
@@ -379,7 +384,7 @@ class GraphContainer:
         for i in range(len(obj_ids) - 1):
             self.add_line(obj_ids[i], outlet, obj_ids[i + 1], inlet)
 
-    def lint(self, *, device_type: str = None):
+    def lint(self, *, device_type: str | None = None):
         """Return structured validation issues for this graph."""
         from .validation import lint_graph
 

@@ -1,5 +1,7 @@
 """Data storage and scripting."""
 
+from __future__ import annotations
+
 from ..objects import newobj, patchline
 
 
@@ -91,7 +93,7 @@ def pattr_system(id_prefix: str) -> tuple:
 
 
 def gen_codebox(id_prefix: str, gen_code: str, numinlets: int = 1,
-                numoutlets: int = 1, outlettype: list = None) -> tuple:
+                numoutlets: int = 1, outlettype: list | None = None) -> tuple:
     """Create a gen~ object with embedded codebox code.
 
     gen~ is Max's DSP codegen environment. The gen_code string is stored

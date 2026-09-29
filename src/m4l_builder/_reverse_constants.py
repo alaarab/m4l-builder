@@ -1,6 +1,6 @@
 """Lookup tables and operator specs for the legacy-device reverse tool.
 
-Extracted from _reverse_legacy.py (god-file split); re-exported by it."""
+Part of the _reverse_* split."""
 from __future__ import annotations
 
 import copy
@@ -100,7 +100,7 @@ BRIDGE_TEXT_MARKERS = (
     "livemcp_bridge_server.js",
 )
 
-BUS_OPERATOR_SPECS = {
+BUS_OPERATOR_SPECS: dict[str, dict[str, Any]] = {
     "s": {"signal": False, "direction": "send"},
     "send": {"signal": False, "direction": "send"},
     "r": {"signal": False, "direction": "receive"},

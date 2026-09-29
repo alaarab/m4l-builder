@@ -1,10 +1,12 @@
 """Audio I/O and gain stages."""
 
+from __future__ import annotations
+
 from ..objects import newobj, patchline
 
 
 def stereo_io(plugin_id: str = "obj-plugin", plugout_id: str = "obj-plugout",
-              plugin_rect: list = None, plugout_rect: list = None) -> tuple:
+              plugin_rect: list | None = None, plugout_rect: list | None = None) -> tuple:
     """Create plugin~ and plugout~ pair for audio I/O.
 
     Returns (boxes, lines) with no lines. Caller wires the DSP chain.
@@ -19,8 +21,8 @@ def stereo_io(plugin_id: str = "obj-plugin", plugout_id: str = "obj-plugout",
     return (boxes, [])
 
 
-def gain_stage(id_prefix: str, *, patching_rect_l: list = None,
-               patching_rect_r: list = None) -> tuple:
+def gain_stage(id_prefix: str, *, patching_rect_l: list | None = None,
+               patching_rect_r: list | None = None) -> tuple:
     """Create a stereo *~ gain stage (left and right channels).
 
     The second inlet of each *~ accepts a signal-rate gain value.

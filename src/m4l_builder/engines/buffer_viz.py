@@ -168,7 +168,7 @@ def multi_lane_thumbnail_js(*, key: str, samps: int, lanes: int,
 
 
 def waveform_layers_js(*, key: str, samps: int, audio_ch: int = 0,
-                       gain_ch: int = None, channels: int = None,
+                       gain_ch: int | None = None, channels: int | None = None,
                        poll_ms: int = 50,
                        wave_color: str = "0.55, 0.58, 0.62, 1.0",
                        gain_color: str = "0.90, 0.36, 0.60, 1.0",
