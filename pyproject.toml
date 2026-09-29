@@ -136,9 +136,6 @@ implicit_optional = true
 #                    _reverse_legacy (P1-P7 arc) into _reverse_detect/
 #                    _extract/_helpers/_match/_constants; the type-checking
 #                    debt moved with the code and needs the same exemption.
-#   device_widgets:  relies on Device.add_* methods attached dynamically via
-#                    setattr (see device.py), which mypy cannot see statically.
-#   livemcp_bridge:  same dynamic-setattr pattern as device_widgets.
 [[tool.mypy.overrides]]
 module = [
     "m4l_builder._reverse_legacy",
@@ -147,7 +144,5 @@ module = [
     "m4l_builder._reverse_helpers",
     "m4l_builder._reverse_match",
     "m4l_builder._reverse_constants",
-    "m4l_builder.device_widgets",
-    "m4l_builder.livemcp_bridge",
 ]
 ignore_errors = true
