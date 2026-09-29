@@ -1,6 +1,6 @@
 """Candidate extractors + top-level snapshot analysis (reverse tool).
 
-Extracted from _reverse_legacy.py (god-file split); re-exported by it."""
+Part of the _reverse_* split."""
 from __future__ import annotations
 
 import copy
