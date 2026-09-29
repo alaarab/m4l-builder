@@ -20,7 +20,6 @@ from .parameters import ParameterSpec
 from .patcher_walk import iter_boxes
 from .profiles import DEFAULT_PATCHER_PROFILE
 from .ui import jsui, v8ui
-from .ui_registry import DEVICE_WIDGET_SPECS, make_device_widget_method
 from .validation import _DECORATION_MAXCLASSES, ValidationIssue, layout_issues
 
 # Device-view height ceiling: Live's device chain shows only ~DEVICE_H px tall
@@ -566,13 +565,13 @@ class Device(CompositeWidgetsMixin, GraphContainer):
 
 
 
-    def row(self, x, y, *, spacing=8, height=None, width=None):
+    def row(self, x, y, *, spacing=8, height=None, width=None) -> Row:
         return Row(self, x, y, spacing=spacing, height=height, width=width)
 
-    def column(self, x, y, *, spacing=4, width=None, height=None):
+    def column(self, x, y, *, spacing=4, width=None, height=None) -> Column:
         return Column(self, x, y, spacing=spacing, width=width, height=height)
 
-    def grid(self, x, y, *, cols, col_width, row_height, spacing_x=4, spacing_y=4):
+    def grid(self, x, y, *, cols, col_width, row_height, spacing_x=4, spacing_y=4) -> Grid:
         return Grid(
             self,
             x,
@@ -584,7 +583,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
             spacing_y=spacing_y,
         )
 
-    def columns(self, x, y, *, width, cols=12.0, height=None):
+    def columns(self, x, y, *, width, cols=12.0, height=None) -> Columns:
         return Columns(self, x, y, width=width, cols=cols, height=height)
 
     def to_json(self, indent: int = 2) -> str:
@@ -747,9 +746,3 @@ class MidiGenerator(Device):
             allow_tall=allow_tall,
         )
 
-
-for _widget_name, _widget_spec in DEVICE_WIDGET_SPECS.items():
-    setattr(Device, f"add_{_widget_name}", make_device_widget_method(_widget_name, _widget_spec))
-
-del _widget_name
-del _widget_spec

@@ -129,13 +129,3 @@ ignore_missing_imports = true
 # Lenient baseline so CI is green today; tighten module-by-module later.
 implicit_optional = true
 
-# Remaining type-checking backlog. Everything else in the package is gated.
-#   device_widgets:  relies on Device.add_* methods attached dynamically via
-#                    setattr (see device.py), which mypy cannot see statically.
-#   livemcp_bridge:  same dynamic-setattr pattern as device_widgets.
-[[tool.mypy.overrides]]
-module = [
-    "m4l_builder.device_widgets",
-    "m4l_builder.livemcp_bridge",
-]
-ignore_errors = true
