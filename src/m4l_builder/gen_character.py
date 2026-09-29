@@ -43,7 +43,6 @@ __all__ = [
 ]
 
 TWO_PI = "6.2831853"
-HALF_PI = "1.5707963"
 
 
 def optical_leveler(

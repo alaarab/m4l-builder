@@ -83,6 +83,16 @@
   instead of 28 hand-copied methods (no API change), with exhaustive proxy
   smoke tests and a Device-widget parity test.
 
+### Removed
+
+- Untracked `tmp/` scratch audio and screenshots and the stale UI-sprint notes
+  under `docs/archive/` and `docs/ui_validation/`; generated artifacts are now
+  gitignored.
+- The `_reverse_legacy` facade (the `_reverse_*` split modules are imported
+  directly) and the unused `clone` module.
+- Dead helpers: `ParameterSpec.with_bank`, `constants.DEFAULT_BG_COLOR`,
+  `constants.DEFAULT_ACCENT_COLOR`, `gen_character.HALF_PI`.
+
 ## [0.8.0] — 2026-05-30
 
 ### Added

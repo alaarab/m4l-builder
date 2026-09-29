@@ -1,8 +1,7 @@
 """Python code generation from reverse-engineered snapshots.
 
-Extracted from _reverse_legacy.py: the generate_*_python_* entry points and
-their codegen-only helpers. Shared lower-level helpers stay in _reverse_legacy
-and are imported below.
+The generate_*_python_* entry points and their codegen-only helpers. Shared
+lower-level helpers live in the other _reverse_* modules.
 """
 
 from __future__ import annotations
@@ -10,24 +9,11 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from ._reverse_legacy import (
+from ._reverse_constants import (
     DEFAULT_AUDIO_IO_BOXES,
     DEVICE_TYPE_TO_CODE_CONSTANT,
-    _assign_parameter_bank_statements,
-    _box_builder_statement,
-    _call_statement,
-    _controller_shell_helper_call,
-    _device_ctor_for_snapshot,
-    _dsp_add_statement,
-    _line_key_from_wrapped,
-    _python_literal,
-    _recipe_call_statement,
-    _semantic_jsui_filenames,
-    _snapshot_graph,
-    _support_file_statements,
-    _support_files_by_name,
-    _wrapped_boxes_for_candidate,
-    _wrapped_lines_for_candidate,
+)
+from ._reverse_extract import (
     analyze_snapshot,
     extract_building_block_candidates,
     extract_controller_shell_candidates,
@@ -48,6 +34,23 @@ from ._reverse_legacy import (
     extract_presentation_widget_cluster_candidates,
     extract_sample_buffer_candidates,
     extract_state_bundle_router_candidates,
+)
+from ._reverse_helpers import (
+    _assign_parameter_bank_statements,
+    _box_builder_statement,
+    _call_statement,
+    _controller_shell_helper_call,
+    _device_ctor_for_snapshot,
+    _dsp_add_statement,
+    _line_key_from_wrapped,
+    _python_literal,
+    _recipe_call_statement,
+    _semantic_jsui_filenames,
+    _snapshot_graph,
+    _support_file_statements,
+    _support_files_by_name,
+    _wrapped_boxes_for_candidate,
+    _wrapped_lines_for_candidate,
     snapshot_from_amxd,
     snapshot_from_bridge_payload,
     snapshot_from_device,

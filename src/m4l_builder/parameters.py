@@ -174,10 +174,6 @@ class ParameterSpec:
         """Return a copied spec with optional overrides."""
         return replace(self, **changes)
 
-    def with_bank(self, bank: int, position: int, bank_name: str = None) -> ParameterSpec:
-        """Return a copied spec with Push bank metadata attached."""
-        return self.copy(bank=bank, position=position, bank_name=bank_name)
-
     def with_visibility(self, visible: int) -> ParameterSpec:
         """Return a copied spec with updated parameter-bank visibility."""
         return self.copy(visible=visible)

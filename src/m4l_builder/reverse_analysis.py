@@ -1,6 +1,6 @@
 """Higher-level reverse analysis and behavior inference helpers."""
 
-from ._reverse_legacy import (
+from ._reverse_extract import (
     analyze_snapshot,
     extract_behavior_hints,
     extract_mapping_behavior_traces,
