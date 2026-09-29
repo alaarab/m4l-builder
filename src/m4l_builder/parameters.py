@@ -229,21 +229,21 @@ class ParameterSpec:
         cls,
         name: str,
         *,
-        shortname: str = None,
-        minimum: float = None,
-        maximum: float = None,
+        shortname: str | None = None,
+        minimum: float | None = None,
+        maximum: float | None = None,
         initial: Any = _UNSET,
         initial_enable: bool | None = True,
-        unitstyle: int = None,
-        exponent: float = None,
-        bank: int = None,
-        position: int = None,
-        bank_name: str = None,
+        unitstyle: int | None = None,
+        exponent: float | None = None,
+        bank: int | None = None,
+        position: int | None = None,
+        bank_name: str | None = None,
         visible: int = 1,
-        annotation_name: str = None,
-        info: str = None,
-        units: str = None,
-        steps: int = None,
+        annotation_name: str | None = None,
+        info: str | None = None,
+        units: str | None = None,
+        steps: int | None = None,
     ) -> ParameterSpec:
         """Build a continuous parameter spec."""
         return cls(
@@ -273,15 +273,15 @@ class ParameterSpec:
         cls,
         name: str,
         *,
-        shortname: str = None,
+        shortname: str | None = None,
         minimum: int = LIVE_NATIVE_INT_MIN,
         maximum: int = LIVE_NATIVE_INT_MAX,
         initial: Any = _UNSET,
         initial_enable: bool | None = True,
-        unitstyle: int = None,
-        bank: int = None,
-        position: int = None,
-        bank_name: str = None,
+        unitstyle: int | None = None,
+        bank: int | None = None,
+        position: int | None = None,
+        bank_name: str | None = None,
         visible: int = PARAM_VISIBLE,
         allow_wide_range: bool = False,
     ) -> ParameterSpec:
@@ -318,14 +318,14 @@ class ParameterSpec:
         name: str,
         options: Iterable[str],
         *,
-        shortname: str = None,
-        minimum: float = None,
-        maximum: float = None,
+        shortname: str | None = None,
+        minimum: float | None = None,
+        maximum: float | None = None,
         initial: Any = _UNSET,
         initial_enable: bool | None = None,
-        bank: int = None,
-        position: int = None,
-        bank_name: str = None,
+        bank: int | None = None,
+        position: int | None = None,
+        bank_name: str | None = None,
         visible: int = 1,
     ) -> ParameterSpec:
         """Build an enum parameter spec."""
@@ -347,7 +347,7 @@ class ParameterSpec:
 
     @classmethod
     def from_valueof_dict(
-        cls, valueof: dict, *, bank: int = None, position: int = None, bank_name: str = None
+        cls, valueof: dict, *, bank: int | None = None, position: int | None = None, bank_name: str | None = None
     ) -> ParameterSpec:
         """Rebuild a spec from a Max `valueof` dict."""
         initial = valueof.get("parameter_initial", _UNSET)

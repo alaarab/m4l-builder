@@ -78,7 +78,7 @@ def _selector_from_box(payload: dict):
     return None
 
 
-def jsui_coverage_issues(boxes: list, lines: list, support_files: dict = None):
+def jsui_coverage_issues(boxes: list, lines: list, support_files: dict | None = None):
     """Return ``(box_id, selector, source_id)`` for missing handlers.
 
     ``support_files`` maps filename -> {"content": str}; the jsui's script is

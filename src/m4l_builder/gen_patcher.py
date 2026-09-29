@@ -208,7 +208,7 @@ def embed_gendsp(
     numouts: int,
     *,
     box_id: str = "gen",
-    patching_rect: list = None,
+    patching_rect: list | None = None,
     lint: bool = True,
     codebox_h: float = 560.0,
     patcher_h: float = 660.0,

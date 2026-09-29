@@ -1,8 +1,10 @@
 """Max object factory functions for creating box and patchline dicts."""
 
+from __future__ import annotations
+
 
 def newobj(id: str, text: str, *, numinlets: int, numoutlets: int,
-           outlettype: list = None, patching_rect: list = None, **kwargs) -> dict:
+           outlettype: list | None = None, patching_rect: list | None = None, **kwargs) -> dict:
     """Create a Max newobj box dict with a "box" key."""
     box = {
         "id": id,
@@ -26,8 +28,8 @@ def message(
     *,
     numinlets: int = 2,
     numoutlets: int = 1,
-    outlettype: list = None,
-    patching_rect: list = None,
+    outlettype: list | None = None,
+    patching_rect: list | None = None,
     **kwargs,
 ) -> dict:
     """Create a Max message box dict with a "box" key."""

@@ -76,7 +76,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         self._param_bank_names: dict[Any, Any] = {}
         self._support_files: dict[Any, Any] = {}
 
-    def lint(self, *, device_type: str = None):
+    def lint(self, *, device_type: str | None = None):
         """Graph lint + device-level layout rules (height ceiling + clipped controls).
 
         Appends WARNING-severity issues (not wiring errors, so default
@@ -210,7 +210,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
                 ))
         return out
 
-    def register_parameter(self, spec, *, box_id: str = None):
+    def register_parameter(self, spec, *, box_id: str | None = None):
         """Register parameter specs and keep bank metadata synchronized."""
         stored = super().register_parameter(spec, box_id=box_id)
         if stored.name in self._param_banks:
@@ -283,7 +283,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         rect: list,
         *,
         js_code: str,
-        js_filename: str = None,
+        js_filename: str | None = None,
         numinlets: int = 1,
         numoutlets: int = 0,
         validate_contract: bool = True,
@@ -321,7 +321,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         rect: list,
         *,
         js_code: str,
-        js_filename: str = None,
+        js_filename: str | None = None,
         numinlets: int = 1,
         numoutlets: int = 0,
         validate_contract: bool = True,
@@ -518,7 +518,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         *,
         numinlets: int = 1,
         numoutlets: int = 1,
-        outlettype: list = None,
+        outlettype: list | None = None,
     ) -> str:
         """Add a Subpatcher as an embedded patcher box and return its ID."""
         box_dict = subpatcher.to_box(
@@ -536,7 +536,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
 
 
 
-    def paint_control(self, box_id, painter_filename: str, *, painter_js: str = None):
+    def paint_control(self, box_id, painter_filename: str, *, painter_js: str | None = None):
         """Attach a render-only ``jspainterfile`` painter to a NATIVE control (C1).
 
         Sets ``jspainterfile`` on the box ``box_id`` (a ``live.dial`` / ``live.numbox``
@@ -594,7 +594,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         """Check the device for common problems. Returns a list of warning strings."""
         return super().validate()
 
-    def assign_parameter_bank(self, varname, bank: int, position: int, bank_name: str = None):
+    def assign_parameter_bank(self, varname, bank: int, position: int, bank_name: str | None = None):
         """Map a parameter into Push's bank layout for hardware control."""
         if bank < 0:
             raise ValueError(f"bank must be >= 0, got {bank}")

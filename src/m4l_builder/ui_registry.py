@@ -392,20 +392,20 @@ if TYPE_CHECKING:
 # accept it positionally (`keyword_only_args`). These shims carry the wrapper's
 # real call signature for type checkers; tests keep them in sync with ui.py.
 def _tab_call(id: str, varname: str, rect: list, options: list, *,
-              bgcolor: list = None, bgoncolor: list = None,
-              textcolor: list = None, textoncolor: list = None,
-              patching_rect: list = None, rounded: float = 0.0,
+              bgcolor: list | None = None, bgoncolor: list | None = None,
+              textcolor: list | None = None, textoncolor: list | None = None,
+              patching_rect: list | None = None, rounded: float = 0.0,
               spacing_x: float = 0.0, multiline: int = 0, appearance: int = 0,
-              parameter: ParameterSpec = None,
+              parameter: ParameterSpec | None = None,
               **kwargs: Any) -> dict:
     raise NotImplementedError  # signature shim only
 
 
 def _menu_call(id: str, varname: str, rect: list, options: list, *,
-               shortname: str = None, patching_rect: list = None,
-               bgcolor: list = None, bgoncolor: list = None,
-               textcolor: list = None, textoncolor: list = None,
-               parameter: ParameterSpec = None,
+               shortname: str | None = None, patching_rect: list | None = None,
+               bgcolor: list | None = None, bgoncolor: list | None = None,
+               textcolor: list | None = None, textoncolor: list | None = None,
+               parameter: ParameterSpec | None = None,
                **kwargs: Any) -> dict:
     raise NotImplementedError  # signature shim only
 

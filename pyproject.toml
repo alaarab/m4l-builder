@@ -126,6 +126,12 @@ ignore = ["E501", "UP031"]
 python_version = "3.9"
 files = ["src/m4l_builder"]
 ignore_missing_imports = true
-# Lenient baseline so CI is green today; tighten module-by-module later.
+implicit_optional = false
+
+# TEMPORARY: the add_newobj(id: str = None) signatures in these modules are
+# being reworked on another branch; drop this override once they read
+# `id: str | None = None`. Every other None default here is already explicit.
+[[tool.mypy.overrides]]
+module = ["m4l_builder.graph", "m4l_builder.device", "m4l_builder.subpatcher"]
 implicit_optional = true
 
