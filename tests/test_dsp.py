@@ -1608,7 +1608,7 @@ class TestTriangleLFO:
         boxes, _ = lfo("lfo", waveform="triangle")
         osc = _find_box(boxes, "lfo_osc")
         assert osc["text"] == "tri~"
-        assert osc["numinlets"] == 2
+        assert osc["numinlets"] == 3
         assert osc["numoutlets"] == 1
 
     def test_scale_and_offset_for_unipolar(self):
@@ -4397,7 +4397,7 @@ class TestLoadbang:
     def test_inlets_outlets(self):
         boxes, _ = loadbang("lb")
         b = boxes[0]["box"]
-        assert b["numinlets"] == 0
+        assert b["numinlets"] == 1
         assert b["numoutlets"] == 1
         assert b["outlettype"] == ["bang"]
 
@@ -4655,7 +4655,7 @@ class TestPattrSystem:
         ap = _find_box(boxes, "ps_autopattr")
         assert ap["text"] == "autopattr"
         assert ap["numinlets"] == 1
-        assert ap["numoutlets"] == 1
+        assert ap["numoutlets"] == 4
 
     def test_pattrstorage_object(self):
         boxes, _ = pattr_system("ps")
@@ -4689,8 +4689,8 @@ class TestMidiChannelFilter:
         boxes, _ = midi_channel_filter("mcf")
         mi = _find_box(boxes, "mcf_midiin")
         assert mi["text"] == "midiin"
-        assert mi["numinlets"] == 0
-        assert mi["numoutlets"] == 2
+        assert mi["numinlets"] == 1
+        assert mi["numoutlets"] == 1
 
     def test_midiparse_object(self):
         boxes, _ = midi_channel_filter("mcf")

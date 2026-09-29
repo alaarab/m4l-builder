@@ -24,8 +24,8 @@ def envelope_follower(id_prefix: str, attack_ms: float = 10,
         newobj(f"{p}_sr", "samplerate~", numinlets=0, numoutlets=1,
                outlettype=["signal"], patching_rect=[130, 90, 75, 20]),
         # expr~ converts sr signal to a float for downstream use
-        newobj(f"{p}_sr_snap", "snapshot~", numinlets=1, numoutlets=1,
-               outlettype=[""], patching_rect=[130, 115, 70, 20]),
+        newobj(f"{p}_sr_snap", "snapshot~",
+               patching_rect=[130, 115, 70, 20]),
         # expr converts attack ms to samples: ms/1000 * sr
         newobj(f"{p}_atk_expr", "expr ($f1 / 1000.0) * $f2",
                numinlets=2, numoutlets=1, outlettype=[""],

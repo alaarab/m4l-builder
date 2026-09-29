@@ -25,8 +25,7 @@ def build() -> str:
                       outlettype=["int", "int", "int"])
     device.add_newobj("mtof", "mtof", numinlets=1, numoutlets=1, outlettype=[""])
     device.add_newobj("osc", "cycle~", numinlets=2, numoutlets=1, outlettype=["signal"])
-    device.add_newobj("env", "adsr~ 10 80 0.6 300", numinlets=5, numoutlets=1,
-                      outlettype=["signal"])
+    device.add_newobj("env", "adsr~ 10 80 0.6 300")
     device.add_newobj("amp", "*~", numinlets=2, numoutlets=1, outlettype=["signal"])
     device.add_newobj("out", "plugout~", numinlets=2, numoutlets=2,
                       outlettype=["signal", "signal"])

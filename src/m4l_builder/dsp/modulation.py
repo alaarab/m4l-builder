@@ -41,8 +41,7 @@ def lfo(id_prefix: str, waveform: str = "sine") -> tuple:
         uni_out = (f"{p}_osc", 0)
     elif waveform == "square":
         # rect~ outputs -1 to 1, convert to 0 to 1
-        boxes.append(newobj(f"{p}_osc", "rect~", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
+        boxes.append(newobj(f"{p}_osc", "rect~",
                             patching_rect=[30, 120, 50, 20]))
         boxes.append(newobj(f"{p}_scale", "*~ 0.5", numinlets=2, numoutlets=1,
                             outlettype=["signal"],
@@ -55,8 +54,7 @@ def lfo(id_prefix: str, waveform: str = "sine") -> tuple:
         uni_out = (f"{p}_offset", 0)
     elif waveform == "triangle":
         # tri~ outputs -1 to 1, convert to 0 to 1
-        boxes.append(newobj(f"{p}_osc", "tri~", numinlets=2, numoutlets=1,
-                            outlettype=["signal"],
+        boxes.append(newobj(f"{p}_osc", "tri~",
                             patching_rect=[30, 120, 50, 20]))
         boxes.append(newobj(f"{p}_scale", "*~ 0.5", numinlets=2, numoutlets=1,
                             outlettype=["signal"],

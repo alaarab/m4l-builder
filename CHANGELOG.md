@@ -73,6 +73,18 @@
 
 ### Fixed
 
+- Newobj inlet/outlet declarations that didn't match what Max 9 saves now
+  use the inferred shape (checked against Max 9 help patches): `loadbang`
+  and `midiin` get their inlet, `route`/`sel`/`select` an inlet per
+  argument, and `pack f 0. 20`, `adsr~`, `autopattr`, `counter`, `timer`,
+  `snapshot~`, `line~`, `rect~` and `tri~` their full inlets/outlets and
+  outlet types. Built output changes for `dsp.loadbang`, `pattr_system`,
+  `envelope_follower`, `lfo` (rect/tri), `xfade_matrix`, `midi_learn_chain`,
+  `midi_clock_in`, `midi_channel_filter`, `live_brand_dim`,
+  `live_theme_state_dim`, `add_flyout`, `add_width_collapse`,
+  `expandable_column`, `modulator_slot_component`, `settings_sidebar` and
+  `parametric_eq_band_backend`. No patchline changed.
+
 - `sysex_out` byte validation: out-of-range values used to wrap silently
   (`256 -> 0`, `-1 -> 255`); they now raise, and body bytes are checked to be
   7-bit (only the 0xF0/0xF7 framing may exceed 127).

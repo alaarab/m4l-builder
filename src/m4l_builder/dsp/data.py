@@ -35,7 +35,6 @@ def loadbang(id_prefix: str) -> tuple:
     """
     boxes = [
         newobj(f"{id_prefix}_loadbang", "loadbang",
-               numinlets=0, numoutlets=1, outlettype=["bang"],
                patching_rect=[30, 30, 60, 20]),
     ]
     return (boxes, [])
@@ -80,7 +79,6 @@ def pattr_system(id_prefix: str) -> tuple:
     p = id_prefix
     boxes = [
         newobj(f"{p}_autopattr", "autopattr",
-               numinlets=1, numoutlets=1, outlettype=[""],
                patching_rect=[30, 30, 60, 20]),
         newobj(f"{p}_pattrstorage", f"pattrstorage {p}_storage",
                numinlets=2, numoutlets=2, outlettype=["", ""],
