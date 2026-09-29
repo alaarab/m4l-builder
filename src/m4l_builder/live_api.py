@@ -5,13 +5,6 @@ from typing import Optional
 from .objects import newobj, patchline
 
 
-def _coerce_box_kwargs(rect, attrs):
-    kwargs = dict(attrs or {})
-    if rect is not None:
-        kwargs["patching_rect"] = rect
-    return kwargs
-
-
 def _split_newobj_kwargs(rect, attrs, *, numinlets, numoutlets, outlettype=None):
     kwargs = dict(attrs or {})
     effective_numinlets = kwargs.pop("numinlets", numinlets)
