@@ -536,6 +536,10 @@ def midi_clock_in(id_prefix: str) -> tuple:
     goes to 1 once per quarter note, and ``sel 1`` turns that into a bang
     that reads and restarts a timer. BPM = 60 / (quarter-note ms / 1000).
     Output BPM float from {prefix}_bpm_scale outlet 0.
+
+    Inside Live, incoming MIDI clock is not passed to a device's ``midiin``;
+    follow Live's tempo there (``plugsync~`` / ``live.observer`` on
+    ``tempo``) and use this recipe for standalone Max patches.
     """
     p = id_prefix
     boxes = [
@@ -561,9 +565,10 @@ def midi_clock_in(id_prefix: str) -> tuple:
         patchline(f"{p}_clockdet", 0, f"{p}_counter", 0),
         patchline(f"{p}_counter", 2, f"{p}_beat", 0),
         patchline(f"{p}_beat", 0, f"{p}_beat_trig", 0),
-        # right outlet fires first: report the elapsed time, then restart
-        patchline(f"{p}_beat_trig", 1, f"{p}_timer", 0),
-        patchline(f"{p}_beat_trig", 0, f"{p}_timer", 1),
+        # right outlet fires first: report the elapsed time (timer's right
+        # inlet), then restart it (left inlet)
+        patchline(f"{p}_beat_trig", 1, f"{p}_timer", 1),
+        patchline(f"{p}_beat_trig", 0, f"{p}_timer", 0),
         patchline(f"{p}_timer", 0, f"{p}_bpm", 0),
         patchline(f"{p}_bpm", 0, f"{p}_bpm_scale", 0),
     ]

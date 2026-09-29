@@ -3928,8 +3928,8 @@ class TestMidiClockIn:
             ("clockdet", 0, "counter", 0),
             ("counter", 2, "beat", 0),        # carry flag: 1 once per 24 clocks
             ("beat", 0, "beat_trig", 0),
-            ("beat_trig", 1, "timer", 0),     # report elapsed ms first,
-            ("beat_trig", 0, "timer", 1),     # then restart the timer
+            ("beat_trig", 1, "timer", 1),     # report elapsed ms first (right inlet),
+            ("beat_trig", 0, "timer", 0),     # then restart the timer (left inlet)
             ("timer", 0, "bpm", 0),
             ("bpm", 0, "bpm_scale", 0),
         }
