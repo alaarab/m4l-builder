@@ -20,7 +20,6 @@ from .parameters import ParameterSpec
 from .patcher_walk import iter_boxes
 from .profiles import DEFAULT_PATCHER_PROFILE
 from .ui import jsui, v8ui
-from .ui_registry import DEVICE_WIDGET_SPECS, make_device_widget_method
 from .validation import _DECORATION_MAXCLASSES, ValidationIssue, layout_issues
 
 # Device-view height ceiling: Live's device chain shows only ~DEVICE_H px tall
@@ -77,7 +76,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         self._param_bank_names: dict[Any, Any] = {}
         self._support_files: dict[Any, Any] = {}
 
-    def lint(self, *, device_type: str = None):
+    def lint(self, *, device_type: str | None = None):
         """Graph lint + device-level layout rules (height ceiling + clipped controls).
 
         Appends WARNING-severity issues (not wiring errors, so default
@@ -211,7 +210,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
                 ))
         return out
 
-    def register_parameter(self, spec, *, box_id: str = None):
+    def register_parameter(self, spec, *, box_id: str | None = None):
         """Register parameter specs and keep bank metadata synchronized."""
         stored = super().register_parameter(spec, box_id=box_id)
         if stored.name in self._param_banks:
@@ -284,7 +283,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         rect: list,
         *,
         js_code: str,
-        js_filename: str = None,
+        js_filename: str | None = None,
         numinlets: int = 1,
         numoutlets: int = 0,
         validate_contract: bool = True,
@@ -322,7 +321,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         rect: list,
         *,
         js_code: str,
-        js_filename: str = None,
+        js_filename: str | None = None,
         numinlets: int = 1,
         numoutlets: int = 0,
         validate_contract: bool = True,
@@ -491,11 +490,11 @@ class Device(CompositeWidgetsMixin, GraphContainer):
 
     def add_newobj(
         self,
-        id: str = None,
+        id: str | None = None,
         text: str = "",
         *,
-        numinlets: int,
-        numoutlets: int,
+        numinlets: int | None = None,
+        numoutlets: int | None = None,
         **kwargs,
     ) -> BoxRef:
         return super().add_newobj(id, text, numinlets=numinlets, numoutlets=numoutlets, **kwargs)
@@ -519,7 +518,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         *,
         numinlets: int = 1,
         numoutlets: int = 1,
-        outlettype: list = None,
+        outlettype: list | None = None,
     ) -> str:
         """Add a Subpatcher as an embedded patcher box and return its ID."""
         box_dict = subpatcher.to_box(
@@ -537,7 +536,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
 
 
 
-    def paint_control(self, box_id, painter_filename: str, *, painter_js: str = None):
+    def paint_control(self, box_id, painter_filename: str, *, painter_js: str | None = None):
         """Attach a render-only ``jspainterfile`` painter to a NATIVE control (C1).
 
         Sets ``jspainterfile`` on the box ``box_id`` (a ``live.dial`` / ``live.numbox``
@@ -566,13 +565,13 @@ class Device(CompositeWidgetsMixin, GraphContainer):
 
 
 
-    def row(self, x, y, *, spacing=8, height=None, width=None):
+    def row(self, x, y, *, spacing=8, height=None, width=None) -> Row:
         return Row(self, x, y, spacing=spacing, height=height, width=width)
 
-    def column(self, x, y, *, spacing=4, width=None, height=None):
+    def column(self, x, y, *, spacing=4, width=None, height=None) -> Column:
         return Column(self, x, y, spacing=spacing, width=width, height=height)
 
-    def grid(self, x, y, *, cols, col_width, row_height, spacing_x=4, spacing_y=4):
+    def grid(self, x, y, *, cols, col_width, row_height, spacing_x=4, spacing_y=4) -> Grid:
         return Grid(
             self,
             x,
@@ -584,7 +583,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
             spacing_y=spacing_y,
         )
 
-    def columns(self, x, y, *, width, cols=12.0, height=None):
+    def columns(self, x, y, *, width, cols=12.0, height=None) -> Columns:
         return Columns(self, x, y, width=width, cols=cols, height=height)
 
     def to_json(self, indent: int = 2) -> str:
@@ -595,7 +594,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         """Check the device for common problems. Returns a list of warning strings."""
         return super().validate()
 
-    def assign_parameter_bank(self, varname, bank: int, position: int, bank_name: str = None):
+    def assign_parameter_bank(self, varname, bank: int, position: int, bank_name: str | None = None):
         """Map a parameter into Push's bank layout for hardware control."""
         if bank < 0:
             raise ValueError(f"bank must be >= 0, got {bank}")
@@ -747,9 +746,3 @@ class MidiGenerator(Device):
             allow_tall=allow_tall,
         )
 
-
-for _widget_name, _widget_spec in DEVICE_WIDGET_SPECS.items():
-    setattr(Device, f"add_{_widget_name}", make_device_widget_method(_widget_name, _widget_spec))
-
-del _widget_name
-del _widget_spec

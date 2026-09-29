@@ -35,9 +35,7 @@ DEFAULT_APPVERSION = {
 }
 
 # Default patcher colors
-DEFAULT_BG_COLOR = [0.15, 0.15, 0.17, 1.0]
 DEFAULT_TEXT_COLOR = [0.95, 0.92, 0.85, 1.0]
-DEFAULT_ACCENT_COLOR = [0.45, 0.75, 0.65, 1.0]
 
 # live.dial unitstyle values
 UNITSTYLE_INT = 0

@@ -15,7 +15,7 @@ Core device classes. All devices share the same builder interface.
 `device.add_box(box_dict)` -- Add a raw box dict, returns object ID
 `device.add_line(source_id, source_outlet, dest_id, dest_inlet)` -- Connect two objects
 `device.add_dsp(boxes, lines)` -- Add all boxes and lines from a DSP block tuple
-`device.add_newobj(id, text, *, numinlets, numoutlets, **kwargs)` -- Add a Max object by text
+`device.add_newobj(id, text, *, numinlets=None, numoutlets=None, **kwargs)` -- Add a Max object by text. Omitted `numinlets`/`numoutlets`/`outlettype` are inferred from `text` (`m4l_builder.object_io`); unknown or context-dependent objects (`gen~`, `poly~`, `p`, `js`, `mc.*`, ...) raise `UnknownObjectIO`
 `device.add_subpatcher(subpatcher, id, rect, *, numinlets=1, numoutlets=1, outlettype=None)` -- Embed a Subpatcher
 
 ### UI methods
@@ -413,7 +413,7 @@ Preset management for Max devices.
 `sub.add_box(box_dict)` -- Add raw box dict
 `sub.add_line(source_id, source_outlet, dest_id, dest_inlet)` -- Connect objects
 `sub.add_dsp(boxes, lines)` -- Add DSP block
-`sub.add_newobj(id, text, *, numinlets, numoutlets, **kwargs)` -- Add Max object
+`sub.add_newobj(id, text, *, numinlets=None, numoutlets=None, **kwargs)` -- Add Max object (counts inferred as for `device.add_newobj`)
 `sub.to_patcher_dict()` -- Return inner patcher dict
 `sub.to_box(id, rect, *, numinlets=1, numoutlets=1, outlettype=None)` -- Return box dict for embedding in a device
 

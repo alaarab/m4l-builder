@@ -83,13 +83,13 @@ def mount_module(graph, spec: ModuleSpec) -> StageResult:
 def module_from_block(
     block_fn: Callable[..., tuple],
     *,
-    name: str = None,
-    mapping_factory: Callable[..., Mapping[str, Any]] = None,
-    port_factory: Callable[..., Mapping[str, Any]] = None,
-    param_factory: Callable[..., Mapping[str, Any]] = None,
-    asset_factory: Callable[..., Iterable[Any]] = None,
-    validator_factory: Callable[..., Iterable[Any]] = None,
-    metadata_factory: Callable[..., Mapping[str, Any]] = None,
+    name: str | None = None,
+    mapping_factory: Callable[..., Mapping[str, Any]] | None = None,
+    port_factory: Callable[..., Mapping[str, Any]] | None = None,
+    param_factory: Callable[..., Mapping[str, Any]] | None = None,
+    asset_factory: Callable[..., Iterable[Any]] | None = None,
+    validator_factory: Callable[..., Iterable[Any]] | None = None,
+    metadata_factory: Callable[..., Mapping[str, Any]] | None = None,
 ) -> Callable[..., ModuleSpec]:
     """Lift a legacy `(boxes, lines)` helper into the module abstraction."""
 

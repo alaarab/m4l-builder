@@ -50,7 +50,7 @@ _DECORATION_MAXCLASSES = frozenset(
 )
 
 
-def lint_graph(boxes: list, lines: list, *, device_type: str = None) -> list[ValidationIssue]:
+def lint_graph(boxes: list, lines: list, *, device_type: str | None = None) -> list[ValidationIssue]:
     """Validate common structural and Max-specific graph rules."""
     issues = []
     seen_ids = {}

@@ -3,10 +3,22 @@ extracted from the Device god class. Mixed into Device via the MRO, so
 ``device.add_step_bars(...)`` etc. are unchanged (same call, same output)."""
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
 from .parameters import ParameterSpec
+from .ui_registry import DeviceWidgetMethods
 
 
-class CompositeWidgetsMixin:
+class CompositeWidgetsMixin(DeviceWidgetMethods):
+    if TYPE_CHECKING:
+        # Provided by Device, the only class this mixin is mixed into.
+        width: float
+        add_jsui: Callable[..., str]
+        add_v8ui: Callable[..., str]
+        add_subpatcher: Callable[..., str]
+        _panel_slice: Callable[..., Any]
+
     def add_compiled_display(
         self,
         base_id: str,
@@ -15,22 +27,22 @@ class CompositeWidgetsMixin:
         *,
         overlay_js: str,
         overlay_filename: str,
-        attrs: dict = None,
+        attrs: dict | None = None,
         signal_src=None,
-        gate_src: tuple = None,
+        gate_src: tuple | None = None,
         inset: tuple = (0, 0, 0, 0),
         scope_numinlets: int = 2,
         scope_numoutlets: int = 1,
-        scope_outlettype: list = None,
-        scope_patching_rect: list = None,
+        scope_outlettype: list | None = None,
+        scope_patching_rect: list | None = None,
         overlay_inlets: int = 1,
         overlay_outlets: int = 0,
-        overlay_outlettype: list = None,
-        overlay_patching_rect: list = None,
+        overlay_outlettype: list | None = None,
+        overlay_patching_rect: list | None = None,
         overlay_behind: bool = False,
-        overlay_bgcolor: list = None,
+        overlay_bgcolor: list | None = None,
         overlay_content_address: bool = False,
-        varname: str = None,
+        varname: str | None = None,
         validate_contract: bool = True,
     ) -> tuple:
         """Layer a native compiled-Max display together with a ``v8ui`` overlay.
@@ -136,19 +148,19 @@ class CompositeWidgetsMixin:
         *,
         vmin: float = 0.0,
         vmax: float = 100.0,
-        initial: float = None,
+        initial: float | None = None,
         unit: str = "",
         decimals: int = 1,
         accent: str = "0.30, 0.80, 0.84",
         exponent: float = 1.0,
-        shortname: str = None,
-        js_filename: str = None,
-        varname: str = None,
+        shortname: str | None = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
         unitstyle: int = 1,
-        bipolar: bool = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        bipolar: bool | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM hand-drawn knob (v8ui) bound to a HIDDEN automatable param.
@@ -186,7 +198,7 @@ class CompositeWidgetsMixin:
         # so it never renders in the device UI, but stays a registered Live
         # parameter (registration is via parameter_enable + saved attrs, not
         # presentation). It lives only in the patching view.
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dial_id, param_name, [rect[0], rect[1], 30, 30],
             min_val=vmin, max_val=vmax, initial=initial,
             parameter_exponent=exponent, showname=0, shownumber=0,
@@ -229,12 +241,12 @@ class CompositeWidgetsMixin:
         off_label: str = "OFF",
         accent: str = "0.30, 0.80, 0.84",
         initial: int = 0,
-        shortname: str = None,
-        js_filename: str = None,
-        varname: str = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        shortname: str | None = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM hand-drawn pill toggle (v8ui) bound to a HIDDEN automatable
@@ -251,7 +263,7 @@ class CompositeWidgetsMixin:
         spec = ParameterSpec.enumerated(
             param_name, (off_label, on_label), shortname=shortname,
             initial=1 if initial else 0, initial_enable=True)
-        self.add_toggle(  # type: ignore[attr-defined]
+        self.add_toggle(
             tog_id, param_name, [rect[0], rect[1], 20, 20], parameter=spec,
             presentation=0, patching_rect=[40, 640, 20, 20],
         )
@@ -285,11 +297,11 @@ class CompositeWidgetsMixin:
         accent: str = "0.30, 0.80, 0.84",
         label: str = "",
         initial: int = 0,
-        js_filename: str = None,
-        varname: str = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM hand-drawn segmented selector / tab bar (v8ui) bound to a
@@ -303,7 +315,7 @@ class CompositeWidgetsMixin:
         tab_id = f"{id}_tab"
         spec = ParameterSpec.enumerated(
             param_name, options, initial=int(initial), initial_enable=True)
-        self.add_tab(  # type: ignore[attr-defined]
+        self.add_tab(
             tab_id, param_name, [rect[0], rect[1], 40, 18], options=options,
             parameter=spec, presentation=0, patching_rect=[40, 660, 40, 18],
         )
@@ -334,15 +346,15 @@ class CompositeWidgetsMixin:
         rect: list,
         *,
         glyphs: list,
-        option_labels: list = None,
+        option_labels: list | None = None,
         accent: str = "0.30, 0.80, 0.84",
         label: str = "",
         initial: int = 0,
-        js_filename: str = None,
-        varname: str = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a compact row of hand-drawn GLYPH buttons (a premium device's mode-glyphs)
@@ -358,7 +370,7 @@ class CompositeWidgetsMixin:
         tab_id = f"{id}_tab"
         spec = ParameterSpec.enumerated(
             param_name, labels, initial=int(initial), initial_enable=True)
-        self.add_tab(  # type: ignore[attr-defined]
+        self.add_tab(
             tab_id, param_name, [rect[0], rect[1], 40, 18], options=labels,
             parameter=spec, presentation=0, patching_rect=[40, 680, 40, 18],
         )
@@ -388,17 +400,17 @@ class CompositeWidgetsMixin:
         param_name: str,
         rect: list,
         *,
-        options: list = None,
-        glyphs: list = None,
-        option_labels: list = None,
+        options: list | None = None,
+        glyphs: list | None = None,
+        option_labels: list | None = None,
         accent: str = "0.30, 0.80, 0.84",
         label: str = "",
         initial: int = 0,
-        js_filename: str = None,
-        varname: str = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a COMPACT cycle / select button (one cell that steps through options
@@ -417,7 +429,7 @@ class CompositeWidgetsMixin:
         tab_id = f"{id}_tab"
         spec = ParameterSpec.enumerated(
             param_name, enum_labels, initial=int(initial), initial_enable=True)
-        self.add_tab(  # type: ignore[attr-defined]
+        self.add_tab(
             tab_id, param_name, [rect[0], rect[1], 40, 18], options=enum_labels,
             parameter=spec, presentation=0, patching_rect=[40, 700, 40, 18],
         )
@@ -449,20 +461,20 @@ class CompositeWidgetsMixin:
         *,
         vmin: float = 0.0,
         vmax: float = 100.0,
-        initial: float = None,
+        initial: float | None = None,
         unit: str = "",
         decimals: int = 1,
         accent: str = "0.30, 0.80, 0.84",
         orientation: int = 0,
         exponent: float = 1.0,
-        shortname: str = None,
-        js_filename: str = None,
-        varname: str = None,
+        shortname: str | None = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
         unitstyle: int = 1,
-        bipolar: bool = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        bipolar: bool | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM hand-drawn fader (v8ui) bound to a HIDDEN automatable param.
@@ -503,7 +515,7 @@ class CompositeWidgetsMixin:
         # parameter. Its STORED initial (min/max/initial) must match the v8ui's
         # initial draw or it loads desynced (same gotcha as the knob). It lives only
         # in the patching view; y=720 keeps it clear of the knob/toggle/tab stack.
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dial_id, param_name, [rect[0], rect[1], 30, 30],
             min_val=vmin, max_val=vmax, initial=initial,
             parameter_exponent=exponent, showname=0, shownumber=0,
@@ -544,21 +556,21 @@ class CompositeWidgetsMixin:
         *,
         vmin: float = 0.0,
         vmax: float = 100.0,
-        initial: float = None,
+        initial: float | None = None,
         step: float = 1.0,
-        fine_step: float = None,
+        fine_step: float | None = None,
         unit: str = "",
         decimals: int = 0,
         label: str = "",
         accent: str = "0.30, 0.80, 0.84",
         scrub: bool = True,
-        shortname: str = None,
-        js_filename: str = None,
-        varname: str = None,
-        unitstyle: int = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        shortname: str | None = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
+        unitstyle: int | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM hand-drawn +/- numeric stepper (v8ui) bound to a HIDDEN
@@ -592,7 +604,7 @@ class CompositeWidgetsMixin:
         # so it never renders in the device UI, but stays a registered Live
         # parameter. A stepped numeric range is continuous-with-step, so live.dial
         # (not live.tab) is correct; the v8ui owns the step grid.
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dial_id, param_name, [rect[0], rect[1], 30, 30],
             min_val=vmin, max_val=vmax, initial=initial,
             showname=0, shownumber=0, shortname=shortname,
@@ -632,22 +644,22 @@ class CompositeWidgetsMixin:
         *,
         vmin: float = 0.0,
         vmax: float = 100.0,
-        initial: float = None,
+        initial: float | None = None,
         unit: str = "",
         decimals: int = 1,
         accent: str = "0.30, 0.80, 0.84",
         exponent: float = 1.0,
-        shortname: str = None,
-        label: str = None,
+        shortname: str | None = None,
+        label: str | None = None,
         show_bar: bool = True,
         align: str = "right",
-        js_filename: str = None,
-        varname: str = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
         unitstyle: int = 1,
-        bipolar: bool = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        bipolar: bool | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM draggable numeric readout (v8ui) bound to a HIDDEN
@@ -688,7 +700,7 @@ class CompositeWidgetsMixin:
         # Hidden automatable param: a live.dial NOT in presentation (presentation=0)
         # so it never renders in the device UI, but stays a registered, automatable
         # Live parameter. It lives only in the patching view.
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dial_id, param_name, [rect[0], rect[1], 30, 30],
             min_val=vmin, max_val=vmax, initial=initial,
             parameter_exponent=exponent, showname=0, shownumber=0,
@@ -730,29 +742,29 @@ class CompositeWidgetsMixin:
         *,
         vmin_x: float = 20.0,
         vmax_x: float = 20000.0,
-        initial_x: float = None,
+        initial_x: float | None = None,
         unit_x: str = "Hz",
         decimals_x: int = 0,
         exponent_x: float = 3.0,
         unitstyle_x: int = 3,        # constants.UNITSTYLE_HZ
         vmin_y: float = -15.0,
         vmax_y: float = 15.0,
-        initial_y: float = None,
+        initial_y: float | None = None,
         unit_y: str = "dB",
         decimals_y: int = 1,
         exponent_y: float = 1.0,
         unitstyle_y: int = 4,        # constants.UNITSTYLE_DB
-        label_x: str = None,
-        label_y: str = None,
+        label_x: str | None = None,
+        label_y: str | None = None,
         accent: str = "0.30, 0.80, 0.84",
         draw_curve: bool = True,
-        shortname_x: str = None,
-        shortname_y: str = None,
-        js_filename: str = None,
-        varname: str = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        shortname_x: str | None = None,
+        shortname_y: str | None = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM draggable curve node (v8ui) bound to TWO HIDDEN automatable
@@ -794,14 +806,14 @@ class CompositeWidgetsMixin:
         # so they never render in the device UI, but stay registered Live parameters.
         # The SAME exponent/unitstyle as the v8ui's axis keeps the drawn node aligned
         # with Live's readout. outlet 0 = display-units value (outlet 1 is normalized).
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dialx_id, param_x, [rect[0], rect[1], 30, 30],
             min_val=vmin_x, max_val=vmax_x, initial=initial_x,
             parameter_exponent=exponent_x, showname=0, shownumber=0,
             shortname=shortname_x, presentation=0, unitstyle=unitstyle_x,
             patching_rect=[40, 600, 30, 30],
         )
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dialy_id, param_y, [rect[0], rect[1], 30, 30],
             min_val=vmin_y, max_val=vmax_y, initial=initial_y,
             parameter_exponent=exponent_y, showname=0, shownumber=0,
@@ -855,30 +867,30 @@ class CompositeWidgetsMixin:
         *,
         vminx: float = 0.0,
         vmaxx: float = 1.0,
-        initialx: float = None,
+        initialx: float | None = None,
         vminy: float = 0.0,
         vmaxy: float = 1.0,
-        initialy: float = None,
+        initialy: float | None = None,
         unitx: str = "",
         unity: str = "",
         decimals: int = 2,
-        label_x: str = None,
-        label_y: str = None,
+        label_x: str | None = None,
+        label_y: str | None = None,
         accent: str = "0.30, 0.80, 0.84",
-        accent2: str = None,
+        accent2: str | None = None,
         exponent_x: float = 1.0,
         exponent_y: float = 1.0,
         unitstyle: int = 1,
-        bipolar_x: bool = None,
-        bipolar_y: bool = None,
-        short_x: str = None,
-        short_y: str = None,
+        bipolar_x: bool | None = None,
+        bipolar_y: bool | None = None,
+        short_x: str | None = None,
+        short_y: str | None = None,
         show_readout: bool = True,
-        js_filename: str = None,
-        varname: str = None,
-        bg_hi: list = None,
-        bg_lo: list = None,
-        device_height: float = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
+        bg_hi: list | None = None,
+        bg_lo: list | None = None,
+        device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
         """Add a PREMIUM hand-drawn 2D XY pad (v8ui) bound to TWO HIDDEN automatable
@@ -917,14 +929,14 @@ class CompositeWidgetsMixin:
         # (presentation=0) so they never render, but stay registered Live params.
         dialx_id = f"{id}_dialx"
         dialy_id = f"{id}_dialy"
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dialx_id, param_x, [rect[0], rect[1], 30, 30],
             min_val=vminx, max_val=vmaxx, initial=initialx,
             parameter_exponent=exponent_x, showname=0, shownumber=0,
             shortname=short_x, presentation=0, unitstyle=unitstyle,
             patching_rect=[40, 600, 30, 30],
         )
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             dialy_id, param_y, [rect[0], rect[1], 30, 30],
             min_val=vminy, max_val=vmaxy, initial=initialy,
             parameter_exponent=exponent_y, showname=0, shownumber=0,
@@ -975,17 +987,17 @@ class CompositeWidgetsMixin:
         rect: list,
         *,
         params: tuple = ("Attack", "Decay", "Sustain", "Release"),
-        shortnames: tuple = None,
+        shortnames: tuple | None = None,
         max_attack_ms: float = 2000.0,
         max_decay_ms: float = 4000.0,
         max_release_ms: float = 8000.0,
         initial: tuple = (10.0, 200.0, 0.7, 400.0),
-        unitstyles: tuple = None,
+        unitstyles: tuple | None = None,
         accent: str = "0.36, 0.92, 0.96, 1.0",
         bg: str = "0.05, 0.05, 0.06, 1.0",
         sustain_frac: float = 0.16,
-        js_filename: str = None,
-        varname: str = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
     ) -> str:
         """Add a DRAGGABLE ADSR envelope editor (jsui) bound to FOUR HIDDEN
         automatable ``live.dial`` params (catalog kit engine #1 — the
@@ -1031,7 +1043,7 @@ class CompositeWidgetsMixin:
         dial_ids = []
         for i in range(4):
             dial_id = f"{id}_dial{i}"
-            self.add_dial(  # type: ignore[attr-defined]
+            self.add_dial(
                 dial_id, params[i], [rect[0], rect[1], 30, 30],
                 min_val=0.0, max_val=maxes[i], initial=initial[i],
                 showname=0, shownumber=0, shortname=shortnames[i],
@@ -1078,8 +1090,8 @@ class CompositeWidgetsMixin:
         accent: str = "0.36, 0.92, 0.96, 1.0",
         bg: str = "0.05, 0.05, 0.06, 1.0",
         stored_only: bool = True,
-        js_filename: str = None,
-        varname: str = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
     ) -> str:
         """Add a GENERAL BREAKPOINT CURVE EDITOR (jsui) whose points/tension/
         grid/snap persist through hidden ``live.dial`` parameter hosts
@@ -1168,7 +1180,7 @@ class CompositeWidgetsMixin:
         # --- hidden STATE hosts: count + per-point X/Y (presentation=0 keeps
         # them off the face; stored-only keeps them out of the automation UI).
         count_id = f"{id}_count"
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             count_id, f"{state_param} Points", [rect[0], rect[1], 30, 30],
             min_val=2.0, max_val=float(max_points), initial=float(len(points)),
             showname=0, shownumber=0, presentation=0,
@@ -1180,7 +1192,7 @@ class CompositeWidgetsMixin:
             px, py = points[k - 1] if k <= len(points) else (0.0, 0.0)
             for axis, val in (("x", px), ("y", py)):
                 coord_id = f"{id}_p{k}{axis}"
-                self.add_dial(  # type: ignore[attr-defined]
+                self.add_dial(
                     coord_id, f"{state_param} P{k} {axis.upper()}",
                     [rect[0], rect[1], 30, 30],
                     min_val=0.0, max_val=1.0, initial=val,
@@ -1203,7 +1215,7 @@ class CompositeWidgetsMixin:
         )
         for i, (cid, longname, vmin, vmax, vinit, ustyle, steps, msg) in enumerate(
                 control_specs):
-            self.add_dial(  # type: ignore[attr-defined]
+            self.add_dial(
                 cid, longname, [rect[0], rect[1], 30, 30],
                 min_val=vmin, max_val=vmax, initial=vinit,
                 showname=0, shownumber=0, presentation=0,
@@ -1283,18 +1295,18 @@ class CompositeWidgetsMixin:
         state_param: str = "Steps",
         max_steps: int = 16,
         init_steps: int = 8,
-        init_values: tuple = None,
+        init_values: tuple | None = None,
         init_value: float = 1.0,
         reset_value: float = 0.0,
         init_link: int = 0,
-        steps_rect: list = None,
-        link_rect: list = None,
+        steps_rect: list | None = None,
+        link_rect: list | None = None,
         link_labels: tuple = ("Off", "Link"),
         accent: str = "0.36, 0.92, 0.96, 1.0",
         bg: str = "0.05, 0.05, 0.06, 1.0",
         stored_only: bool = True,
-        js_filename: str = None,
-        varname: str = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
     ) -> str:
         """Add a STEP-BAR LANE EDITOR (jsui) whose bar values persist through
         hidden ``live.dial`` parameter hosts (catalog kit engines
@@ -1383,7 +1395,7 @@ class CompositeWidgetsMixin:
         # --- hidden STATE hosts: count + per-step value (presentation=0 keeps
         # them off the face; stored-only keeps them out of the automation UI).
         count_id = f"{id}_steps"
-        self.add_dial(  # type: ignore[attr-defined]
+        self.add_dial(
             count_id, f"{state_param} N", [rect[0], rect[1], 30, 30],
             min_val=2.0, max_val=float(max_steps), initial=float(init_steps),
             showname=0, shownumber=0, presentation=0,
@@ -1393,7 +1405,7 @@ class CompositeWidgetsMixin:
         slot_ids = []
         for k in range(1, max_steps + 1):
             slot_id = f"{id}_s{k}"
-            self.add_dial(  # type: ignore[attr-defined]
+            self.add_dial(
                 slot_id, f"{state_param} S{k}", [rect[0], rect[1], 30, 30],
                 min_val=0.0, max_val=1.0, initial=slots[k - 1],
                 showname=0, shownumber=0, presentation=0,
@@ -1405,11 +1417,11 @@ class CompositeWidgetsMixin:
 
         # --- native automatable params: STEPS numbox + LINK toggle.
         num_id = f"{id}_num"
-        num_kwargs = {}
+        num_kwargs: dict[str, Any] = {}
         if steps_rect is None:
             steps_rect = [rect[0], rect[1], 40, 15]
             num_kwargs["presentation"] = 0
-        self.add_number_box(  # type: ignore[attr-defined]
+        self.add_number_box(
             num_id, f"{state_param} Count", steps_rect,
             min_val=2.0, max_val=float(max_steps), initial=float(init_steps),
             unitstyle=UNITSTYLE_INT,
@@ -1426,11 +1438,11 @@ class CompositeWidgetsMixin:
         self.add_line(num_id, 0, count_id, 0)
 
         link_id = f"{id}_link"
-        link_kwargs = {}
+        link_kwargs: dict[str, Any] = {}
         if link_rect is None:
             link_rect = [rect[0], rect[1], 40, 15]
             link_kwargs["presentation"] = 0
-        self.add_live_text(  # type: ignore[attr-defined]
+        self.add_live_text(
             link_id, f"{state_param} Link", link_rect,
             text_off=str(link_labels[0]), text_on=str(link_labels[1]), mode=1,
             patching_rect=[700, 560, 40, 15],
@@ -1503,8 +1515,8 @@ class CompositeWidgetsMixin:
         radius: float = 14.0,
         drag_px: float = 90.0,
         host_park: tuple = (900, 900, 1, 1),
-        js_filename: str = None,
-        varname: str = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
     ) -> dict:
         """Add an interactive ARC-KNOB CLUSTER — a bespoke premium control grid
         (v8ui) backed by parked ``live.dial`` param hosts, so drag/automation/
@@ -1531,7 +1543,7 @@ class CompositeWidgetsMixin:
             arc_knob_cluster_js,
         )
 
-        self.add_v8ui(  # type: ignore[attr-defined]
+        self.add_v8ui(
             id, rect,
             js_code=arc_knob_cluster_js(
                 knobs, accent=accent, cols=cols, radius=radius, drag_px=drag_px),
@@ -1553,7 +1565,7 @@ class CompositeWidgetsMixin:
             key = k["key"]
             hid = f"{id}_{key}"
             name = k.get("name") or str(k["label"]).title()
-            self.add_dial(  # type: ignore[attr-defined]
+            self.add_dial(
                 hid, name, list(host_park),
                 min_val=float(k["min"]), max_val=float(k["max"]),
                 initial=float(k.get("init", k["min"])),
@@ -1577,14 +1589,14 @@ class CompositeWidgetsMixin:
         rect: list,
         *,
         theme=None,
-        lo: str = None,
-        hi: str = None,
-        border: str = None,
+        lo: str | None = None,
+        hi: str | None = None,
+        border: str | None = None,
         radius: float = 8.0,
         inset: float = 4.0,
         noise: bool = True,
-        js_filename: str = None,
-        varname: str = None,
+        js_filename: str | None = None,
+        varname: str | None = None,
     ) -> str:
         """Add a SHOWCASE frosted-glass device background (v8ui) that exercises the
         premium drawing techniques (``ds_glass_panel`` + ``ds_inner_shadow`` +
@@ -1643,9 +1655,9 @@ class CompositeWidgetsMixin:
         name: str = "module",
         numinlets: int = 1,
         numoutlets: int = 1,
-        outlettype: list = None,
-        patching_rect: list = None,
-        args: list = None,
+        outlettype: list | None = None,
+        patching_rect: list | None = None,
+        args: list | None = None,
     ):
         """Embed a Subpatcher as a VISIBLE bpatcher module (DSP + UI shown).
 
@@ -1697,7 +1709,7 @@ class CompositeWidgetsMixin:
         name: str = "component",
         numinlets: int = 1,
         numoutlets: int = 1,
-        outlettype: list = None,
+        outlettype: list | None = None,
     ) -> list:
         """Stamp ONE Subpatcher component ``count`` times as embedded bpatchers —
         the library P11 rack (grounded in measured device conventions: six ``bpatcher args=[i]``
@@ -2223,11 +2235,11 @@ class CompositeWidgetsMixin:
         button_id: str = "flyout_expand",
         text_on: str = "EXPAND",
         text_off: str = "EXPAND",
-        show_send: str = None,
-        hide_send: str = None,
+        show_send: str | None = None,
+        hide_send: str | None = None,
         window_flags: str = "float grow",
-        box_rect: list = None,
-        button_kwargs: dict = None,
+        box_rect: list | None = None,
+        button_kwargs: dict | None = None,
     ) -> str:
         """Add an expandable fly-out window (the M4L "fly-out" pattern).
 
@@ -2282,11 +2294,11 @@ class CompositeWidgetsMixin:
         content.add_line("_fly_exec", 0, "_fly_this", 0)
 
         # --- Main view: EXPAND param toggle -> sel -> send show/hide ---
-        bkw = {"text_on": text_on, "text_off": text_off, "rounded": 4,
-               "fontsize": 7.5, "mode": 1}
+        bkw: dict[str, Any] = {"text_on": text_on, "text_off": text_off, "rounded": 4,
+                               "fontsize": 7.5, "mode": 1}
         if button_kwargs:
             bkw.update(button_kwargs)
-        self.add_live_text(button_id, param_name, expand_rect,  # type: ignore[attr-defined]  # generated via setattr below
+        self.add_live_text(button_id, param_name, expand_rect,
                            parameter=ParameterSpec(
                                name=param_name, parameter_type=2,
                                enum=["HIDE", "SHOW"], initial=[0],
@@ -2311,12 +2323,12 @@ class CompositeWidgetsMixin:
         *,
         mini_width: int,
         rect: list,
-        full_width: int = None,
+        full_width: int | None = None,
         param_name: str = "Size",
         button_id: str = "width_collapse",
         text_full: str = "FULL",
         text_mini: str = "MINI",
-        button_kwargs: dict = None,
+        button_kwargs: dict | None = None,
     ) -> str:
         """Add a FULL/MINI width-collapse toggle (runtime device resize).
 
@@ -2339,11 +2351,11 @@ class CompositeWidgetsMixin:
         """
         if full_width is None:
             full_width = round(self.width)
-        bkw = {"text_on": text_mini, "text_off": text_full, "rounded": 4,
-               "fontsize": 7.5, "mode": 1}
+        bkw: dict[str, Any] = {"text_on": text_mini, "text_off": text_full, "rounded": 4,
+                               "fontsize": 7.5, "mode": 1}
         if button_kwargs:
             bkw.update(button_kwargs)
-        self.add_live_text(button_id, param_name, rect,  # type: ignore[attr-defined]  # generated via setattr below
+        self.add_live_text(button_id, param_name, rect,
                            parameter=ParameterSpec(
                                name=param_name, parameter_type=2,
                                enum=[text_full, text_mini], initial=[0],

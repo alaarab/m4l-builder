@@ -41,9 +41,11 @@ device.add_dial("gain", "Gain", [10, 6, 50, 90],
                 unitstyle=4, annotation_name="Gain")
 
 # Raw Max objects. AudioEffect already added `obj-plugin` / `obj-plugout`.
-device.add_newobj("mul_l", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
-device.add_newobj("mul_r", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
-device.add_newobj("db2a", "dbtoa", numinlets=1, numoutlets=1, outlettype=[""])
+# Inlet/outlet counts and outlet types are inferred from the object text; pass
+# numinlets=/numoutlets= for objects whose shape isn't in the text (gen~, p, js).
+device.add_newobj("mul_l", "*~ 1.")
+device.add_newobj("mul_r", "*~ 1.")
+device.add_newobj("db2a", "dbtoa")
 
 # Wire it up: dial -> dbtoa -> gain cells, audio in -> gain -> audio out.
 device.add_line("gain", 0, "db2a", 0)

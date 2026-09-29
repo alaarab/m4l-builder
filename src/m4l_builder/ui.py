@@ -5,6 +5,8 @@ don't interfere with the DSP wiring) and placed at the specified rect in
 presentation view.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from .constants import (
@@ -21,8 +23,8 @@ _PARAM_UNSET = object()
 def _resolve_parameter_spec(
     varname_or_spec,
     *,
-    parameter: ParameterSpec = None,
-    shortname: str = None,
+    parameter: ParameterSpec | None = None,
+    shortname: str | None = None,
     parameter_type: int = 0,
     minimum=None,
     maximum=None,
@@ -104,7 +106,7 @@ def _apply_info_view_annotations(box: dict, spec) -> None:
 
 def _presentation_box(id: str, maxclass: str, rect: list, *,
                       numinlets: int = 1, numoutlets: int = 0,
-                      patching_rect: list = None, **kwargs) -> dict:
+                      patching_rect: list | None = None, **kwargs) -> dict:
     """Internal helper for creating a presentation-mode box."""
     box = {
         "id": id,
@@ -120,8 +122,8 @@ def _presentation_box(id: str, maxclass: str, rect: list, *,
 
 
 def panel(id: str, rect: list, *, bgcolor: list, border: int = 0,
-          bordercolor: list = None, rounded: int = 0,
-          bgfillcolor: dict = None, shadow: int = 0, shape: int = 0,
+          bordercolor: list | None = None, rounded: int = 0,
+          bgfillcolor: dict | None = None, shadow: int = 0, shape: int = 0,
           **kwargs) -> dict:
     """Create a panel background element.
 
@@ -157,19 +159,19 @@ def panel(id: str, rect: list, *, bgcolor: list, border: int = 0,
 
 def dial(id: str, varname: str, rect: list, *,
          min_val: float = 0.0, max_val: float = 100.0,
-         initial: float = 50.0, shortname: str = None,
-         unitstyle: int = UNITSTYLE_PERCENT, patching_rect: list = None,
-         appearance: int = 0, needlemode: int = None,
-         activedialcolor: list = None, activefgdialcolor: list = None,
-         fgdialcolor: list = None, tricolor: list = None,
-         panelcolor: list = None,
-         activeneedlecolor: list = None, showname: int = 1,
+         initial: float = 50.0, shortname: str | None = None,
+         unitstyle: int = UNITSTYLE_PERCENT, patching_rect: list | None = None,
+         appearance: int = 0, needlemode: int | None = None,
+         activedialcolor: list | None = None, activefgdialcolor: list | None = None,
+         fgdialcolor: list | None = None, tricolor: list | None = None,
+         panelcolor: list | None = None,
+         activeneedlecolor: list | None = None, showname: int = 1,
          shownumber: int = 1, parameter_exponent: float = 1.0,
-         triangle: int = 0, focusbordercolor: list = None,
-         parameter: ParameterSpec = None, invisible: int = None,
-         annotation_name: str = None, info: str = None, units: str = None,
-         steps: int = None,
-         valuepopup: int = None, valuepopuplabel: int = None,
+         triangle: int = 0, focusbordercolor: list | None = None,
+         parameter: ParameterSpec | None = None, invisible: int | None = None,
+         annotation_name: str | None = None, info: str | None = None, units: str | None = None,
+         steps: int | None = None,
+         valuepopup: int | None = None, valuepopuplabel: int | None = None,
          **kwargs) -> dict:
     """Create a live.dial with parameter storage.
 
@@ -270,11 +272,11 @@ def dial(id: str, varname: str, rect: list, *,
 
 
 def tab(id: str, varname: str, rect: list, *,
-        options: list, bgcolor: list = None, bgoncolor: list = None,
-        textcolor: list = None, textoncolor: list = None,
-        patching_rect: list = None, rounded: float = 0.0,
+        options: list, bgcolor: list | None = None, bgoncolor: list | None = None,
+        textcolor: list | None = None, textoncolor: list | None = None,
+        patching_rect: list | None = None, rounded: float = 0.0,
         spacing_x: float = 0.0, multiline: int = 0, appearance: int = 0,
-        parameter: ParameterSpec = None,
+        parameter: ParameterSpec | None = None,
         **kwargs) -> dict:
     """Create a live.tab selector.
 
@@ -347,11 +349,11 @@ def tab(id: str, varname: str, rect: list, *,
     return {"box": box}
 
 
-def toggle(id: str, varname: str, rect: list, *, shortname: str = None,
-           patching_rect: list = None, activebgcolor: list = None,
-           activebgoncolor: list = None, rounded: float = 0.0,
+def toggle(id: str, varname: str, rect: list, *, shortname: str | None = None,
+           patching_rect: list | None = None, activebgcolor: list | None = None,
+           activebgoncolor: list | None = None, rounded: float = 0.0,
            labels: tuple = ("off", "on"),
-           parameter: ParameterSpec = None,
+           parameter: ParameterSpec | None = None,
            **kwargs) -> dict:
     """Create a live.toggle with parameter storage.
 
@@ -388,10 +390,10 @@ def toggle(id: str, varname: str, rect: list, *, shortname: str = None,
     return {"box": box}
 
 
-def comment(id: str, rect: list, text: str, *, textcolor: list = None,
+def comment(id: str, rect: list, text: str, *, textcolor: list | None = None,
             fontsize: float = 10.0, fontname: str = "Ableton Sans Medium",
-            justification: int = 0, linecount: int = None, fontface: int = None,
-            patching_rect: list = None, **kwargs) -> dict:
+            justification: int = 0, linecount: int | None = None, fontface: int | None = None,
+            patching_rect: list | None = None, **kwargs) -> dict:
     """Create a live.comment label.
 
     A live.comment is SINGLE-LINE by default and TRUNCATES text wider than its rect
@@ -425,9 +427,9 @@ def comment(id: str, rect: list, text: str, *, textcolor: list = None,
 
 
 def meter(id: str, rect: list, *, orientation: int = 0,
-          patching_rect: list = None, coldcolor: list = None,
-          warmcolor: list = None, hotcolor: list = None,
-          overloadcolor: list = None, **kwargs) -> dict:
+          patching_rect: list | None = None, coldcolor: list | None = None,
+          warmcolor: list | None = None, hotcolor: list | None = None,
+          overloadcolor: list | None = None, **kwargs) -> dict:
     """Create a live.meter~ level meter."""
     extra: dict[str, Any] = {
         "orientation": orientation,
@@ -451,10 +453,10 @@ def meter(id: str, rect: list, *, orientation: int = 0,
 
 
 def menu(id: str, varname: str, rect: list, *, options: list,
-         shortname: str = None, patching_rect: list = None,
-         bgcolor: list = None, bgoncolor: list = None,
-         textcolor: list = None, textoncolor: list = None,
-         parameter: ParameterSpec = None,
+         shortname: str | None = None, patching_rect: list | None = None,
+         bgcolor: list | None = None, bgoncolor: list | None = None,
+         textcolor: list | None = None, textoncolor: list | None = None,
+         parameter: ParameterSpec | None = None,
          **kwargs) -> dict:
     """Create a live.menu dropdown enum selector (automatable Enum param).
 
@@ -509,12 +511,12 @@ def menu(id: str, varname: str, rect: list, *, options: list,
 
 def number_box(id: str, varname: str, rect: list, *,
                min_val: float = 0.0, max_val: float = 127.0,
-               initial: float = 0.0, shortname: str = None,
-               unitstyle: int = UNITSTYLE_FLOAT, patching_rect: list = None,
+               initial: float = 0.0, shortname: str | None = None,
+               unitstyle: int = UNITSTYLE_FLOAT, patching_rect: list | None = None,
                allow_wide_int_range: bool = False, appearance: int = 4,
-               lcdcolor: list = None, lcdbgcolor: list = None,
-               inactivelcdcolor: list = None,
-               parameter: ParameterSpec = None,
+               lcdcolor: list | None = None, lcdbgcolor: list | None = None,
+               inactivelcdcolor: list | None = None,
+               parameter: ParameterSpec | None = None,
                **kwargs) -> dict:
     """Create a live.numbox numeric display with parameter storage.
 
@@ -591,9 +593,9 @@ def number_box(id: str, varname: str, rect: list, *,
 
 def slider(id: str, varname: str, rect: list, *,
            min_val: float = 0.0, max_val: float = 1.0,
-           initial: float = 0.5, shortname: str = None,
+           initial: float = 0.5, shortname: str | None = None,
            unitstyle: int = UNITSTYLE_FLOAT, orientation: int = 0,
-           patching_rect: list = None, parameter: ParameterSpec = None,
+           patching_rect: list | None = None, parameter: ParameterSpec | None = None,
            **kwargs) -> dict:
     """Create a live.slider with parameter storage."""
     spec = _resolve_parameter_spec(
@@ -626,9 +628,9 @@ def slider(id: str, varname: str, rect: list, *,
     return {"box": box}
 
 
-def button(id: str, varname: str, rect: list, *, shortname: str = None,
-           bgcolor: list = None, bgoncolor: list = None, bordercolor: list = None,
-           patching_rect: list = None, parameter: ParameterSpec = None,
+def button(id: str, varname: str, rect: list, *, shortname: str | None = None,
+           bgcolor: list | None = None, bgoncolor: list | None = None, bordercolor: list | None = None,
+           patching_rect: list | None = None, parameter: ParameterSpec | None = None,
            **kwargs) -> dict:
     """Create a live.button (momentary trigger, parameter-enabled for automation).
 
@@ -669,11 +671,11 @@ def button(id: str, varname: str, rect: list, *, shortname: str = None,
     return {"box": box}
 
 
-def scope(id: str, rect: list, *, bgcolor: list = None, linecolor: list = None,
-          gridcolor: list = None, range_vals: list = None,
-          calccount: int = 64, patching_rect: list = None,
+def scope(id: str, rect: list, *, bgcolor: list | None = None, linecolor: list | None = None,
+          gridcolor: list | None = None, range_vals: list | None = None,
+          calccount: int = 64, patching_rect: list | None = None,
           smooth: int = 0, line_width: float = 1.0,
-          mode: str = None, activelinecolor: list = None,
+          mode: str | None = None, activelinecolor: list | None = None,
           decay_time: int = 0, **kwargs) -> dict:
     """Create a live.scope~ display.
 
@@ -716,13 +718,13 @@ def scope(id: str, rect: list, *, bgcolor: list = None, linecolor: list = None,
 
 
 def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
-              text_off: str = "OFF", bgcolor: list = None,
-              bgoncolor: list = None, textcolor: list = None,
-              textoncolor: list = None, fontname: str = "Ableton Sans Medium",
+              text_off: str = "OFF", bgcolor: list | None = None,
+              bgoncolor: list | None = None, textcolor: list | None = None,
+              textoncolor: list | None = None, fontname: str = "Ableton Sans Medium",
               fontsize: float = 10.0, rounded: float = 0.0, mode: int = 1,
-              outputmode: int = None, appearance: int = None,
-              shortname: str = None,
-              patching_rect: list = None, parameter: ParameterSpec = None,
+              outputmode: int | None = None, appearance: int | None = None,
+              shortname: str | None = None,
+              patching_rect: list | None = None, parameter: ParameterSpec | None = None,
               **kwargs) -> dict:
     """Create a live.text styled button/toggle.
 
@@ -818,8 +820,8 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
 
 
 def fpic(id: str, rect: list, *, pic: str = "", autofit: int = 1,
-         forceaspect: int = None, embed: int = None, hidden: int = None,
-         background: int = None, patching_rect: list = None, **kwargs) -> dict:
+         forceaspect: int | None = None, embed: int | None = None, hidden: int | None = None,
+         background: int | None = None, patching_rect: list | None = None, **kwargs) -> dict:
     """Create an ``fpic`` picture display (logo / background / SVG state graphic).
 
     NOT in the synced Max docs — every attr is observed (35
@@ -855,8 +857,8 @@ def fpic(id: str, rect: list, *, pic: str = "", autofit: int = 1,
 
 def live_gain(id: str, varname: str, rect: list, *, min_val: float = -70.0,
               max_val: float = 6.0, initial: float = 0.0,
-              shortname: str = None, orientation: int = 0,
-              patching_rect: list = None, parameter: ParameterSpec = None,
+              shortname: str | None = None, orientation: int = 0,
+              patching_rect: list | None = None, parameter: ParameterSpec | None = None,
               **kwargs) -> dict:
     """Create a live.gain~ fader with built-in meter."""
     spec = _resolve_parameter_spec(
@@ -890,13 +892,13 @@ def live_gain(id: str, varname: str, rect: list, *, min_val: float = -70.0,
 
 
 def multislider(id: str, rect: list, *, size: int = 16, min_val: float = 0.0,
-                max_val: float = 1.0, setminmax: list = None,
-                slidercolor: list = None, candicane2: list = None,
+                max_val: float = 1.0, setminmax: list | None = None,
+                slidercolor: list | None = None, candicane2: list | None = None,
                 orientation: int = 0, setstyle: int = 0,
-                patching_rect: list = None, display: bool = False,
-                ghostbar: int = None, ignoreclick: int = None,
-                thickness: float = None, signed: int = None,
-                bgcolor: list = None, **kwargs) -> dict:
+                patching_rect: list | None = None, display: bool = False,
+                ghostbar: int | None = None, ignoreclick: int | None = None,
+                thickness: float | None = None, signed: int | None = None,
+                bgcolor: list | None = None, **kwargs) -> dict:
     """Create a ``multislider`` — a strip of N bars (a multi-band meter / GR display
     / step editor).
 
@@ -944,8 +946,8 @@ def multislider(id: str, rect: list, *, size: int = 16, min_val: float = 0.0,
 
 
 def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
-         numoutlets: int = 0, outlettype: list = None,
-         patching_rect: list = None, **kwargs) -> dict:
+         numoutlets: int = 0, outlettype: list | None = None,
+         patching_rect: list | None = None, **kwargs) -> dict:
     """Create a jsui display for custom vector graphics via Max's mgraphics (Cairo) API.
 
     A bare ``jsui`` defaults to ``border 1`` — a 1px box OUTLINE Max draws at the
@@ -973,8 +975,8 @@ def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
 
 
 def v8ui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
-         numoutlets: int = 0, outlettype: list = None,
-         patching_rect: list = None, **kwargs) -> dict:
+         numoutlets: int = 0, outlettype: list | None = None,
+         patching_rect: list | None = None, **kwargs) -> dict:
     """Create a v8ui display for modern pointer-aware custom UI rendering.
 
     Like :func:`jsui`, a bare v8ui draws Max's default black 1px BORDER frame at
@@ -1008,15 +1010,15 @@ def v8ui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
     return {"box": box}
 
 
-def adsrui(id: str, rect: list, *, attack_domain: list = None,
-           decay_domain: list = None, release_domain: list = None,
-           attack_time: float = None, decay_time: float = None,
-           release_time: float = None, enable_initial: int = None,
-           enable_peak: int = None, enable_final: int = None,
-           outputmode: int = None, show_slopehandles: int = None,
-           tethering: int = None, activebgcolor: list = None,
-           activelinecolor: list = None, activehandlecolor: list = None,
-           patching_rect: list = None, **kwargs) -> dict:
+def adsrui(id: str, rect: list, *, attack_domain: list | None = None,
+           decay_domain: list | None = None, release_domain: list | None = None,
+           attack_time: float | None = None, decay_time: float | None = None,
+           release_time: float | None = None, enable_initial: int | None = None,
+           enable_peak: int | None = None, enable_final: int | None = None,
+           outputmode: int | None = None, show_slopehandles: int | None = None,
+           tethering: int | None = None, activebgcolor: list | None = None,
+           activelinecolor: list | None = None, activehandlecolor: list | None = None,
+           patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``live.adsrui`` ADSR envelope editor.
 
     Observed Max behaviour (2 instances, identical structure). Drag the
@@ -1058,14 +1060,14 @@ def adsrui(id: str, rect: list, *, attack_domain: list = None,
     return {"box": box}
 
 
-def live_drop(id: str, rect: list, *, param_name: str = None,
-              invisible: int = 1, shortname: str = None,
-              decodemode: int = None, color: list = None,
-              textcolor: list = None, bordercolor: list = None,
-              focusbordercolor: list = None, legend: str = None,
-              textjustification: int = None, fontname: str = None,
-              fontsize: float = None, ignoreclick: int = None,
-              patching_rect: list = None, **kwargs) -> dict:
+def live_drop(id: str, rect: list, *, param_name: str | None = None,
+              invisible: int = 1, shortname: str | None = None,
+              decodemode: int | None = None, color: list | None = None,
+              textcolor: list | None = None, bordercolor: list | None = None,
+              focusbordercolor: list | None = None, legend: str | None = None,
+              textjustification: int | None = None, fontname: str | None = None,
+              fontsize: float | None = None, ignoreclick: int | None = None,
+              patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``live.drop`` file/sample drop target.
 
     DOC-GROUNDED (live.drop maxref; 0 library instances, so the synced doc is the
@@ -1128,9 +1130,9 @@ def live_drop(id: str, rect: list, *, param_name: str = None,
     return {"box": box}
 
 
-def bpatcher(id: str, rect: list, patcher_name: str, *, args: str = None,
+def bpatcher(id: str, rect: list, patcher_name: str, *, args: str | None = None,
              embed: int = 1, numinlets: int = 0, numoutlets: int = 0,
-             patching_rect: list = None, **kwargs) -> dict:
+             patching_rect: list | None = None, **kwargs) -> dict:
     """Create a bpatcher embeddable sub-patcher.
 
     embed: 1 stores the sub-patch inside the device file.
@@ -1152,8 +1154,8 @@ def bpatcher(id: str, rect: list, patcher_name: str, *, args: str = None,
     return {"box": box}
 
 
-def swatch(id: str, rect: list, *, compatibility: int = None,
-           parameter_enable: int = None, patching_rect: list = None,
+def swatch(id: str, rect: list, *, compatibility: int | None = None,
+           parameter_enable: int | None = None, patching_rect: list | None = None,
            **kwargs) -> dict:
     """Create a ``swatch`` colour picker / display.
 
@@ -1185,11 +1187,11 @@ def swatch(id: str, rect: list, *, compatibility: int = None,
 
 
 def textedit(id: str, rect: list, *, fontname: str = "Ableton Sans Medium",
-             fontsize: float = 10.0, text: str = None, textcolor: list = None,
-             bgcolor: list = None, textjustification: int = None,
-             keymode: int = None, tabmode: int = None, border: float = None,
-             rounded: float = None, parameter_enable: int = None,
-             patching_rect: list = None, **kwargs) -> dict:
+             fontsize: float = 10.0, text: str | None = None, textcolor: list | None = None,
+             bgcolor: list | None = None, textjustification: int | None = None,
+             keymode: int | None = None, tabmode: int | None = None, border: float | None = None,
+             rounded: float | None = None, parameter_enable: int | None = None,
+             patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``textedit`` editable text / numeric entry field.
 
     NOT in the synced Max docs — observed (4 instances,
@@ -1230,15 +1232,15 @@ def textedit(id: str, rect: list, *, fontname: str = "Ableton Sans Medium",
 # --- Phase 5: Additional UI Objects ---
 
 
-def live_step(id: str, rect: list, *, mode: int = None,
-              parameter_enable: int = None, stepcolor: list = None,
-              stepcolor2: list = None, bgcolor: list = None,
-              bgcolor2: list = None, blackkeycolor: list = None,
-              bordercolor: list = None, loopbordercolor: list = None,
-              loopruler: int = None, unitruler: int = None,
-              pitch_active: int = None, velocity_active: int = None,
-              duration_active: int = None, extra2_active: int = None,
-              patching_rect: list = None, **kwargs) -> dict:
+def live_step(id: str, rect: list, *, mode: int | None = None,
+              parameter_enable: int | None = None, stepcolor: list | None = None,
+              stepcolor2: list | None = None, bgcolor: list | None = None,
+              bgcolor2: list | None = None, blackkeycolor: list | None = None,
+              bordercolor: list | None = None, loopbordercolor: list | None = None,
+              loopruler: int | None = None, unitruler: int | None = None,
+              pitch_active: int | None = None, velocity_active: int | None = None,
+              duration_active: int | None = None, extra2_active: int | None = None,
+              patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``live.step`` multi-lane step sequencer.
 
     NOT in the synced Max docs — every attribute here is MEASURED from the real
@@ -1284,13 +1286,13 @@ def live_step(id: str, rect: list, *, mode: int = None,
 
 
 def live_grid(id: str, rect: list, *, columns: int = 16, rows: int = 8,
-              maxcolumns: int = None, maxrows: int = None, direction: int = None,
-              parameter_enable: int = None, stepcolor: list = None,
-              bgstepcolor: list = None, bgstepcolor2: list = None,
-              bordercolor: list = None, bordercolor2: list = None,
-              hbgcolor: list = None, directioncolor: list = None,
-              marker_horizontal: int = None, marker_vertical: int = None,
-              rounded: float = None, patching_rect: list = None,
+              maxcolumns: int | None = None, maxrows: int | None = None, direction: int | None = None,
+              parameter_enable: int | None = None, stepcolor: list | None = None,
+              bgstepcolor: list | None = None, bgstepcolor2: list | None = None,
+              bordercolor: list | None = None, bordercolor2: list | None = None,
+              hbgcolor: list | None = None, directioncolor: list | None = None,
+              marker_horizontal: int | None = None, marker_vertical: int | None = None,
+              rounded: float | None = None, patching_rect: list | None = None,
               **kwargs) -> dict:
     """Create a ``live.grid`` monome-style cell sequencer.
 
@@ -1335,8 +1337,8 @@ def live_grid(id: str, rect: list, *, columns: int = 16, rows: int = 8,
     return {"box": box}
 
 
-def live_line(id: str, rect: list, *, linecolor: list = None,
-              justification: int = 0, patching_rect: list = None,
+def live_line(id: str, rect: list, *, linecolor: list | None = None,
+              justification: int = 0, patching_rect: list | None = None,
               **kwargs) -> dict:
     """Create a live.line visual divider."""
     box = {
@@ -1356,13 +1358,13 @@ def live_line(id: str, rect: list, *, linecolor: list = None,
     return {"box": box}
 
 
-def live_arrows(id: str, rect: list, *, arrowcolor: list = None,
-                blinkcolor: list = None, bordercolor: list = None,
-                textcolor: list = None, color: list = None, blinktime: int = None,
-                uparrow: int = None, downarrow: int = None, leftarrow: int = None,
-                rightarrow: int = None, textjustification: int = None,
-                ignoreclick: int = None, parameter_enable: int = None,
-                patching_rect: list = None, **kwargs) -> dict:
+def live_arrows(id: str, rect: list, *, arrowcolor: list | None = None,
+                blinkcolor: list | None = None, bordercolor: list | None = None,
+                textcolor: list | None = None, color: list | None = None, blinktime: int | None = None,
+                uparrow: int | None = None, downarrow: int | None = None, leftarrow: int | None = None,
+                rightarrow: int | None = None, textjustification: int | None = None,
+                ignoreclick: int | None = None, parameter_enable: int | None = None,
+                patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``live.arrows`` direction-arrow control.
 
     DOC-VERIFIED (live.arrows maxref). On click it sends the **symbol** ``left`` /
@@ -1404,8 +1406,8 @@ def live_arrows(id: str, rect: list, *, arrowcolor: list = None,
 
 
 def rslider(id: str, rect: list, *, min_val: int = 0, max_val: int = 127,
-            bgcolor: list = None, fgcolor: list = None,
-            patching_rect: list = None, **kwargs) -> dict:
+            bgcolor: list | None = None, fgcolor: list | None = None,
+            patching_rect: list | None = None, **kwargs) -> dict:
     """Create an rslider range slider (two handles selecting a min..max range).
 
     ⚠️ NOT M4L-idiomatic / UNGROUNDED. ``rslider`` is a stock-Max control with NO
@@ -1441,7 +1443,7 @@ def rslider(id: str, rect: list, *, min_val: int = 0, max_val: int = 127,
 
 
 def kslider(id: str, rect: list, *, range: int = 61, offset: int = 36,
-            patching_rect: list = None, **kwargs) -> dict:
+            patching_rect: list | None = None, **kwargs) -> dict:
     """Create a kslider piano keyboard display."""
     box = {
         "id": id,
@@ -1460,11 +1462,11 @@ def kslider(id: str, rect: list, *, range: int = 61, offset: int = 36,
 
 
 def textbutton(id: str, rect: list, text: str = "Button", *,
-               texton: str = None, textoff: str = None, mode: int = 0,
-               fontsize: float = None, fontname: str = None,
-               bgcolor: list = None, bgoncolor: list = None,
-               textcolor: list = None, textoncolor: list = None,
-               patching_rect: list = None, **kwargs) -> dict:
+               texton: str | None = None, textoff: str | None = None, mode: int = 0,
+               fontsize: float | None = None, fontname: str | None = None,
+               bgcolor: list | None = None, bgoncolor: list | None = None,
+               textcolor: list | None = None, textoncolor: list | None = None,
+               patching_rect: list | None = None, **kwargs) -> dict:
     """Create a textbutton text button (classic Max, NO Live parameter storage —
     for an automatable button use ``live_text``/``button`` instead).
 
@@ -1511,11 +1513,11 @@ def textbutton(id: str, rect: list, text: str = "Button", *,
     return {"box": box}
 
 
-def umenu(id: str, rect: list, *, items: list = None,
-          patching_rect: list = None, display: bool = False,
-          arrow: int = None, ignoreclick: int = None, allowdrag: int = None,
-          bgcolor: list = None, textcolor: list = None,
-          fontname: str = None, fontsize: float = None,
+def umenu(id: str, rect: list, *, items: list | None = None,
+          patching_rect: list | None = None, display: bool = False,
+          arrow: int | None = None, ignoreclick: int | None = None, allowdrag: int | None = None,
+          bgcolor: list | None = None, textcolor: list | None = None,
+          fontname: str | None = None, fontsize: float | None = None,
           **kwargs) -> dict:
     """Create a ``umenu`` — a NON-parameter dropdown: it outputs the selected int
     index and is NOT automatable/saved. For an automatable enum parameter use
@@ -1571,8 +1573,8 @@ def umenu(id: str, rect: list, *, items: list = None,
 
 
 def radiogroup(id: str, rect: list, *, itemcount: int = 4,
-               value: int = None, mode: int = None,
-               patching_rect: list = None, **kwargs) -> dict:
+               value: int | None = None, mode: int | None = None,
+               patching_rect: list | None = None, **kwargs) -> dict:
     """Create a radiogroup (plain-Max radio buttons / checkboxes).
 
     ⚠️ NOT M4L-idiomatic. ``radiogroup`` is a stock-Max control with NO ``live.*``
@@ -1609,9 +1611,9 @@ def radiogroup(id: str, rect: list, *, itemcount: int = 4,
     return {"box": box}
 
 
-def nodes(id: str, rect: list, *, numnodes: int = 4, xmin: float = None,
-          xmax: float = None, ymin: float = None, ymax: float = None,
-          patching_rect: list = None, **kwargs) -> dict:
+def nodes(id: str, rect: list, *, numnodes: int = 4, xmin: float | None = None,
+          xmax: float | None = None, ymin: float | None = None, ymax: float | None = None,
+          patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``nodes`` XY node editor (draggable circular nodes in a 2D field).
 
     ⚠️ UNGROUNDED + non-M4L. ``nodes`` is a stock-Max object but is absent from the
@@ -1647,9 +1649,9 @@ def nodes(id: str, rect: list, *, numnodes: int = 4, xmin: float = None,
 
 
 def matrixctrl(id: str, rect: list, *, rows: int = 8, columns: int = 8,
-               patching_rect: list = None, autosize: int = 1,
-               ignoreclick: int = None, bgcolor: list = None,
-               color: list = None, elementcolor: list = None,
+               patching_rect: list | None = None, autosize: int = 1,
+               ignoreclick: int | None = None, bgcolor: list | None = None,
+               color: list | None = None, elementcolor: list | None = None,
                **kwargs) -> dict:
     """Create a ``matrixctrl`` — a ``rows``×``columns`` grid of toggle cells (routing
     matrix, mod matrix, step row).
@@ -1685,8 +1687,8 @@ def matrixctrl(id: str, rect: list, *, rows: int = 8, columns: int = 8,
     return {"box": box}
 
 
-def ubutton(id: str, rect: list, *, hltcolor: list = None, handoff: str = None,
-            patching_rect: list = None, **kwargs) -> dict:
+def ubutton(id: str, rect: list, *, hltcolor: list | None = None, handoff: str | None = None,
+            patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``ubutton`` — an invisible click zone over graphics.
 
     Observed Max behaviour (43 instances across 14 devices, 100%
@@ -1719,8 +1721,8 @@ def ubutton(id: str, rect: list, *, hltcolor: list = None, handoff: str = None,
     return {"box": box}
 
 
-def nslider(id: str, rect: list, *, staffs: int = None,
-            bgcolor: list = None, patching_rect: list = None,
+def nslider(id: str, rect: list, *, staffs: int | None = None,
+            bgcolor: list | None = None, patching_rect: list | None = None,
             **kwargs) -> dict:
     """Create an nslider staff notation display."""
     box = {
@@ -1750,7 +1752,7 @@ def nslider(id: str, rect: list, *, staffs: int = None,
 # they vary by config — set them to match your patch.
 
 def plot(id: str, rect: list, *, numinlets: int = 1, numoutlets: int = 1,
-         outlettype: list = None, patching_rect: list = None, **attrs) -> dict:
+         outlettype: list | None = None, patching_rect: list | None = None, **attrs) -> dict:
     """Create a ``plot~`` — a compiled curve/data plotter.
 
     ⚠️ UNGROUNDED. ``plot~`` is absent from the synced Max docs (only the unrelated
@@ -1780,14 +1782,14 @@ def plot(id: str, rect: list, *, numinlets: int = 1, numoutlets: int = 1,
 
 
 def filtergraph(id: str, rect: list, *, numinlets: int = 8, numoutlets: int = 7,
-                outlettype: list = None, domain: list = None,
-                value_range: list = None, nfilters: int = None,
-                setfilter: list = None, logmarkers: list = None,
-                dbdisplay: int = None, numdisplay: int = None,
-                bgcolor: list = None, curvecolor: list = None,
-                hcurvecolor: list = None, markercolor: list = None,
-                bwidthcolor: list = None, fgcolor: list = None,
-                textcolor: list = None, patching_rect: list = None, **attrs) -> dict:
+                outlettype: list | None = None, domain: list | None = None,
+                value_range: list | None = None, nfilters: int | None = None,
+                setfilter: list | None = None, logmarkers: list | None = None,
+                dbdisplay: int | None = None, numdisplay: int | None = None,
+                bgcolor: list | None = None, curvecolor: list | None = None,
+                hcurvecolor: list | None = None, markercolor: list | None = None,
+                bwidthcolor: list | None = None, fgcolor: list | None = None,
+                textcolor: list | None = None, patching_rect: list | None = None, **attrs) -> dict:
     """Create a ``filtergraph~`` — the COMPILED interactive filter-response editor.
 
     Observed Max behaviour (11 instances, 100% consistent). Drag the
@@ -1834,10 +1836,10 @@ def filtergraph(id: str, rect: list, *, numinlets: int = 8, numoutlets: int = 7,
     return {"box": box}
 
 
-def function(id: str, rect: list, *, points: list = None, domain: float = None,
-             value_range: list = None, mode: int = 1, classic_curve: int = None,
-             parameter_enable: int = None, presentation: int = 1,
-             patching_rect: list = None, **kwargs) -> dict:
+def function(id: str, rect: list, *, points: list | None = None, domain: float | None = None,
+             value_range: list | None = None, mode: int = 1, classic_curve: int | None = None,
+             parameter_enable: int | None = None, presentation: int = 1,
+             patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``function`` — the native breakpoint / envelope / transfer-curve editor.
 
     NOT in the synced Max docs — observed (20 instances: synth-voice
@@ -1879,14 +1881,14 @@ def function(id: str, rect: list, *, points: list = None, domain: float = None,
     return {"box": box}
 
 
-def waveform(id: str, rect: list, *, buffername: str = None,
-             waveformcolor: list = None, selectioncolor: list = None,
-             bgcolor: list = None, gridcolor: list = None,
-             bordercolor: list = None, linecolor: list = None,
-             labelbgcolor: list = None, labeltextcolor: list = None,
-             labels: int = None, ruler: int = None, vticks: int = None,
-             ignoreclick: int = None, setmode: int = None, allowdrag: int = None,
-             patching_rect: list = None, **kwargs) -> dict:
+def waveform(id: str, rect: list, *, buffername: str | None = None,
+             waveformcolor: list | None = None, selectioncolor: list | None = None,
+             bgcolor: list | None = None, gridcolor: list | None = None,
+             bordercolor: list | None = None, linecolor: list | None = None,
+             labelbgcolor: list | None = None, labeltextcolor: list | None = None,
+             labels: int | None = None, ruler: int | None = None, vticks: int | None = None,
+             ignoreclick: int | None = None, setmode: int | None = None, allowdrag: int | None = None,
+             patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``waveform~`` — a ``buffer~`` audio display with drag-to-select.
 
     Observed Max behaviour (7 instances, 100% consistent). Draws the
@@ -1931,11 +1933,11 @@ def waveform(id: str, rect: list, *, buffername: str = None,
     return {"box": box}
 
 
-def pictctrl(id: str, rect: list, *, name: str = None, frames: int = None,
-             mode: int = None, trackvertical: int = None,
-             clickedimage: int = None, inactiveimage: int = None,
-             active: int = None, parameter_enable: int = None,
-             patching_rect: list = None, **kwargs) -> dict:
+def pictctrl(id: str, rect: list, *, name: str | None = None, frames: int | None = None,
+             mode: int | None = None, trackvertical: int | None = None,
+             clickedimage: int | None = None, inactiveimage: int | None = None,
+             active: int | None = None, parameter_enable: int | None = None,
+             patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``pictctrl`` — an image-filmstrip control (custom knob / button / slider).
 
     Observed Max behaviour (17 instances, 100% consistent). Displays one
@@ -1970,16 +1972,16 @@ def pictctrl(id: str, rect: list, *, name: str = None, frames: int = None,
     return {"box": box}
 
 
-def spectrumdraw(id: str, rect: list, *, amprange: list = None, ampgrid: int = None,
-                 amplabels: int = None, freqgrid: int = None, freqlabels: int = None,
-                 color: list = None, color2: list = None, color3: list = None,
-                 color4: list = None, thickness: float = None,
-                 thickness2: float = None, thickness3: float = None,
-                 thickness4: float = None, curvestyle: int = None,
-                 bgcolor: list = None, bordercolor: list = None,
-                 octavesmooth: float = None, timesmooth: list = None,
-                 mousemode: int = None, mode: int = None, fftsize: int = None,
-                 patching_rect: list = None, **kwargs) -> dict:
+def spectrumdraw(id: str, rect: list, *, amprange: list | None = None, ampgrid: int | None = None,
+                 amplabels: int | None = None, freqgrid: int | None = None, freqlabels: int | None = None,
+                 color: list | None = None, color2: list | None = None, color3: list | None = None,
+                 color4: list | None = None, thickness: float | None = None,
+                 thickness2: float | None = None, thickness3: float | None = None,
+                 thickness4: float | None = None, curvestyle: int | None = None,
+                 bgcolor: list | None = None, bordercolor: list | None = None,
+                 octavesmooth: float | None = None, timesmooth: list | None = None,
+                 mousemode: int | None = None, mode: int | None = None, fftsize: int | None = None,
+                 patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``spectrumdraw~`` — a multi-trace spectrum analyzer display.
 
     Observed Max behaviour (4 instances, 100% consistent). **4 signal

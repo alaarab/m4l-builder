@@ -41,10 +41,10 @@ device.add_dial("gain", "Gain", [10, 6, 50, 90],
                 unitstyle=4, annotation_name="Gain")
 
 # Signal path: stereo in -> gain -> stereo out, with smoothing
-device.add_newobj("mul_l", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
-device.add_newobj("mul_r", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
+device.add_newobj("mul_l", "*~ 1.")   # inlets/outlets inferred from the text
+device.add_newobj("mul_r", "*~ 1.")
 device.add_newobj("db2a", "dbtoa")
-device.add_newobj("ln", "line~", numinlets=2, numoutlets=2, outlettype=["signal", "bang"])
+device.add_newobj("ln", "line~")
 
 device.add_line("obj-plugin", 0, "mul_l", 0)     # stereo in (auto plugin~)
 device.add_line("obj-plugin", 1, "mul_r", 0)

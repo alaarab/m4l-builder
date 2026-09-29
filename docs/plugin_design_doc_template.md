@@ -7,11 +7,7 @@ The goal is not marketing copy. The goal is to explain what problem the plugin
 solves, why it exists, how it works, and what tradeoffs come with the chosen
 approach.
 
-For flagship lanes, also use:
-
-- `docs/archive/ui_sprint_2026_03/ableton_ui_playbook.md`
-- `docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md`
-- `docs/archive/ui_sprint_2026_03/ableton_ui_validation_template.md`
+For flagship lanes, also use `docs/ui_premium_playbook.md`.
 
 The plugin README should define the product role clearly enough that the UI can
 be judged against the shared playbook.
@@ -165,8 +161,7 @@ Include:
 
 For flagship lanes, the validation section should also point to:
 
-- the current UI rubric score using `docs/archive/ui_sprint_2026_03/ableton_ui_review_checklist.md`
-- the latest validation note in `docs/ui_validation/`
+- the checks from `docs/ui_premium_playbook.md`
 - any compact-vs-expanded checks that are specific to this product role
 
 ## References
