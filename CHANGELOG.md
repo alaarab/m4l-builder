@@ -103,6 +103,17 @@
 
 ### Removed
 
+- Reverse-engineering and corpus analysis moved to the separate
+  **m4l-research** package (`m4l_research`): `reverse`, `reverse_snapshot`,
+  `reverse_patterns`, `reverse_analysis`, `reverse_codegen`, `analysis`,
+  `corpus_analysis`, `corpus_fixture`, the `_reverse_*` / `_corpus_*` modules,
+  every `REVERSE_EXPORTS` / `ANALYSIS_EXPORTS` root name (`snapshot_from_amxd`,
+  `analyze_amxd_corpus`, `generate_*_python_from_*`, ...), and the corpus report
+  tools. No shim remains. Migration: install m4l-research next to m4l-builder
+  and change the import, e.g. `from m4l_builder import snapshot_from_amxd`
+  becomes `from m4l_research import snapshot_from_amxd`.
+  `m4l_builder.amxd.device_from_amxd` / `Device.from_amxd` and the LiveMCP
+  bridge stay here.
 - Untracked `tmp/` scratch audio and screenshots and the stale UI-sprint notes
   under `docs/archive/` and `docs/ui_validation/`; generated artifacts are now
   gitignored.

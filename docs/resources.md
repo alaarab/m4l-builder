@@ -29,9 +29,9 @@ Curated, authoritative sources for the technologies `m4l-builder` sits on top of
 | [GitHub — alaarab/m4l-builder](https://github.com/alaarab/m4l-builder) | Source, issues, and the example scripts under `examples/`. |
 | [PyPI — m4l-builder](https://pypi.org/project/m4l-builder/) | Released versions; `pip install m4l-builder`. |
 | [API reference](api.md) | Every public class and function in the library. |
-| [Reverse engineering](reverse_engineering.md) | Read an existing `.amxd` back into Python with `from_amxd`. |
+| [m4l-research](https://github.com/alaarab/m4l-research) | Reverse-engineering and corpus analysis of existing `.amxd` devices (separate package). |
 | [LiveMCP bridge](livemcp_max_bridge.md) | Drive a built device live in Ableton from an MCP client. |
 
 ## File format background
 
-A `.amxd` is a small binary header followed by a Max patcher (`.maxpat`) JSON document. `m4l-builder` constructs that JSON — boxes (objects), lines (patch cords), and presentation-mode rectangles — and writes the wrapper. You don't edit the format by hand; the [API reference](api.md) and [Getting started](getting_started.md) cover the Python surface, and [Reverse engineering](reverse_engineering.md) shows the round trip back from an existing device.
+A `.amxd` is a small binary header followed by a Max patcher (`.maxpat`) JSON document. `m4l-builder` constructs that JSON — boxes (objects), lines (patch cords), and presentation-mode rectangles — and writes the wrapper. You don't edit the format by hand; the [API reference](api.md) and [Getting started](getting_started.md) cover the Python surface, and `Device.from_amxd` reads an existing device back in.
