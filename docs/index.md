@@ -17,7 +17,7 @@ Max for Live devices are normally authored by hand in the Max patcher GUI, which
 - **Version-controllable** — a device is a Python script; `git diff` shows real changes.
 - **Reproducible** — the same script always emits the same `.amxd`.
 - **No GUI, no runtime deps** — pure Python stdlib; runs in CI.
-- **Batteries included** — 100+ DSP blocks, a UI widget library, jsui visual engines, themes, and analysis tools to round-trip existing devices.
+- **Batteries included** — 100+ DSP blocks, a UI widget library, jsui visual engines, themes, and `from_amxd` to round-trip existing devices.
 
 ## Install
 
@@ -71,7 +71,7 @@ Restart Ableton (or refresh the browser) and the device appears in your User Lib
 | **UI widgets** | Dials, sliders, toggles, menus, panels, scopes, meters, text, and more — all placed in presentation mode |
 | **Visual engines** | jsui-based vector displays: filter response, parametric EQ nodes, ADSR, spectrum, waveform |
 | **Themes** | `MIDNIGHT`, `WARM`, `COOL`, `LIGHT` presets, or a custom `Theme` |
-| **analysis** | Read an existing `.amxd` back into a Python model with `from_amxd` for round-trip editing |
+| **Round-trip** | Read an existing `.amxd` back into a Python model with `from_amxd` for round-trip editing |
 | **LiveMCP bridge** | Embed a bridge so an MCP client can drive the device live in Ableton |
 
 ## Where to go next
@@ -82,7 +82,7 @@ Restart Ableton (or refresh the browser) and the device appears in your User Lib
 - :material-book-open-variant: **[DSP & UI catalog](catalog.md)** — browse every building block.
 - :material-piano: **[MIDI Tools](midi_tools.md)** — Live 12 Generators & Transformations.
 - :material-api: **[API reference](api.md)** — every public class and function.
-- :material-backup-restore: **[analysis](reverse_engineering.md)** — round-trip existing devices.
+- :material-backup-restore: **[a separate package](https://github.com/alaarab/a separate package)** — analyze and mine existing devices (separate package).
 - :material-link-variant: **[Resources](resources.md)** — Max/MSP and Max for Live sources.
 
 </div>

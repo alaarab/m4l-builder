@@ -103,6 +103,17 @@
 
 ### Removed
 
+- analysis and library analysis moved to the separate
+  **a separate package** package (`m4l_research`): `reverse`, `amxd_snapshot`,
+  `amxd_patterns`, `amxd_analysis`, `amxd_codegen`, `analysis`,
+  `library_analysis`, `library_fixture`, the `_amxd_*` / `_library_*` modules,
+  every `AMXD_EXPORTS` / `ANALYSIS_EXPORTS` root name (`snapshot_from_amxd`,
+  `analyze_amxd_library`, `generate_*_python_from_*`, ...), and the library report
+  tools. No shim remains. Migration: install a separate package next to m4l-builder
+  and change the import, e.g. `from m4l_builder import snapshot_from_amxd`
+  becomes `from m4l_research import snapshot_from_amxd`.
+  `m4l_builder.amxd.device_from_amxd` / `Device.from_amxd` and the LiveMCP
+  bridge stay here.
 - Untracked `tmp/` scratch audio and screenshots and the stale UI-sprint notes
   under `docs/archive/` and `docs/ui_validation/`; generated artifacts are now
   gitignored.

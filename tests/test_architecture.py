@@ -261,9 +261,8 @@ class TestV8uiContract:
 
 
 class TestPublicExportSurface:
-    """Every declared public export must actually load (guards lazy-getattr typos
-    like the unloadable extract_controller_shell_candidates that shipped in __all__
-    but was never imported in amxd_api)."""
+    """Every declared public export must actually load (guards lazy-getattr typos:
+    a name listed in __all__ whose group module never imports it)."""
 
     def test_every_root_export_is_loadable(self):
         from m4l_builder._exports import ROOT_ALL
@@ -500,12 +499,6 @@ class TestNamespaces:
         assert m4l.live.live_object_path is m4l.live_object_path
         assert m4l.builder.live.live_object_path is not None
         assert m4l.builder.recipes.gain_controlled_stage is m4l.gain_controlled_stage
-        assert m4l.amxd_snapshot.snapshot_from_amxd is m4l.snapshot_from_amxd
-        assert m4l.amxd_patterns.detect_snapshot_patterns is m4l.detect_snapshot_patterns
-        assert m4l.amxd_analysis.analyze_snapshot is m4l.analyze_snapshot
-        assert m4l.amxd_codegen.generate_python_from_amxd is m4l.generate_python_from_amxd
-        assert m4l.reverse.generate_python_from_amxd is not None
-        assert m4l.analysis.analyze_amxd_file is not None
         assert m4l.bridge.enable_livemcp_bridge is not None
 
 

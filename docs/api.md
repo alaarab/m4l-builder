@@ -77,73 +77,8 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 
 ### analysis and library mining
 
-`read_amxd(path)` -- Read an .amxd container and return its patcher plus inferred metadata
-`snapshot_from_device(device)` -- Capture a normalized snapshot from an in-memory Device
-`snapshot_from_amxd(path)` -- Capture a normalized snapshot from an .amxd plus nearby sidecars
-`snapshot_from_bridge_payload(...)` -- Capture a normalized snapshot from LiveMCP Max bridge payloads
-`analyze_snapshot(snapshot)` -- First-pass structural analysis for a normalized snapshot
-`extract_embedded_patcher_snapshots(snapshot)` -- Extract nested embedded patchers as reusable snapshots
-`extract_controller_shell_candidates(snapshot)` -- Extract controller-shell normalization candidates such as controller-surface and sequencer-dispatch shells
-`extract_embedded_ui_shell_candidates(snapshot)` -- Extract exact-safe embedded host shell candidates for root subpatcher and `bpatcher` boxes, including attached routing/control/init structure
-`extract_named_bus_router_candidates(snapshot)` -- Extract exact named-bus router candidates, including cross-scope metadata when available
-`extract_init_dispatch_chain_candidates(snapshot)` -- Extract exact init/scheduler dispatch chains driven by `loadbang`, `deferlow`, `t`, `sel`, `gate`, `route`, and message scaffolds
-`extract_state_bundle_router_candidates(snapshot)` -- Extract semantic pack/unpack/zl state-shuttle candidates
-`extract_sample_buffer_candidates(snapshot)` -- Extract semantic sample-buffer shells such as file-handling, waveform-visualization, and playback clusters from generic motifs
-`extract_gen_processing_candidates(snapshot)` -- Extract semantic `gen~` processing shells such as buffered capture cores from generic motifs
-`extract_poly_shell_candidates(snapshot)` -- Extract exact `poly~` host shells with attached routing/control layers
-`extract_poly_shell_bank_candidates(snapshot)` -- Extract exact grouped banks of repeated `poly~` editor shells that share the same target and host UI
-`extract_poly_editor_bank_candidates(snapshot)` -- Extract semantic multi-voice editor-bank candidates layered on top of repeated `poly~` shell banks
-`extract_behavior_hints(snapshot)` -- Extract product-level behavior hints such as mapping-bank, trigger-mode, and mapping-session summaries inferred from structure
-`extract_mapping_behavior_traces(snapshot)` -- Extract structured mapping/modulation traces such as output banks, trigger-source clusters, random-value generation, mapping lifecycles, lane-update paths, and hidden sidecar engines
-`extract_mapping_semantic_candidates(snapshot)` -- Extract higher-level semantic mapping candidates such as `mapped_modulation_bank`, `random_modulation_mapper`, and `triggered_parameter_mapper`
-`extract_mapping_workflow_candidates(snapshot)` -- Extract semantic mapping-workflow shells that combine repeated editor banks with trigger-mode and q-map session evidence
-`extract_first_party_api_rig_candidates(snapshot)` -- Extract semantic first-party API rigs from `building blocks / API`
-`extract_first_party_abstraction_host_candidates(snapshot)` -- Extract semantic factory-only `M4L.*` abstraction host clusters, including inferred abstraction families like `balance_shell`, `gain_shell`, `pan_shell`, and `envelope_follower_shell`, before whole-device building-block fallback
-`extract_first_party_abstraction_family_candidates(snapshot)` -- Derive family-level semantic candidates such as `balance_shell`, `gain_shell`, `pan_shell`, and `envelope_follower_shell` from first-party abstraction hosts for cleaner semantic codegen
-`extract_building_block_candidates(snapshot)` -- Extract semantic building-block candidates from `building blocks / Building Blocks`
-`detect_snapshot_patterns(snapshot)` -- Detect known helper-level DSP structures
-`detect_snapshot_recipes(snapshot)` -- Detect higher-level staged recipes
-`detect_snapshot_motifs(snapshot)` -- Detect generic Max motifs like named buses, controller dispatch/scheduler/state-bundle clusters, Live API clusters, sample-buffer/granular cores, and embedded patchers
-`extract_parameter_specs(snapshot)` -- Pull normalized parameter/control specs from a snapshot
-`extract_snapshot_knowledge(snapshot)` -- Build a prompt-ready manifest of controls, displays, patterns, recipes, motifs, behavior hints, named-bus networks, embedded patchers, Live API archetypes, bridge state, and lossiness
-`generate_python_from_snapshot(snapshot)` -- Fidelity-first exact rebuild script
-`generate_builder_python_from_snapshot(snapshot)` -- Builder-style rebuild script with semantic `add_*` calls where recognized
-`generate_optimized_python_from_snapshot(snapshot)` -- Exact-safe helper/recipe rebuild with canonical Live API, controller-shell, embedded-ui-shell, and repeated `poly~` bank helper collapsing when safe
-`generate_semantic_python_from_snapshot(snapshot)` -- Rewrite-oriented semantic rebuild that also normalizes safe non-canonical Live API helper opportunities and higher-level workflow shells such as `mapping_workflow_shell`
-`analyze_amxd_file(path)` -- Analyze one .amxd file for library mining
-`analyze_amxd_library(path, recursive=True)` -- Mine a directory of .amxd files into aggregate metrics, motifs, and object/control distributions
-`rank_reverse_candidates(report, limit=20)` -- Rank parsed library items by expected analysis payoff using motifs, embedded patchers, and unresolved helper opportunities
-`rank_reverse_candidate_families(report, limit=20)` -- Collapse versioned variants into device families so the next reverse targets are easier to prioritize
-`build_reverse_candidate_family_profile(report, family)` -- Build a detailed stable-vs-variable profile for one normalized device family, including inferred semantic targets and next-work suggestions
-`build_reverse_candidate_family_profiles(report, limit=20)` -- Aggregate motif/object signals across ranked families so variant-heavy device lines can be mined as one lane
-`build_source_lane_profiles(report)` -- Aggregate motif and abstraction signals by source lane (`public`, `factory`, `site_leads`)
-`source_lane_profiles_markdown(profiles)` -- Render those lane profiles as markdown
-`build_reference_device_dossier(path)` -- Build a semantic-lifting dossier for one fixed proof device, including raw `add_box(...)` reduction, semantic helper-call counts, and a combined structural-lift score
-`build_reference_device_dossiers(paths)` -- Build dossiers for a whole fixed proof set
-`reference_device_dossiers_markdown(dossiers)` -- Render those dossiers as markdown
-`rank_mapping_candidates(report, limit=20)` -- Rank mapping/modulation-oriented devices and classify them as modulation banks, random modulation sources, or triggered parameter mappers
-`build_mapping_lane_report(report, limit=20)` -- Build a focused mapping/modulation-lane report from a general library report
-`mapping_lane_report_markdown(report)` -- Render that mapping/modulation-lane report as markdown
-`write_mapping_lane_report(report, path)` -- Write the mapping/modulation-lane markdown report to disk
-`build_mapping_product_brief(item)` -- Build one plain-language product brief from a mined mapping/modulation library item
-`build_mapping_product_brief_from_path(path)` -- Build one plain-language product brief directly from a single AMXD path
-`build_mapping_product_briefs(report, limit=20)` -- Build ordered mapping/modulation product briefs from a library report
-`mapping_product_brief_markdown(brief)` -- Render one product brief as markdown
-`mapping_product_briefs_markdown(briefs)` -- Render those product briefs as markdown
-`write_mapping_product_brief(brief, path)` -- Write one mapping/modulation product brief to disk
-`write_mapping_product_briefs(briefs, path)` -- Write the mapping/modulation product briefs to disk
-`build_library_comparison(reports_by_label)` -- Compare separately mined corpora such as `public` vs `factory`
-`library_comparison_markdown(comparison)` -- Render that cross-library comparison as markdown
-`library_report_markdown(report)` -- Render a markdown report from `analyze_amxd_library(...)`
-`family_profile_markdown(profile)` -- Render a markdown report from `build_reverse_candidate_family_profile(...)`
-`write_library_report(report, path)` -- Write that markdown report to disk
-`write_family_profile(profile, path)` -- Write the family markdown report to disk
-`build_library_manifest(path, recursive=True, stable_sample_size=12)` -- Build a deterministic manifest with hashes, categories, dependency notes, and a stable sample subset for a local library
-`load_library_manifest(path)` -- Read a library manifest JSON file
-`write_library_manifest(manifest, path)` -- Write a library manifest JSON file
-`select_library_manifest_entries(manifest, selection=\"stable\", limit=None)` -- Select manifest entries by sample set, family tag, lane, pack, pack section, or category tag
-`run_library_fixture(library_or_manifest, output_dir, ...)` -- Materialize local reverse/codegen artifacts (`snapshot.json`, `knowledge.json`, exact/builder/optimized/semantic scripts) for a selected subset
-`write_library_fixture_results(results, path)` -- Write fixture-run results to disk
+Moved to the separate [a separate package](https://github.com/alaarab/a separate package)
+package (`from m4l_research import snapshot_from_amxd, analyze_amxd_library, ...`).
 
 ### Layout shortcuts
 
@@ -392,7 +327,7 @@ Max for Live Live API integration.
 `device_active_state(id_prefix, *, from_device_outlet=None)` -- `prepend active` + `live.thisdevice` pair for device active-state control. By default it emits the toggle-style `prepend active -> live.thisdevice` line, but it can also preserve external-device `live.thisdevice -> prepend active` variants by setting `from_device_outlet`. Returns `(boxes, lines)`.
 
 All Live API helpers also accept explicit box IDs and patching rect overrides so
-reverse-generated code can preserve original geometry and wiring targets while
+regenerated code (a separate package) can preserve original geometry and wiring targets while
 still using semantic helper calls.
 
 ---

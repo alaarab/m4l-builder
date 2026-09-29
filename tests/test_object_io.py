@@ -141,13 +141,6 @@ KNOWN_COUNT_DISAGREEMENTS = {
     ("route lanes", 1, 2): OLD_ROUTE,
     ("route rowcolor", 1, 2): OLD_ROUTE,
     ("route mapped min max pname dname path flash announce", 1, 9): OLD_ROUTE,
-    ("route capture", 1, 2): OLD_ROUTE,
-    ("route done", 1, 2): OLD_ROUTE,
-    ("route id", 1, 2): OLD_ROUTE,
-    ("route loop", 1, 2): OLD_ROUTE,
-    ("route mode", 1, 2): OLD_ROUTE,
-    ("route mode bypass", 1, 3): OLD_ROUTE,
-    ("route value", 1, 2): OLD_ROUTE,
     ("sel 0 1", 1, 3): OLD_ROUTE,
     ("sel 1 0", 1, 3): OLD_ROUTE,
     ("select 0 1", 1, 3): OLD_ROUTE,
@@ -169,20 +162,12 @@ KNOWN_COUNT_DISAGREEMENTS = {
     ("cycle~", 2, 2): MAX9,
     ("noise~", 0, 1): MAX9,
     ("midiparse", 1, 7): MAX9,
-    ("route Device On", 2, 2): FIXTURE,
     ("buffer~ b_smp", 1, 1): FIXTURE,
     ("buffer~ mybuf_smp", 1, 1): FIXTURE,
-    ("buffer~ captured", 2, 2): FIXTURE,
-    ("buffer~ grains", 2, 2): FIXTURE,
-    ("live.path", 2, 2): FIXTURE,
-    ("live.path live_set", 2, 2): FIXTURE,
-    ("live.path live_set view", 2, 2): FIXTURE,
     ("live.thisdevice", 1, 2): FIXTURE,
-    ("midiparse", 1, 1): FIXTURE,
     ("plugin~", 1, 2): FIXTURE,
     ("plugin~", 1, 4): FIXTURE,
     ("plugin~", 3, 1): FIXTURE,
-    ("strippath", 1, 1): FIXTURE,
     ("transport", 1, 7): "deliberately wrong: box_lint must reject it",
 }
 
@@ -191,13 +176,10 @@ TYPED = "declared a typed outlet where Max saves ''"
 KNOWN_TYPE_DISAGREEMENTS = {
     ("* 60.", ("",)): GENERIC,
     ("+ 1", ("",)): GENERIC,
-    ("/ 100.", ("",)): GENERIC,
     ("/ 1000.", ("",)): GENERIC,
     ("/ 2.5", ("",)): GENERIC,
-    ("f 120.", ("",)): GENERIC,
     ("i", ("",)): GENERIC,
     ("i 248", ("",)): GENERIC,
-    ("int", ("",)): GENERIC,
     ("t 0", ("",)): GENERIC,
     ("t 1", ("",)): GENERIC,
     ("t 60", ("",)): GENERIC,
@@ -262,7 +244,7 @@ def test_inference_agrees_with_existing_declarations():
         elif ot and list(ot) != io.outlettype:
             type_diffs.setdefault((text, tuple(ot)), where)
 
-    assert checked >= 600, f"only {checked} declarations checked; did the scan break?"
+    assert checked >= 450, f"only {checked} declarations checked; did the scan break?"
     new = {k: v for k, v in count_diffs.items() if k not in KNOWN_COUNT_DISAGREEMENTS}
     gone = set(KNOWN_COUNT_DISAGREEMENTS) - set(count_diffs)
     assert not new, f"declared counts disagree with inference: {new}"

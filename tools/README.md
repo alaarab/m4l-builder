@@ -1,6 +1,6 @@
 # tools/
 
-Repo-maintenance and library-analysis scripts. Run each with `uv run python tools/<script>.py` from the repo root, unless noted otherwise.
+Repo-maintenance scripts. Run each with `uv run python tools/<script>.py` from the repo root, unless noted otherwise.
 
 ## Doc generators
 
@@ -13,16 +13,6 @@ Regenerate these after adding, renaming, or removing public DSP blocks, recipes,
 
 ## Library mining & analysis reports
 
-Analyze external `.amxd` corpora (mined devices) and turn the extracted structure into markdown reports. See `docs/reverse_engineering.md`.
-
-| Script | Description |
-|--------|-------------|
-| `mine_amxd_library.py` | Mine a directory of `.amxd` files into a reusable JSON + markdown report. |
-| `build_family_report.py` | Build a focused analysis report for one external AMXD family. |
-| `build_reference_dossiers.py` | Build reference-device semantic-lifting dossiers for one or more AMXDs. |
-| `build_source_lane_report.py` | Build a lane-comparison markdown report for a local AMXD library. |
-| `build_library_comparison_report.py` | Build a comparison markdown report across multiple library roots. |
-| `build_library_fixture.py` | Build a local reverse/codegen fixture from an external AMXD library. |
-| `build_mapping_lane_report.py` | Build a mapping/modulation lane markdown report for a local AMXD library. |
-| `build_mapping_product_brief.py` | Build a mapping/modulation product brief for one AMXD device. |
-| `build_mapping_product_briefs.py` | Build mapping/modulation product briefs for a local AMXD library. |
+Moved to [a separate package](https://github.com/alaarab/a separate package) along with the
+reverse/library code (`mine_amxd_library.py`, `build_family_report.py`,
+`build_library_fixture.py`, and the other report builders).

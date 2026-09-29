@@ -42,11 +42,9 @@ src/m4l_builder/
   theme.py           Color themes
   engines/           JavaScript (jsui) visualization generators
   builder/           Public authoring namespace (core, ui, dsp, live, recipes)
-  reverse*.py        analysis of existing .amxd files
-  library_*.py        Device-library mining and analysis
   _exports.py        Explicit public-name lists consumed by __init__.py
 tests/               pytest suite (mirrors the modules above)
-tools/               CLI helper scripts
+tools/               Doc generators and repo-maintenance scripts
 docs/                API reference and Ableton UI playbooks
 ```
 

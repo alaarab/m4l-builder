@@ -1,7 +1,7 @@
 """m4l_builder: Programmatically build Max for Live (.amxd) devices.
 
-The root package stays compatibility-oriented, but it now resolves most exports
-lazily so importing `m4l_builder` does not eagerly load reverse/library tooling.
+The root package resolves its exports lazily, so importing `m4l_builder` only
+loads the modules a caller actually touches.
 """
 
 from __future__ import annotations
@@ -15,104 +15,10 @@ if TYPE_CHECKING:
     # Static mirror of the lazy exports below, so type checkers see real types.
     # BEGIN GENERATED ROOT TYPE IMPORTS (tools/gen_root_type_imports.py)
     # isort: off
-    from . import analysis as analysis
     from . import authoring as authoring
     from . import bridge as bridge
     from . import builder as builder
     from . import live as live
-    from . import amxd_api as _amxd_module
-    from . import amxd_analysis as amxd_analysis
-    from . import amxd_codegen as amxd_codegen
-    from . import amxd_patterns as amxd_patterns
-    from . import amxd_snapshot as amxd_snapshot
-    from ._library_aggregate import (
-        analyze_amxd_library as analyze_amxd_library,
-    )
-    from ._library_dossier import (
-        build_library_comparison as build_library_comparison,
-        build_reference_device_dossier as build_reference_device_dossier,
-        build_reference_device_dossiers as build_reference_device_dossiers,
-    )
-    from ._library_file import (
-        analyze_amxd_file as analyze_amxd_file,
-        classify_library_source_metadata as classify_library_source_metadata,
-    )
-    from ._library_mapping import (
-        build_mapping_lane_report as build_mapping_lane_report,
-        build_mapping_product_brief as build_mapping_product_brief,
-        build_mapping_product_brief_from_path as build_mapping_product_brief_from_path,
-        build_mapping_product_briefs as build_mapping_product_briefs,
-        rank_mapping_candidates as rank_mapping_candidates,
-    )
-    from ._library_markdown import (
-        library_comparison_markdown as library_comparison_markdown,
-        library_report_markdown as library_report_markdown,
-        family_profile_markdown as family_profile_markdown,
-        mapping_lane_report_markdown as mapping_lane_report_markdown,
-        mapping_product_brief_markdown as mapping_product_brief_markdown,
-        mapping_product_briefs_markdown as mapping_product_briefs_markdown,
-        reference_device_dossiers_markdown as reference_device_dossiers_markdown,
-        source_lane_profiles_markdown as source_lane_profiles_markdown,
-        write_library_report as write_library_report,
-        write_family_profile as write_family_profile,
-        write_mapping_lane_report as write_mapping_lane_report,
-        write_mapping_product_brief as write_mapping_product_brief,
-        write_mapping_product_briefs as write_mapping_product_briefs,
-    )
-    from ._library_ranking import (
-        build_reverse_candidate_family_profile as build_reverse_candidate_family_profile,
-        build_reverse_candidate_family_profiles as build_reverse_candidate_family_profiles,
-        build_source_lane_profiles as build_source_lane_profiles,
-        rank_reverse_candidate_families as rank_reverse_candidate_families,
-        rank_reverse_candidates as rank_reverse_candidates,
-    )
-    from ._amxd_codegen import (
-        generate_builder_python_from_amxd as generate_builder_python_from_amxd,
-        generate_builder_python_from_bridge_payload as generate_builder_python_from_bridge_payload,
-        generate_builder_python_from_device as generate_builder_python_from_device,
-        generate_builder_python_from_snapshot as generate_builder_python_from_snapshot,
-        generate_optimized_python_from_amxd as generate_optimized_python_from_amxd,
-        generate_optimized_python_from_bridge_payload as generate_optimized_python_from_bridge_payload,
-        generate_optimized_python_from_device as generate_optimized_python_from_device,
-        generate_optimized_python_from_snapshot as generate_optimized_python_from_snapshot,
-        generate_python_from_amxd as generate_python_from_amxd,
-        generate_python_from_bridge_payload as generate_python_from_bridge_payload,
-        generate_python_from_device as generate_python_from_device,
-        generate_python_from_snapshot as generate_python_from_snapshot,
-        generate_semantic_python_from_amxd as generate_semantic_python_from_amxd,
-        generate_semantic_python_from_bridge_payload as generate_semantic_python_from_bridge_payload,
-        generate_semantic_python_from_device as generate_semantic_python_from_device,
-        generate_semantic_python_from_snapshot as generate_semantic_python_from_snapshot,
-    )
-    from ._amxd_detect import (
-        detect_snapshot_motifs as detect_snapshot_motifs,
-        detect_snapshot_patterns as detect_snapshot_patterns,
-        detect_snapshot_recipes as detect_snapshot_recipes,
-    )
-    from ._amxd_extract import (
-        analyze_snapshot as analyze_snapshot,
-        extract_behavior_hints as extract_behavior_hints,
-        extract_building_block_candidates as extract_building_block_candidates,
-        extract_controller_shell_candidates as extract_controller_shell_candidates,
-        extract_embedded_ui_shell_candidates as extract_embedded_ui_shell_candidates,
-        extract_first_party_abstraction_family_candidates as extract_first_party_abstraction_family_candidates,
-        extract_first_party_abstraction_host_candidates as extract_first_party_abstraction_host_candidates,
-        extract_first_party_api_rig_candidates as extract_first_party_api_rig_candidates,
-        extract_gen_processing_candidates as extract_gen_processing_candidates,
-        extract_init_dispatch_chain_candidates as extract_init_dispatch_chain_candidates,
-        extract_live_api_normalization_candidates as extract_live_api_normalization_candidates,
-        extract_mapping_behavior_traces as extract_mapping_behavior_traces,
-        extract_mapping_semantic_candidates as extract_mapping_semantic_candidates,
-        extract_mapping_workflow_candidates as extract_mapping_workflow_candidates,
-        extract_named_bus_router_candidates as extract_named_bus_router_candidates,
-        extract_poly_editor_bank_candidates as extract_poly_editor_bank_candidates,
-        extract_poly_shell_bank_candidates as extract_poly_shell_bank_candidates,
-        extract_poly_shell_candidates as extract_poly_shell_candidates,
-        extract_presentation_widget_cluster_candidates as extract_presentation_widget_cluster_candidates,
-        extract_sample_buffer_candidates as extract_sample_buffer_candidates,
-        extract_snapshot_knowledge as extract_snapshot_knowledge,
-        extract_state_bundle_router_candidates as extract_state_bundle_router_candidates,
-    )
     from .assets import (
         Asset as Asset,
     )
@@ -140,14 +46,6 @@ if TYPE_CHECKING:
         poly_shell as poly_shell,
         poly_shell_bank as poly_shell_bank,
         sequencer_dispatch_shell as sequencer_dispatch_shell,
-    )
-    from .library_fixture import (
-        build_library_manifest as build_library_manifest,
-        load_library_manifest as load_library_manifest,
-        run_library_fixture as run_library_fixture,
-        select_library_manifest_entries as select_library_manifest_entries,
-        write_library_fixture_results as write_library_fixture_results,
-        write_library_manifest as write_library_manifest,
     )
     from .device import (
         AudioEffect as AudioEffect,
@@ -462,17 +360,6 @@ if TYPE_CHECKING:
         tempo_synced_delay as tempo_synced_delay,
         transport_sync_lfo_recipe as transport_sync_lfo_recipe,
     )
-    from .amxd_snapshot import (
-        extract_embedded_patcher_snapshots as extract_embedded_patcher_snapshots,
-        extract_parameter_specs as extract_parameter_specs,
-        load_snapshot as load_snapshot,
-        read_amxd as read_amxd,
-        snapshot_from_amxd as snapshot_from_amxd,
-        snapshot_from_bridge_payload as snapshot_from_bridge_payload,
-        snapshot_from_device as snapshot_from_device,
-        snapshot_to_json as snapshot_to_json,
-        write_snapshot as write_snapshot,
-    )
     from .stages import (
         Stage as Stage,
         StageResult as StageResult,
@@ -545,7 +432,6 @@ if TYPE_CHECKING:
         format_validation_issues as format_validation_issues,
         lint_graph as lint_graph,
     )
-    reverse = _amxd_module
     # isort: on
     # END GENERATED ROOT TYPE IMPORTS
 
