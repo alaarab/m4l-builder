@@ -22,14 +22,13 @@ jobs:
   build:
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       # actions/setup-python cannot resolve a prebuilt Python on the Arch
-      # linux runner (the runner host); use uv instead and run mkdocs from an
-      # ephemeral tool environment.
-      - uses: astral-sh/setup-uv@v7
+      # linux runner (the runner host); use uv and the locked docs group.
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Build site
-        run: uv tool run --with mkdocs-material mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v3
+        run: uv run --locked --group docs mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: site
 
@@ -41,4 +40,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5.0.1

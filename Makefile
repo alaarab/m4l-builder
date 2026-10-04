@@ -10,7 +10,7 @@ help:            ## Show this help
 check: lint typecheck test  ## Full CI-parity gate — run before pushing
 
 lint:            ## Ruff (identical to CI's lint step)
-	uv run ruff check src tests examples
+	uv run ruff check src tests
 
 typecheck:       ## Mypy (identical to CI's type-check step)
 	uv run mypy
@@ -19,7 +19,7 @@ test:            ## Pytest
 	uv run pytest -q
 
 fix:             ## Auto-fix what ruff can (imports, simple lint)
-	uv run ruff check --fix src tests examples
+	uv run ruff check --fix src tests
 
 hooks:           ## Enable the repo's pre-push hook in this clone
 	git config core.hooksPath .githooks

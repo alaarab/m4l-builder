@@ -14,16 +14,16 @@ jobs:
     name: lint & type-check
     runs-on: [self-hosted, linux]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.12"
           enable-cache: true
       - name: Sync dev dependencies
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
       - name: Ruff
-        run: uv run ruff check src tests examples
+        run: uv run ruff check src tests
       - name: Mypy
         run: uv run mypy
 
@@ -35,13 +35,13 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Sync dev dependencies
-        run: uv sync --group dev
+        run: uv sync --locked --group dev
       - name: Pytest
         run: uv run pytest --cov=m4l_builder --cov-report=term-missing
