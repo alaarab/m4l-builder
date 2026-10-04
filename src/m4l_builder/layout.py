@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING
 from . import ui
 
 if TYPE_CHECKING:
-    from typing_extensions import Concatenate, ParamSpec
+    from typing import Concatenate
+
+    from typing_extensions import ParamSpec
 
     from .ui_registry import VarnameWidgetMethod, WidgetMethod
 

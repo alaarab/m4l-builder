@@ -17,7 +17,7 @@ uv run pytest
 ```
 
 All three must pass before a change is merged. CI
-(`.github/workflows/tests.yml`) runs the same checks across Python 3.9–3.13.
+(`.github/workflows/tests.yml`) runs the same checks across Python 3.10–3.14.
 
 ## Ground rules
 

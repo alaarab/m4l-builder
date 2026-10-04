@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.32.4"]
 build-backend = "hatchling.build"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.8.0"
 description = "Programmatically build Max for Live (.amxd) devices"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     { name = "Ala Arab" },
 ]
@@ -32,29 +32,15 @@ packages = ["src/m4l_builder"]
 
 [dependency-groups]
 dev = [
-    # pytest 9.x dropped runtime support for Python 3.9; install it where it
-    # runs and fall back to the latest 8.x series on 3.9. Project targets 3.9+.
-    "pytest>=9; python_version >= '3.10'",
-    "pytest>=8.4,<9; python_version < '3.10'",
-    "pytest-cov>=7",
-    "ruff>=0.15.16",
-    # mypy 2.x rejects --python-version 3.9 and mypy>=1.20 dropped runtime
-    # support for Python 3.9; the project targets 3.9+, so cap below 2 and only
-    # install the newer mypy where it can run. CI type-checks on 3.12.
-    "mypy>=1.20,<2; python_version >= '3.10'",
-    "mypy>=1.19,<1.20; python_version < '3.10'",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
+    "mypy>=2.4.0",
 ]
 docs = [
-    # Docs build on modern Python only — the >=3.10 marker keeps the 3.9
-    # resolution branch (and its unpatchable urllib3/requests pins; both
-    # dropped 3.9 before their security fixes) out of the lock.
-    "mkdocs-material>=9.5; python_version >= '3.10'",
-    # Transitive via mkdocs-material. Pinned to a floor because <=10.21.3 has a
-    # path traversal in the b64 extension (an <img src> can read files outside
-    # base_path) — GHSA, Dependabot #5. mkdocs-material's own range still
-    # permits the vulnerable line, so without this floor a future `uv lock`
-    # can silently resolve back down to it.
-    "pymdown-extensions>=11.0.0; python_version >= '3.10'",
+    "mkdocs-material>=9.7.7",
+    # Keep a security floor for the transitive b64 extension dependency.
+    "pymdown-extensions>=12.1",
 ]
 
 [tool.pytest.ini_options]
@@ -76,7 +62,7 @@ show_missing = true
 fail_under = 85
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
 
@@ -101,7 +87,7 @@ ignore = ["E501", "UP031"]
 "tests/**" = ["E741"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 files = ["src/m4l_builder"]
 ignore_missing_imports = true
 implicit_optional = false

@@ -1536,7 +1536,7 @@ def randomize_matrix(device, id_prefix, *, rect, targets, columns=4,
     chip_w = (w - (columns - 1) * gap) / float(columns)
     params = {}
     chips = []
-    for k, (tid, spec) in enumerate(zip(tgt_ids, specs)):
+    for k, (tid, spec) in enumerate(zip(tgt_ids, specs, strict=False)):
         row, col = divmod(k, columns)
         cy = y + (chip_h + gap) * (row + 1)
         cx = x + col * (chip_w + gap)
