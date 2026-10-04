@@ -3,7 +3,6 @@
 import os
 import platform
 from pathlib import Path
-from typing import Optional
 
 # Output directories relative to the User Library root. Regular devices live
 # under Presets/; Live 12 MIDI Tools load from a top-level MIDI Tools folder.
@@ -49,7 +48,7 @@ def user_library() -> Path:
     return Path.home() / "Music" / "Ableton" / "User Library"
 
 
-def _validated_subfolder(subfolder: Optional[str]) -> Optional[Path]:
+def _validated_subfolder(subfolder: str | None) -> Path | None:
     if not subfolder:
         return None
     path = Path(subfolder)
@@ -62,7 +61,7 @@ def device_output_path(
     name: str,
     device_type: str = "audio_effect",
     *,
-    subfolder: Optional[str] = None,
+    subfolder: str | None = None,
     create_dirs: bool = True,
 ) -> str:
     """Return the full output path for a device .amxd file.

@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/m4l-builder.svg)](https://pypi.org/project/m4l-builder/)
 [![Tests](https://img.shields.io/github/actions/workflow/status/alaarab/m4l-builder/tests.yml?label=tests)](https://github.com/alaarab/m4l-builder)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://pypi.org/project/m4l-builder/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://pypi.org/project/m4l-builder/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 Build Max for Live devices in Python. Write scripts, emit `.amxd` files straight to your Ableton User Library. No Max GUI required. Everything is version-controllable, scriptable, and reproducible. Zero runtime dependencies -- pure stdlib.

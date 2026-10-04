@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/m4l-builder.svg)](https://pypi.org/project/m4l-builder/)
 [![Tests](https://img.shields.io/github/actions/workflow/status/alaarab/m4l-builder/tests.yml?label=tests)](https://github.com/alaarab/m4l-builder/actions)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://pypi.org/project/m4l-builder/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://pypi.org/project/m4l-builder/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 **Build Max for Live devices in Python.** Write a script, emit a `.amxd` file straight to your Ableton User Library. No Max GUI required — everything is version-controllable, scriptable, and reproducible, with **zero runtime dependencies** (pure standard library).
@@ -25,7 +25,7 @@ Max for Live devices are normally authored by hand in the Max patcher GUI, which
 pip install m4l-builder
 ```
 
-Requires Python 3.9+. To build the actual `.amxd` into your User Library you also need Ableton Live 10.1+ with Max for Live.
+Requires Python 3.10+. To build the actual `.amxd` into your User Library you also need Ableton Live 10.1+ with Max for Live.
 
 ## Quick start
 
