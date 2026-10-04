@@ -2,7 +2,6 @@
 
 import colorsys
 from dataclasses import dataclass
-from typing import Optional
 
 
 def js_color(color) -> str:
@@ -43,46 +42,46 @@ class Theme:
     # Second accent — the SELECTION/secondary color (a pink-on-cyan selection).
     # Two-accent devices read far more premium than one-accent ones. Defaults to
     # accent (single-accent) when omitted.
-    accent2: Optional[list[float]] = None
+    accent2: list[float] | None = None
 
     # v8ui panel gradient (the ui_kit premium top-lit panel_bg). Derived from
     # surface (top, lit) and bg (bottom) when omitted.
-    panel_hi: Optional[list[float]] = None
-    panel_lo: Optional[list[float]] = None
-    panel_border: Optional[list[float]] = None
+    panel_hi: list[float] | None = None
+    panel_lo: list[float] | None = None
+    panel_border: list[float] | None = None
 
     # Font
     fontname: str = "Ableton Sans Medium"
     fontname_bold: str = "Ableton Sans Bold"
 
     # Dial colors (derived from accent by default)
-    dial_color: Optional[list[float]] = None       # activedialcolor
-    needle_color: Optional[list[float]] = None     # activeneedlecolor
+    dial_color: list[float] | None = None       # activedialcolor
+    needle_color: list[float] | None = None     # activeneedlecolor
 
     # Tab colors
-    tab_bg: Optional[list[float]] = None           # bgcolor for unselected
-    tab_bg_on: Optional[list[float]] = None        # bgoncolor for selected
-    tab_text: Optional[list[float]] = None
-    tab_text_on: Optional[list[float]] = None
+    tab_bg: list[float] | None = None           # bgcolor for unselected
+    tab_bg_on: list[float] | None = None        # bgoncolor for selected
+    tab_text: list[float] | None = None
+    tab_text_on: list[float] | None = None
 
     # Meter colors
-    meter_cold: Optional[list[float]] = None   # Low level color (green-ish)
-    meter_warm: Optional[list[float]] = None   # Medium level color (yellow-ish)
-    meter_hot: Optional[list[float]] = None    # High level color (orange-ish)
-    meter_over: Optional[list[float]] = None   # Overload color (red)
+    meter_cold: list[float] | None = None   # Low level color (green-ish)
+    meter_warm: list[float] | None = None   # Medium level color (yellow-ish)
+    meter_hot: list[float] | None = None    # High level color (orange-ish)
+    meter_over: list[float] | None = None   # Overload color (red)
 
     # Scope colors
-    scope_color: Optional[list[float]] = None    # Waveform/trace color
-    scope_bgcolor: Optional[list[float]] = None  # Scope background
+    scope_color: list[float] | None = None    # Waveform/trace color
+    scope_bgcolor: list[float] | None = None  # Scope background
 
     # Compiled graph-display colors (spectroscope~ / filtergraph~)
-    spectrum_color: Optional[list[float]] = None  # Spectrum fill/line (neutral grey)
-    grid_color: Optional[list[float]] = None      # Graph grid lines
+    spectrum_color: list[float] | None = None  # Spectrum fill/line (neutral grey)
+    grid_color: list[float] | None = None      # Graph grid lines
 
     # LCD numbox/readout colors (appearance=4 — the dominant premium numbox look)
-    lcd_on: Optional[list[float]] = None    # lcdcolor — the lit digit
-    lcd_bg: Optional[list[float]] = None    # lcdbgcolor — the dark readout field
-    lcd_off: Optional[list[float]] = None   # inactivelcdcolor — dim/unlit segments
+    lcd_on: list[float] | None = None    # lcdcolor — the lit digit
+    lcd_bg: list[float] | None = None    # lcdbgcolor — the dark readout field
+    lcd_off: list[float] | None = None   # inactivelcdcolor — dim/unlit segments
 
     def __post_init__(self):
         if self.accent2 is None:

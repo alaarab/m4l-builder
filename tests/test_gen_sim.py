@@ -32,7 +32,7 @@ def test_history_reads_previous_sample_then_commits():
     lp = "History prev(0.);\nout1 = prev + 0.1 * (in1 - prev);\nprev = out1;"
     out = simulate(lp, {"in1": [1.0, 0, 0, 0, 0]}, num_samples=5)["out1"]
     expected = [0.1, 0.09, 0.081, 0.0729, 0.06561]
-    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(out, expected))
+    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(out, expected, strict=False))
 
 
 def test_param_and_samplerate_are_honoured():
@@ -88,7 +88,7 @@ def test_isp_detector_multisample_matches_independent_reimpl():
     seq = [-1.0, 1.0, 1.0, -1.0]
     got = simulate(kernel, {"in1": seq}, num_samples=4)["out1"]
     ref = _ref_isp(seq)
-    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(got, ref))
+    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(got, ref, strict=False))
     # the headline already-proven fact: the (-1,1,1,-1) window yields 1.25, the
     # inter-sample peak the sample peak (1.0) is blind to.
     assert isclose(got[3], 1.25, abs_tol=1e-12)
@@ -130,20 +130,20 @@ def test_drive_blend_null_test_transparent_at_zero_drive():
     db = "Param drv(0.);\n" + drive_blend("in1", "out1", "6.0", "drv")
     sig = [-0.7, 0.0, 0.3, 0.9, -0.5]
     flat = simulate(db, {"in1": sig}, params={"drv": 0.0}, num_samples=5)["out1"]
-    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(flat, sig))
+    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(flat, sig, strict=False))
     driven = simulate(db, {"in1": sig}, params={"drv": 1.0}, num_samples=5)["out1"]
-    assert any(not isclose(a, b, abs_tol=1e-6) for a, b in zip(driven, sig))
+    assert any(not isclose(a, b, abs_tol=1e-6) for a, b in zip(driven, sig, strict=False))
 
 
 def test_ms_width_null_test_identity_and_mono():
     mw = "Param w(1.);\n" + ms_width("in1", "in2", "out1", "out2", "w")
     left, right = [0.6, -0.2, 0.5], [0.1, 0.4, -0.3]
     ident = simulate(mw, {"in1": left, "in2": right}, params={"w": 1.0}, num_samples=3)
-    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(ident["out1"], left))
-    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(ident["out2"], right))
+    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(ident["out1"], left, strict=False))
+    assert all(isclose(a, b, abs_tol=1e-12) for a, b in zip(ident["out2"], right, strict=False))
     mono = simulate(mw, {"in1": left, "in2": right}, params={"w": 0.0}, num_samples=3)
     assert all(isclose(a, b, abs_tol=1e-12)
-               for a, b in zip(mono["out1"], mono["out2"]))
+               for a, b in zip(mono["out1"], mono["out2"], strict=False))
 
 
 # ── if / else / else-if control flow ─────────────────────────────────────────

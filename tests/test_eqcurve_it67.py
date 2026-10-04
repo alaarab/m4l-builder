@@ -97,7 +97,7 @@ class TestDynamicRingDragMonotonic:
         assert len(amts) >= 3, "ring drag emitted dynamic amounts"
         # strictly non-increasing (monotonic downward drag)
         vals = [a[3] for a in amts]
-        for a, b in zip(vals, vals[1:]):
+        for a, b in zip(vals, vals[1:], strict=False):
             assert b <= a + 1e-9, f"amounts not monotonic: {vals}"
         # and NEVER flipped to a node (freq/gain) edit
         assert _named(result.outlets, "band_freq") == []

@@ -55,7 +55,7 @@ def arc_knob_cluster_js(
     maxs = [float(k["max"]) for k in knobs]
     inits = [float(k.get("init", k["min"])) for k in knobs]
     signed = [1 if k.get("signed") else 0 for k in knobs]
-    for key, lo, hi in zip(keys, mins, maxs):
+    for key, lo, hi in zip(keys, mins, maxs, strict=False):
         if hi <= lo:
             raise ValueError(f"knob {key!r}: max must exceed min")
     setters = "\n".join(

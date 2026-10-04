@@ -1689,7 +1689,7 @@ def isp_bs1770_4x(x: str, out: str, *, ch: str = "l") -> str:
         "".join(f"History bp{ch}{i}(0.); " for i in range(1, 12)).rstrip()
     ]
     for p, coefs in enumerate(_BS1770_PHASES):
-        terms = " + ".join(f"{c:.13f} * {t}" for c, t in zip(coefs, taps))
+        terms = " + ".join(f"{c:.13f} * {t}" for c, t in zip(coefs, taps, strict=False))
         lines.append(f"ph{ch}{p} = {terms};")
     lines.append(
         f"{out} = max(max(max(abs(ph{ch}0), abs(ph{ch}1)), "
