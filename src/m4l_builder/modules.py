@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from .assets import Asset
 from .graph import BoxRef, InletRef, OutletRef

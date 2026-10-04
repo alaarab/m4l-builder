@@ -504,7 +504,7 @@ def test_biquad_df1_identity_passes_signal_through():
     # b0=1, all else 0 -> y == x sample for sample.
     sig = [0.3, -0.7, 1.0, 0.0, 0.5]
     out = _run_biquad(sig, 1.0, 0.0, 0.0, 0.0, 0.0)
-    assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig))
+    assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig, strict=False))
 
 
 def test_biquad_df1_impulse_response_is_b_then_feedback():
@@ -515,7 +515,7 @@ def test_biquad_df1_impulse_response_is_b_then_feedback():
     y1 = b1 - a1 * y0
     y2 = b2 - a1 * y1 - a2 * y0
     y3 = -a1 * y2 - a2 * y1
-    for got, exp in zip(out, [y0, y1, y2, y3]):
+    for got, exp in zip(out, [y0, y1, y2, y3], strict=False):
         assert abs(got - exp) < 1e-12
 
 
@@ -549,7 +549,7 @@ def test_rbj_peaking_matches_reference_coeffs():
     # independently computed RBJ peaking for f0=1000, Q=1, +6 dB, 48k.
     ref = [1.0439530870, -1.8953207239, 0.8677222848, -1.8953207239, 0.9116753718]
     got = _rbj_coeffs(1000.0, 1.0, 6.0)
-    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref)), got
+    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref, strict=False)), got
 
 
 def test_rbj_peaking_zero_gain_is_unity_through_biquad():
@@ -562,7 +562,7 @@ def test_rbj_peaking_zero_gain_is_unity_through_biquad():
     sig = [0.3, -0.7, 1.0, 0.0, 0.5, -0.2]
     out = _sim(code, {"in1": sig}, params={"f": 1000.0, "q": 1.0, "g": 0.0},
                num_samples=len(sig))["out1"]
-    assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig))
+    assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig, strict=False))
 
 
 def test_rbj_peaking_dc_gain_is_unity():
@@ -611,13 +611,13 @@ def test_rbj_low_shelf_matches_reference():
     # (regression snapshot; physical correctness is the DC/Nyquist tests below).
     ref = [1.03795790, -1.81274621, 0.79692279, -1.81826669, 0.82936021]
     got = _shelf_coeffs("low", 1000.0, 6.0)
-    assert all(abs(a - b) < 1e-7 for a, b in zip(got, ref)), got
+    assert all(abs(a - b) < 1e-7 for a, b in zip(got, ref, strict=False)), got
 
 
 def test_rbj_high_shelf_matches_reference():
     ref = [1.92229600, -3.49524679, 1.59427581, -1.74645447, 0.76777949]
     got = _shelf_coeffs("high", 1000.0, 6.0)
-    assert all(abs(a - b) < 1e-7 for a, b in zip(got, ref)), got
+    assert all(abs(a - b) < 1e-7 for a, b in zip(got, ref, strict=False)), got
 
 
 def test_rbj_shelf_zero_gain_is_unity_through_biquad():
@@ -630,7 +630,7 @@ def test_rbj_shelf_zero_gain_is_unity_through_biquad():
         sig = [0.3, -0.7, 1.0, 0.0, 0.5, -0.2]
         out = _sim(code, {"in1": sig}, params={"f": 1000.0, "g": 0.0},
                    num_samples=len(sig))["out1"]
-        assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig)), kind
+        assert all(abs(a - b) < 1e-12 for a, b in zip(out, sig, strict=False)), kind
 
 
 def test_rbj_low_shelf_dc_gain_is_full_nyquist_unity():
@@ -706,7 +706,7 @@ def test_one_pole_lp_hp_reconstruct_the_input():
     sig = [0.3, -0.7, 1.0, 0.0, 0.5, -0.2, 0.9]
     lp = _run_one_pole("lp", sig, 2000.0)
     hp = _run_one_pole("hp", sig, 2000.0)
-    assert all(abs((a + b) - x) < 1e-12 for a, b, x in zip(lp, hp, sig))
+    assert all(abs((a + b) - x) < 1e-12 for a, b, x in zip(lp, hp, sig, strict=False))
 
 
 def test_one_pole_hp_passes_nyquist_alternation():
@@ -802,13 +802,13 @@ def test_rbj_lowpass_matches_reference_coeffs():
     # normalised for the biquad_df1 MINUS convention (a1,a2 are +a1/a0,+a2/a0).
     ref = [0.00391612666, 0.00783225332, 0.00391612666, -1.81534108245, 0.83100558909]
     got = _lphp_coeffs(rbj_lowpass, 1000.0, 0.70710678)
-    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref)), got
+    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref, strict=False)), got
 
 
 def test_rbj_highpass_matches_reference_coeffs():
     ref = [0.91158666788, -1.82317333577, 0.91158666788, -1.81534108245, 0.83100558909]
     got = _lphp_coeffs(rbj_highpass, 1000.0, 0.70710678)
-    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref)), got
+    assert all(abs(a - b) < 1e-9 for a, b in zip(got, ref, strict=False)), got
 
 
 def test_rbj_lowpass_passes_dc_blocks_nyquist():
@@ -944,9 +944,9 @@ def test_tilt_shelf_is_monotonic_and_signed():
     fs = (40.0, 200.0, 1000.0, 5000.0, 14000.0)
     up = [_tilt_mag_db(f, 6.0) for f in fs]
     dn = [_tilt_mag_db(f, -6.0) for f in fs]
-    assert all(b > a for a, b in zip(up, up[1:]))     # +tilt strictly increasing
-    assert all(b < a for a, b in zip(dn, dn[1:]))     # -tilt strictly decreasing
-    for u, d in zip(up, dn):
+    assert all(b > a for a, b in zip(up, up[1:], strict=False))     # +tilt strictly increasing
+    assert all(b < a for a, b in zip(dn, dn[1:], strict=False))     # -tilt strictly decreasing
+    for u, d in zip(up, dn, strict=False):
         # +tilt and -tilt are mirror images about the pivot; RBJ shelves carry a
         # tiny (~0.03 dB) gain-sign asymmetry at the extremes, so allow for it.
         assert abs(u + d) < 0.06                      # mirror images (sum ~ 0)
@@ -1246,7 +1246,7 @@ def test_tanh_adaa_matches_independent_reference():
     seq = [2.5 * sin(2 * pi * 3000 * i / 48000.0) for i in range(3000)]
     got = _adaa_tanh(code, seq)
     ref = _adaa_ref(seq)
-    assert max(abs(a - b) for a, b in zip(got, ref)) < 1e-12
+    assert max(abs(a - b) for a, b in zip(got, ref, strict=False)) < 1e-12
 
 
 def test_tanh_adaa_constant_input_falls_back_to_tanh():
@@ -1312,7 +1312,7 @@ def test_hardclip_adaa_matches_independent_reference():
     from math import pi, sin
     seq = [3.0 * sin(2 * pi * 2000 * i / 48000.0) for i in range(3000)]
     got = _hc(hardclip_adaa("in1", "out1", "xp"), seq)
-    assert max(abs(a - b) for a, b in zip(got, _hc_ref(seq))) < 1e-12
+    assert max(abs(a - b) for a, b in zip(got, _hc_ref(seq), strict=False)) < 1e-12
 
 
 def test_hardclip_adaa_constant_input_falls_back_to_clamp():
@@ -1328,7 +1328,7 @@ def test_hardclip_adaa_transparent_below_ceiling():
     from math import pi, sin
     lo = [0.4 * sin(2 * pi * 100 * i / 48000.0) for i in range(2000)]
     got = _hc(hardclip_adaa("in1", "out1", "xp"), lo)
-    assert max(abs(a - b) for a, b in zip(got[1:], lo[1:])) < 0.01
+    assert max(abs(a - b) for a, b in zip(got[1:], lo[1:], strict=False)) < 0.01
 
 
 def test_hardclip_adaa_is_bounded_and_finite():
@@ -1375,14 +1375,14 @@ def test_square_adaa_matches_mean_of_square_reference():
     for x in seq:
         ref.append((x * x + x * xp + xp * xp) / 3.0)
         xp = x
-    assert max(abs(a - b) for a, b in zip(_sq(seq), ref)) < 1e-12
+    assert max(abs(a - b) for a, b in zip(_sq(seq), ref, strict=False)) < 1e-12
 
 
 def test_square_adaa_slow_signal_is_square():
     from math import pi, sin
     slow = [0.5 * sin(2 * pi * 60 * i / 48000.0) for i in range(2000)]
     got = _sq(slow)
-    assert max(abs(a - b * b) for a, b in zip(got[1:], slow[1:])) < 0.005
+    assert max(abs(a - b * b) for a, b in zip(got[1:], slow[1:], strict=False)) < 0.005
 
 
 def test_square_adaa_suppresses_aliasing_vs_naive_square():
@@ -1430,7 +1430,7 @@ def _ms_through(L, R, mode, g):
 
 
 def _close(a, b, tol=1e-9):
-    return len(a) == len(b) and all(abs(x - y) < tol for x, y in zip(a, b))
+    return len(a) == len(b) and all(abs(x - y) < tol for x, y in zip(a, b, strict=False))
 
 
 def test_ms_mode_split_text_is_a_2in_4out_router():

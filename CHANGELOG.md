@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Compatibility
+
+- Require Python 3.10+ for standalone device authoring. This library does not run
+  inside Ableton's bundled Python; the new minimum permits current development
+  and build tooling, including mypy 2 and pytest 9. No runtime dependencies added.
+
 <!-- FIXME(changelog): the entries below covering device freezing, sample_drop_target,
      gen_snippets' harmonic-exciter foundation, engines/exciter_curve.py, NoteEvent/notes_dict,
      the device_output_path fix, and the three Changed items were previously filed under a

@@ -4,7 +4,7 @@ Local setup, project layout, and the tooling that runs in CI.
 
 ## Prerequisites
 
-- Python 3.9+ (CI tests 3.9–3.13)
+- Python 3.10+ (CI tests 3.10–3.14)
 - [`uv`](https://docs.astral.sh/uv/) for environment and dependency management
 
 ## Setup
@@ -59,29 +59,23 @@ the null-terminated JSON patcher). See the docstring at the top of
 
 All tool config lives in `pyproject.toml`:
 
-- **ruff** — a conservative starter rule set (`E`, `F`, `W`, `B`). `E501`
-  (line length), import sorting (`I`), and `pyupgrade` (`UP`) are intentionally
-  deferred to keep diffs focused; they can be enabled in a dedicated cleanup
-  pass. Facade re-export modules are allow-listed via `per-file-ignores`.
-- **pytest / coverage** — `testpaths = ["tests"]`; a `slow` marker is
-  registered for opt-in slow tests.
-- **mypy** — pinned `<2` (mypy 2.x dropped Python 3.9 support). It gates the
-  whole package **except** a documented backlog of legacy modules listed under
-  `[[tool.mypy.overrides]]` with `ignore_errors = true`.
+- **ruff** — `E`, `F`, `W`, `B`, import sorting (`I`), and `pyupgrade` (`UP`),
+  targeting Python 3.10. Long generated literals (`E501`) and behavior-sensitive
+  printf rewrites (`UP031`) remain deferred. Facade re-exports are allow-listed.
+- **pytest / coverage** — `testpaths = ["tests"]`; the complete suite runs in CI
+  with an 85% branch coverage floor. A `slow` marker is registered.
+- **mypy** — current 2.x, targeting Python 3.10, gates every package module.
+  Fix type errors rather than introducing exclusions or weakening the gate.
 
-### Shrinking the mypy backlog (the ratchet)
+The package is a standalone authoring library, not an Ableton control-surface
+script running inside Live's bundled Python. Python 3.10 is the minimum needed
+by current build and development tooling. The docs dependency Markdown 3.11
+requires Python 3.11+, so Python 3.10 resolves its latest compatible 3.10.3;
+newer interpreters use 3.11.
 
-To bring an excluded module under the gate:
-
-```bash
-# See the real errors for a module (bypassing the overrides):
-uv run mypy src/m4l_builder/<module>.py --config-file=/dev/null \
-  --ignore-missing-imports --implicit-optional --python-version 3.9
-```
-
-Fix the errors, remove the module from the `[[tool.mypy.overrides]]` `module`
-list, and confirm `uv run mypy` stays green. Never *add* a module to that list
-to silence new errors — fix the code instead.
+CI uses the self-hosted runner's disk-backed temporary directory for native C++
+compilation because its `/tmp` tmpfs is quota-limited. Documentation builds on
+PRs; deployment requires an explicit manual workflow dispatch.
 
 ## Building & publishing
 

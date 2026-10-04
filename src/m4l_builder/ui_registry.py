@@ -368,10 +368,12 @@ DEVICE_WIDGET_SPECS = {
 # bound signature is the factory's minus the returned dict, e.g.
 # ``(id: str, varname: str, rect: list, *, min_val: float = 0.0, ...) -> BoxRef``.
 # ParamSpec/Concatenate are only needed by the checker, so the package keeps
-# zero runtime dependencies on Python 3.9.
+# zero runtime dependencies on Python 3.10.
 
 if TYPE_CHECKING:
-    from typing_extensions import Concatenate, ParamSpec
+    from typing import Concatenate
+
+    from typing_extensions import ParamSpec
 
     from .graph import BoxRef
 

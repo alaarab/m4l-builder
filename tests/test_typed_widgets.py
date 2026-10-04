@@ -99,7 +99,7 @@ def test_mypy_sees_widget_signatures(tmp_path):
     snippet = tmp_path / "snippet.py"
     snippet.write_text(_SNIPPET)
     stdout, _stderr, status = api.run([
-        str(snippet), "--python-version", "3.9", "--no-incremental",
+        str(snippet), "--python-version", "3.10", "--no-incremental",
         "--config-file", "/dev/null", "--no-error-summary", "--hide-error-context",
     ])
     errors = [line for line in stdout.splitlines() if ": error:" in line]
