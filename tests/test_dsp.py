@@ -1965,7 +1965,7 @@ class TestLiveRemote:
         assert box["text"] == "live.remote~"
 
     def test_inlets_outlets(self):
-        # corpus-verbatim (measured from the corpus): 2 inlets — value signal left,
+        # 2 inlets — value signal left,
         # `id <n>` on the RIGHT; one MESSAGE outlet (`mapped 0|1`), not signal
         boxes, _ = live_remote("lr")
         box = _find_box(boxes, "lr_remote")
@@ -4960,7 +4960,7 @@ class TestDynamicsWiringIntegrity:
         assert len(gain_to_mul) == 1
 
 
-class TestT36OfficialAdopt:
+class TestT36DelayPitchVoiceRecipes:
     """T36 [Q19,Q20]: vdelay~/gizmo~ recipes + poly~ voice template."""
 
     def test_clickless_delay_lints_and_crossfades(self):

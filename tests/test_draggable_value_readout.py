@@ -30,7 +30,7 @@ def test_custom_readout_declares_inlet_and_outlet():
 
 def test_custom_readout_has_pointer_handlers_and_drag_math():
     js = custom_readout_js(vmin=-12.0, vmax=12.0)
-    # The drag handlers (clone of custom_knob_js) emit on outlet 0 in param units.
+    # The drag handlers (same as custom_knob_js) emit on outlet 0 in param units.
     assert "function onclick(" in js
     assert "function onpointermove(" in js   # v8ui drag handler (ondrag dead on v8ui)
     assert "function ondblclick(" in js

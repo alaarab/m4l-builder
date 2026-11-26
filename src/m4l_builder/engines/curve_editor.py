@@ -3,10 +3,10 @@
 A breakpoint curve editor: N draggable breakpoints on a dark plot with an
 accent curve, a dim N-division grid, square nodes, a value row beneath the plot
 ("5 pt / Curve 40% / Grid 4 / Snap"), a live "X 59 Y 60" cursor readout while
-dragging, and a loop-glyph rendering hook. Corpus grounding: a boutique device
-builds its curves by rebuilding a native ``[function]`` object from SCALAR Live params
-(FunctionHandler.maxpat: indexed point messages like ``1 <x> <y> <curve>``,
-mid-x clamped 1..126 so ``[function]`` never renumbers its points) —
+dragging, and a loop-glyph rendering hook. Background: a common approach
+rebuilds a native ``[function]`` object from SCALAR Live params (indexed point
+messages like ``1 <x> <y> <curve>``, mid-x clamped 1..126 so ``[function]``
+never renumbers its points) —
 this engine is the kit-native generalization: our own jsui editor with the SAME
 neighbor-clamp rule and the same scalar-param persistence story (see
 ``Device.add_curve_editor``).

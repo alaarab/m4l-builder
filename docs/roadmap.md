@@ -11,9 +11,7 @@ device in Live to confirm behavior before relying on it.
   (`NoteEvent` / `notes_dict`, see [midi_tools.md](midi_tools.md)) ship today,
   but a generator that actually *emits* notes must send that dictionary to
   `live.miditool.out`. The likely approach is Max `dict` / `dict.pack` objects
-  or an embedded `v8`/`js` script. Open-source reference generators are
-  *frozen* (`.amxd` patcher encrypted), so the mechanism must be confirmed in
-  Live rather than reverse-engineered.
+  or an embedded `v8`/`js` script; the mechanism must be confirmed in Live.
 - **MPE per-note expression helpers.** Blocks for per-note channel routing,
   per-note pitch bend (±48 st), channel pressure, and slide (CC74). The objects
   are easy to emit; the per-note routing behavior needs a Live check.

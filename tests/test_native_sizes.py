@@ -1,10 +1,10 @@
-"""Native sizing tiers measured from the reference device set."""
+"""Native sizing tiers and layout tokens."""
 
 from m4l_builder import native_sizes as ns
 
 
-def test_premium_tiers_present_and_correct():
-    assert ns.DIAL_COMPACT == (41, 35)   # the corpus workhorse (38/82 dials)
+def test_sizing_tiers_present_and_correct():
+    assert ns.DIAL_COMPACT == (41, 35)   # the workhorse dial size
     assert ns.DIAL_RAIL == (41, 48)
     assert ns.DIAL_LCD == (51, 63)
     assert ns.NUMBOX_MINI == (17, 15)
@@ -27,7 +27,7 @@ def test_knob_row_fit_single_knob():
 
 
 def test_knob_row_defaults_to_dial_compact():
-    # knob_row must default to the premium DIAL_COMPACT (41x35), matching knob_row_fit
+    # knob_row must default to DIAL_COMPACT (41x35), matching knob_row_fit
     # — not the deprecated DIAL (44,47) guess.
     rects = ns.knob_row(10, 20, 3)
     assert all(r[2:] == [41, 35] for r in rects)
@@ -84,8 +84,8 @@ def test_max_value_rows_fit_dense_band_with_header():
 
 
 def test_col_pitch_clears_cell_width_dial():
-    # Columns at COL_PITCH must not overlap 41-wide dials (>= 4px gutter... the
-    # corpus gap is ~7 on a 41-wide dial at pitch 48).
+    # Columns at COL_PITCH must not overlap 41-wide dials (>= 4px gutter; the
+    # gap is ~7 on a 41-wide dial at pitch 48).
     assert ns.COL_PITCH >= ns.DIAL_COMPACT[0] + 4
     assert ns.CELL_W >= ns.DIAL_COMPACT[0]
 

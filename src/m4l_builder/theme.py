@@ -132,7 +132,7 @@ class Theme:
         if self.scope_bgcolor is None:
             self.scope_bgcolor = list(self.bg)
         if self.spectrum_color is None:
-            # Spectra read best NEUTRAL grey (not the accent) — the EQ8 look.
+            # Spectra read best NEUTRAL grey (not the accent).
             self.spectrum_color = [0.66, 0.70, 0.74, 0.85]
         if self.grid_color is None:
             self.grid_color = alpha(self.text_dim, 0.45)
@@ -551,9 +551,9 @@ ACCENTS: dict[str, list[float]] = {
 }
 
 # ── Semantic color roles (catalog #60, brand audit) ──────────────────
-# The corpus uses COLOR AS GRAMMAR, not decoration: the same four hues carry
+# Use COLOR AS GRAMMAR, not decoration: the same four hues carry
 # the same meaning on every device, so a user reads a row's function
-# before reading its label. Keep ONE primary accent per device (corpus P5)
+# before reading its label. Keep ONE primary accent per device
 # and reserve these roles for the mapping/mode grammar:
 #
 #   remote   orange — the hands-on lane: Remote-mode mapping rows, primary
@@ -562,7 +562,7 @@ ACCENTS: dict[str, list[float]] = {
 #            meters, engine-driven values (matches modulator_slot_component's
 #            Remote/Mod pair — do not re-tint per device).
 #   special  pink — armed / exceptional states: capture pills, scale
-#            awareness, one-shot actions (Bass Lock capture, Chordsaus REC).
+#            awareness, one-shot actions (capture, REC).
 #   inactive grey — unmapped, bypassed, empty: rows and chips waiting for a
 #            target take NO hue (never dim the accent; switch to this grey).
 #

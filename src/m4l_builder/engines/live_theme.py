@@ -1,13 +1,11 @@
 """Runtime ``live.colors`` theme bus — re-tints native controls from the user's
 actual Live skin, live (including on a light/dark theme switch).
 
-THE #1 most-cited pattern in the reference device set (13 of 15 devices use
-``live.colors``; a premium channel strip alone has 19 instances). Premium devices never
-bake colors at build time — they read the user's Live theme at load and broadcast
-each color over a device-scoped ``---`` send bus, so every control tracks the skin.
+Premium devices never bake colors at build time — they read the user's Live theme
+at load and broadcast each color over a device-scoped ``---`` send bus, so every
+control tracks the skin.
 
-Verified wiring (traced from a premium channel strip, the real pattern — more nuanced
-than a single route-dump): per color,
+Verified wiring (more nuanced than a single route-dump): per color,
 
     live.thisdevice[0] (loadbang) ─┐
                                    ├─► message "<skin_token>" ─► live.colors[0]
@@ -18,14 +16,14 @@ and each control subscribes with ``r ---<bus> -> control[inlet]`` (live.* object
 accept ``<attr> R G B A`` color-setting messages).
 
 These are box/line generators (the engine convention): they return ``(boxes,
-lines)`` for ``device.add_dsp(boxes, lines)``. NOTE: structurally verified against
-the real device; a Live-verify that it actually re-tints on a skin change is a
+lines)`` for ``device.add_dsp(boxes, lines)``. NOTE: structurally verified;
+a Live-verify that it actually re-tints on a skin change is a
 queued follow-up.
 """
 
 from ..objects import newobj, patchline
 
-# Live theme skin-slot names exposed by live.colors (seen across the corpus).
+# Live theme skin-slot names exposed by live.colors.
 LIVE_SKIN = (
     "lcd_control_fg",        # the LCD lit-digit / control foreground
     "lcd_control_fg_zombie",  # the dimmed (bypassed/zombie) foreground
@@ -203,9 +201,9 @@ def live_brand_dim(bus, brand_rgba, *, attrs=("activedialcolor",),
     """Generate the HYBRID brand-accent dim distributor (Surface default).
 
     The hybrid theming decision: the device keeps its BAKED brand accent while
-    enabled (each device's one disciplined accent, corpus P5), but greys out to
-    the user's actual Live skin "zombie" color when bypassed (the half of the J1
-    theme jewel that makes a device read first-party).
+    enabled (each device's one disciplined accent), but greys out to
+    the user's actual Live skin "zombie" color when bypassed (the half of the
+    runtime theme that makes a device read first-party).
 
     State source: a ``live.observer`` on this device's **Device On parameter
     value** (``this_device parameters 0``). **Live-verified 2026-07-01 (Strip
@@ -284,7 +282,7 @@ def live_theme_state_dim(bus, *, attrs=("activedialcolor",),
     """Generate the bypass "zombie" DIM distributor — broadcasts the Live ACTIVE
     accent over ``s ---<bus>`` while the device is enabled, and the DIMMED accent
     when it is bypassed, so every control on ``bus`` greys out on bypass like a
-    stock device (the second half of the J1 theme jewel).
+    stock device (the second half of the runtime theme).
 
     The enable state selects which skin token is (re-)queried from
     ``live.colors``::

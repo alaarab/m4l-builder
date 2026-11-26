@@ -2,7 +2,7 @@
 
 The filter/dynamics/stereo primitives in :mod:`gen_snippets` are the clean,
 neutral building blocks. This module is the other half of the palette: the
-*character* algorithms — optical compression, tape, Leslie, BBD chorus,
+*character* algorithms — optical compression, tape, rotary speaker, BBD chorus,
 de-essing, console coloration, sidechain ducking — that give a device its
 identity. Each was proven in Live inside a shipping device, then extracted here
 so the ALGORITHM survives independently of any one faceplate. Compose these into
@@ -49,7 +49,7 @@ def optical_leveler(
     xl: str, xr: str, outl: str, outr: str, peakred: str, *,
     makeup: str = "0.", gr_out: str | None = None, prefix: str = "opt",
 ) -> str:
-    """LA-2A-style optical leveler with a *program-dependent* release (harvested
+    """Optical-style leveler with a *program-dependent* release (harvested
     from Opti).
 
     The signature move of an optical compressor is that the release stretches
@@ -57,7 +57,7 @@ def optical_leveler(
     gain-reduction depth and lengthens the release from ~60 ms (idle) toward
     ~3 s (fully charged), so sustained level is smoothed while transients still
     recover fast. ``peakred`` (0..100) drives threshold DOWN and ratio UP in
-    lockstep (the single LA-2A "Peak Reduction" knob). Detection is stereo-linked
+    lockstep (a single peak-reduction knob). Detection is stereo-linked
     (max of both channels) so the image never shifts; one gain is applied to
     both. Set ``gr_out`` to a var name to tap gain reduction (dB, <= 0) for a
     meter. Built on :func:`~m4l_builder.gen_snippets.soft_knee_gain_computer`.
@@ -150,7 +150,7 @@ def leslie_rotor(
     balance: str, prefix: str = "lsl", horn_hz_out: str | None = None,
     drum_hz_out: str | None = None,
 ) -> str:
-    """Leslie rotary speaker: dual horn+drum rotors with mechanical inertia
+    """Rotary speaker: dual horn+drum rotors with mechanical inertia
     (from Rotary).
 
     An 800 Hz crossover splits ``mono`` into a HORN (highs) and DRUM (lows)
@@ -175,7 +175,7 @@ def leslie_rotor(
         f"{p}_drum_in = {p}_xlp;\n"
         f"{p}_horn_in = {mono} - {p}_xlp;\n"
         # hunt #66: 2=STOP coasts both rotors to ~0 through the same
-        # inertia poles (the signature Leslie brake); 0=SLOW/1=FAST are
+        # inertia poles (the signature rotary brake); 0=SLOW/1=FAST are
         # unchanged so existing sets do not remap.
         f"{p}_ht = {speed} > 1.5 ? 0.02 : ({speed} > 0.5 ? 6.7 : 0.8);\n"
         f"{p}_dt = {speed} > 1.5 ? 0.02 : ({speed} > 0.5 ? 5.7 : 0.66);\n"
@@ -228,7 +228,7 @@ def bbd_chorus(
     A soft ``tanh`` BBD input stage feeds one delay line read by 2/3 voices at
     120-degree-spread phases. Each voice is swept by a DUAL-RANK LFO — a slow
     rank at ``rate`` plus a fast shimmer rank ~9.7x — for the lush, non-periodic
-    Solina/Juno wash. ``depth`` (0..100) scales the sweep; ``voices`` >= 3
+    string-machine wash. ``depth`` (0..100) scales the sweep; ``voices`` >= 3
     enables the centre voice; ``tone`` (2k..16k Hz) is a per-voice one-pole for
     BBD darkness. Voices pan v1->L, v3->R, v2->centre; equal-power layout.
     Stereo out from mono. Set ``sweep_out`` to tap voice-1 sweep (ms). The caller

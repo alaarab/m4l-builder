@@ -1,9 +1,9 @@
 """Step-bar lane editor for jsui (catalog kit engines #7-#8).
 
 A gate/random step lane, kit-native: N vertical bars in a dark
-plot (a boutique device ships this as a raw ``multislider`` -- Auto_Gate's 8-slot rate
-lane), with the curve_editor's chrome idiom (same margins, dim grid, footer
-value row, drag readout) and the SIGNATURE step-editor gesture set:
+plot (a lane often shipped as a raw ``multislider``), with the curve_editor's
+chrome idiom (same margins, dim grid, footer value row, drag readout) and the
+SIGNATURE step-editor gesture set:
 
     click a bar         -- set it to the clicked value (y -> 0..1)
     drag                -- PAINT: continuously writes values across every bar

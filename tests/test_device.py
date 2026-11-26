@@ -256,7 +256,7 @@ class TestDevice:
         assert self._height_codes(self._make(height=120)) == []
 
     def test_allow_tall_opts_out_of_height_warning(self):
-        # a faithful clone of a taller original (190px) suppresses the rule
+        # a device that must stay taller (190px) suppresses the rule
         d = AudioEffect("Clone", width=280, height=190, allow_tall=True)
         assert self._height_codes(d) == []
 
@@ -298,7 +298,7 @@ class TestDevice:
         assert self._clip_ids(d) == set()
 
     def test_parked_offcanvas_control_not_flagged(self):
-        # the corpus idiom: a functional dial parked far off-canvas to hide it
+        # the parking idiom: a functional dial parked far off-canvas to hide it
         d = self._make(width=300, height=168)
         d.add_dial("probe", "Probe", [900, 900, 40, 30])
         assert self._clip_ids(d) == set()
@@ -511,7 +511,7 @@ class TestDevice:
         assert box["warmcolor"] == MIDNIGHT.meter_warm
         assert box["hotcolor"] == MIDNIGHT.meter_hot
         assert box["overloadcolor"] == MIDNIGHT.meter_over
-        # slidercolor = the recessed background rail (live.gain~ maxref); corpus sets it
+        # slidercolor = the recessed background rail (live.gain~ maxref); it is set
         # dark (~surface), so the channel matches the panel, not Live-default grey.
         assert box["slidercolor"] == MIDNIGHT.surface
 

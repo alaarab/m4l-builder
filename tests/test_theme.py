@@ -377,7 +377,7 @@ class TestDeviceThemeIntegration:
     def test_menu_highlighted_item_text_is_themed(self):
         # live.menu's highlighted item: bg = hltcolor (tab_bg_on / accent2), and its
         # TEXT = hlttextcolor (tab_text_on). The theme must inject textoncolor so the
-        # highlight text is legible — corpus themes hlttextcolor; tab already does too.
+        # highlight text is legible; tab already does too.
         d = Device("Test", 200, 100, theme=WARM)
         d.add_menu("m1", "mode", [0, 0, 80, 15], options=["A", "B"])
         box = d.boxes[0]["box"]
@@ -385,8 +385,8 @@ class TestDeviceThemeIntegration:
         assert box["hlttextcolor"] == WARM.tab_text_on  # highlight TEXT now themed
 
     def test_scope_gets_theme_colors(self):
-        # live.scope~ trace is the BARE linecolor (verified across the real-device
-        # corpus); activelinecolor is not a real live.scope~ attribute.
+        # live.scope~ trace is the BARE linecolor; activelinecolor is not a real
+        # live.scope~ attribute.
         d = Device("Test", 200, 100, theme=COOL)
         d.add_scope("s1", [0, 0, 200, 100])
         box = d.boxes[0]["box"]

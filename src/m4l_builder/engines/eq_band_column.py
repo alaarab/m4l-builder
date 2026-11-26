@@ -354,7 +354,7 @@ function knob_defs(band) {
     var center_x = SHOW_TYPE_CONTROLS ? Math.floor(w * 0.5) : (SHOW_TOGGLE_STACK ? Math.floor(w * 0.41) : Math.floor(w * 0.5));
     var motion_pad = 0;
     if (HORIZONTAL) {
-        // Three knobs in a ROW (EQ8 bottom-strip style): each owns a width-third,
+        // Three knobs in a ROW (EQ bottom-strip style): each owns a width-third,
         // name label above + value below, vertically centered with room for both.
         var hcell = w / 3.0;
         var hrad = Math.max(9, Math.min(13, Math.floor(Math.min(hcell * 0.22, (h - 22) * 0.5))));

@@ -1,6 +1,6 @@
 """buffer_viz — the jsui read side of the D4 gen->named-buffer->jsui viz bus.
 
-The corpus keystone for live displays: the gen~ engine pokes per-frame
+The keystone for live displays: the gen~ engine pokes per-frame
 screen state into ``---``-scoped ``buffer~`` objects (see
 ``gen_stateful.viz_declares`` / ``viz_poke_block``), and THIS v8ui peeks the
 same buffers on a self-owned poll ``Task`` and redraws — zero patchcord
@@ -41,7 +41,7 @@ def buffer_viz_js(*, draw: str, buffers: list, poll_ms: int = 33,
     keys_js = ", ".join(f'"{k}"' for k in keys)
     samps_js = ", ".join(str(n) for n in samps)
     chans_js = ", ".join(str(c) for c in chans)
-    return f"""// buffer_viz — D4 gen->buffer~->jsui animated display (corpus keystone)
+    return f"""// buffer_viz — D4 gen->buffer~->jsui animated display
 mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;

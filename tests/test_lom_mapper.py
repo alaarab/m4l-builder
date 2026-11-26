@@ -23,7 +23,7 @@ def test_lom_mapper_js_contract():
     assert 'outlet(0, "id", id)' in js    # sink bus speaks id lists only
 
 
-def test_sinks_are_two_inlet_corpus_shapes():
+def test_sinks_are_two_inlet_shapes():
     (rb,), _ = live_remote("t")
     assert rb["box"]["numinlets"] == 2
     assert rb["box"]["saved_object_attributes"]["_persistence"] == 1
@@ -161,7 +161,7 @@ def test_modulator_header_row_aligns_to_columns():
 
 
 def test_parameter_modmode_serializes():
-    """Live 12 Mod data model (corpus): parameter_modmode emits only
+    """Live 12 Mod data model: parameter_modmode emits only
     when set — the fleet stays byte-stable by default."""
     from m4l_builder.parameters import ParameterSpec
     spec = ParameterSpec(name="X", minimum=0.0, maximum=1.0, modmode=3,

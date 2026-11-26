@@ -135,13 +135,12 @@
   `live_compat/`, including the Max module host) and its Max/Live specs and
   reference fixtures moved out of this repository. The modal engine,
   `NativeInstrument` and `modal_external` stay.
-- Reverse-engineering and corpus analysis moved out of m4l-builder into a
-  separate package: `reverse`, `reverse_snapshot`,
-  `reverse_patterns`, `reverse_analysis`, `reverse_codegen`, `analysis`,
-  `corpus_analysis`, `corpus_fixture`, the `_reverse_*` / `_corpus_*` modules,
-  every `REVERSE_EXPORTS` / `ANALYSIS_EXPORTS` root name (`snapshot_from_amxd`,
-  `analyze_amxd_corpus`, `generate_*_python_from_*`, ...), and the corpus report
-  tools. No shim remains.
+- The `.amxd` analysis and Python-regeneration tooling moved out of m4l-builder
+  into a separate package: `reverse`, `reverse_snapshot`, `reverse_patterns`,
+  `reverse_analysis`, `reverse_codegen`, `analysis` with its companion analysis
+  and fixture modules, the private `_reverse_*` and analysis helpers, every
+  `REVERSE_EXPORTS` / `ANALYSIS_EXPORTS` root name (`snapshot_from_amxd`,
+  `generate_*_python_from_*`, ...), and the report tools. No shim remains.
   `m4l_builder.amxd.device_from_amxd` / `Device.from_amxd` and the LiveMCP
   bridge stay here.
 - Untracked `tmp/` scratch audio and screenshots and the stale UI-sprint notes
@@ -167,8 +166,8 @@
   win and existing calls build byte-identical output.
 **Live 12 MIDI Tools**
 - `MidiTransformation` and `MidiGenerator` device types (`.amxd` device-type
-  codes `natt` / `nagg`, reverse-engineered and byte-verified against shipping
-  devices), with round-trip read-back via `device_from_amxd`.
+  codes `natt` / `nagg`, byte-verified against Live 12's own MIDI Tool files),
+  with round-trip read-back via `device_from_amxd`.
 - `midi_tool_io` block: the `live.miditool.in` / `live.miditool.out` scaffold.
 - `docs/midi_tools.md` guide.
 
@@ -217,7 +216,7 @@
 **New Devices**
 - `probability_gate.py` — 16-step MIDI gate with per-step probability bars (multislider), tempo-synced via live.beat~
 - `morphing_filter.py` — large XY pad (cutoff × resonance) with filter type tab and Lissajous LFO auto-movement
-- `glue_compressor.py` — SSL-style bus compressor with transfer curve display, stepped ratio tab, auto-gain toggle
+- `glue_compressor.py` — VCA-style bus compressor with transfer curve display, stepped ratio tab, auto-gain toggle
 - `parallel_compressor.py` — NY-style parallel fattener with blend control and dry/wet meters
 
 ### Changed

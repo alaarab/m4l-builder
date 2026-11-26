@@ -1158,7 +1158,7 @@ def mc_poly_spine(device, id_prefix, *, voices=16, gen_name=None, gen_inlets=2,
         gen_inlets: inlet count of the gen voice (>=2: trigger + pitch).
         mpe: emit ``@mpemode 1`` on the noteallocator (the MPE path).
         steal: emit ``@steal 1`` (voice stealing).
-        autogain: ``@autogain 1`` on the mixdown (default 0, like the corpus default).
+        autogain: ``@autogain 1`` on the mixdown (default 0).
 
     Returns:
         StageResult with the spine IDs and ports (``note_out``, ``voice_index_out``,
@@ -1301,7 +1301,7 @@ def transport_sync_lfo_recipe(device, id_prefix, x=30, y=30):
 def beat_phase_gate(device, id_prefix="bpg", *, x=30, y=30):
     """Transport beat-phase source (Q3 framework recipe) built on
     ``plugsync~`` — the M4L-native transport reporter (scheduler-rate, no
-    LiveAPI round-trip; corpus precedent).
+    LiveAPI round-trip).
 
     Derives four message-rate signals every tempo-synced device builds on:
 
@@ -1316,7 +1316,7 @@ def beat_phase_gate(device, id_prefix="bpg", *, x=30, y=30):
                          swing amount + your off-beat mask downstream
 
     plugsync~ outlet map — LIVE-PROBED 2026-07-03 (tools/probe_plugsync.py;
-    the Max-docs/corpus-inferred map was WRONG — outlet 5 is tempo, not
+    the Max-docs-inferred map was WRONG — outlet 5 is tempo, not
     beats): 0 running(int) · 1 elapsed ms(int) · 2 beat-in-bar(int, 1-based)
     · 3 BEAT PHASE 0..1(float) · 4 [bar beat unit] list · 5 tempo BPM(float)
     · 6/7 large tick/sample counters · 8 bar number(int).

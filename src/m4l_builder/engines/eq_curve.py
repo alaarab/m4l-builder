@@ -1,6 +1,6 @@
 """Parametric EQ curve display with draggable nodes for jsui.
 
-Generates JavaScript (ES5) for Max's jsui object, drawing a premium-EQ/EQ Eight
+Generates JavaScript (ES5) for Max's jsui object, drawing a premium-EQ
 style multi-band EQ with draggable nodes and composite response rendering.
 
 Communication uses 3 inlets and 4 outlets.
@@ -90,8 +90,8 @@ def eq_curve_js(
     analyzer_fill_color="0.24, 0.78, 0.92, 0.12",
     analyzer_line_color="0.32, 0.84, 0.96, 0.48",
     analyzer_peak_color="0.92, 0.96, 1.0, 0.9",
-    # EQ8-style spectrum colour: a muted grey for the heavy solid fill + thin line
-    # used when the device flips to the "Ableton EQ Eight" look (vs the crisp
+    # Filled-style spectrum colour: a muted grey for the heavy solid fill + thin line
+    # used when the device flips to the grey filled look (vs the crisp
     # cyan line). Selected at runtime by set_analyzer_style 0|1.
     analyzer_eq8_color="0.70, 0.73, 0.78, 1.0",
     grid_color="0.2, 0.2, 0.22, 0.5",
@@ -172,7 +172,7 @@ var FILL_CLR       = [$fill_color];
 var ANALYZER_FILL_CLR = [$analyzer_fill_color];
 var ANALYZER_LINE_CLR = [$analyzer_line_color];
 var ANALYZER_PEAK_CLR = [$analyzer_peak_color];
-var ANALYZER_EQ8_CLR  = [$analyzer_eq8_color];   // muted grey for the EQ8-style fill
+var ANALYZER_SOLID_CLR = [$analyzer_eq8_color];   // muted grey for the filled style
 var GRID_CLR       = [$grid_color];
 var GRID_LIGHT_CLR = [$grid_color_light];
 var TEXT_CLR       = [$text_color];
@@ -257,7 +257,7 @@ var MARGIN_BOTTOM = 12;
 // ── State ────────────────────────────────────────────────────────────
 var sample_rate = DEFAULT_SR;
 var analyzer_enabled = 1;
-var ANALYZER_STYLE = 0;   // 0 = crisp (thin colour line + light wash); 1 = EQ8 (heavy grey fill, smoothed)
+var ANALYZER_STYLE = 0;   // 0 = crisp (thin colour line + light wash); 1 = filled (heavy grey fill, smoothed)
 // Display-domain spectrum tilt around a 1 kHz pivot (a premium-EQ convention):
 // +4.5 dB/oct makes pink noise read ~flat behind the curve. Pure render
 // transform — never touches the audio path. Freeze halts the ballistics and
@@ -572,15 +572,15 @@ function ensure_analyzer_arrays() {
     }
 }
 
-// Shared Ableton MAX-per-pixel-COLUMN rebin (the Spectrum Analyzer v42
+// Shared MAX-per-pixel-COLUMN rebin (the Spectrum Analyzer v42
 // algorithm) — used by BOTH the post-EQ display path and the pre-EQ overlay so
 // the two traces are column-for-column comparable. Returns ANALYZER_BINS dB
 // columns (floor-filled), or null when the frame is unusable.
 function rebin_fft_to_columns(mags) {
     var m = mags.length;
     if (m < 4) return null;
-    // Ableton MAX-per-pixel-COLUMN rebin (the Spectrum Analyzer v42 algorithm,
-    // ground-truth-verified vs Ableton Spectrum + EQ8): forward-map every linear FFT
+    // MAX-per-pixel-COLUMN rebin (the Spectrum Analyzer v42 algorithm,
+    // Live-verified): forward-map every linear FFT
     // bin to its LOG display column and keep the MAX bin per column; interpolate the
     // sparse low columns. Replaces the old wide-cell band (which blobbed the lows /
     // plateaued the mids). Lows smooth (~1 bin/col -> line between bins), highs peaky
@@ -833,8 +833,8 @@ function set_analyzer_freeze(v) {
 }
 
 // Spectrum render style: 0 = crisp (thin colour line + 5% wash, max-per-column
-// detail); 1 = EQ Eight (heavy muted-grey solid fill + smoothing → the creamy
-// filled look from Ableton's EQ8); 2 = Both (grey filled backdrop + the crisp
+// detail); 1 = filled (heavy muted-grey solid fill + smoothing → a creamy
+// filled look); 2 = Both (grey filled backdrop + the crisp
 // cyan line on top — energy AND a precise envelope, the most useful for real EQ
 // work). Render-only; the FFT feed + dB mapping are identical, draw_analyzer branches.
 function set_analyzer_style(v) {
@@ -1647,17 +1647,17 @@ function draw_analyzer() {
     }
 
     // Two render styles (set_analyzer_style): both use the SAME max-per-column data
-    // ROUNDED with path_roundcorners (spectRCorners=4); only the fill weight, line
+    // ROUNDED with path_roundcorners (radius 4); only the fill weight, line
     // and smoothing differ.
     //   0 crisp   — thin colour line + 5% wash, detail kept.
-    //   1 EQ8     — heavy muted-grey solid fill + an extra ±3-tap smooth that lifts the
-    //               inter-harmonic valleys into the creamy filled envelope of Ableton EQ8.
+    //   1 filled  — heavy muted-grey solid fill + an extra ±3-tap smooth that lifts the
+    //               inter-harmonic valleys into a creamy filled envelope.
     var ai;
-    var style = ANALYZER_STYLE;        // 0 crisp, 1 EQ8, 2 Both
-    var eq8 = (style === 1);
+    var style = ANALYZER_STYLE;        // 0 crisp, 1 filled, 2 Both
+    var filled = (style === 1);
     var both = (style === 2);
-    if (eq8) {
-        // Creamy EQ8 smooth (pure EQ8 only — crisp + Both keep max-per-column
+    if (filled) {
+        // Creamy filled smooth (filled style only — crisp + Both keep max-per-column
         // detail so resonances stay visible for real EQ work).
         var sm = [], j, acc, cnt;   // box-smooth in y (= dB; the map is linear) → fill the comb gaps
         for (i = 0; i < n; i++) {
@@ -1667,11 +1667,11 @@ function draw_analyzer() {
         }
         ys = sm;
     }
-    // Fill: crisp = light cyan wash; EQ8 = heavy grey; Both = a grey backdrop
-    // (lighter than EQ8) UNDER the crisp cyan line — energy + a precise envelope.
+    // Fill: crisp = light cyan wash; filled = heavy grey; Both = a grey backdrop
+    // (lighter than filled) UNDER the crisp cyan line — energy + a precise envelope.
     var fc, fTopA, fBotA;
-    if (eq8)       { fc = ANALYZER_EQ8_CLR;  fTopA = 0.30; fBotA = 0.46; }
-    else if (both) { fc = ANALYZER_EQ8_CLR;  fTopA = 0.16; fBotA = 0.30; }
+    if (filled)       { fc = ANALYZER_SOLID_CLR; fTopA = 0.30; fBotA = 0.46; }
+    else if (both) { fc = ANALYZER_SOLID_CLR; fTopA = 0.16; fBotA = 0.30; }
     else           { fc = ANALYZER_FILL_CLR; fTopA = ANALYZER_FILL_CLR[3] * 0.5; fBotA = ANALYZER_FILL_CLR[3]; }
     mgraphics.move_to(xs[0], bottom + 2);
     mgraphics.line_to(xs[0], ys[0]);
@@ -1685,13 +1685,13 @@ function draw_analyzer() {
     mgraphics.set_source(grad);
     mgraphics.fill();
 
-    // Envelope on top — crisp = bright thin colour line; EQ8 = a quiet grey edge
+    // Envelope on top — crisp = bright thin colour line; filled = a quiet grey edge
     // (the fill is the spectrum, not the line).
     mgraphics.move_to(xs[0], ys[0]);
     for (ai = 1; ai < n; ai++) mgraphics.line_to(xs[ai], ys[ai]);
     mgraphics.path_roundcorners(ANALYZER_RCORNERS);
-    if (eq8) {
-        mgraphics.set_source_rgba(ANALYZER_EQ8_CLR[0], ANALYZER_EQ8_CLR[1], ANALYZER_EQ8_CLR[2], 0.85);
+    if (filled) {
+        mgraphics.set_source_rgba(ANALYZER_SOLID_CLR[0], ANALYZER_SOLID_CLR[1], ANALYZER_SOLID_CLR[2], 0.85);
         mgraphics.set_line_width(1.0);
     } else {
         mgraphics.set_source_rgba(ANALYZER_LINE_CLR);
@@ -1701,9 +1701,9 @@ function draw_analyzer() {
 
     // Peak-hold line (slow-decaying), drawn thin above the live spectrum. Cyan +
     // grassy (the peaks aren't smoothed), so it belongs to the DETAIL styles only:
-    // skip it in EQ8 mode, where it would read as a second overlaid spectrum on top
-    // of the clean grey fill (EQ8 = monochrome smooth).
-    if (!eq8 && ANALYZER_PEAK_CLR[3] > 0.001) {
+    // skip it in filled mode, where it would read as a second overlaid spectrum on top
+    // of the clean grey fill (filled = monochrome smooth).
+    if (!filled && ANALYZER_PEAK_CLR[3] > 0.001) {
         mgraphics.set_source_rgba(ANALYZER_PEAK_CLR);
         mgraphics.set_line_width(1.0);
         var started = 0;

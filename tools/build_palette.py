@@ -126,7 +126,7 @@ def main() -> int:
           "- **`recipes.py`** — composed UI blocks (dial-value cells, settings"
           " sidebar, chip rows, viewport, mapper slots).",
           "- **`theme.py` / `native_sizes.py`** — GRAPHITE/ACCENTS palettes and"
-          " the corpus-derived sizing tokens.",
+          " the native sizing tokens.",
           "- **`engines/lom_mapper.py`** — the Live Object Model mapping kit"
           " (Remote/Mod modes, retargetable param sinks).", ""]
 

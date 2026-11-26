@@ -140,15 +140,15 @@ class PatcherProfile:
                 # NO parameterbanks stub: Live 12.4.5b's rewritten
                 # param_banks_fromdictionary SEGFAULTS (memmove from 0x0) on a
                 # bank with an empty parameters list whenever a control surface
-                # asks for bank counts on device load. Real Ableton devices
-                # (Map8 et al) omit the key entirely and let Live auto-bank;
+                # asks for bank counts on device load. Omitting the key
+                # entirely lets Live auto-bank;
                 # explicit banks still emit via _parameter_banks_payload.
                 "parameters": {},
             }
         }
         if is_mpe:
             # Emitted only when set: non-MPE devices stay byte-identical to
-            # pre-flag builds (Ableton's own non-MPE devices omit the key).
+            # pre-flag builds (non-MPE devices normally omit the key).
             payload["patcher"]["is_mpe"] = 1
         return payload
 

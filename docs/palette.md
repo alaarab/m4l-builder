@@ -10,10 +10,10 @@ The "vibe" algorithms — harvested from shipping devices, each proven in Live. 
 
 `m4l_builder.gen_character` — 12 functions
 
-- **`optical_leveler`** — LA-2A-style optical leveler with a *program-dependent* release (harvested from Opti)
+- **`optical_leveler`** — Optical-style leveler with a *program-dependent* release (harvested from Opti)
 - **`wow_flutter`** — Tape transport drift as a modulated read position in SAMPLES (from Chrono)
 - **`tape_hysteresis`** — Magnetic-tape record-head saturation with hysteresis memory (from Chrono)
-- **`leslie_rotor`** — Leslie rotary speaker: dual horn+drum rotors with mechanical inertia (from Rotary)
+- **`leslie_rotor`** — Rotary speaker: dual horn+drum rotors with mechanical inertia (from Rotary)
 - **`bbd_chorus`** — Bucket-brigade string-machine chorus, 2 or 3 voices (from Ensemble)
 - **`bbd_ensemble`** — True multi-voice BBD ensemble, 2..6 voices (the bbd_chorus superset)
 - **`deesser`** — Split-band de-esser: duck only the high band when sibilance triggers (from Sibilant Surgeon)
@@ -74,7 +74,7 @@ Clean building blocks — filters, dynamics gain-computers, saturators, M/S, lou
 - **`transient_split`** — Differential-envelope transient amount: a FAST envelope minus a SLOW one
 - **`allpass_first_order`** — First-order all-pass: magnitude-flat, phase-rotating diffusion / phaser stage
 - **`wavefold`** — Sine wavefolder: ``{out} = sin({gain} * {x} + {bias});``
-- **`moog_ladder`** — 4-pole Moog-style ladder lowpass with resonance feedback
+- **`moog_ladder`** — 4-pole transistor-ladder lowpass with resonance feedback
 - **`smooth_coeffs`** — Per-sample slew of biquad coefficients (de-zipper a moving filter)
 - **`kweight_lufs`** — Momentary BS.1770 K-weighted loudness (LUFS) of a stereo pair (self-contained)
 - **`grain_window_lookup`** — Read a grain amplitude-window value from a Buffer by NORMALIZED phase
@@ -209,6 +209,6 @@ The visual heroes — EQ curves, meters, spectra, waveforms, XY pads, goniometer
 
 - **`Surface`** (`surface.py`) — the faceplate layout engine: heroes, section cards, derived width, the brand-accent bus.
 - **`recipes.py`** — composed UI blocks (dial-value cells, settings sidebar, chip rows, viewport, mapper slots).
-- **`theme.py` / `native_sizes.py`** — GRAPHITE/ACCENTS palettes and the corpus-derived sizing tokens.
+- **`theme.py` / `native_sizes.py`** — GRAPHITE/ACCENTS palettes and the native sizing tokens.
 - **`engines/lom_mapper.py`** — the Live Object Model mapping kit (Remote/Mod modes, retargetable param sinks).
 

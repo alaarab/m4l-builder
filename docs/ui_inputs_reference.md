@@ -13,8 +13,8 @@ these notes — **never guess attributes; look them up here or in the docs.**
 
 ## ⭐ THE premium-control method — the Surface layout engine (native persistent-value cells)
 
-**Current law (UI Foundations v2, 2026-07; supersedes the earlier "reuse extracted
-painters" thesis):** the fleet's premium default is `m4l_builder.surface.Surface` —
+**Current law (UI Foundations v2, 2026-07; supersedes the earlier "paint every
+knob" thesis):** the fleet's premium default is `m4l_builder.surface.Surface` —
 hero slot(s) + untitled section cards of **native `dial_value_cell`s** (caption above,
 bare 41×35 `DIAL_COMPACT` dial, its own persistent `shownumber=1` value), width
 DERIVED from content at `finalize()`, and the hybrid brand-dim theme bus (baked
@@ -23,46 +23,37 @@ the Device-On-param `live.observer`, the only reliable runtime source). See
 `docs/ui_premium_playbook.md` for the API walkthrough and migration discipline.
 
 Corrections to the old text kept here for the record:
-- There is no extraction workflow in this repo (the old `research/extracted/` path
-  never existed here). Devices ship
-  ORIGINAL painters only (`engines/painters.py`).
+- Devices ship the kit's own painters only (`engines/painters.py`).
 - `paint_control` (`jspainterfile`) remains Live-proven (Nimbus) but is the path for
   a genuinely bespoke ONE-OFF control, **not** the default knob — painters hide the
-  native value readout, which is the corpus's #1 legibility rule (P2).
+  native value readout, which is the kit's #1 legibility rule (P2).
 
 ## Core principle — native-first, custom for what native can't draw
 
 **Native controls (`live.dial` / `live.tab` / `live.toggle` / `live.slider` /
-`live.numbox` / `live.menu`), sized small + laid out densely, are the premium DEFAULT**
-(validated against a native reference device). Reserve the **custom v8ui kit** for
-what native genuinely cannot do: hero curves, drag-curve nodes, XY pads, animated
+`live.numbox` / `live.menu`), sized small + laid out densely, are the premium DEFAULT**.
+Reserve the **custom v8ui kit** for what native genuinely cannot do: hero curves, drag-curve nodes, XY pads, animated
 displays (LFO / spinning reel), glyph pickers, glass panels. The mistake to avoid:
 over-engineering custom v8ui for ordinary knobs/menus, **and** sizing either too large.
 Compact sizing + dense layout is what reads as premium — native or custom.
 
-## ✅ Premium device LAYOUT grammar (corpus JSON ground truth)
+## ✅ Premium device LAYOUT grammar
 
-What reads as "a real device" is the LAYOUT, not bespoke knobs. Verified from the three
-reference devices' patcher JSON:
+What reads as "a real device" is the LAYOUT, not bespoke knobs:
 
-- **ONE coherent dark base.** A single dark rounded `panel` fills the device — the
-  channel-strip corpus device `[0.098]³` rnd 6, the spectrum-EQ corpus device `[0.157]³`
-  rnd 4, the effects-rack corpus device `[0.059]³` rnd 4. Not many nested boxes.
+- **ONE coherent dark base.** A single dark rounded `panel` fills the device — a grey
+  around `[0.059]³`–`[0.157]³`, `rounded` 4–6. Not many nested boxes.
 - **Displays are drawn DIRECTLY on the dark base** (a `jsui`/`spectroscope~`/`scope~`), or
   on a *gently* recessed screen only slightly darker than the base. ⛔ **NEVER a near-black
   box on a lighter panel** — that hard "black box" is the #1 amateur tell (the old Strip).
-- **Group CONTROLS on subtly *lighter* raised tiles**, not darker ones (the spectrum-EQ
-  corpus device's control cells `[0.529]`, the effects-rack corpus device's side columns
-  `[0.204]`). Light-on-dark = raised; dark-on-light = wrong.
-- **Sections split by thin `live.line` dividers** (the channel-strip corpus device uses 75
-  of them) — structure without heavy boxes.
+- **Group CONTROLS on subtly *lighter* raised tiles**, not darker ones (e.g. tiles
+  around `[0.204]`–`[0.529]` on the dark base). Light-on-dark = raised; dark-on-light = wrong.
+- **Sections split by thin `live.line` dividers** — structure without heavy boxes.
 - **Tabs are transparent, text-only**: `live.tab` `bgcolor`/`bgoncolor` **alpha 0**, grey
-  text → **accent** selected text (the channel-strip corpus device's
-  `textoncolor=[1.0,0.694,0.0]` orange). No filled pill.
+  text → **accent** selected text (e.g. `textoncolor=[1.0,0.694,0.0]` orange). No filled pill.
 - **No redundant internal title** — Live's device title bar already names it; an internal
   "STRIP" comment top-left reads as garbage. Use the space for content.
-- **One vivid accent** (the channel-strip and spectrum-EQ corpus devices use orange, the
-  effects-rack corpus device uses cyan), on dial rings + the live
+- **One vivid accent** (e.g. orange or cyan), on dial rings + the live
   trace; everything else muted-dark. Density (small controls packed on an 8px grid) + a
   value under every knob + a real graph is the premium signal.
 - **Live spectrum behind a curve** = a premium spectrum-EQ look: stock `spectroscope~`
@@ -84,25 +75,21 @@ reference devices' patcher JSON:
   for a plain dry/wet — it overlaps neighbors).
 - **Tiny inline value**: `appearance 1` (Tiny) or a `live.numbox`.
 
-## ✅ NATIVE SIZING (MEASURED — re-censused across 193 official Ableton/C74 .amxd devices)
+## ✅ NATIVE SIZING
 
-Ground truth — the W×H (px) Ableton actually uses (the **mode** of every presentation_rect, with
-its count). **Use these as defaults; native M4L is DENSE and SMALL.** Re-measured 2026-06 across
-the full official M4L Factory Packs (193 devices, via `extract_frozen_amxd` on the bundled
-abstractions) — a bigger dataset than the earlier 81-device pass; it CONFIRMS the dial and refines
-the rest.
+The native W×H (px) for each control. **Use these as defaults; native M4L is DENSE and SMALL.**
 
-| Control        | **Native W×H (mode)** | n | notes |
-|----------------|------------------------|----|-------|
-| `live.dial` knob | **44×47** | 119 (×54) | THE standard knob; secondary 51×36 / 47×36 (wide-short); label+value baked in |
-| `live.numbox`  | **39×15** | 170 (×75) | was 44 — corrected; H is ALWAYS 15. often `appearance 1` (LCD) |
-| `live.text`    | **20×12** | 214 (×60) | the dominant is a SQUARE-ish icon/label cell; 40×15 for a wider button |
-| `live.menu`    | **43×15** | 19 | NARROW + short; H ALWAYS 15 (some wide ~167 for long labels) |
-| `live.slider` (V) | **21×97** | 8 | vertical fader |
-| `live.tab`     | ~43–100 × **15–17** | 6 | width grows with segments |
-| `live.toggle`  | **11×11** | 4 | tiny square |
-| `live.button`  | **8×8** | 9 (×7) | tiny trigger dot (also 15×15) |
-| fontsize       | **10** (the live.* default) | — | renders small at these sizes |
+| Control        | **Native W×H** | notes |
+|----------------|------------------------|-------|
+| `live.dial` knob | **44×47** | THE standard knob; secondary 51×36 / 47×36 (wide-short); label+value baked in |
+| `live.numbox`  | **39×15** | was 44 — corrected; H is ALWAYS 15. often `appearance 1` (LCD) |
+| `live.text`    | **20×12** | a SQUARE-ish icon/label cell; 40×15 for a wider button |
+| `live.menu`    | **43×15** | NARROW + short; H ALWAYS 15 (some wide ~167 for long labels) |
+| `live.slider` (V) | **21×97** | vertical fader |
+| `live.tab`     | ~43–100 × **15–17** | width grows with segments |
+| `live.toggle`  | **11×11** | tiny square |
+| `live.button`  | **8×8** | tiny trigger dot (also 15×15) |
+| fontsize       | **10** (the live.* default) | renders small at these sizes |
 
 **Baked into the kit:** `m4l_builder.native_sizes` exposes these as constants
 (`ns.DIAL_COMPACT`, `ns.MENU`, `ns.NUMBOX`, `ns.TOGGLE`, `ns.TEXT`, `ns.BUTTON`,
@@ -119,9 +106,9 @@ There are TWO valid size regimes; pick by the look you want:
 - **OFFICIAL-NATIVE (spacious)** — the table above (dial **44×47**, numbox **39×15**). Matches
   Ableton's stock devices. Use for a utility / "feels built-in" device, or when the device sits
   next to stock devices and should not look out of place. Constants: `ns.DIAL`, `ns.NUMBOX`, …
-- **PREMIUM-COMPACT (dense boutique)** — measured from a 15-device reference set (dial
+- **PREMIUM-COMPACT (dense boutique)** — dial
   **41×35** `DIAL_COMPACT`, `NUMBOX_WIDE=50×15`, `VSLIDER_NATIVE=22×113`, `TAB_BAR_H=20`,
-  `ROW_PITCH_TIGHT=17`). Denser + flatter; matches dense boutique layouts.
+  `ROW_PITCH_TIGHT=17`. Denser + flatter; matches dense boutique layouts.
   Use for a flagship/character device where dense, tightly-packed controls read as
   premium. Constants: `ns.DIAL_COMPACT`, `ns.DIAL_RAIL`, `ns.NUMBOX_WIDE`, `ns.knob_row_fit(...)`.
 
@@ -143,7 +130,7 @@ Don't mix regimes in one device — choose one and size every control from it.
     NOT scale with the rect (Live-measured 2026-06):** `0 = Vertical` draws a **small**
     knob (~21px ⌀) and **stays ~21px even in a tall/wide rect** (extra rect = padding,
     not a bigger knob — the "knob looks small + padded" complaint). `3 = Large` draws a
-    **big** knob (~30px ⌀, ≈ Ableton EQ Eight's native dial) and **stays big even in a
+    **big** knob (~30px ⌀, about a stock EQ's dial) and **stays big even in a
     smaller rect** (a too-small rect just clips/crowds it). There is **NO medium**
     between them. So: pick the SIZE with `appearance` (0 small / 3 large), then size the
     RECT only to fit `label + that knob + value`; don't expect the rect to tune the knob
@@ -171,8 +158,8 @@ Don't mix regimes in one device — choose one and size every control from it.
     bipolar dial is ALL remainder, so it reads all-accent, then the dim filled arc grows out.
   - ⛔ **`dial_fill` token DECISION (task Q1, 2026-06): REJECTED.** The proposed token
     (`activefgdialcolor`→accent + `activedialcolor`→dim track) is **backwards** — the Lab A/B
-    shows it makes a DIM filled value + a BRIGHT empty remainder (the inverse of a premium
-    EQ's knob). The kit already ships the correct bright-fill/dark-track premium knob via the
+    shows it makes a DIM filled value + a BRIGHT empty remainder (the inverse of the usual
+    bright-fill knob). The kit already ships the correct bright-fill/dark-track premium knob via the
     default `activedialcolor`=accent. No token needed.
 - **Color anatomy (doc-verified — THREE pairs, each split by the active state):**
   - `dialcolor` / `activedialcolor` — the **FILLED value arc** (min→value), the bright
@@ -183,18 +170,18 @@ Don't mix regimes in one device — choose one and size every control from it.
   - `needlecolor` / `activeneedlecolor` — the **needle/pointer** line.
   - `tricolor` — the **reset-triangle marker** (shown when `triangle=1`; clicking it
     restores the dial's initial value). `bordercolor` / `focusbordercolor` = box border.
-  - ✅ **Channel-strip corpus device ground truth (v1.02) + Lab A/B 2026-06:** accent on
+  - ✅ **Recommended mapping (Lab A/B 2026-06):** accent on
     **`activedialcolor`** (the FILLED arc) + a neutral-grey **`activefgdialcolor`** (the
-    remainder track). The channel-strip corpus device's 24 dials:
+    remainder track), e.g.
     `activedialcolor=[1.0,0.694,0.0]` (orange fill) + `activefgdialcolor=[0.588]×3` (grey
     track), `showname 0`, 41×35. The kit's `recipes.dial_value_cell` follows this —
     `accent → activedialcolor` (filled value), `activefgdialcolor` grey (track): the premium
     bright-fill / dark-track knob.
-  - ✅ **ONE convention, not two — the channel-strip corpus device AND the EQ Eight / premium
-    EQ knob are the SAME mapping** (accent on the filled `activedialcolor`; they differ only
+  - ✅ **ONE convention, not two — an orange-fill knob AND a cyan stock-EQ-style knob are
+    the SAME mapping** (accent on the filled `activedialcolor`; they differ only
     in how dark the remainder track is). ⚠️ **CORRECTION (Lab A/B 2026-06):** the earlier "(b)
-    EQ Eight = accent on `activefgdialcolor` + dim `activedialcolor`" recipe was BACKWARDS —
-    that dims the filled value and brightens the empty remainder. To match EQ Eight's cyan,
+    cyan knob = accent on `activefgdialcolor` + dim `activedialcolor`" recipe was BACKWARDS —
+    that dims the filled value and brightens the empty remainder. For a cyan knob,
     set `activedialcolor`=cyan (the fill) + a dim `activefgdialcolor`, NOT the reverse. **Para
     EQ (#21) shipped the reversed recipe (`activefgdialcolor`=cyan) — RE-CHECK its dials.**
     The kit default (`dial_value_cell`) is already correct: `accent → activedialcolor`.
@@ -210,8 +197,7 @@ Don't mix regimes in one device — choose one and size every control from it.
     and value-less. For premium NATIVE dials: no painter, `shownumber 1`, accent ring.
     Reserve painters for a genuinely bespoke one-off control, not the default knob.
 - **`triangle` [int] 0**: toggles the reset-triangle marker (when `1`, clicking it restores
-  the dial's initial value). **Max default `0` (hidden), and the premium norm — corpus census
-  2026-06: 83/85 dials leave it absent (=0), only 2 set `1`, ZERO premium devices show it.**
+  the dial's initial value). **Max default `0` (hidden), and the premium norm.**
   The kit now **defaults `triangle 0`** to match (was `1`, which drew the stray reset-arrow
   above every knob — the "white arrows at the top of the knob" flagged on Para EQ). Pass
   `triangle 1` + a themed `tricolor` only for the rare device that genuinely wants the marker.
@@ -223,7 +209,7 @@ Don't mix regimes in one device — choose one and size every control from it.
 - **`panelcolor` [4 floats]**: only used when `appearance = 2` (Panel).
 - **`showname` / `shownumber` [int]**: draw the param name / value. **LABEL DECISION RULE
   (Live-verified 2026-06):**
-  - **Matched label** (caption the SAME font + size as the value — the EQ-Eight look) → use
+  - **Matched label** (caption the SAME font + size as the value — the stock-EQ look) → use
     the dial's OWN `showname 1`, NOT a separate comment. `fontsize` is a WHOLE-OBJECT attr
     (Max docs: *"Sets the object's font size (in points)"*), so the name and value always
     render in the identical font; `showname` natively stacks **name → knob → value**. Give
@@ -236,8 +222,8 @@ Don't mix regimes in one device — choose one and size every control from it.
     `live.dial`'s name/value text at the SAME nominal `fontsize`** (different font metrics) —
     so equal `fontsize` does NOT make them match; size the comment up deliberately, or accept
     the smaller grey caption as the intended look.
-  - **Ground truth:** the channel-strip corpus device's 24 dials are `showname 0` + `shownumber 1` (default)
-    and carry **ZERO `live.comment`s** — their captions come from a **backdrop graphic**
+  - **Backdrop captions:** a dial grid can be `showname 0` + `shownumber 1` (default)
+    with **ZERO `live.comment`s** — the captions come from a **backdrop graphic**
     (fpic/jsui), not comments. The kit's `dial_value_cell` approximates that backdrop with a
     small comment caption (`label_fontsize 7.5`); for a value-matching caption instead, pass
     `showname 1` and omit the comment. `dial_label_cell` must pass `showname 0` (else the
@@ -257,7 +243,7 @@ Don't mix regimes in one device — choose one and size every control from it.
   settable" note):** use **`unitstyle = 9` (Custom)** + the parameter's **`units`**
   (`_parameter_units`) string. A plain symbol (e.g. `"Harmonic(s)"`) appends to the native
   value; a **sprintf format** gives full control of the number — `units="%0.2f dB"` →
-  `"0.00 dB"`, `"%.1f Hz"`, etc. This is how to match EQ Eight's 2-decimal gain (`0.00 dB`)
+  `"0.00 dB"`, `"%.1f Hz"`, etc. This is how to show a 2-decimal gain (`0.00 dB`)
   on a stock `live.dial`. (`_parameter_steps` quantizes the range into N positions — that
   changes RESOLUTION, not just display, so don't use steps to force decimals.)
 
@@ -293,33 +279,31 @@ bypassed; the live (active) selection needs **`activebgoncolor=cyan`** (+ `activ
 for the unselected fill). Theme the `active*` attrs.
 
 > ⚠️ **The rule above is the COMMON case, NOT universal — every live.* object has its OWN
-> colour model and several break it.** Verified across the synced docs + corpus (one run per
+> colour model and several break it.** Verified against the synced docs (one run per
 > control). Use this cheat-sheet; do NOT copy one control's colour signature onto another (that
 > caused the tab→menu, numbox-text, and slider-fill bugs):
 >
 > | control | fill / "on" you SEE | text | notes / traps |
 > |---|---|---|---|
 > | **live.dial** | `activedialcolor` (FILLED value arc — accent here), `activefgdialcolor` (remainder track — dim) | — | NO bipolar flip (Lab A/B 2026-06); `triangle 0` = no reset arrow |
-> | **live.tab** | bg+`activebg*` twins | `textcolor`/`textoncolor` **+ `inactive*` twins** | TEXT has NO active twin; `activetextoncolor`=0 corpus (bug) |
+> | **live.tab** | bg+`activebg*` twins | `textcolor`/`textoncolor` **+ `inactive*` twins** | TEXT has NO active twin; don't set `activetextoncolor` (bug) |
 > | **live.text** | bg+`activebg*` twins | `textcolor`+`activetextcolor`; on-text = **`activetextoncolor`** only | NO bare `textoncolor` |
 > | **live.menu** | body=`activebgcolor`; highlight=**`hltcolor`** | **bare `textcolor`** + `hlttextcolor` | NO `bgoncolor`/`textoncolor`/active-text |
 > | **live.numbox** | body=`activebgcolor`; slider-mode=`activeslidercolor`; LCD=`lcd*` | **bare `textcolor`** | colours are APPEARANCE-gated; no bare `bgcolor` |
 > | **live.slider** | **bare `slidercolor`** (NO active twin) | **bare `textcolor`** | NO `appearance` attr at all |
-> | **live.button** | bg+`activebg*` twins (mirrored) | — | corpus border is alpha-0 (borderless) |
+> | **live.button** | bg+`activebg*` twins (mirrored) | — | border alpha-0 (borderless) |
 > | **live.toggle** | `activebgoncolor` (ON) | — | OFF-box left Live-default (don't hide it) |
 > | **live.meter~/gain~** | **INVERTED: lit = bare `cold/warm/hot/overloadcolor`** | `textcolor` (gain~) | unlit twins only for cold/warm (`inactive*`) |
 > | **textbutton** (classic) | bare `bgcolor`/`bgoncolor` | bare | Toggle on-bg needs `usebgoncolor 1` |
 > | **live.step/grid** | solid: `stepcolor`/`stepcolor2`/borders | — | alpha-WASH attrs (zebra/hover/amount) can't be token-mapped |
 
-## ✅ Runtime THEME BUS (`live.colors`) + bypass "zombie" dim — the #1 corpus jewel
+## ✅ Runtime THEME BUS (`live.colors`) + bypass "zombie" dim — the #1 premium jewel
 
-Grounded (13 of 15 reference devices use `live.colors`; one channel-strip device has 19 instances).
-Not in the synced Max docs — grounded from the reference set + `engines/
-live_theme.py`. **Premium devices never bake colors at build time** — they read the user's actual Live
+Not in the synced Max docs — see `engines/live_theme.py`. **Premium devices never bake colors at build time** — they read the user's actual Live
 skin at load + on every theme change and broadcast it so every native control tracks the skin
 (dark/light/custom). This is the single biggest "looks like a first-party Ableton device" cue.
 
-**The color bus** (verified from the channel-strip, sequencer, and effects-rack corpus devices):
+**The color bus:**
 ```
 live.thisdevice[0] (loadbang) ─┐
                                ├─► message "<skin_token>" ─► live.colors[0]
@@ -331,7 +315,7 @@ r ---<bus> ─► control[inlet]                                              //
 broadcast color into the control. One palette change repaints the whole device live; theming is data.
 **Skin slots** (`LIVE_SKIN`): `lcd_control_fg` (the ACCENT), `lcd_control_fg_zombie` (the dimmed/bypass
 accent), `lcd_bg`, `surface_bg`, `control_fg`, `assignment_text_bg`, `control_selection`. Fan ONE slot
-to many attrs at tiered alphas for a full look (the sequencer corpus device's `p lcd-knob`: `lcd_control_fg` →
+to many attrs at tiered alphas for a full look (e.g. `lcd_control_fg` →
 `activedialcolor`@1.0, `activefgdialcolor`@0.5, `fgdialcolor`@0.25, `textcolor`@0.5, `tricolor`@1.0 …).
 
 **`live.thisdevice` — the device-lifecycle object (3 outlets, synced-maxref-verified).** Declare
@@ -353,7 +337,7 @@ NEEDED, not redundant (empirically, 2026-06):** Live does NOT dim an M4L device'
 at all (enabled vs bypassed = 0.0 pixel-diff), so to get the stock "greys when off" look you
 MUST wire it yourself. Mechanism:
 `live.thisdevice <state> ─► s ---devicestate ─► r ---devicestate ─► sel 0 1 ─► [accent msg | zombie-grey
-msg]`. The effects-rack corpus device emits BOTH simultaneously with complementary alphas (`!- 1.`) so enable/bypass is an
+msg]`. Emit BOTH simultaneously with complementary alphas (`!- 1.`) so enable/bypass is an
 alpha crossfade. ✅ **STATE OUTLET RESOLVED (synced live.thisdevice maxref):** the enabled/disabled
 (bypass) bang comes from the **MIDDLE outlet (outlet 1)** — *"sent from the middle outlet when the Device
 is enabled or disabled"* (1=enabled, 0=disabled). NOT outlet 0 (leftmost = init/loadbang) and NOT outlet 2
@@ -381,13 +365,12 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
 ## ✅ live.tab  (segmented selector / enum param)
 
 - **Fill — BG has `active*` twins:** `activebgoncolor` (selected, active) · `activebgcolor`
-  (unselected, active) · `bgoncolor`/`bgcolor` (the bypassed twins). Premium devices set BOTH
-  twins (corpus census 2026-06: 17/28 each) so the fill themes in either device state.
+  (unselected, active) · `bgoncolor`/`bgcolor` (the bypassed twins). Set BOTH
+  twins so the fill themes in either device state.
 - **Text — pairs with `inactive*` twins, NOT `active*`:** `textoncolor` = selected-tab text
-  (enabled) **+ `inactivetextoncolor`** = the same when the device is bypassed (corpus 20/28);
-  `textcolor` = unselected-tab text **+ `inactivetextoffcolor`** when bypassed (9/28). ⚠️ **No
-  `activetextoncolor`/`activetextcolor` in the premium vocabulary — the corpus sets `activetextoncolor`
-  0/28.** The kit's `tab()` mirrors `textoncolor→inactivetextoncolor` and `textcolor→inactivetextoffcolor`
+  (enabled) **+ `inactivetextoncolor`** = the same when the device is bypassed;
+  `textcolor` = unselected-tab text **+ `inactivetextoffcolor`** when bypassed. ⚠️ **No
+  `activetextoncolor`/`activetextcolor` in the premium vocabulary.** The kit's `tab()` mirrors `textoncolor→inactivetextoncolor` and `textcolor→inactivetextoffcolor`
   (it previously mirrored to the bogus `activetextoncolor`, leaving bypassed selected-tab text un-themed).
 - `spacing_x` [float]: gap between segments (default ~6). `rounded` [float]: corner.
 - ⚠️ **`multiline` [int] — Max default is `1`, and that STACKS the segments.** Doc
@@ -416,9 +399,9 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
 - **`live.menu`** — a dropdown showing only the current value; one click + pick. Best for **many
   options** or a **tight width** where a tab won't fit. Saves as a parameter. (A 3-option enum in
   a cramped strip can go either way — a tab is more discoverable if it fits; a menu if it doesn't.)
-- **`umenu`** — NON-parameter; in the corpus almost always a styled read-only readout (`set`-driven,
+- **`umenu`** — NON-parameter; best as a styled read-only readout (`set`-driven,
   `ignoreclick`), not an interactive selector. Don't use it for a savable enum — use `live.menu`.
-- **`radiogroup`** — ⊘ plain-Max, unthemed, **0** M4L corpus. Never in a device; use `tab`/`menu`.
+- **`radiogroup`** — ⊘ plain-Max, unthemed. Never in a device; use `tab`/`menu`.
 
 ## ✅ live.slider / rslider  (fader)
 
@@ -432,7 +415,7 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
   non-existent `activeslidercolor` → sliders rendered Live-grey; **fixed → maps the real
   `slidercolor → dial_color`.**
 - **`textcolor` = the value-readout text** (doc-confirmed: *"Sets the display color for the
-  live.slider object's text"*; set by 14/14 sliders in a reference channel-strip device). The registry now maps
+  live.slider object's text"*). The registry now maps
   `textcolor → text` (was unmapped → digits rendered Live-default).
 - `tricolor`/`trioncolor`/`tribordercolor`: the mod/automation triangle (shown only when the
   param is modulated) — left to Live's modulation colour, not token-mapped. `modulationcolor`,
@@ -449,7 +432,7 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
   they share values): **0=Default, 1=Triangle, 2=Slider, 3=Bipolar, 4=LCD**. (The dial's is
   0=Vertical/1=Tiny/2=Panel/3=Large — so e.g. `appearance=2` is a *Slider*-fill numbox, NOT a
   panel; `appearance=3` is a *Bipolar* center-fill readout.)
-- **`appearance=4` = LCD — the DOMINANT premium numbox look** (corpus: 98 of 142 numboxes).
+- **`appearance=4` = LCD — the DEFAULT premium numbox look**.
   Borderless glowing digit: `lcdcolor` (lit digit), `lcdbgcolor` (dark readout field),
   `inactivelcdcolor` (dim/unlit segments). `appearance=2` (Slider) draws `activeslidercolor`
   as a value-fill bar behind the digits. Now first-class
@@ -458,24 +441,24 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
 - **`number_box()` now DEFAULTS to `appearance=4` (LCD) (fix 2026-06).** Previously the default
   was unset → Max's plain mode, so the registry's themed `lcd*` colours were **DEAD** (they
   only paint at appearance 4) — every kit numbox was a plain box wearing LCD theming it never
-  showed. The corpus is 69% LCD (98/142) and all 5 fleet numboxes are value readouts (Out
+  showed. All 5 fleet numboxes are value readouts (Out
   Gain, Output Gain, Slices, Refresh, Range…) — the exact LCD use case — so LCD-by-default is
   the right premium default and brings the lcd theming to life. Pass `appearance=0` for a plain
   box. (Manifests on REBUILD; installed `.amxd`s unchanged until then — Live-verify the LCD
   digits on the next numbox-device rebuild.)
 - `unitstyle` same enum as the dial. The compact native number — prefer over the custom
   stepper/readout unless you need −/+ buttons or a drawn bar.
-- **COLOUR MODEL (doc + corpus-grounded, 142 corpus numboxes) — MODE-specific, each colour
+- **COLOUR MODEL (doc-grounded) — MODE-specific, each colour
   renders ONLY in its `appearance`:** body bg = **`activebgcolor`** (the visible active=1
-  body for the non-LCD modes 0/1/3; corpus 30, and **bare `bgcolor` is NEVER used — 0**),
-  value text = **bare `textcolor`** (41; NO `activetextcolor` twin — like live.menu, unlike
+  body for the non-LCD modes 0/1/3; **bare `bgcolor` is NEVER used**),
+  value text = **bare `textcolor`** (NO `activetextcolor` twin — like live.menu, unlike
   live.text/tab), slider-fill (`appearance=2`) = `activeslidercolor`, LCD (`appearance=4`) =
   `lcdcolor`/`lcdbgcolor`/`inactivelcdcolor`, triangle (`appearance=1`) = `tricolor`/`tricolor2`
   + `activetricolor`/`activetricolor2` (the active twins go accent when value ≠ initial).
   There is NO `bgoncolor`/`textoncolor` (numbox has no on/off state).
 - **Theming:** registry maps `activebgcolor→surface` (non-LCD body), `textcolor→text`,
   `activeslidercolor→dial_color`, and the lcd trio — all unconditionally (off-mode colours
-  are ignored, so it's harmless; 17 corpus numboxes set `activebgcolor` AND lcd together).
+  are ignored, so it's harmless to set `activebgcolor` AND lcd together).
 
 ## ✅ live.toggle  (on/off)
 
@@ -484,10 +467,9 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
 - ⚠️ **toggle vs `live.text` — pick by whether the control needs a LABEL.** `live.toggle` is a
   bare ~12×13 checkbox: use it only for a tiny inline on/off whose meaning is obvious from
   context. For ANY on/off that benefits from a word (Bypass, HP On, Mono, M/S, AN) use
-  **`live.text`** (off/on labels, `mode=1` to latch) — that is the PREMIUM corpus norm
-  (the channel-strip corpus device builds its entire utility strip from labelled `live.text`;
-  the slice-sequencer corpus device's toggles are 2-value enum `live.text`). Both are real
-  automatable params; the difference is the label.
+  **`live.text`** (off/on labels, `mode=1` to latch) — that is the PREMIUM norm
+  (a whole utility strip of labelled `live.text`; 2-value toggles as enum `live.text`). Both
+  are real automatable params; the difference is the label.
 
 ## ✅ live.text  (text button / toggle hybrid)
 
@@ -497,8 +479,7 @@ Automatable enum param (stores 0/1). **Full active-twin object** — doc-verifie
   It previously FORCED `mode=0`, so all 48 fleet toggles (bypass/freeze/M-S/on-off) shipped
   MOMENTARY: they un-latched on release, rejected Live-API `set` (`bad arguments for message
   set`) and broke loadbang defaults. **Live-verified the fix** (rebuilt Mono Maker → its BASS
-  MONO toggle now latches `ON` with a persistent accent fill AND a LOM `set 0→1` holds; the
-  corpus is 0/113 explicit `mode=1` because they ride the native default). Pass `mode=0`
+  MONO toggle now latches `ON` with a persistent accent fill AND a LOM `set 0→1` holds). Pass `mode=0`
   explicitly for a genuine momentary action button. `transition` [int]: when the bang fires —
   0 Zero→One, 1 One→Zero, 2 Both.
 - `outputmode` [int] 0 (toggle mode only): `0 = Mouse down` (default), `1 = Mouse up`
@@ -508,8 +489,8 @@ Automatable enum param (stores 0/1). **Full active-twin object** — doc-verifie
 - `text` / `texton` [symbol]: the OFF / ON labels (the factory uses `text_off`/`text_on`).
 - ⚠️ **enum value labels: `live.text` does NOT surface `parameter_enum` to Live's value display**
   (Live-confirmed). The factory emits `parameter_type=2` + `parameter_enum=[text_off,text_on]`, and
-  the fix this run added the missing **`parameter_mmin=0`/`parameter_mmax=1`** (every one of 166
-  corpus enum params has `parameter_mmax` = `len(enum)-1`; `live.text` was the only enum control
+  the fix this run added the missing **`parameter_mmin=0`/`parameter_mmax=1`** (an enum param's
+  `parameter_mmax` should be `len(enum)-1`; `live.text` was the only enum control
   not setting min/max, unlike `menu()`/`tab()` — a real structural gap, now closed). BUT even with
   byte-identical `valueof`, Live shows the **`live.toggle`/`live.tab`** value label (`"ON"`, `"SINE"`)
   while **`live.text` shows the placeholder `"val2"`** in the LOM/automation readout — proven by
@@ -540,7 +521,7 @@ stored/automated value = the **index** (0..N-1). `add_menu(options=[...])` regis
 (`parameter_type=2`, min 0, max N-1, initial 0). Verified in the gallery: themed body +
 `Mode` param 0..3 → "WARM".
 - ⚠️ **live.menu has its OWN colour model — it does NOT share live.tab's** (NO synced doc
-  for live.menu; grounded on 25 corpus menus, e.g. the sequencer corpus device). Real attrs: **`activebgcolor`**
+  for live.menu). Real attrs: **`activebgcolor`**
   (the menu BODY you see, active=1; bare `bgcolor` = bypassed body), **bare `textcolor`** (item
   text — NO `activetextcolor` twin), **`hltcolor`** (the HIGHLIGHTED item's bg in the open list)
   + **`hlttextcolor`** (its text), `tricolor` (dropdown triangle), `bordercolor`/`focusbordercolor`,
@@ -553,15 +534,13 @@ stored/automated value = the **index** (0..N-1). `add_menu(options=[...])` regis
   registry mapping fed only `bgoncolor`→`tab_bg_on` and `textcolor`/`bgcolor`, so the highlighted
   item got the accent BG but its TEXT (`hlttextcolor`) stayed Live-default — often illegible on the
   accent. Added **`textoncolor`→`tab_text_on`** so the highlight TEXT themes too, matching the
-  selected `live.tab` (which already maps all four) and the corpus (6/25 menus set `hlttextcolor`).
-  Verified by diffing the kit's *emitted* menu attrs against the 25 corpus menus: kit was missing
+  selected `live.tab` (which already maps all four). The kit had been missing
   `hlttextcolor`/`lcd*`/`tricolor`/`bordercolor`; the closed (visible) menu look is unchanged — the
   themed highlight only shows when the dropdown is open — so no Live-verify needed.
-- **`appearance` — checked, NO kit-default change warranted (unlike numbox).** Corpus menu
-  `appearance` splits ~50/50: **None=12, appearance=1=13** (and all 7 lcd-themed menus are at
-  appearance 1, so 1 is the LCD-style menu mode). Because it is NOT a clear plurality (numbox was
-  69% at LCD), and the kit's default-appearance menu already renders themed (body `activebgcolor`,
-  `textcolor`, `hlt*` — Live-verified rendering fine in UIKit Gallery), leaving the menu default
+- **`appearance` — checked, NO kit-default change warranted (unlike numbox).** Both the
+  default appearance and **`appearance=1`** are common (1 is the LCD-style menu mode, where the
+  lcd colours apply). The kit's default-appearance menu already renders themed (body `activebgcolor`,
+  `textcolor`, `hlt*` — Live-verified rendering fine in UIKit Gallery), so leaving the menu default
   unset is correct. The LCD menu (`appearance=1` + `lcdcolor`/`lcdbgcolor`/`inactivelcdcolor`) is an
   available opt-in via kwargs, not the default.
 - **Use when** >4 options or long labels or tight width (one compact box); prefer `live.tab`
@@ -570,16 +549,15 @@ stored/automated value = the **index** (0..N-1). `add_menu(options=[...])` regis
 ## ✅ umenu  (non-parameter dropdown — in practice a styled READOUT)
 
 `umenu` (core Max, NOT `live.*`) outputs the selected **int index** on outlet 0 and is
-**NOT automatable or saved** — for an enum *parameter* use `live.menu` instead. But the
-corpus tells a surprising story: across **26 `umenu` instances, ALL have
-`parameter_enable=0`**, and **25/26 set `ignoreclick=1` + `arrow=0` + `allowdrag=0`** with a
-`bgfillcolor` fill and centered text (`textjustification=1` on 12). So premium devices use
+**NOT automatable or saved** — for an enum *parameter* use `live.menu` instead. Its best
+use is surprising: with `parameter_enable=0`, **`ignoreclick=1` + `arrow=0` + `allowdrag=0`**, a
+`bgfillcolor` fill and centered text (`textjustification=1`), premium devices use
 `umenu` almost exclusively as a **non-interactive STYLED VALUE READOUT** — a filled "LCD
 label" whose text is set programmatically by sending `set <index>` (or the int) into it — NOT
 as a picker. `add_umenu(..., display=True)` applies the verified preset (`ignoreclick=1,
 arrow=0, allowdrag=0`).
 - ⚠️ **The RENDERED fill is `bgfillcolor`, NOT bare `bgcolor`** (the modern Max "Color" attr
-  overrides it). Corpus-measured: **25/25 umenus use `bgfillcolor_type "color"` (a FLAT fill)
+  overrides it). A readout uses **`bgfillcolor_type "color"` (a FLAT fill)
   with `bgfillcolor_color` == `bgcolor`** — `bgfillcolor_color1/_color2/_angle` are stored but
   UNUSED at type `color` (it is NOT a rendered gradient, despite the stored stops). **Fix
   (2026-06):** `umenu()` now MIRRORS a themed `bgcolor` into `bgfillcolor_type:"color"` +
@@ -604,8 +582,7 @@ THREE 'button' variations — pick by need:
   toggle shows its on-LABEL but never its on-COLOUR). The kit's `textbutton()` now auto-sets
   `usebgoncolor=1` whenever a toggle is given a `bgoncolor` (Button mode flashes it briefly,
   no flag needed). Use for a labeled mode/action button that drives patcher logic (not a param).
-- **ubutton** (INVISIBLE click-zone over graphics) — now VERIFIED from the official M4L corpus
-  (43 instances / 14 devices, 100% consistent). 1 inlet / **4 outlets**
+- **ubutton** (INVISIBLE click-zone over graphics) — 1 inlet / **4 outlets**
   `["bang", "bang", "", "int"]`: outlet 0 bangs on mouse-UP (release inside), outlet 1 bangs on
   mouse-DOWN, outlet 3 is the `int` button state (1 down / 0 up). (The old stub had outlet 1 as
   `""` — wrong.) Its ONE color is `hltcolor` (the highlight flash drawn on click; otherwise
@@ -615,13 +592,13 @@ THREE 'button' variations — pick by need:
 
 ## ✅ matrixctrl  (grid of toggle cells — routing / mod matrix / step row)
 
-`matrixctrl` = a `rows`×`columns` grid of on/off cells. Measured (7 corpus instances):
-`rows`/`columns` always set (norm **2×4**, one **1×16** step row); **`autosize=1` on 6/7**
-(the Max default — cells auto-fit the rect, so you size the *box* not the cells); **6/7 are
-`ignoreclick=1` DISPLAYS** driven by the patch (showing a step pattern / routing state),
-NOT interactive. The interactive one is a 1×16 step row that's a **Blob parameter**:
+`matrixctrl` = a `rows`×`columns` grid of on/off cells. Always set
+`rows`/`columns` (typically **2×4**, or a **1×16** step row); keep **`autosize=1`**
+(the Max default — cells auto-fit the rect, so you size the *box* not the cells). It is
+usually an **`ignoreclick=1` DISPLAY** driven by the patch (showing a step pattern / routing state),
+NOT interactive. The interactive form (e.g. a 1×16 step row) is a **Blob parameter**:
 `parameter_enable=1` + `parameter_type=3` stores the WHOLE grid as one automatable/saved
-list (`parameter_longname='trigs'`), `outlettype=['list','list']`. Cell colors: **`color`**
+list, `outlettype=['list','list']`. Cell colors: **`color`**
 = ON/lit cell (→accent), **`elementcolor`** = OFF cell, **`bgcolor`** = backdrop — all
 alpha-0 in the saved file when a `live.colors` bus injects them at runtime. `verticalmargin`
 spaces rows. Kit: `add_matrixctrl(rows=, columns=, autosize=1, ignoreclick=, color=,
@@ -631,13 +608,13 @@ elementcolor=, bgcolor=)`; theme injects `color→accent, elementcolor→section
 
 ## ✅ multislider  (strip of N bars — multi-band meter / GR display / step editor)
 
-`multislider` draws N bars in a strip. Measured (5 corpus instances): `slidercolor`
-(the bars) + `bgcolor` (5/5); **4/5 are non-interactive DISPLAYS** — `ignoreclick=1` +
+`multislider` draws N bars in a strip. Colours: `slidercolor`
+(the bars) + `bgcolor`. It is usually a **non-interactive DISPLAY** — `ignoreclick=1` +
 `ghostbar=1` (a faint full-range outline behind each bar) + `thickness`, fed a list into
-the right inlet. The `setminmax` ranges are dB: **`[-70,0]`** (a multi-band LEVEL meter)
+the right inlet. Typical `setminmax` ranges are dB: **`[-70,0]`** (a multi-band LEVEL meter)
 and **`[-24,24]`** (a bipolar GAIN-REDUCTION display, with `signed=1`). So premium devices
 use multislider mostly as a multi-bar METER / spectrum-bars / GR readout, NOT an editor.
-The interactive case (1/5) is a Blob PARAMETER: `parameter_enable=1` + `settype` stores all
+The interactive case is a Blob PARAMETER: `parameter_enable=1` + `settype` stores all
 bars as ONE saved/automatable list (same Blob `parameter_type=3` idea as matrixctrl).
 `setstyle` 0=bar/1=line/2=point. Kit: `add_multislider(size=, display=True, ghostbar=,
 ignoreclick=, thickness=, signed=, slidercolor=, bgcolor=, setminmax=)`; theme injects
@@ -646,31 +623,28 @@ for one on/off grid use `matrixctrl`, for a single value use `live.slider`.
 
 ## ✅ live.step / live.grid  (Blob-param multi-value SEQUENCERS)
 
-**NOT in the synced Max docs** — grounded in MEASURED corpus device JSON (verify-don't-
-trust), like `live.line`. Both are **Blob parameters** (`parameter_enable=1` +
+**NOT in the synced Max docs** (verify-don't-trust, like `live.line`). Both are **Blob parameters** (`parameter_enable=1` +
 `parameter_type=3` + `parameter_invisible=1`): the ENTIRE pattern saves/automates as ONE
 list — same family as `matrixctrl` / `multislider`. The step/grid count lives INSIDE that
 Blob, NOT in a count attribute (the old `nstep`/`nseq`/`loop_start`/`loop_end` stub attrs
-were **hallucinated** — removed this run; no real corpus box has them).
+were **hallucinated** — removed this run; no real box has them).
 
-**live.step** (4 corpus instances — the slice-sequencer corpus device's Mod / Pan / Direction / Slice lanes):
+**live.step**:
 a multi-lane piano-roll step editor. **1 inlet / 5 outlets** (pitch, velocity, duration,
 extra1, extra2 lane data). Lanes are toggled by `pitch_active` / `velocity_active` /
-`duration_active` / `extra2_active` (corpus disables all but the one editable lane);
+`duration_active` / `extra2_active` (disable all but the one editable lane);
 `extra1` is ranged via `extra1_min` / `extra1_max` / `extra1_signed` (e.g. Pan = −50..50
-signed). `mode` selects the shown lane (corpus = 4). Colors are TWO-SHADE gradients:
+signed). `mode` selects the shown lane (e.g. 4). Colors are TWO-SHADE gradients:
 `stepcolor`/`stepcolor2` (the step bars), `bgcolor`/`bgcolor2` (backdrop), `blackkeycolor`
 (pitch-row black keys), `bordercolor`/`loopbordercolor`; `loopruler`/`unitruler` (0 = hide
 the rulers), `extra_thickness`, `fontname` (Arial Bold). Theme injects
 `stepcolor→accent, stepcolor2→accent2, bgcolor→bg, bordercolor→panel_border` (all solid).
 
-**live.grid** (2 corpus instances — the sequencer corpus device's 12×12 PitchMap, the
-slice-sequencer corpus device's 32×32 Sequencer):
+**live.grid** (e.g. a 12×12 pitch map or a 32×32 sequencer):
 a monome-style cell sequencer. **2 inlets / 6 outlets** (the old 1/4 stub was WRONG).
 `rows`/`columns` = visible grid; `maxrows`/`maxcolumns` = resizable cap; `direction` =
 play-direction mode; `marker_horizontal`/`marker_vertical` = guide lines; `rounded`/
-`spacing` = cell shape; `link` = link lanes. Colors: `stepcolor` (the lit cell — the sequencer
-corpus device uses orange, the slice-sequencer corpus device uses magenta),
+`spacing` = cell shape; `link` = link lanes. Colors: `stepcolor` (the lit cell — the accent),
 `bgstepcolor`/`bgstepcolor2` (unlit-cell two-shade bg),
 `bordercolor`/`bordercolor2`, `hbgcolor` (playhead-column highlight), `directioncolor`
 (the direction-arrow strip), `amountcolor`/`freezecolor`. Theme injects
@@ -686,7 +660,7 @@ directioncolor→accent2`.
   per-device with explicit RGBA. (`live.step` is mostly solid — `stepcolor`/`stepcolor2`/
   `bgcolor2`/`blackkeycolor`/borders are alpha=1.0; only `bgcolor` is a black@0.05 wash.)
 
-**Kit:** `add_live_step(...)` / `add_live_grid(...)` emit corpus-faithful boxes (display
+**Kit:** `add_live_step(...)` / `add_live_grid(...)` emit native-faithful boxes (display
 mode by default; pass `parameter_enable=1` only when you ALSO wire the `parameter_initial`
 Blob — full Blob-param automation is a separate, future step). **Use when** you need an
 interactive multi-step pattern editor: `live.step` for per-step value LANES
@@ -701,7 +675,7 @@ strip, `live.step` its step lane. Two-accent theming visibly confirmed on the gr
 ## ✅ live.scope~  (waveform / signal display)
 
 A DISPLAY object (not a parameter) — 2 signal inlets (X, and Y for X/Y mode), 0 outlets.
-Grounded in the real-device corpus (reference devices use it as a small waveform hero, 108×20).
+Typically used as a small waveform hero (108×20).
 - **Colors are the BARE attrs** (display, like the meter — there is NO active twin):
   `bgcolor` (background), `linecolor` (the trace — the color you always see),
   `gridcolor` (grid lines). **Fix this run:** the registry mapped a non-existent
@@ -749,7 +723,7 @@ Rate dial at the default renders "12.5%", not "2.5 Hz"). unitstyle is independen
 
 Verified from the `live.gain~` maxref (`~/.cache/livemcp/docs/raw/.../live-gain-*.html`).
 `live.meter~` is NOT in the synced docs, so treat the `live.gain~` color model as
-authoritative for both — and the corpus confirms it: the channel-strip corpus device's `live.meter~` sets
+authoritative for both — `live.meter~` takes
 `inactivecoldcolor`/`inactivewarmcolor` too, so the unlit-segment attrs apply to BOTH.
 
 **The INVERTED color rule (the gotcha).** Unlike `live.dial`/`live.tab` (where the `active*`
@@ -773,9 +747,9 @@ appear in the attr index but are undocumented duplicates — do not rely on them
 
 **`slidercolor` fix (2026-06):** the meter's recessed BACKGROUND rail (`slidercolor`,
 gain~ maxref = "the slider background color") was un-themed on the kit `meter` (it was
-only on `live_gain`), so the channel behind the segments was Live-default grey. The corpus
-`live.meter~` (the channel-strip corpus device, 2/2) sets it dark **`[0.098,0.098,0.098,1]`** — measurably the
-**`surface`** token (≈0.1), NOT the accent — so the registry now maps `meter slidercolor →
+only on `live_gain`), so the channel behind the segments was Live-default grey. The rail
+should be dark (**`[0.098,0.098,0.098,1]`** — the
+**`surface`** token, ≈0.1), NOT the accent — so the registry now maps `meter slidercolor →
 surface`. (It only takes effect when a metering device is REBUILT; installed `.amxd`s are
 unchanged until then — 6 devices use the meter, so Live-verify the rail on the next rebuild.)
 
@@ -787,7 +761,7 @@ display-only sibling (1 inlet, 1 outlet = peak value).
 
 **Premium usage:** lit segments use the theme `meter_*` tokens; the idle track now themes
 automatically — the registry maps `inactivecoldcolor`/`inactivewarmcolor` → `text_dim`
-(the channel-strip corpus device sets them to a mid-grey ~0.5, so the unlit rail reads as a consistent dim
+(a mid-grey ~0.5, so the unlit rail reads as a consistent dim
 strip instead of Live-default grey — fixed this run, for both `meter` and `live_gain`); the
 drag handle themes via `tricolor`/`trioncolor` → accent. Use
 `live.gain~` for an output trim with visual feedback; bare `live.meter~` for a read-only
@@ -807,9 +781,8 @@ need a non-standard shape (circular/radial) or a histogram the native object can
 
 ## ✅ live.drop  (file / sample drop target — IO intake)
 
-DOC-grounded (live.drop maxref; **0 corpus instances**, so the synced doc is the sole
-ground truth — a prior 'ScratchBacker/Mosaique 2-outlet' grounding in the kit was
-**fabricated** and was removed). Drag a file from Live's browser / Finder / Max file browser
+DOC-grounded (live.drop maxref, the sole ground truth — a prior 2-outlet grounding in the
+kit was **fabricated** and was removed). Drag a file from Live's browser / Finder / Max file browser
 onto it; the **absolute pathname** is sent out its **single** outlet as one quoted symbol.
 Route it through `prepend read` into a `buffer~` / `sfplay~` / `jit.movie` to actually load.
 
@@ -835,18 +808,16 @@ Route it through `prepend read` into a `buffer~` / `sfplay~` / `jit.movie` to ac
 
 ## ✅ swatch  (colour picker / display — utility)
 
-MEASURED from the official M4L corpus (1 instance; absent from synced docs and the reference
-set). A clickable colour field that outputs the chosen colour. **3 inlets / 2 outlets**
+Absent from the synced docs. A clickable colour field that outputs the chosen colour. **3 inlets / 2 outlets**
 `["", "float"]` (the prior stub's 1-in / 4-out was guessed and wrong) — outlet 0 emits the colour
 (list), outlet 1 a float. No styling box attrs: its displayed colour IS its runtime VALUE (set by
-a message), so there is nothing to theme. Measured attrs: `compatibility` (a Max compatibility-mode
-flag), `parameter_enable` (corpus 0). **Niche for audio** — use for a colour-pick utility or a
+a message), so there is nothing to theme. Attrs: `compatibility` (a Max compatibility-mode
+flag), `parameter_enable` (0). **Niche for audio** — use for a colour-pick utility or a
 user-themeable accent control; for a normal value use a `live.*` control.
 
 ## ✅ Premium SPECTRUM rendering — constant-Q smoothing (a premium spectrum-EQ look)
 
-Live-verified (2026-06, vs several premium spectrum-EQ devices + EQ8 on a sustained chord; a
-premium spectrum-EQ device's rendering source read as ground truth).
+Live-verified (2026-06, on a sustained chord).
 A spectrum looking "fucked up" — sharp needles, blocky wide lows, jagged "grass" highs — starts
 from ONE root cause: **plotting raw LINEAR FFT bins on a LOG-frequency axis.** An FFT gives
 evenly-spaced bins (~23 Hz @ 2048/48k); a log axis makes each octave equal width, so:
@@ -854,36 +825,35 @@ evenly-spaced bins (~23 Hz @ 2048/48k); a log axis makes each octave equal width
 - **Highs:** 5 k–20 k is a thin slice holding ~thousands of bins → dense jagged grass.
 - A tonal source's partials become needles on top.
 
-**The fix — MAX-per-pixel-COLUMN rebin (NOT constant-Q averaging).** This is what premium
-spectrum-EQ devices, Ableton Spectrum and EQ8 actually do (verified). For each integer pixel COLUMN, forward-map
+**The fix — MAX-per-pixel-COLUMN rebin (NOT constant-Q averaging).** For each integer pixel COLUMN, forward-map
 every FFT bin to its column (`round(freqToPos(binF))`) and keep the **single loudest bin** in
 that column; interpolate the sparse low columns between filled neighbours. NO frequency
 averaging, NO mean blend, NO octave band.
 - ⛔ **REVERSAL of the old advice below:** an earlier constant-Q / fractional-octave rebin
   (`peak*0.8 + mean*0.2`, widen the band, spatial+temporal Avg, +4.5 dB tilt) was tried and the
-  user rejected it — it read as a **smeared "blob"** that lost EQ8/premium-EQ detail. **Do NOT
+  user rejected it — it read as a **smeared "blob"** that lost spectral detail. **Do NOT
   octave-average a hero spectrum.** Max-per-column keeps lows smooth (≤1 bin/col → a line
   between bins) and highs honest (many bins/col → the max rides the partials).
 - **NO display tilt by default** (`slope = 0`). Tilt lifts the empty noise floor into a fake
-  rising diagonal and was reverted; only add it if a device explicitly wants SPAN-style balance.
-- **Two smoothness levers are DSP-side, not averaging** (the real reason a premium spectrum-EQ
-  device looks smooth):
-  1. **FFT size.** 2048 (a premium spectrum-EQ device uses `fftSize=2048` + `overlap=4`) blurs
+  rising diagonal and was reverted; only add it if a device explicitly wants a tilted balance.
+- **Two smoothness levers are DSP-side, not averaging** (the real reason a premium spectrum
+  looks smooth):
+  1. **FFT size.** 2048 (with `overlap=4`) blurs
      a chord's harmonics into a smooth hump; 4096 resolves each harmonic as a razor spike → a
      GRASSY COMB. **Use 2048 for a premium-smooth look** (4096 only if you specifically need
      finer low-freq resolution and accept the grass). Halving the FFT runs the analyzer ~+6 dB
      hotter — re-trim.
   2. **Per-column fall-clip (the anti-grass secret).** Each column rises instantly but may
-     FALL only ~2 dB/display-frame (`spectDClipDown`), so columns BETWEEN harmonics decay slowly
+     FALL only ~2 dB/display-frame, so columns BETWEEN harmonics decay slowly
      from their neighbour instead of plunging to the floor → the envelope stays smooth. (A plain
      `disp*0.82 + v*0.18` release does NOT do this — it settles each gap to the floor = grass.)
 - **VERTICAL FILL — ceiling at 0 dBFS, not +12.** A spectrum that "sits squished at the middle /
   body cut off / only the tops of the needles show" almost always has its dB ceiling above 0
   (e.g. `MAX_DB=+12` reserves headroom real audio never reaches). Set the top of the dB map to
   **0 dBFS** (our Spectrum Analyzer: `-78..0`) and trim so the loud low-mids land in the upper
-  third. A premium spectrum-EQ device uses `-90..+18` but its FFT runs hot enough to reach it.
+  third. A higher ceiling (e.g. `-90..+18`) only works if the FFT runs hot enough to reach it.
 - **Render STYLE = a thin full-alpha LINE (~1.1 px) carrying the shape + a LIGHT, FLAT fill**
-  (a premium spectrum-EQ device sets `spectFill = [1,1,1,0.05]` — a 5% white whisper, NOT a gradient and NOT a saturated
+  (e.g. a `[1,1,1,0.05]` fill — a 5% white whisper, NOT a gradient and NOT a saturated
   blob). Build the polyline → close to just BELOW the floor (`bottom+2`, off-screen) →
   `path_roundcorners(4)` → `stroke_preserve` the line → `fill` the wash. A heavy/gradient fill
   reads crude; the line + whisper reads "airy/pro."
@@ -906,7 +876,7 @@ averaging, NO mean blend, NO octave band.
   across the Max app, so TWO instances of the same device (after `duplicate_track`, or two copies in
   a Set) bind the SAME buffer; deleting one leaves the survivor's analyzer **DEAD** (spectrum blank
   though audio is loud / output meter ~0.85). **Reload the device to recover.** Proper fix (tracked):
-  per-instance-unique name like a premium device's `DEVICE_UNIQUE_ID+name` (a `#0` prefix or a
+  per-instance-unique name (a `#0` prefix or a
   `live.thisdevice`/LOM-derived suffix). Symptom signature: loud meter + totally empty analyzer = a
   dead/again-unfed buffer, not a render bug.
 - ⚠️ **`send`/`receive` need the `---` LOCAL prefix (same collision class, 2026-06).** A bare
@@ -927,17 +897,15 @@ depending on the path's angle."* Build the path (`move_to`/`line_to`/…), then 
 `mgraphics.path_roundcorners(r)` **before** `stroke`/`fill`/`stroke_preserve` and every corner
 is rounded. This turns a polyline of straight `line_to` segments into a smooth ORGANIC curve —
 the cure for the "straight lines / angular" look on ANY v8ui spectrum, EQ curve, envelope, or
-transfer graph. Cheap, native, no manual bezier math. A premium spectrum-EQ device uses
-`path_roundcorners(4)` on its spectrum (its `displayNormal` draw routine: build path → close to
+transfer graph. Cheap, native, no manual bezier math. For a spectrum: build path → close to
 floor → `path_roundcorners(4)` →
-`stroke_preserve` + `fill`); Live-verified in our Spectrum Analyzer at radius 4.
+`stroke_preserve` + `fill`; Live-verified in our Spectrum Analyzer at radius 4.
 
-## ✅ Native-compositing hero — a premium display with ZERO jsui (the slice-sequencer corpus device)
+## ✅ Native-compositing hero — a premium display with ZERO jsui
 
 A premium "data-inside-data" hero can be built ENTIRELY from STOCK native objects stacked on
-ONE rect — no jsui/v8ui/`paint()`/compile step. Code-verified from the slice-sequencer corpus
-device (the whole device has zero jsui): its "waveform inside the 32-step sequencer" hero = 5 native boxes on one
-~795×285 rect:
+ONE rect — no jsui/v8ui/`paint()`/compile step. E.g. a "waveform inside a 32-step sequencer"
+hero = 5 native boxes on one ~795×285 rect:
 - a themed **`live.grid`** at the BOTTOM of the z-stack (the sequencer matrix);
 - **4 `waveform~` overlays** stacked ON TOP, each with **`bgcolor` alpha 0** (the grid shows
   through), **`gridcolor` alpha 0** (no double-grid), **`selectioncolor` alpha 0**, and
@@ -977,7 +945,7 @@ v8ui drew its own spectrum (`external_spectrum=False`). Removing it (box + `scri
   Attribute** (`[int]`, grounded 2026-06) — present in EVERY object's refpage boilerplate, even
   non-UI objects like `pak`, so it is syntactically valid on `spectroscope~`/`scope~`/`waveform~`
   alike (it will set without error). What varies is the BEHAVIOR: click pass-through is
-  **corpus-proven for `waveform~` over a `live.grid`** (the slice-sequencer corpus device, above) — the right tool for a
+  **proven for `waveform~` over a `live.grid`** (the native-compositing hero, above) — the right tool for a
   NON-interactive compiled DISPLAY stacked on an interactive NATIVE control — but is **unverified for
   `spectroscope~`** (the object itself is absent from the synced docs). So don't TRUST it to free an
   interactive v8ui sitting under a `spectroscope~`; go behind or remove (or Live-verify first).
@@ -996,7 +964,7 @@ v8ui drew its own spectrum (`external_spectrum=False`). Removing it (box + `scri
   Tilt-+5 curve over a live signal). When a v8ui overlay MUST sit visually in front of a compiled
   display, either keep the compiled object SEMI-TRANSPARENT (this) or draw the data in the v8ui.
 
-## ⚠️ jsui vs v8ui — the default `border 1` box (Live-verified + corpus-grounded, 2026-06)
+## ⚠️ jsui vs v8ui — the default `border 1` box (Live-verified, 2026-06)
 
 A bare **`jsui` defaults to `border 1`** — a 1px box OUTLINE drawn at the box edge ON TOP of
 whatever the JS paints. For a **transparent overlay** (a jsui that paints no opaque background — a
@@ -1011,8 +979,7 @@ v8ui blends seamlessly instead of showing an opaque object box"*).
   JS (`SHOW_FRAME=0`) — it was the jsui's own `border 1`.
 - **Why some jsui never show it:** ones that PAINT an opaque background (drift `hero`, knocker
   `scope`) cover the inside; the 1px edge still draws but reads as an intentional framed display.
-- **Fix:** set **`border=0`** on the jsui box. Grounded: a corpus device's JSON ships `"border":0` on its
-  jsui. **The kit `jsui()` factory now defaults `border=0`** (2026-06) — a device that wants a
+- **Fix:** set **`border=0`** on the jsui box. **The kit `jsui()` factory now defaults `border=0`** (2026-06) — a device that wants a
   visible frame passes `border=1` (kwargs win). Latent until each device is rebuilt; at-risk display
   jsui (shard/pocket_delay/linear_phase_crossover) all sit inside panels, so losing the redundant
   edge is safe.
@@ -1051,11 +1018,11 @@ v8ui blends seamlessly instead of showing an opaque object box"*).
   patcher JSON) — extract a box's `presentation_rect`/attrs directly to see what shipped instead of
   guessing about Live/Max caches.
 
-## ✅ Modifier keys on an interactive v8ui graph (the premium-EQ / EQ8 node-edit scheme)
+## ✅ Modifier keys on an interactive v8ui graph (the pro-EQ node-edit scheme)
 
 A draggable-node graph (EQ curve, XY pad, transfer curve) is the premium reason to reach for a v8ui
 over native controls — but it only feels pro if it honours the **modifier keys** the engineer's
-muscle memory expects from a premium EQ / EQ Eight. Grounded two ways:
+muscle memory expects from a pro EQ:
 
 - **Reading modifiers off the v8ui `PointerEvent`** (Max JS API `PointerEvent` doc — these are the
   CORRECT property names, NOT the DOM `metaKey`/`optionKey`, which are dead on a v8ui event):
@@ -1069,8 +1036,7 @@ muscle memory expects from a premium EQ / EQ Eight. Grounded two ways:
   live. The kit wraps these in `pointer_shift_key()`/`pointer_option_key()`/`pointer_command_key()`
   helpers (in `eq_curve.py`) that fall back to the positional jsui-callback args, so the SAME engine
   works under both the v8ui `onpointer*` path and the legacy jsui `onclick`/`ondrag` path.
-- **The canonical premium mapping** (a leading EQ plugin's help documentation, and EQ Eight
-  agrees): the authoritative grounding when a note disagrees (one did — it had
+- **The kit's canonical mapping** — the authoritative reference when a note disagrees (one did — it had
   Cmd=axis-lock / Alt=solo, both WRONG). For node dragging:
 
   | gesture | does | kit `eq_curve` status |
@@ -1084,15 +1050,15 @@ muscle memory expects from a premium EQ / EQ Eight. Grounded two ways:
   | Cmd+Alt+click | change shape; **Alt+Shift+click** = change slope | ⬜ backlog |
   | Alt+wheel / Cmd+wheel | dynamic range / gain | ⬜ backlog |
 
-- ⚠️ **EQ8 ≠ the premium EQ on Alt — they CONFLICT (Ableton manual, grounded 2026-06):** Ableton's
-  own EQ Eight uses **Alt/Option + drag = Q** (its ONLY drag modifier; plain drag = freq+gain), and
+- ⚠️ **Live's stock EQ CONFLICTS with this mapping on Alt (Ableton manual, grounded 2026-06):**
+  the stock EQ uses **Alt/Option + drag = Q** (its ONLY drag modifier; plain drag = freq+gain), and
   exposes band "solo" through **Audition mode** (the headphone icon — *"clicking and holding a
   filter dot lets you hear only that filter's effect"*), NOT a modifier-click. So a device cannot
-  honour BOTH muscle memories on Alt: the premium EQ wants **Alt=constrain + Cmd=Q**, EQ8 wants
-  **Alt=Q**. The kit follows **the premium-EQ convention** (a deliberate product choice, not a bug)
+  honour BOTH muscle memories on Alt: the mapping above wants **Alt=constrain + Cmd=Q**, the stock
+  EQ wants **Alt=Q**. The kit follows **the mapping above** (a deliberate product choice, not a bug)
   — pick ONE house convention and document it on the device. (This also explains the bogus
-  "Alt+click=solo" note that misled an earlier pass: solo is an EQ8 *Audition-mode* feature,
-  never a modifier-click on the premium EQ.)
+  "Alt+click=solo" note that misled an earlier pass: solo is a stock-EQ *Audition-mode* feature,
+  never a modifier-click.)
 - **Click-vs-drag disambiguation (the key pattern):** Alt is BOTH a click action (bypass) and a drag
   action (constrain). Resolve by **arming a drag on Alt-press WITHOUT firing the click action**, then
   on `onpointerup` fire the discrete action **only if the press never travelled** (`alt_moved` stays
@@ -1105,8 +1071,8 @@ muscle memory expects from a premium EQ / EQ Eight. Grounded two ways:
 - ⚠️ **Edge-label collision (node caption vs axis scale):** when a draggable node reaches a plot edge
   its number/value caption competes with the axis scale labels for the same pixels. Observed on Para
   EQ (2026-06): a band dragged to the far RIGHT (~19 kHz) parks ON the right-edge dB scale — the node
-  occludes the `-36` label and its "4" number crowds the `-24`/`-36` zone. Premium fix (a premium
-  EQ does this): (a) FLIP the node caption to the INNER side when it's within ~caption-width of an edge, and
+  occludes the `-36` label and its "4" number crowds the `-24`/`-36` zone. Premium fix:
+  (a) FLIP the node caption to the INNER side when it's within ~caption-width of an edge, and
   (b) dim or skip the axis label a node currently overlaps. Draw-only (mgraphics layout) so the
   gesture test harness can't catch it — Live-eyeball a node parked at each edge.
 - ⚠️ **Filled response curve must plot EVERY point — never skip below-floor points then close to the
@@ -1131,25 +1097,24 @@ muscle memory expects from a premium EQ / EQ Eight. Grounded two ways:
 
 ## ⚠️ spectrumdraw~  (multi-trace spectrum — needs a BUNDLED external, does NOT render bare)
 
-MEASURED from the official M4L corpus (4 instances, 100% consistent; absent from synced docs and
-the reference set). The multi-trace FFT spectrum graph. **4 signal inlets / 1 outlet** (`[""]`)
+Absent from the synced docs. The multi-trace FFT spectrum graph. **4 signal inlets / 1 outlet** (`[""]`)
 — feed up to 4 signals to OVERLAY 4 spectra (input vs output, L / R, with / without sidechain).
 
 > ⚠️ **LIVE-VERIFIED GOTCHA (DisplayProbe, 2026-06):** `spectrumdraw~` is a **compiled external
 > (`spectrumdraw~.mxo`) that is NOT in the stock Max install** — it ships ONLY bundled inside
-> specific Ableton devices (Convolution Reverb bundles `spectrumdraw~.mxo`/`.mxe64`). A bare
+> the specific devices that use it (as `spectrumdraw~.mxo`/`.mxe64`). A bare
 > `spectrumdraw~` box loads with NO error but renders the striped **classname placeholder** (the
-> external can't be found) — confirmed even with the full official attr set + signal fed in. So
+> external can't be found) — confirmed even with the full attr set + signal fed in. So
 > `add_spectrumdraw` is only usable if you ALSO bundle the proprietary external (dubious). **For a
 > spectrum in the kit, use `spectroscope~` (stock) or the compiled `fft_analyzer` / jsui display
 > instead.** (Contrast `waveform~`, whose `.mxo` IS stock, so it renders bare.) The attrs below
-> remain corpus-accurate for the rare case you do bundle the external.
+> remain accurate for the rare case you do bundle the external.
 
-- **`amprange`** [lo, hi] dB (corpus `[-80, 10]`). **`ampgrid`** / **`amplabels`** /
+- **`amprange`** [lo, hi] dB (e.g. `[-80, 10]`). **`ampgrid`** / **`amplabels`** /
   **`freqgrid`** / **`freqlabels`** toggle the grids + labels.
 - **Per-trace:** `color` / `color2` / `color3` / `color4` + `thickness` / `thickness2` /
   `thickness3` / `thickness4` — one color + width per overlaid spectrum.
-- **Analysis:** `octavesmooth` (fractional-octave smoothing, corpus ~1/6), `timesmooth`
+- **Analysis:** `octavesmooth` (fractional-octave smoothing, e.g. ~1/6), `timesmooth`
   [attack, release] ms, `fftsize` (index), `mode`, `curvestyle`, `mousemode`.
 - **Kit:** `add_spectrumdraw(amprange=, color=, octavesmooth=, freqgrid=, …)`; theme injects
   `color→accent`, `color2→accent2` (the comparison trace), `bgcolor→scope_bgcolor`.
@@ -1170,21 +1135,20 @@ checked against the stock Max externals folder
 `nslider` all have a **stock `.mxo`** → they render in a bare device. The `live.*` controls
 (`live.dial`/`live.tab`/`live.text`/`live.scope~`…) are **built into the Max app** (no `.mxo`
 file) → also always available. **`spectrumdraw~` is the SOLE kit maxclass with no stock external**
-(ships only bundled inside Convolution Reverb). So no other widget carries the spectrumdraw~ risk.
+(ships only bundled inside the devices that use it). So no other widget carries the spectrumdraw~ risk.
 RULE: a non-`live.*` `~` object is only safe if its `.mxo` is in that stock folder; re-run this
 check before adding any new compiled object to the kit.
 
 ## ✅ waveform~  (buffer~ audio display + drag-to-select region)
 
-MEASURED from the official M4L corpus (7 instances, 100% consistent; absent from synced docs and
-the reference set). Draws the audio in a named `buffer~` and (unless `ignoreclick`) lets the
+Absent from the synced docs. Draws the audio in a named `buffer~` and (unless `ignoreclick`) lets the
 user drag-select a region. **5 inlets / 6 outlets** `["float","float","float","float","list",""]` —
 the float outlets emit the selection bounds (start / end) as you drag; outlet 4 is a list.
 
 - **`buffername`** (required): the `buffer~` to display.
 - **Colors:** `waveformcolor` (the trace), `selectioncolor` (the drag-selection highlight),
-  `bgcolor`, `gridcolor`, `bordercolor`, `linecolor`, `labelbgcolor` / `labeltextcolor` (corpus
-  saves them alpha-0 — runtime-skinned).
+  `bgcolor`, `gridcolor`, `bordercolor`, `linecolor`, `labelbgcolor` / `labeltextcolor` (saved
+  alpha-0 when runtime-skinned).
 - **Display toggles:** `labels`, `ruler` (time ruler), `vticks`. `ignoreclick` 1 = display-only
   (no selection); `allowdrag` / `setmode` control drag behaviour.
 - **Kit:** `add_waveform(buffername=, waveformcolor=, selectioncolor=, ruler=, ignoreclick=, …)`;
@@ -1197,19 +1161,18 @@ the float outlets emit the selection bounds (start / end) as you drag; outlet 4 
 
 ## ✅ live.adsrui  (ADSR envelope editor)
 
-MEASURED from the official M4L corpus (2 instances, identical; absent from synced docs and the
-reference set). The native A / D / (S) / R envelope editor — drag the handles to shape it.
+Absent from the synced docs. The native A / D / (S) / R envelope editor — drag the handles to shape it.
 **10 inlets / 10 outlets, all UNTYPED** (`[""]*10`); the prior kit stub's 1-in / 4-out 'float'
 outlets were guessed and WRONG (it did already emit the right maxclass `live.adsrui`).
 
 - **Per-stage TIME AXES (ms):** `attack_domain` / `decay_domain` / `release_domain` [lo, hi]
-  (corpus attack `[0, 60000]`, decay `[10, 60000]`, release `[10, 30000]`). Live values:
+  (e.g. attack `[0, 60000]`, decay `[10, 60000]`, release `[10, 30000]`). Live values:
   `attack_time` / `decay_time` / `release_time` (ms).
-- **Extra handles:** `enable_initial` / `enable_peak` / `enable_final` [int] (corpus all 0 — a
+- **Extra handles:** `enable_initial` / `enable_peak` / `enable_final` [int] (all 0 — a
   plain ADSR; enable them for an initial / peak / final level handle).
 - **Behaviour:** `outputmode`, `show_slopehandles` (curve/slope handles), `tethering`.
 - **Colors (the `active*` set — bare twins are the runtime skin):** `activebgcolor` (display bg,
-  corpus alpha-0, bound to a `themecolor` expression at runtime), `activelinecolor` (envelope
+  saved alpha-0, bound to a `themecolor` expression at runtime), `activelinecolor` (envelope
   line), `activehandlecolor` (drag handles). Themed `activebgcolor → scope_bgcolor`,
   `activelinecolor → accent`, `activehandlecolor → accent`. (Saved with `themecolor.*`
   expressions in `saved_attribute_attributes` — the runtime live.colors binding.)
@@ -1218,17 +1181,16 @@ outlets were guessed and WRONG (it did already emit the right maxclass `live.ads
 
 ## ✅ filtergraph~  (EQ / filter-response editor → biquad coefficients)
 
-MEASURED from the official M4L corpus (11 instances, 100% consistent; absent from the synced docs
-AND the reference set). The COMPILED native filter editor: drag the curve to design a filter,
+Absent from the synced docs. The COMPILED native filter editor: drag the curve to design a filter,
 and outlet 0 emits the coefficient **list** for `biquad~` / `cascade~` — so it is BOTH the UI AND
 the coefficient source. **8 inlets / 7 outlets** `["list","float","float","float","float","list","int"]`
 (the prior stub defaulted to 1/1 — wrong).
 
-- **`domain`** [lo, hi]: X-axis frequency range (corpus `[20.0, 22050.0]` Hz).
+- **`domain`** [lo, hi]: X-axis frequency range (e.g. `[20.0, 22050.0]` Hz).
 - **`value_range` → `range`** [lo, hi]: Y-axis gain (LINEAR amplitude, e.g. `[0.0725, 4.0]`); set
   `dbdisplay 1` to label it in dB.
 - **`nfilters`** [int]: filter count. **`setfilter`** [list] `[idx, type, bypass, …, freq, gain, Q]`
-  defines a band. **`logmarkers`** [list]: the log-spaced freq grid (corpus `[50, 500, 5000]`).
+  defines a band. **`logmarkers`** [list]: the log-spaced freq grid (e.g. `[50, 500, 5000]`).
 - **Colors:** `bgcolor`, **`markercolor`** (the freq GRID — NOT `gridcolor`, which was a dead guess
   in the registry), `curvecolor` (response curve), `hcurvecolor` (highlighted curve),
   `bwidthcolor`/`hbwidthcolor` (bandwidth fill), `fgcolor`, `textcolor`. `parameter_enable` is 0
@@ -1272,7 +1234,7 @@ whole control — to `accent2`; single-accent themes set `accent2 == accent` so 
 
 ## ✅ live.arrows  (direction-arrow control — rotate / nudge / step)
 
-DOC-VERIFIED (live.arrows maxref) + 1 corpus instance (the slice-sequencer corpus device's "rotate cell sequence").
+DOC-VERIFIED (live.arrows maxref).
 1 inlet / 1 outlet (`[""]`). On click it sends the **symbol** `left` / `up` / `down` / `right`
 (NOT a number) — wire those to your own increment / rotate / nudge logic.
 
@@ -1292,23 +1254,22 @@ DOC-VERIFIED (live.arrows maxref) + 1 corpus instance (the slice-sequencer corpu
 
 ## ✅ function  (breakpoint / envelope / transfer-curve editor)
 
-NOT in the synced Max docs — MEASURED from the corpus (20 instances: effects-rack and
-synth-voice corpus device transfer curves). The native curve editor. **1 inlet / 4 outlets** `["float","","","bang"]`:
+NOT in the synced Max docs. The native curve editor. **1 inlet / 4 outlets** `["float","","","bang"]`:
 send an x into the inlet → the curve's y at that x comes out outlet 0 (outlet 3 bangs on
-finish). In the corpus it is used as an **invisible curve-DATA store** (patching layer, no
+finish). Its common use is as an **invisible curve-DATA store** (patching layer, no
 presentation, `parameter_enable 0`): you bake a shape and the DSP reads y-values from it.
 
 - **`points` → `addpoints_with_curve`**: the breakpoint list, flat `[x, y, flags, curve, …]`
   per node — `curve` is the per-segment tension (0 = linear, ± curves the segment).
-- **`domain`** [float]: the X-axis max / input range (corpus 1.0 or 100.0).
+- **`domain`** [float]: the X-axis max / input range (e.g. 1.0 or 100.0).
 - **`value_range` → `range`** [min, max]: the Y-axis output range (e.g. `[0, 8]`).
-- **`mode`** [int] (corpus 1) + **`classic_curve`** [int] (1 = classic interpolation).
-- **`parameter_enable`** [int]: opt-in (corpus all 0 — a patch-internal store, not a Live param).
+- **`mode`** [int] (typically 1) + **`classic_curve`** [int] (1 = classic interpolation).
+- **`parameter_enable`** [int]: opt-in (0 for a patch-internal store, not a Live param).
 - **Kit:** `add_function(points=, domain=, value_range=, mode=, classic_curve=, presentation=)`.
   Defaults to a VISIBLE editor (`presentation=1`, so it places in a layout); pass
-  `presentation=0` for the corpus-style invisible data store. **Live-VERIFIED** (EditorsProbe,
+  `presentation=0` for the invisible data store. **Live-VERIFIED** (EditorsProbe,
   2026-06): a visible `function` renders its breakpoint curve + handles correctly. Its display
-  colors aren't corpus-grounded, so pass them via `**kwargs` if you want them themed.
+  colors aren't theme-mapped, so pass them via `**kwargs` if you want them themed.
 - **When native vs custom:** `function` is THE native way to define a drawn curve — velocity /
   transfer / response curves, a custom envelope feeding gen~, a wave-shaper. Far cheaper than a
   hand-drawn `v8ui` drag-curve. Use a `v8ui` drag-node only for a multi-param curve `function`
@@ -1316,19 +1277,18 @@ presentation, `parameter_enable 0`): you bake a shape and the DSP reads y-values
 
 ## ✅ textedit  (editable text / numeric entry field)
 
-NOT in the synced Max docs — MEASURED from the corpus (4 instances, the sequencer /
-slice-sequencer corpus devices, small numeric entry fields like a "StepsNum 32" box). 1 inlet / **4 outlets**;
+NOT in the synced Max docs. Suited to small numeric entry fields (e.g. a step-count box). 1 inlet / **4 outlets**;
 **`outlettype ['', 'int', '', '']`** — the int is on outlet **1** (the prior stub's
 int-on-outlet-3 was wrong). On Enter the typed text/number is reported (outlet 0 = symbol/list,
 outlet 1 = int when numeric).
 
-- **`text`** [symbol]: the initial / stored string (corpus '0', '127').
+- **`text`** [symbol]: the initial / stored string (e.g. '0', '127').
 - **`keymode`** [int] (1): key-handling mode. **`tabmode`** [int] (0): tab behaviour.
-- **`textjustification`** [int] (1 = center). **`border`** / **`rounded`** [float] (corpus 0 —
-  flat, borderless). **`bgcolor`** (corpus alpha-0 / transparent — themed at runtime),
-  **`textcolor`** (corpus colored, e.g. orange).
+- **`textjustification`** [int] (1 = center). **`border`** / **`rounded`** [float] (0 —
+  flat, borderless). **`bgcolor`** (alpha-0 / transparent — themed at runtime),
+  **`textcolor`** (coloured, e.g. orange).
 - **`parameter_enable=1`** makes textedit a **Blob parameter** (`parameter_type 3`) that SAVES
-  its text with the device (the sequencer corpus device stores its value this way) — pass it only when you also
+  its text with the device — pass it only when you also
   wire the saved-attr blob.
 - **Kit:** `add_textedit(text=, keymode=, tabmode=, textjustification=, border=, rounded=,
   parameter_enable=)`; theme injects `textcolor → text`, `bgcolor → section`.
@@ -1337,15 +1297,14 @@ outlet 1 = int when numeric).
 
 ## ✅ pictctrl  (image-filmstrip control — custom knob / button / slider)
 
-MEASURED from the official M4L corpus (17 instances, 100% consistent; absent from synced docs and
-the reference set). Displays one frame of a sprite image and outputs the frame **index** as an
+Absent from the synced docs. Displays one frame of a sprite image and outputs the frame **index** as an
 `int`. 1 inlet / 1 outlet (`["int"]`).
 
 - **`name`**: the sprite file (a filmstrip — e.g. a 68-frame vertical strip). **`frames`**: the
   frame count. The control shows frame = value (0..frames-1).
 - **`mode`**: interaction (button / toggle / slider-drag). **`trackvertical`** 1 = frames stack
   VERTICALLY (drag up/down to change). **`clickedimage`** / **`inactiveimage`**: use the clicked /
-  inactive sub-images in the sprite. `active` / `parameter_enable` opt-in (corpus all 0).
+  inactive sub-images in the sprite. `active` / `parameter_enable` opt-in (usually 0).
 - Requires bundling the sprite `name` as an asset (embed it like `fpic`). No themeable colors —
   the look IS the art, so it is not themed.
 - **When native vs custom — IMPORTANT:** pictctrl is the OLD way to get a custom-looking control
@@ -1355,19 +1314,18 @@ the reference set). Displays one frame of a sprite image and outputs the frame *
 
 ## ✅ fpic  (picture display — logo / backdrop / SVG state graphic)
 
-NOT in the synced Max docs — MEASURED from the corpus (35 instances; the most-used widget
-that was still un-mastered). Core Max picture object: **1 inlet / 1 outlet** (`jit_matrix`),
-`pic` = the image file. The corpus is almost entirely **`.svg`** (vector — crisp at any device
-scale) and reveals the premium patterns the prior stub omitted:
+NOT in the synced Max docs. Core Max picture object: **1 inlet / 1 outlet** (`jit_matrix`),
+`pic` = the image file. Prefer **`.svg`** (vector — crisp at any device
+scale). The premium patterns the prior stub omitted:
 
-- **`embed`** [int] (17/35): bundle the image DATA inside the patcher → a self-contained device
+- **`embed`** [int]: bundle the image DATA inside the patcher → a self-contained device
   with no external file to ship. Pair with the kit's asset/freeze bundling so the `pic` is
   actually present at build.
-- **`forceaspect`** [int] (33/35): preserve aspect ratio; with `autofit 1` (34/35) the image
+- **`forceaspect`** [int]: preserve aspect ratio; with `autofit 1` the image
   scales to the box without distorting.
-- **`hidden`** [int] (23/35): THE state-graphic trick — stack N fpics (`algo1.svg`…`algo8.svg`
+- **`hidden`** [int]: THE state-graphic trick — stack N fpics (`algo1.svg`…`algo8.svg`
   + `*Off.svg`), all `hidden 1`, and let the patch reveal the one matching the current state
-  (the channel-strip corpus device's switchable algorithm diagrams; also on/off button glyphs). `background 1` (1/35)
+  (e.g. switchable algorithm diagrams, or on/off button glyphs). `background 1`
   drops it to the bg layer.
 - No color attrs — fpic is **not themed**.
 - **Kit:** `add_fpic(pic=, autofit=, forceaspect=, embed=, hidden=, background=)`. **Use for** a
@@ -1378,44 +1336,42 @@ scale) and reveals the premium patterns the prior stub omitted:
 ## Backlog (the loop fills these in)
 
 > **Integration source:** the `harden-all-widgets` blitz produced proposed fixes + doc
-> sections for all 26 remaining widgets, saved at `docs/_widget_hardening_specs.json`.
+> sections for all 26 remaining widgets.
 > **VERIFY, don't trust** — agents hallucinate: e.g. the blitz claimed `add_menu` drops
 > `shortname` (FALSE — the code already passes it) but correctly flagged `live.arrows`'
-> `arrowbgcolor` as a non-existent attribute. So each loop tick: pick ONE widget from the
-> specs, **confirm every claim against the cached Max doc** (`~/.cache/livemcp/docs/raw`)
+> `arrowbgcolor` as a non-existent attribute. So each loop tick: pick ONE widget,
+> **confirm every claim against the cached Max doc** (`~/.cache/livemcp/docs/raw`)
 > AND the real factory code, apply only the verified parts, gate-check, **Live-verify in a
 > gallery device** (build → load → screenshot → `get_device_parameters`), then mark ✅.
 > Already done & verified: `live_arrows` (removed dead `arrowbgcolor`, added real color attrs).
 
-- ✅ **umenu** — DONE (see "umenu" section). NON-parameter (outputs int index); corpus uses it
+- ✅ **umenu** — DONE (see "umenu" section). NON-parameter (outputs int index); used
   almost only as a styled READ-ONLY gradient readout (`display=True`: ignoreclick/arrow/allowdrag),
   driven by `set`. Hardened: `umenu(display=, arrow=, ignoreclick=, bgcolor=, textcolor=, …)` +
   theme_mapping `bgcolor→tab_bg, textcolor→tab_text`. Interactive enum → `live.menu`.
-- ✅ **ubutton** — DONE (see button-family section). Grounded from the OFFICIAL M4L corpus
-  (M4L Building Tools / Essentials packs, 43 instances) since it is absent from the synced docs
-  AND the reference set: fixed outlettype to `["bang","bang","","int"]` (outlet 1 = down-bang),
-  added `hltcolor` (click flash) + `handoff`, theme `hltcolor → accent`.
-- ✅ **multislider** — DONE (see "multislider" section). Strip of N bars; corpus uses it mostly
+- ✅ **ubutton** — DONE (see button-family section). Absent from the synced docs; fixed
+  outlettype to `["bang","bang","","int"]` (outlet 1 = down-bang), added `hltcolor` (click flash) + `handoff`, theme `hltcolor → accent`.
+- ✅ **multislider** — DONE (see "multislider" section). Strip of N bars; used mostly
   as a non-interactive multi-bar meter/GR DISPLAY (`display=True`: ghostbar+ignoreclick, dB
   setminmax, signed for bipolar). Hardened + theme_mapping `slidercolor→accent, bgcolor→bg`.
 - ✅ **live.grid / live.step** — DONE (see "live.step / live.grid" section). Blob-param
-  multi-value sequencers (corpus-measured; absent from synced docs). Removed the
+  multi-value sequencers (absent from synced docs). Removed the
   hallucinated `nstep`/`nseq`/`loop_start`/`loop_end` stub attrs; FIXED `live.grid` I/O to
-  the real **2 inlets / 6 outlets** (was 1/4); added measured color kwargs + theme_mapping
+  the real **2 inlets / 6 outlets** (was 1/4); added color kwargs + theme_mapping
   (`stepcolor→accent`, grid `directioncolor→accent2`).
 - ✅ **function** — DONE (see "function" section). The native breakpoint/envelope/transfer-curve
-  editor — was a complete GAP (20 corpus instances, no factory). Built `add_function(points=,
+  editor — was a complete GAP (no factory). Built `add_function(points=,
   domain=, value_range=, mode=, classic_curve=, presentation=)`: 1 inlet / **4 outlets**
-  (`['float','','','bang']`), corpus curve attrs grounded; defaults to a visible editor,
+  (`['float','','','bang']`), curve attrs grounded; defaults to a visible editor,
   `presentation=0` for the invisible data store. Registered in registry + layout proxy.
   **Live-VERIFIED** (EditorsProbe, 2026-06) alongside `filtergraph~` + `live.adsrui` — all three
   graph editors render correctly (curve / response / envelope + handles), no load error.
 - ✅ **live.gain~ / meter** — DONE (see "live.gain~ / live.meter~" section below).
-- ✅ **matrixctrl** — DONE (see "matrixctrl" section). rows×columns toggle grid; corpus norm
-  2×4, `autosize=1`, mostly `ignoreclick=1` displays; the interactive one is a Blob param
+- ✅ **matrixctrl** — DONE (see "matrixctrl" section). rows×columns toggle grid; typically
+  2×4, `autosize=1`, mostly `ignoreclick=1` displays; the interactive form is a Blob param
   (`parameter_type=3`, whole grid saved). Hardened: `matrixctrl(autosize=1, ignoreclick=,
   color=, elementcolor=, bgcolor=)` + theme_mapping `color→accent, elementcolor→section, bgcolor→bg`.
-- ⊘ **kslider / nslider** — keyboard / notation inputs: **0 corpus instances** and absent from
+- ⊘ **kslider / nslider** — keyboard / notation inputs: absent from
   the synced docs → can't ground without guessing; skip (revisit only if a device needs them).
 - ✅ **panels + comment text layout** — DONE. `panel()` sets `background:1` → it renders
   BEHIND controls automatically (z-order safe); still add panels before controls.
@@ -1424,7 +1380,7 @@ scale) and reveals the premium patterns the prior stub omitted:
   height permits — so size BOTH axes: width ≥ ~0.5·fontsize·chars *for a single line*,
   OR a narrower width + height ≥ `(fontsize+3)·lines` to wrap deliberately. For a
   DELIBERATE multi-line info/credit block, set `comment(..., linecount=N)` explicitly
-  (corpus uses 3 and 5) rather than relying on height alone; `comment(..., fontface=N)`
+  (e.g. 3 or 5) rather than relying on height alone; `comment(..., fontface=N)`
   picks the weight (0 regular / 1 bold / 2 italic / 3 bold-italic) — both are now
   first-class kit params (were kwargs-only). Verified:
   `drift "foot"` (92×28, 58 chars, fs 6) reads fine because 28px fits the ~2 wrapped
@@ -1434,10 +1390,10 @@ scale) and reveals the premium patterns the prior stub omitted:
   intentionally-grouped knobs with extra height, never a plain dry/wet. Fix this run:
   `tab()` now mirrors bg/on/text colors to their `active*` twins (selected tab themes
   right by default).
-- ✅ **two-accent theming of native controls** — DONE. MEASURED: corpus tabs carry full
-  `bgcolor`/`bgoncolor` + `activebgcolor`/`activebgoncolor` (17 each) but the SAVED values are
+- ✅ **two-accent theming of native controls** — DONE. A skin-bus device's tabs carry full
+  `bgcolor`/`bgoncolor` + `activebgcolor`/`activebgoncolor` but the SAVED values are
   alpha-0 placeholders — the runtime `live.colors` skin bus drives selection at load (so the
-  corpus selection color = Live's skin slot, not a baked second accent). For our BUILD-TIME
+  selection color = Live's skin slot, not a baked second accent). For our BUILD-TIME
   Theme the premium convention is **accent = primary draw (dials, bars, value arcs); accent2 =
   the SELECTED/active state** (a pink-on-cyan selection). Implemented by deriving `Theme.tab_bg_on`
   (the selected-tab bgoncolor) from **accent2** instead of accent. Backward-compatible: single-
@@ -1459,15 +1415,14 @@ uikit_compare / uikit_lab. Width is the CELL (control + its label/value).
 
 | Density        | rect W×H | native_sizes const | notes |
 |----------------|----------|--------------------|-------|
-| **workhorse**  | **41×35** | `DIAL_COMPACT` | **38 of 82 corpus dials — the premium default** |
-| tall rail      | 41×48    | `DIAL_RAIL`    | taller labelled rail dial (corpus: 7) |
-| tiny           | 54×36    | `DIAL_TINY`    | wide-short, appearance=1 (5) |
-| LCD-stacked    | 51×63    | `DIAL_LCD`     | tall LCD readout, appearance=3 (5) |
+| **workhorse**  | **41×35** | `DIAL_COMPACT` | **the premium default** |
+| tall rail      | 41×48    | `DIAL_RAIL`    | taller labelled rail dial |
+| tiny           | 54×36    | `DIAL_TINY`    | wide-short, appearance=1 |
+| LCD-stacked    | 51×63    | `DIAL_LCD`     | tall LCD readout, appearance=3 |
 
-> **MEASURED across the 15-device reference set** (own count of `presentation_rect`).
-> The old `DIAL=(44,47)` was a guess and is NOT how premium devices size knobs (it's not
-> even in the corpus top-6 — confirms "too tall/chunky"). Prefer **`DIAL_COMPACT=(41,35)`**.
-> Other verified tiers: `NUMBOX=(44,15)` (primary, 53×) + `NUMBOX_MINI=(17,15)`,
+> The old `DIAL=(44,47)` was a guess and is NOT how premium devices size knobs (it reads
+> "too tall/chunky"). Prefer **`DIAL_COMPACT=(41,35)`**.
+> Other verified tiers: `NUMBOX=(44,15)` (primary) + `NUMBOX_MINI=(17,15)`,
 > `VSLIDER_NATIVE=(22,113)` (wider than the old 18,110), `TAB_BAR_H=20` (full-width mode
 > bar — taller than 16), `TEXT_ICON=(15,15)` (square glyph/icon live.text), `LED_DOT=(10,10)`.
 > Use `knob_row_fit(x0, y, n, width)` to spread a knob aisle to a panel width (DIAL_COMPACT).
@@ -1527,14 +1482,13 @@ authored height).
 > so it nags when you lint but never blocks a normal build. **MIDI Tools** (`note_transformation`
 > / `note_generator`) render in a different UI and are **exempt** (not grounded to the 168 row).
 >
-> **The clone-parity EXCEPTION — `allow_tall=True`.** "Never author height > 168" governs
-> ORIGINAL designs. A faithful **1:1 reproduction** of a taller existing device legitimately
-> exceeds it to match the source's verbatim rects — **a 190px clone** mirrors its original (and
-> inherits the original's own bottom-clip). Such a clone passes
-> `AudioEffect(..., allow_tall=True)` to opt out of the lint, rather than condensing (which would
+> **The 1:1-rebuild EXCEPTION — `allow_tall=True`.** "Never author height > 168" governs
+> new designs. A faithful **1:1 rebuild** of a taller existing layout legitimately
+> exceeds it to keep that layout's exact rects (and inherits its own bottom-clip). Such a
+> rebuild passes `AudioEffect(..., allow_tall=True)` to opt out of the lint, rather than condensing (which would
 > break the structural A/B match). Re-audit 2026-06: fleet clean — every chain device ≤168 EXCEPT
-> one 190px device (intentional `allow_tall` clone). Rule of thumb: condense your own devices to ≤168;
-> reach for `allow_tall` ONLY when reproducing a taller source 1:1.
+> one 190px device (intentional `allow_tall`). Rule of thumb: condense new designs to ≤168;
+> reach for `allow_tall` ONLY when rebuilding a taller layout 1:1.
 
 > **PER-CONTROL clip lint — `control-clipped` (2026-06).** The 168 ceiling is necessary but not
 > sufficient: a device can be ≤168 yet still place a dial at `y=150,h=30` (bottom **180**) so it
@@ -1542,7 +1496,7 @@ authored height).
 > straddles a device edge** (partly inside, partly past `width`/`height`) — same warning
 > severity, same silent-on-default / surfaces-under-`validate="warn"` behavior. Two layout idioms
 > are deliberately EXCLUDED (empirically false-positive-free across the whole 33-device fleet):
-> (1) **fully off-canvas controls are PARKED, not clipped** — the corpus hides a still-functional
+> (1) **fully off-canvas controls are PARKED, not clipped** — a common idiom hides a still-functional
 > `live.dial`/`live.menu` (an automatable probe/param) by parking it far out at ~`(900, 900)`;
 > a box entirely outside `0..width × 0..height` is intentional and skipped. (2) **a background
 > `panel` routinely full-bleeds past the bottom/right edge by design** (so no gap shows at the
@@ -1558,7 +1512,7 @@ authored height).
 
 Goal: every M4L control/UI object is a first-class builder helper with CORRECT defaults
 (fill/needlemode, active* colors), theming, sizing, and when-to-use docs. ✅ mastered ·
-🔬 partial · ⊘ not M4L vocabulary (real Max object, 0 corpus everywhere — steer-away docstring) ·
+🔬 partial · ⊘ not M4L vocabulary (real Max object, ungrounded for M4L — steer-away docstring) ·
 TODO not yet hardened.
 
 > **STATUS (2026-06): the per-widget pass is COMPLETE — no `TODO` widgets remain.** Every builder
@@ -1571,23 +1525,23 @@ TODO not yet hardened.
 
 **Parameter controls (automatable):**
 - ✅ `dial` (knob) · ✅ `tab` · ✅ `toggle` · ✅ `slider` (live.slider) · ✅ `number_box` · ✅ `live_text`
-  · ⊘ `rslider` (plain-Max range slider — UNGROUNDED: no synced maxref, **0** corpus, **0**
-  Factory-Pack, **0** kit usage; not a Live parameter, `min`/`max` unverified. Use `slider` or a
+  · ⊘ `rslider` (plain-Max range slider — UNGROUNDED: no synced maxref, **0**
+  kit usage; not a Live parameter, `min`/`max` unverified. Use `slider` or a
   custom v8ui range bar. Steer-away docstring added)
 - ✅ `menu` · ✅ `umenu` (non-param readout) · ✅ `button` · ✅ `textbutton` · ✅ `ubutton`
-  · ✅ `pictctrl` (image filmstrip) · ⊘ `radiogroup` (plain-Max, unthemed, **0** Factory-Pack
-  corpus — use `tab`/`menu`; helper kept with a steer-away docstring for non-Live patches)
+  · ✅ `pictctrl` (image filmstrip) · ⊘ `radiogroup` (plain-Max, unthemed
+  — use `tab`/`menu`; helper kept with a steer-away docstring for non-Live patches)
 
 **Multi-value / sequencer / envelope:**
 - ✅ `multislider` · ✅ `live_grid` · ✅ `live_step` · ✅ `matrixctrl` · ✅ `function` (curve
-  editor) · ✅ `adsrui` (live.adsrui envelope) · ⊘ `nodes` (ungrounded, **0** corpus everywhere —
-  use `function`/`filtergraph~`/v8ui XY pad) · ⊘ `kslider`/`nslider` (0 corpus, not in
+  editor) · ✅ `adsrui` (live.adsrui envelope) · ⊘ `nodes` (ungrounded —
+  use `function`/`filtergraph~`/v8ui XY pad) · ⊘ `kslider`/`nslider` (not in
   docs) · ✅ `live_arrows`
 
 **Displays / meters / graphs:**
 - ✅ `meter` · ✅ `live_gain` (fader+meter) · ✅ `scope` (live.scope~) · ✅ `waveform~` (buffer)
   · ⚠️ `spectrumdraw~` (external not stock — use `spectroscope~`/`fft_analyzer`)
-  · 🔬 `plot~` (ungrounded: absent from synced docs + **0** corpus → attrs unverified; prefer
+  · 🔬 `plot~` (ungrounded: absent from synced docs → attrs unverified; prefer
   `scope~`/`function`/`filtergraph~`/v8ui) · ✅ `filtergraph~` · ✅ `swatch` (color)
 
 **Structure / decoration / IO:**
@@ -1597,16 +1551,15 @@ TODO not yet hardened.
 > **bpatcher module** (F3): `device.add_bpatcher_module(subpatcher, id, rect, name=…,
 > numinlets=, numoutlets=, outlettype=)` embeds a `Subpatcher` as a VISIBLE bpatcher whose
 > presentation view renders inside the device (`embed:1`, `presentation:1`,
-> `viewvisibility:1`) — the premium self-contained DSP+UI module pattern (the channel-strip corpus device).
+> `viewvisibility:1`) — the premium self-contained DSP+UI module pattern.
 > Use `Subpatcher.to_presentation_patcher_dict()` (sets the inner `openinpresentation:1`).
 > Contrast `add_subpatcher` = an invisible `p name` box. `bpatcher()` (external `.maxpat`
 > ref) is for non-embedded reuse.
 
 > **`live.line`** (divider/separator): a non-parameter decoration. Its ONLY style attr is
-> `linecolor` (verified across the corpus: 40 uses, no thickness/orientation attrs —
+> `linecolor` (no thickness/orientation attrs —
 > orientation is implicit from the rect aspect: wide rect → horizontal rule, tall → vertical;
-> 1 inlet, 0 outlets). Not in the synced Max docs, so grounded in real-device usage (AS
-> Console modules use 5 each as section rules ~174×6). Registry now themes
+> 1 inlet, 0 outlets). Not in the synced Max docs; a typical section rule is ~174×6. Registry now themes
 > `linecolor → panel_border` (subtle); was Live-default. Use it for section separators
 > inside a panel — cheaper/cleaner than drawing a v8ui line.
 
@@ -1618,14 +1571,14 @@ TODO not yet hardened.
 > `orphan-box` lint now SKIPS these maxclasses (`_DECORATION_MAXCLASSES` in `validation.py`):
 > flagging a box that can *never* be connected is noise that buries a genuinely unwired
 > FUNCTIONAL box (a `newobj`/`message` you forgot to patch). So a surviving `orphan-box` warning
-> is now a real signal — the 190px clone went from **5** decoration false-positives to **0**. When adding a
+> is now a real signal — the 190px device went from **5** decoration false-positives to **0**. When adding a
 > new pure-decoration maxclass, extend that set. (Functional UI controls — `live.dial`/`tab`/
 > `numbox`/meters/jsui heroes — keep real I/O and stay in the check; an unwired one is a real bug.)
 
 **Cross-cutting (apply to all):**
 - ✅ native vs custom decision rule · ✅ active* color rule · ✅ two-accent theming via theme inject
-  (Live-verified; see "Two-accent theming" table) · ✅ per-density sizing tables (193-device census +
-  the two-regime rule) · ✅ unitstyle correctness per param type
+  (Live-verified; see "Two-accent theming" table) · ✅ per-density sizing tables +
+  the two-regime rule · ✅ unitstyle correctness per param type
 - ✅ **ATTR-GROUNDING AUDIT (2026-06)** — programmatically diffed every kit control's *emitted* box
   attrs against its synced maxref (minus a common-box allowlist). **11/11** maxref-backed controls
   (`live.dial`/`tab`/`slider`/`numbox`/`toggle`/`text`/`button`/`gain~`/`drop`/`arrows`/`line`) emit
@@ -1653,7 +1606,7 @@ Default to NATIVE. Reach for a CUSTOM v8ui control only when the right column ap
 | Need                     | Native (default)            | Custom v8ui (only if…) |
 |--------------------------|-----------------------------|------------------------|
 | knob (any scalar param)  | `live.dial` (+needlemode)   | bespoke arc/glow/glyph identity, or a knob that drives a hero |
-| on/off — LABELED (Bypass, HP On, M/S) | **`live.text`** (off/on labels; the PREMIUM corpus norm — the channel-strip corpus device's utility strip, the slice-sequencer corpus device's toggles; `mode=1` to latch) | bespoke glyph/LED toggle |
+| on/off — LABELED (Bypass, HP On, M/S) | **`live.text`** (off/on labels; the PREMIUM norm; `mode=1` to latch) | bespoke glyph/LED toggle |
 | on/off — bare inline     | `live.toggle` (tiny ~12×13 checkbox, no label) | an LED-dot/inline micro-toggle look |
 | pick 1 of N (≤4)         | `live.tab`                  | mode GLYPHS (∿ ⊓ ∧), or a 1-cell cycle/stepper to save space |
 | pick 1 of N (>4)         | `live.menu`/`umenu`         | rarely |

@@ -148,7 +148,7 @@ class TestMcPolySpine:
         device = AudioEffect("test", width=200, height=100)
         mc_poly_spine(device, "syn", voices=16)
         texts = _box_texts(device)
-        # the poly~-free spine — verbatim object grammar (steal on by default)
+        # the poly~-free spine — exact object grammar (steal on by default)
         assert "mc.noteallocator~ @voices 16 @steal 1" in texts
         assert "mc.click~ @chans 16" in texts
         assert "mc.gen~ @chans 16" in texts
@@ -171,7 +171,7 @@ class TestMcPolySpine:
         device = AudioEffect("test", width=200, height=100)
         mc_poly_spine(device, "mpe", voices=8, mpe=True, gen_name="myvoice")
         texts = _box_texts(device)
-        # A premium synth's MPE allocator grammar + a named .gendsp voice
+        # The MPE allocator grammar + a named .gendsp voice
         assert "mc.noteallocator~ @mpemode 1 @voices 8 @steal 1" in texts
         assert "mc.gen~ myvoice @chans 8" in texts
         assert "mc.click~ @chans 8" in texts
@@ -181,7 +181,7 @@ class TestTwoPanelStrip:
     def test_grounded_channel_strip_geometry(self):
         device = AudioEffect("test", width=231, height=167)
         res = two_panel_strip(device, "strip")
-        # a premium two-panel channel-strip grammar: wide main + narrow side, gap 2
+        # the two-panel strip grammar: wide main + narrow side, gap 2
         assert res["main_rect"] == [0, 0, 174, 167]
         assert res["side_rect"] == [176, 0, 56, 167]
         assert res["total_width"] == 232
@@ -1060,7 +1060,7 @@ class TestModeStack:
         tab = boxes["mode_tab"]
         assert tab["maxclass"] == "live.tab"
         assert tab["tabs"] == 3
-        # the corpus-exact vertical column (Auto_Gate "Time Mode": 21px x N rows)
+        # a vertical tab column (21px x N rows)
         assert tab["multiline"] == 1
         assert tab["num_lines_presentation"] == 3
         assert tab["num_lines_patching"] == 3
@@ -1723,7 +1723,7 @@ out = []; msg_float(34.65); console.log(JSON.stringify(out));
         assert ["1", "set", "A3"] == [str(x) for x in a440[0]] or \
                ["1", "set", "A4"] == [str(x) for x in a440[0]]
         assert "440" in "".join(str(x) for x in a440[1])
-        # 34.65 Hz ≈ C#1 territory (Bass Lock's register)
+        # 34.65 Hz ≈ C#1 territory (a sub-bass register)
         assert "34.6" in "".join(str(x) for x in low[1])
 
     def test_progress_tick_js(self):
@@ -2040,7 +2040,7 @@ class TestW6aFacesColumns:
     strip), #59 (icon rail)."""
 
     def test_region_translate_guard_math(self):
-        """Node-harness: corpus moveUi semantics — region slides by delta,
+        """Node-harness: moveUi semantics — region slides by delta,
         boxes outside the origin filter stay, repeat sends are idempotent."""
         import json
         import subprocess

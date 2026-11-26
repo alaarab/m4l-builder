@@ -68,7 +68,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         # True, Live delivers per-note MPE data (member-channel notes, bend,
         # pressure, CC74) to the device instead of folding it to one channel
         # (patcher.maxref: "a Max for Live device will receive MPE data from
-        # Live"; Granulator III ships is_mpe: 1).
+        # Live").
         self.is_mpe = False
         self.profile = profile or DEFAULT_PATCHER_PROFILE
         self._js_files: dict[Any, Any] = {}
@@ -86,7 +86,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         * ``device-height-over-ceiling`` — a chain device authored taller than
           Live's ~``DEVICE_H``px device view, so its bottom rows are clipped +
           unreachable (Live-verified: Linear Phase Crossover=214 lost ~45px).
-          ``allow_tall=True`` (a faithful clone of a taller original) opts out.
+          ``allow_tall=True`` (a deliberately taller layout) opts out.
         * ``control-clipped`` — a FUNCTIONAL control whose ``presentation_rect``
           straddles a device edge (partly visible, partly cut). The complement to
           the height rule: a device can be ≤168 yet still place a dial at y=150,h=30
@@ -96,7 +96,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
           -free across the 33-device fleet.
         * :func:`~m4l_builder.validation.layout_issues` — ``control-overlap`` /
           ``dead-zone`` / ``width-mismatch`` (warnings) + ``setwidth-mismatch``
-          (error): the space-utilization rules from the corpus audit (a FULL
+          (error): the space-utilization rules (a FULL
           collapse wider than the layout, >=40px dead bands, stale widths).
         """
         issues = list(super().lint(device_type=device_type))
@@ -113,7 +113,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
                     f"authored height {self.height:g} exceeds Live's ~{DEVICE_H}px "
                     f"device-view ceiling; the bottom ~{clipped:g}px will be CLIPPED "
                     f"and unreachable. Condense to <= {DEVICE_H}, or pass "
-                    f"allow_tall=True for a faithful clone of a taller original."
+                    f"allow_tall=True for a deliberately taller layout."
                 ),
                 severity="warning",
             ))
@@ -166,7 +166,7 @@ class Device(CompositeWidgetsMixin, GraphContainer):
         Flags a presentation control only when its rect INTERSECTS the visible
         ``width``×``height`` area AND spills past an edge — a partial clip (the
         "I can see half my knob" bug). A box fully outside the canvas is treated as
-        intentionally parked/hidden (the corpus ~(900,900) idiom) and skipped, as is
+        intentionally parked/hidden (the ~(900,900) parking idiom) and skipped, as is
         any decoration maxclass (a ``panel`` background routinely full-bleeds past
         the edge by design; a clipped label/divider is cosmetic, not an unreachable
         control).
@@ -541,11 +541,11 @@ class Device(CompositeWidgetsMixin, GraphContainer):
 
         Sets ``jspainterfile`` on the box ``box_id`` (a ``live.dial`` / ``live.numbox``
         / ``toggle`` …) so the control keeps full native behaviour + parameter
-        storage while the ``.js`` paints it — the corpus pattern (seen across premium
-        devices). When ``painter_js`` is given it is bundled alongside the device
-        as a TEXT asset under ``painter_filename`` (via ``register_asset``); pass a
-        painter from :mod:`m4l_builder.engines.painters` (e.g.
-        :func:`lcd_panel_painter_js`). Returns ``painter_filename``.
+        storage while the ``.js`` paints it — a common premium pattern. When
+        ``painter_js`` is given it is bundled alongside the device as a TEXT asset
+        under ``painter_filename`` (via ``register_asset``); pass a painter from
+        :mod:`m4l_builder.engines.painters` (e.g. :func:`lcd_panel_painter_js`).
+        Returns ``painter_filename``.
 
         The control box must already exist (create it with ``add_dial`` /
         ``add_draggable_readout`` / etc. first). Raises ``KeyError`` if not found.

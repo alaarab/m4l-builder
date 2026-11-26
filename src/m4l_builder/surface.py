@@ -1,6 +1,6 @@
 """Surface — the semantic device-faceplate layout engine (UI Foundations v2).
 
-The corpus audit found the kit had the right *primitives* (``dial_value_cell``,
+A fleet audit found the kit had the right *primitives* (``dial_value_cell``,
 ``knob_column``, the theme bus) but 16 of 17 devices still hand-wrote every
 label+dial rect — and drifted (8 dial sizes, 3 value-display strategies, hover
 values, stale widths). ``Surface`` owns that rect math. A device author
@@ -8,11 +8,11 @@ declares hero displays and labeled sections of cells; the engine computes every
 rect from the :mod:`native_sizes` cell grammar, derives the final device width
 from content (no more stale ``full_width``/dead zones), and wires the hybrid
 brand-accent theme bus (baked accent while enabled, Live "zombie" grey on
-bypass — corpus P1) into every dial it placed.
+bypass) into every dial it placed.
 
 Composition rules it enforces at build time (:class:`SurfaceError`):
 
-* persistent values ALWAYS (corpus P2) — every dial is a
+* persistent values ALWAYS — every dial is a
   :func:`~m4l_builder.recipes.dial_value_cell`; the hover-``valuepopup``
   value-less knob is not expressible;
 * at most :data:`~m4l_builder.native_sizes.MAX_VALUE_ROWS` dial rows per
@@ -63,7 +63,7 @@ def _slug(name: str) -> str:
 
 
 class HeroSlot:
-    """A hero-display slot (corpus P10): a recessed screen panel on the card.
+    """A hero-display slot: a recessed screen panel on the card.
 
     ``rect`` is the inset content rect — pass it to ``add_compiled_display`` /
     ``add_jsui`` for bespoke content, or call :meth:`v8ui` for the common case.
@@ -89,7 +89,7 @@ class HeroSlot:
 
 
 class Section:
-    """A labeled section card (corpus P3) holding a cols x rows grid of cells.
+    """A labeled section card holding a cols x rows grid of cells.
 
     Cells fill COLUMN-MAJOR (down, then right — the console-strip reading
     order); pin a cell with ``at=(col, row)``. Every dial cell is a persistent
@@ -205,8 +205,8 @@ class Section:
                on: str = "ON", off: str = "OFF", initial: int = 0,
                shortname: str | None = None,
                at: tuple[int, int] | None = None, **kwargs: Any) -> str:
-        """A captioned 2-state ``live.text`` cell (self-documenting enum, corpus
-        convention). Returns the button box id."""
+        """A captioned 2-state ``live.text`` cell (self-documenting enum).
+        Returns the button box id."""
         col, row = self._take_slot(at)
         cx, cy = self._cell_xy(col, row)
         p = f"{self.id}_{_slug(param_name)}"

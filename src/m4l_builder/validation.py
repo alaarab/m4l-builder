@@ -293,7 +293,7 @@ def final_checklist_issues(boxes: list) -> list[ValidationIssue]:
 # ── Device-level LAYOUT lint (UI Foundations v2) ─────────────────────────────
 # Interactive control classes for the overlap rule: two of THESE intersecting is
 # almost always a real authoring bug. Displays (jsui/v8ui/scope~/…) are exempt —
-# stacking a transparent display/overlay is a legitimate corpus pattern (P6), as
+# stacking a transparent display/overlay is a legitimate pattern, as
 # is an alpha-0 "ghost" control (stacked_panels tabs, drop targets).
 _INTERACTIVE_MAXCLASSES = frozenset({
     "live.dial", "live.menu", "live.numbox", "live.text", "live.toggle",

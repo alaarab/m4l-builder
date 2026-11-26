@@ -85,12 +85,12 @@ def _resolve_parameter_spec(
 
 
 def _apply_info_view_annotations(box: dict, spec) -> None:
-    """Official-adopt 2 (Ableton Final Checklist): every UI parameter carries
+    """Per Ableton's Final Checklist, every UI parameter carries
     BOX-level ``annotation_name`` (Live Info View title) + ``annotation``
     (body) so hovering the control in Live shows real help text instead of a
     blank pane. Derives from the richer ``parameter_annotation_name`` when the
     widget provided one, else the param longname; explicit attrs always win
-    (setdefault) and raw box dicts (reverse-engineered builds) are untouched.
+    (setdefault) and raw box dicts are untouched.
     """
     title = getattr(spec, "annotation_name", None) or getattr(spec, "name", None)
     # the hover BODY prefers the richer ParameterSpec.info (multi-line help)
@@ -177,7 +177,7 @@ def dial(id: str, varname: str, rect: list, *,
 
     appearance: 0=Vertical, 1=Tiny, 2=Panel, 3=Large. This is the knob-SIZE lever and
         the sizes are NEAR-FIXED (Live-measured): 0=small (~21px) stays small even in a
-        big rect (extra rect = padding); 3=large (~30px, ≈ EQ Eight's native dial) stays
+        big rect (extra rect = padding); 3=large (~30px, ≈ a native Live device dial) stays
         large even in a small rect. No medium between them — for an in-between size draw
         a custom v8ui knob. Size the rect only to fit label+knob+value, not to tune ⌀.
     parameter_exponent: log scaling, use 3.0 for frequency knobs.
@@ -188,7 +188,7 @@ def dial(id: str, varname: str, rect: list, *,
     REAL parameter shows the value. Accent goes on ``activedialcolor`` — the FILLED value
     arc (min→value unipolar, center→value bipolar), the bright indicator — with a dim
     ``activefgdialcolor`` for the UNFILLED remainder track. This is the kit default and the
-    premium bright-fill / dark-track knob (premium channel-strip devices + EQ Eight use the SAME mapping).
+    premium bright-fill / dark-track knob.
     Verified by the Dial Color Lab A/B at appearance 0 AND 3 (2026-06): there is NO needlemode
     "flip" — ``activedialcolor`` is the filled arc for BOTH polarities. Do NOT accent
     ``activefgdialcolor`` (the remainder): it dims the fill and brightens the empty track.
@@ -322,16 +322,16 @@ def tab(id: str, varname: str, rect: list, *,
     box["multiline"] = multiline
     if appearance != 0:
         box["appearance"] = appearance
-    # live.tab color state matrix (corpus-grounded across 28 corpus tabs): the
+    # live.tab color state matrix: the
     # BACKGROUND attrs have active* twins — bgcolor/activebgcolor and
-    # bgoncolor/activebgoncolor — and premium devices set BOTH (17/28 each) so the fill
+    # bgoncolor/activebgoncolor — and both are set so the fill
     # themes whether the device is active or bypassed. The TEXT attrs pair with
-    # INACTIVE* twins instead: textoncolor + inactivetextoncolor (20/28) and
-    # textcolor + inactivetextoffcolor (9/28) — the bare attr is the enabled colour,
-    # the inactive* one holds it when the device is BYPASSED. NB the corpus NEVER sets
-    # activetextoncolor (0/28); mirroring textoncolor there (an earlier guess) set a
-    # non-corpus attr and left the bypassed selected-tab text un-themed. Mirror each
-    # given colour to the twin the corpus uses. Explicit kwargs win last.
+    # INACTIVE* twins instead: textoncolor + inactivetextoncolor and
+    # textcolor + inactivetextoffcolor — the bare attr is the enabled colour,
+    # the inactive* one holds it when the device is BYPASSED. NB do NOT set
+    # activetextoncolor; mirroring textoncolor there (an earlier guess) set a
+    # non-idiomatic attr and left the bypassed selected-tab text un-themed. Mirror each
+    # given colour to its matching twin. Explicit kwargs win last.
     if bgcolor:
         box["bgcolor"] = bgcolor
         box["activebgcolor"] = bgcolor
@@ -398,7 +398,7 @@ def comment(id: str, rect: list, text: str, *, textcolor: list | None = None,
 
     A live.comment is SINGLE-LINE by default and TRUNCATES text wider than its rect
     (it does not auto-wrap). For a multi-line info/description/credit block set
-    ``linecount`` = the number of lines (corpus uses 3 and 5) and give the rect enough
+    ``linecount`` = the number of lines (e.g. 3 or 5) and give the rect enough
     height. ``fontface``: 0 regular / 1 bold / 2 italic / 3 bold-italic (combines with
     ``fontname``). ``justification`` = ``textjustification`` (0 left / 1 center / 2 right).
     NB a live.comment renders VISIBLY SMALLER than a live.dial's text at the same
@@ -461,7 +461,7 @@ def menu(id: str, varname: str, rect: list, *, options: list,
     """Create a live.menu dropdown enum selector (automatable Enum param).
 
     live.menu has its OWN colour model — it does NOT share live.tab's (no synced doc
-    exists; 25 corpus menus are the ground truth). The kit maps its
+    exists; this model is observed Max behaviour). The kit maps its
     uniform colour args to live.menu's REAL attrs:
       * ``bgcolor``    -> ``bgcolor`` + ``activebgcolor`` (the menu BODY; active=1 = visible)
       * ``textcolor``  -> bare ``textcolor`` (live.menu shows the BARE attr; NO active twin)
@@ -520,11 +520,11 @@ def number_box(id: str, varname: str, rect: list, *,
                **kwargs) -> dict:
     """Create a live.numbox numeric display with parameter storage.
 
-    appearance (doc/corpus-verified): the numbox enum is its OWN — 0=Default,
+    appearance (doc-verified): the numbox enum is its OWN — 0=Default,
     1=Triangle, 2=Slider, 3=Bipolar, 4=LCD — NOT the dial's (0=Vertical/1=Tiny/
     2=Panel/3=Large), so don't copy a dial appearance value here. **The kit DEFAULTS
-    to ``appearance=4`` (LCD)** — the DOMINANT premium numbox look (98 of 142 corpus
-    numboxes) and the one the registry's ``lcdcolor``/``lcdbgcolor``/
+    to ``appearance=4`` (LCD)** — the DOMINANT premium numbox look, and the one the
+    registry's ``lcdcolor``/``lcdbgcolor``/
     ``inactivelcdcolor`` theme tokens actually RENDER in: a borderless glowing digit
     on an ``lcdbgcolor`` field; ``lcdcolor`` = lit digit, ``inactivelcdcolor`` = the
     dim/unlit segments. (Previously the default was unset → Max's plain mode, so the
@@ -730,12 +730,11 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
 
     appearance (doc-verified): 0 = Default (text within box), 1 = Label (a
     square button with the text to the right — the glyph/icon-toggle look), 2 =
-    LCD. Corpus uses appearance=2 on live.text 12 sites (LCD readout labels).
+    LCD (for LCD readout labels).
 
     mode: 0 = Button (MOMENTARY — fires on press, un-latches on release,
     rejects Live-API sets), 1 = Toggle (latching). **DEFAULTS to 1 (Toggle)** —
-    the live.text MAXREF default is ``mode 1``, the corpus is dominantly toggles
-    (113 live.text: 72 default-toggle + 0 explicit mode=1 + 41 explicit Button),
+    the live.text MAXREF default is ``mode 1``, toggles are the common case,
     and EVERY kit/device use is a latching control (bypass / freeze / M-S / on-off).
     The factory previously FORCED ``mode 0`` on every live.text, overriding Max's
     Toggle default, so all 48 fleet toggles shipped MOMENTARY: they un-latched on
@@ -768,9 +767,8 @@ def live_text(id: str, varname: str, rect: list, *, text_on: str = "ON",
     # BOX-level ``automation`` (off state) / ``automationon`` (on state) attrs —
     # ``parameter_enum`` + ``parameter_mmax`` alone still leave live.text's
     # built-in "val1"/"val2" defaults showing in Live (LOM display_value,
-    # automation lanes, MIDI map). Corpus-verified: premium EQs / channel-strip
-    # devices mirror their enum labels into these two attrs on every
-    # custom-labelled live.text.
+    # automation lanes, MIDI map). So mirror the enum labels into these two
+    # attrs on every custom-labelled live.text.
     auto_labels = (list(spec.enum) if getattr(spec, "enum", None)
                    and len(spec.enum) == 2 else [text_off, text_on])
     box = {
@@ -824,19 +822,18 @@ def fpic(id: str, rect: list, *, pic: str = "", autofit: int = 1,
          background: int | None = None, patching_rect: list | None = None, **kwargs) -> dict:
     """Create an ``fpic`` picture display (logo / background / SVG state graphic).
 
-    NOT in the synced Max docs — every attr is MEASURED from the corpus (35
-    instances; 1 inlet / 1 outlet ``jit_matrix``). ``pic`` is the image file
-    (corpus is almost all ``.svg`` — crisp at any size). The high-value attrs the
-    prior stub omitted:
-    - ``embed`` [int] (corpus 17/35): bundle the image DATA inside the patcher so
+    NOT in the synced Max docs; these attrs are observed Max behaviour (1 inlet /
+    1 outlet ``jit_matrix``). ``pic`` is the image file (prefer ``.svg`` — crisp
+    at any size). The high-value attrs the prior stub omitted:
+    - ``embed`` [int]: bundle the image DATA inside the patcher so
       the device is self-contained (no external file to ship). Pair with the kit's
       asset/freeze bundling so the ``pic`` is actually present.
-    - ``forceaspect`` [int] (corpus 33/35): preserve the image's aspect ratio
+    - ``forceaspect`` [int]: preserve the image's aspect ratio
       (with ``autofit`` 1, scales to the box without distorting).
-    - ``hidden`` [int] (corpus 23/35): the premium STATE-GRAPHIC pattern — stack N
+    - ``hidden`` [int]: the premium STATE-GRAPHIC pattern — stack N
       fpics (e.g. ``algo1.svg``…``algo8.svg`` + ``*Off.svg``), all ``hidden 1``, and
-      let the patch reveal the one matching the current state (a premium device's
-      switchable algorithm diagrams). ``background`` 1 puts it on the bg layer.
+      let the patch reveal the one matching the current state (e.g. switchable
+      algorithm diagrams). ``background`` 1 puts it on the bg layer.
     fpic has no color attrs (it's an image) — so it is NOT themed. **Use for** a
     logo, a textured/material backdrop, or switchable diagram graphics; for a drawn
     gradient/panel use ``panel`` / a ``v8ui`` painter instead.
@@ -904,16 +901,15 @@ def multislider(id: str, rect: list, *, size: int = 16, min_val: float = 0.0,
     / step editor).
 
     ``setstyle`` (default 0): the bar/line/point draw style. ⚠️ The exact enum is
-    UNVERIFIED — `multislider` is absent from the synced Max docs, all 5 corpus
-    multisliders use the default (0), and the Factory Packs set no explicit `setstyle`;
-    an earlier note disputes the old "0=bar/1=line/2=point" labels (claiming 0=thin-line,
-    1=bars, …). So keep the default for the standard bar look and Live-VERIFY before
-    relying on any non-default style. PREMIUM USAGE (measured: 4/5 corpus
-    instances): multislider is used mostly as a NON-interactive multi-bar DISPLAY —
+    UNVERIFIED — `multislider` is absent from the synced Max docs and typical use
+    keeps the default (0); an earlier note disputes the old "0=bar/1=line/2=point"
+    labels (claiming 0=thin-line, 1=bars, …). So keep the default for the standard
+    bar look and Live-VERIFY before relying on any non-default style. PREMIUM USAGE:
+    multislider is used mostly as a NON-interactive multi-bar DISPLAY —
     ``ignoreclick=1`` + ``ghostbar=1`` (a faint full-range outline behind each bar)
     + ``thickness`` + a ``setminmax`` dB range (``[-70,0]`` level, ``[-24,24]``
     gain-reduction), ``signed=1`` for bipolar bars — driven by a list into the right
-    inlet. Pass ``display=True`` for that meter preset. The interactive case (1/5)
+    inlet. Pass ``display=True`` for that meter preset. The interactive case
     is a Blob PARAMETER (``parameter_enable=1`` + ``settype`` stores all bars as one
     saved/automatable list, like ``matrixctrl``). Colors: ``slidercolor`` (the bars)
     + ``bgcolor`` (backdrop) — themed.
@@ -956,7 +952,7 @@ def jsui(id: str, rect: list, *, js_filename: str, numinlets: int = 1,
     paints no opaque background) that renders as a stray empty rectangle around the
     control (Live-verified: the Parametric EQ "black box around the knobs"). ``v8ui``
     does not draw this, and ``add_custom_knob`` already uses v8ui to dodge it.
-    So we default ``border=0`` here (premium devices ship ``"border":0`` on their jsui); a
+    So we default ``border=0`` here; a
     device that wants a visible frame passes ``border=1`` explicitly (kwargs win).
     """
     box = {
@@ -1022,16 +1018,16 @@ def adsrui(id: str, rect: list, *, attack_domain: list | None = None,
            patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``live.adsrui`` ADSR envelope editor.
 
-    MEASURED from the official M4L corpus (2 instances, identical structure). Drag the
+    The IO and attrs below are observed Max behaviour. Drag the
     handles to shape an A / D / (S) / R envelope. **10 inlets / 10 outlets, all UNTYPED**
     (``[""]*10``) — the prior stub's 1-in / 4-out 'float' outlets were guessed and WRONG.
     Per-stage TIME AXES (ms): ``attack_domain`` / ``decay_domain`` / ``release_domain``
-    [lo, hi] (corpus attack ``[0, 60000]``, decay ``[10, 60000]``, release ``[10, 30000]``);
+    [lo, hi] (typical: attack ``[0, 60000]``, decay ``[10, 60000]``, release ``[10, 30000]``);
     the live values are ``attack_time`` / ``decay_time`` / ``release_time`` (ms). Extra
-    handles: ``enable_initial`` / ``enable_peak`` / ``enable_final`` (corpus all 0).
+    handles: ``enable_initial`` / ``enable_peak`` / ``enable_final`` (usually all 0).
     Behaviour: ``outputmode``, ``show_slopehandles`` (curve handles), ``tethering``. Colors
     are the ``active*`` set (the bare twins are the runtime skin): ``activebgcolor`` (display
-    bg, corpus alpha-0), ``activelinecolor`` (the envelope line), ``activehandlecolor`` (drag
+    bg, usually alpha-0), ``activelinecolor`` (the envelope line), ``activehandlecolor`` (drag
     handles). Themed ``activebgcolor → scope_bgcolor``, ``activelinecolor → accent``,
     ``activehandlecolor → accent``. **Use for** a built-in ADSR shaper; for an arbitrary
     multi-breakpoint curve use ``function``.
@@ -1071,9 +1067,8 @@ def live_drop(id: str, rect: list, *, param_name: str | None = None,
               patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``live.drop`` file/sample drop target.
 
-    DOC-GROUNDED (live.drop maxref; 0 corpus instances, so the synced doc is the
-    sole ground truth — the prior 'ScratchBacker/Mosaique 2-outlet' grounding was
-    fabricated and is removed). Drag a file from Live's browser / Finder / Max
+    DOC-GROUNDED (the live.drop maxref is the sole ground truth — an earlier
+    2-outlet description was wrong and is removed). Drag a file from Live's browser / Finder / Max
     file browser onto it; the absolute pathname is sent out its **single** outlet
     as one quoted symbol (route through ``prepend read`` to feed a ``buffer~`` /
     ``sfplay~``). Doc-verified attributes:
@@ -1160,12 +1155,12 @@ def swatch(id: str, rect: list, *, compatibility: int | None = None,
            **kwargs) -> dict:
     """Create a ``swatch`` colour picker / display.
 
-    MEASURED from the official M4L corpus (1 instance). A clickable colour field that
+    A clickable colour field that
     outputs the chosen colour. **3 inlets / 2 outlets** ``["", "float"]`` (the prior
     stub's 1-in / 4-out was guessed and WRONG) — outlet 0 emits the colour (list),
     outlet 1 a float. It has no styling box attrs (its displayed colour IS its runtime
     VALUE, set by a message); the only measured attrs are ``compatibility`` (a Max
-    compatibility-mode flag) and ``parameter_enable`` (corpus 0). NICHE for audio —
+    compatibility-mode flag) and ``parameter_enable`` (usually 0). NICHE for audio —
     use it for a colour-pick utility / a user-themeable accent control; for a normal
     value use a ``live.*`` control.
     """
@@ -1195,13 +1190,13 @@ def textedit(id: str, rect: list, *, fontname: str = "Ableton Sans Medium",
              patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``textedit`` editable text / numeric entry field.
 
-    NOT in the synced Max docs — MEASURED from the corpus (4 instances,
-    used as small numeric entry fields). 1 inlet / 4 outlets;
+    NOT in the synced Max docs; the IO and attrs are observed Max behaviour
+    (typically used as a small numeric entry field). 1 inlet / 4 outlets;
     **outlettype ``['', 'int', '', '']``** (the int is on outlet **1** — the prior
     stub's int-on-outlet-3 was WRONG). On Enter the typed text/number is reported.
     Measured attrs: ``text`` (initial / stored string, e.g. '0' / '127'), ``keymode``
     (1 = key handling on), ``tabmode`` (0), ``textjustification`` (1 = center),
-    ``border`` / ``rounded`` (corpus 0 — flat borderless), ``bgcolor`` (corpus alpha-0
+    ``border`` / ``rounded`` (0 — flat borderless), ``bgcolor`` (alpha-0
     transparent, themed at runtime), ``textcolor``. ``parameter_enable=1`` makes it a
     **Blob parameter** (``parameter_type 3``) that SAVES the text with the device —
     pass it only when you also wire the saved-attr blob. Themed:
@@ -1244,17 +1239,17 @@ def live_step(id: str, rect: list, *, mode: int | None = None,
               patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``live.step`` multi-lane step sequencer.
 
-    NOT in the synced Max docs — every attribute here is MEASURED from the real
-    corpus (4 instances, Mod/Pan/Direction/Slice lanes), not guessed.
+    NOT in the synced Max docs; every attribute here is observed Max behaviour,
+    not guessed.
     Structure: **1 inlet / 5 outlets** (pitch, velocity, duration, extra1, extra2 lane
     data). It is a **Blob parameter** (``parameter_enable=1`` + ``parameter_type=3``
     stores the WHOLE pattern as one saved/automatable list — same family as
     ``matrixctrl`` / ``multislider`` / ``live.grid``); the step count lives inside that
     Blob, NOT in a ``nstep`` attr. Lanes are toggled by ``pitch_active`` /
-    ``velocity_active`` / ``duration_active`` / ``extra2_active`` (corpus disables all
-    but one editable lane); ``extra1`` is ranged via ``extra1_min`` / ``extra1_max`` /
+    ``velocity_active`` / ``duration_active`` / ``extra2_active`` (typically all
+    but one editable lane are disabled); ``extra1`` is ranged via ``extra1_min`` / ``extra1_max`` /
     ``extra1_signed`` (pass through ``**kwargs``). ``mode`` selects the shown lane
-    (corpus uses 4). Colors (two-shade gradients): ``stepcolor`` / ``stepcolor2`` (the
+    (e.g. 4). Colors (two-shade gradients): ``stepcolor`` / ``stepcolor2`` (the
     step bars), ``bgcolor`` / ``bgcolor2`` (backdrop), ``blackkeycolor`` (pitch-row
     black keys), ``bordercolor`` / ``loopbordercolor``; ``loopruler`` / ``unitruler``
     toggle the rulers. Themed: ``stepcolor→accent``, ``bgcolor→bg``,
@@ -1298,15 +1293,15 @@ def live_grid(id: str, rect: list, *, columns: int = 16, rows: int = 8,
               **kwargs) -> dict:
     """Create a ``live.grid`` monome-style cell sequencer.
 
-    NOT in the synced Max docs — every attribute is MEASURED from the real corpus
-    (2 instances: a 12×12 pitch-map grid, a 32×32 step sequencer), not
+    NOT in the synced Max docs; every attribute is observed Max behaviour (e.g.
+    a 12×12 pitch-map grid, a 32×32 step sequencer), not
     guessed. Structure: **2 inlets / 6 outlets** (the prior stub's 1/4 was wrong). It
     is a **Blob parameter** (``parameter_enable=1`` + ``parameter_type=3`` saves the
     whole grid as one automatable list). ``rows`` / ``columns`` set the visible grid;
     ``maxrows`` / ``maxcolumns`` cap a resizable grid. ``direction`` picks the play
     direction mode; ``marker_horizontal`` / ``marker_vertical`` draw guide lines;
     ``rounded`` rounds cells. Colors: ``stepcolor`` (the lit/active cell — commonly
-    orange or magenta in the corpus), ``bgstepcolor`` / ``bgstepcolor2`` (the unlit-cell
+    orange or magenta), ``bgstepcolor`` / ``bgstepcolor2`` (the unlit-cell
     two-shade backdrop), ``bordercolor`` / ``bordercolor2``, ``hbgcolor`` (playhead-
     column highlight), ``directioncolor`` (the direction-arrow strip). Themed:
     ``stepcolor→accent``, ``bgstepcolor→section``, ``bordercolor→panel_border``,
@@ -1380,7 +1375,7 @@ def live_arrows(id: str, rect: list, *, arrowcolor: list | None = None,
     ``color`` (object color); ``textjustification`` aligns text. (The old
     ``arrowbgcolor`` kwarg was a non-existent attr — removed.) Supports a
     ``jspainterfile`` painter; ``parameter_enable`` opt-in. **Use for** a rotate / nudge
-    / step control (seen in the corpus rotating a cell sequence); for a numeric
+    / step control (e.g. rotating a cell sequence); for a numeric
     value prefer ``live.numbox`` / ``live.dial``.
     """
     box = {
@@ -1414,9 +1409,8 @@ def rslider(id: str, rect: list, *, min_val: int = 0, max_val: int = 127,
 
     ⚠️ NOT M4L-idiomatic / UNGROUNDED. ``rslider`` is a stock-Max control with NO
     ``live.*`` theming — it renders unthemed/out-of-place in a premium device — and
-    is absent from the synced Max docs, used by ZERO reference-set devices, ZERO
-    M4L Factory-Pack devices, and ZERO kit devices (verified 2026-06 across all
-    three sources). It is NOT a Live parameter (does not save/automate). The
+    is absent from the synced Max docs and used by ZERO kit devices. It is NOT a
+    Live parameter (does not save/automate). The
     ``min``/``max`` box attrs set here are therefore UNVERIFIED (no maxref to ground
     them; never guess). For a level/range control inside a device use ``slider``
     (live.slider — verified, themes to the accent, saves as a parameter) for a
@@ -1525,7 +1519,7 @@ def umenu(id: str, rect: list, *, items: list | None = None,
     index and is NOT automatable/saved. For an automatable enum parameter use
     :func:`menu` (``live.menu``) instead.
 
-    PREMIUM USAGE (measured: 25/26 corpus ``umenu`` instances): ``umenu`` is used
+    PREMIUM USAGE: ``umenu`` is used
     almost exclusively as a STYLED READ-ONLY DISPLAY — ``ignoreclick=1`` (clicks do
     nothing), ``arrow=0`` (no dropdown triangle), ``allowdrag=0``, a flat
     ``bgfillcolor`` fill + centered text — driven programmatically by a
@@ -1533,7 +1527,7 @@ def umenu(id: str, rect: list, *, items: list | None = None,
     ``display=True`` for that preset.
 
     ⚠️ A umenu's RENDERED background is ``bgfillcolor`` (the modern "Color" attr), NOT
-    bare ``bgcolor``: corpus-measured, 25/25 umenus set ``bgfillcolor_type "color"``
+    bare ``bgcolor``: the idiom is ``bgfillcolor_type "color"``
     with ``bgfillcolor_color == bgcolor`` — a FLAT fill (``bgfillcolor_color1/color2``
     are stored but unused at type ``color``; it is NOT a rendered gradient). So a
     themed ``bgcolor`` is MIRRORED here into a flat ``bgfillcolor`` automatically — set
@@ -1564,7 +1558,7 @@ def umenu(id: str, rect: list, *, items: list | None = None,
             box[key] = val
     if items is not None:
         box["items"] = items
-    # Mirror a themed bg into a FLAT bgfillcolor (the corpus pattern: type "color",
+    # Mirror a themed bg into a FLAT bgfillcolor (the idiomatic pattern: type "color",
     # bgfillcolor_color == bgcolor) so the readout actually renders the theme colour
     # instead of Max's default fill. Explicit bgfillcolor_* kwargs win (applied below).
     if bgcolor is not None:
@@ -1580,9 +1574,9 @@ def radiogroup(id: str, rect: list, *, itemcount: int = 4,
     """Create a radiogroup (plain-Max radio buttons / checkboxes).
 
     ⚠️ NOT M4L-idiomatic. ``radiogroup`` is a stock-Max control with NO ``live.*``
-    theming — it renders unthemed/out-of-place in a premium device — and is used by
-    ZERO M4L Factory Pack devices (verified 2026-06) and absent from the synced
-    docs. For an enum / segmented selector inside a device use ``tab`` (live.tab —
+    theming — it renders unthemed/out-of-place in a premium device — and is
+    absent from the synced docs. For an enum / segmented selector inside a device
+    use ``tab`` (live.tab —
     shows ALL options at once, best ≤4 segments, ≈40 px/seg) or ``menu`` (live.menu
     — a dropdown, best for many options); both theme to the device accent and SAVE
     as a Live parameter. Reserve ``radiogroup`` for a non-Live Max patch where the
@@ -1591,7 +1585,7 @@ def radiogroup(id: str, rect: list, *, itemcount: int = 4,
     The outlet emits the selected button INDEX as an int. ``mode``: 0 = Radio
     Button (exclusive single-select, the default), 1 = Check Box (independent
     per-button toggles, value is a bitmask). Color attrs are NOT in the synced
-    docs and no corpus device uses it, so they are left to raw kwargs (unverified)
+    docs, so they are left to raw kwargs (unverified)
     rather than a guessed theme_mapping.
     """
     box = {
@@ -1619,8 +1613,7 @@ def nodes(id: str, rect: list, *, numnodes: int = 4, xmin: float | None = None,
     """Create a ``nodes`` XY node editor (draggable circular nodes in a 2D field).
 
     ⚠️ UNGROUNDED + non-M4L. ``nodes`` is a stock-Max object but is absent from the
-    synced Max docs AND used by ZERO devices across the Ableton Factory Packs and the
-    reference device set (verified 2026-06) — so the IO and attrs here
+    synced Max docs — so the IO and attrs here
     (3 outlets; ``numnodes`` / ``xmin`` / ``xmax`` / ``ymin`` / ``ymax``) are
     UNVERIFIED guesses, and it carries no ``live.*`` theming (renders out-of-place in
     a device). For device UI prefer: ``function`` (breakpoint / transfer curve),
@@ -1658,10 +1651,10 @@ def matrixctrl(id: str, rect: list, *, rows: int = 8, columns: int = 8,
     """Create a ``matrixctrl`` — a ``rows``×``columns`` grid of toggle cells (routing
     matrix, mod matrix, step row).
 
-    Verified from the corpus (7 instances): ``autosize=1`` (6/7, the Max default —
-    cells auto-fit the rect), and most are ``ignoreclick=1`` *displays* driven by the
-    patch (showing a step pattern / routing state), not interactive. The interactive
-    one is a 1×16 step row that's a **Blob parameter** (``parameter_enable=1`` +
+    Typical use: ``autosize=1`` (the Max default — cells auto-fit the rect), and
+    usually an ``ignoreclick=1`` *display* driven by the patch (showing a step
+    pattern / routing state), not interactive. An interactive one (e.g. a 1×16
+    step row) is a **Blob parameter** (``parameter_enable=1`` +
     ``parameter_type=3`` stores the WHOLE grid state, automatable/saved). Cell colors
     (``color`` = ON cell, ``elementcolor`` = OFF cell, ``bgcolor`` = backdrop) are
     themed; when a runtime ``live.colors`` bus drives them the SAVED colors are
@@ -1693,9 +1686,8 @@ def ubutton(id: str, rect: list, *, hltcolor: list | None = None, handoff: str |
             patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``ubutton`` — an invisible click zone over graphics.
 
-    MEASURED from the official M4L corpus (43 instances across 14 devices, 100%
-    consistent). 1 inlet / **4 outlets** ``["bang", "bang", "", "int"]`` — outlet 0
-    bangs on mouse-UP (release inside), outlet 1 bangs on mouse-DOWN, outlet 3 is the
+    1 inlet / **4 outlets** ``["bang", "bang", "", "int"]`` — outlet 0 bangs on
+    mouse-UP (release inside), outlet 1 bangs on mouse-DOWN, outlet 3 is the
     ``int`` button state (1 down / 0 up). (The prior stub's outlet 1 was wrongly
     ``""`` — it is a down-bang.) Real attrs: ``hltcolor`` = the highlight flash drawn
     on click (ubutton's ONLY color — it is otherwise transparent), ``handoff`` = a
@@ -1758,13 +1750,12 @@ def plot(id: str, rect: list, *, numinlets: int = 1, numoutlets: int = 1,
     """Create a ``plot~`` — a compiled curve/data plotter.
 
     ⚠️ UNGROUNDED. ``plot~`` is absent from the synced Max docs (only the unrelated
-    Jitter ``jit.plot`` is documented) AND used by ZERO devices across the Ableton
-    Factory Packs and the reference device set (verified 2026-06), so the
+    Jitter ``jit.plot`` is documented), so the
     attrs suggested here (``rgba`` / ``bgrgba`` / ``range`` / ``domain`` / ``style``)
     are UNVERIFIED — confirm them in Max before relying on them. For a GROUNDED
     display prefer: ``scope`` (live.scope~, signal time-domain), ``function`` /
     ``multislider`` (breakpoint or bar data), ``filtergraph~`` (filter response),
-    ``spectroscope~`` (spectrum), or a custom ``v8ui`` curve — all corpus-verified
+    ``spectroscope~`` (spectrum), or a custom ``v8ui`` curve — all verified
     and themed. Reach for ``plot~`` only when you specifically need it and have
     checked its real attribute set.
     """
@@ -1794,22 +1785,21 @@ def filtergraph(id: str, rect: list, *, numinlets: int = 8, numoutlets: int = 7,
                 textcolor: list | None = None, patching_rect: list | None = None, **attrs) -> dict:
     """Create a ``filtergraph~`` — the COMPILED interactive filter-response editor.
 
-    MEASURED from the official M4L corpus (11 instances, 100% consistent). Drag the
-    curve to design a filter; outlet 0 emits the coefficient **list** to feed
+    Drag the curve to design a filter; outlet 0 emits the coefficient **list** to feed
     ``biquad~`` / ``cascade~``, so it is BOTH the UI and the coefficient source.
     **8 inlets / 7 outlets** ``["list","float","float","float","float","list","int"]``
     (the prior stub's 1/1 was wrong). Key attrs:
-    - ``domain`` [lo, hi]: the X-axis frequency range (corpus ``[20.0, 22050.0]`` Hz).
+    - ``domain`` [lo, hi]: the X-axis frequency range (typically ``[20.0, 22050.0]`` Hz).
     - ``value_range`` → ``range`` [lo, hi]: the Y-axis gain range (LINEAR amplitude,
       e.g. ``[0.0725, 4.0]``); set ``dbdisplay 1`` to label it in dB.
     - ``nfilters`` [int]: filter count. ``setfilter`` [list]: define a filter band
-      ``[idx, type, bypass, …, freq, gain, Q, …]`` (corpus ``type`` enum, e.g. 6).
-    - ``logmarkers`` [list]: log-spaced freq grid lines (corpus ``[50, 500, 5000]``).
+      ``[idx, type, bypass, …, freq, gain, Q, …]`` (``type`` enum, e.g. 6).
+    - ``logmarkers`` [list]: log-spaced freq grid lines (e.g. ``[50, 500, 5000]``).
       ``numdisplay`` toggles numeric readouts.
     - Colors: ``bgcolor``, ``markercolor`` (the freq GRID — NOT ``gridcolor``),
       ``curvecolor`` (the response curve), ``hcurvecolor`` (highlighted/active curve),
       ``bwidthcolor`` / ``hbwidthcolor`` (bandwidth fill), ``fgcolor``, ``textcolor``.
-    ``parameter_enable`` is 0 in the corpus (a coefficient source, not a Live param).
+    ``parameter_enable`` is normally 0 (a coefficient source, not a Live param).
     Themed ``bgcolor → scope_bgcolor``, ``markercolor → grid_color``,
     ``curvecolor → accent``, ``hcurvecolor → accent2``. **Use for** an EQ / filter
     response editor; for an arbitrary 2-param drawn curve use ``function`` or a v8ui.
@@ -1844,21 +1834,21 @@ def function(id: str, rect: list, *, points: list | None = None, domain: float |
              patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``function`` — the native breakpoint / envelope / transfer-curve editor.
 
-    NOT in the synced Max docs — MEASURED from the corpus (20 instances: synth-voice
-    transfer curves). 1 inlet / **4 outlets** ``["float", "", "", "bang"]``
+    NOT in the synced Max docs; the IO and attrs below are observed Max
+    behaviour. 1 inlet / **4 outlets** ``["float", "", "", "bang"]``
     (send an x value in → the y at that x comes out outlet 0; outlet 3 bangs on
-    finish). In the corpus it is a **curve-DATA store** in the patching layer (no
+    finish). It is typically a **curve-DATA store** in the patching layer (no
     presentation, ``parameter_enable 0``) — you define a shape and the DSP reads it.
     Measured attrs:
     - ``points`` → ``addpoints_with_curve``: the breakpoint list, flat
       ``[x, y, flags, curve, …]`` per node (``curve`` = per-segment tension).
     - ``domain`` [float]: the X-axis max (input range, e.g. 1.0 or 100.0).
     - ``value_range`` → ``range`` [min, max]: the Y-axis output range (e.g. [0, 8]).
-    - ``mode`` [int] (corpus 1) + ``classic_curve`` [int] (1 = classic interpolation).
-    - ``parameter_enable`` [int]: opt-in (corpus is all 0 — a patch-internal store).
+    - ``mode`` [int] (usually 1) + ``classic_curve`` [int] (1 = classic interpolation).
+    - ``parameter_enable`` [int]: opt-in (usually 0 — a patch-internal store).
     Defaults to a VISIBLE editor (``presentation=1``, so it places in a layout like any
-    UI control); pass ``presentation=0`` for the corpus-style patching-layer curve-DATA
-    store. Its display colors are not corpus-grounded here, so set them via ``**kwargs``
+    UI control); pass ``presentation=0`` for a patching-layer curve-DATA
+    store. Its display colors are not verified here, so set them via ``**kwargs``
     and Live-verify. **Use for** a velocity / transfer / response curve or a drawn
     envelope feeding gen~; for a single value use a dial.
     """
@@ -1893,8 +1883,7 @@ def waveform(id: str, rect: list, *, buffername: str | None = None,
              patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``waveform~`` — a ``buffer~`` audio display with drag-to-select.
 
-    MEASURED from the official M4L corpus (7 instances, 100% consistent). Draws the
-    audio in a named ``buffer~`` and (unless ``ignoreclick``) lets the user drag-select
+    Draws the audio in a named ``buffer~`` and (unless ``ignoreclick``) lets the user drag-select
     a region. **5 inlets / 6 outlets** ``["float","float","float","float","list",""]`` —
     doc-verified order: inlets/outlets 0/1 are the DISPLAY window (start ms / length
     ms), 2/3 the SELECTION bounds (start / end ms), outlet 4 the raw mouse list,
@@ -1942,8 +1931,8 @@ def pictctrl(id: str, rect: list, *, name: str | None = None, frames: int | None
              patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``pictctrl`` — an image-filmstrip control (custom knob / button / slider).
 
-    MEASURED from the official M4L corpus (17 instances, 100% consistent). Displays one
-    frame of a sprite image and outputs the frame INDEX as an **int**. 1 inlet / 1 outlet
+    Displays one frame of a sprite image and outputs the frame INDEX as an **int**.
+    1 inlet / 1 outlet
     (``["int"]``). ``name`` = the sprite file (a filmstrip, e.g. a 68-frame vertical
     strip); ``frames`` = the frame count; ``mode`` = interaction (button / toggle /
     slider-drag); ``trackvertical`` 1 = frames stack VERTICALLY (drag up/down to change).
@@ -1986,13 +1975,12 @@ def spectrumdraw(id: str, rect: list, *, amprange: list | None = None, ampgrid: 
                  patching_rect: list | None = None, **kwargs) -> dict:
     """Create a ``spectrumdraw~`` — a multi-trace spectrum analyzer display.
 
-    MEASURED from the official M4L corpus (4 instances, 100% consistent). **4 signal
-    inlets / 1 outlet** (``[""]``) — feed up to 4 signals to OVERLAY 4 spectra (e.g.
-    input vs output, or L / R). ``amprange`` [lo, hi] dB (corpus ``[-80, 10]``);
+    **4 signal inlets / 1 outlet** (``[""]``) — feed up to 4 signals to OVERLAY 4 spectra (e.g.
+    input vs output, or L / R). ``amprange`` [lo, hi] dB (e.g. ``[-80, 10]``);
     ``ampgrid`` / ``amplabels`` / ``freqgrid`` / ``freqlabels`` toggle the grids +
     labels. Each of the 4 traces has its own color (``color`` / ``color2`` / ``color3``
     / ``color4``) and ``thickness`` / ``thickness2`` / ``thickness3`` / ``thickness4``.
-    ``curvestyle`` = draw style; ``octavesmooth`` = fractional-octave smoothing (corpus
+    ``curvestyle`` = draw style; ``octavesmooth`` = fractional-octave smoothing (e.g.
     ~1/6); ``timesmooth`` [attack, release] ms; ``fftsize`` index; ``mode``;
     ``mousemode``. Themed ``color → accent``, ``color2 → accent2``,
     ``bgcolor → scope_bgcolor``. **Use for** a spectrum / analyzer display (the native

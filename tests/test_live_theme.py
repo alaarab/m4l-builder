@@ -161,7 +161,7 @@ def test_device_add_theme_bus_dim_wires_receiver():
 
 
 class TestApplyStockTheme:
-    """One-call stock-theme recipe (the corpus pattern, standardized)."""
+    """One-call stock-theme recipe."""
 
     @staticmethod
     def _device():

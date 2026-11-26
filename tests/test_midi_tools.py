@@ -1,7 +1,7 @@
 """Tests for Live 12 MIDI Tools (Generator / Transformation) support.
 
-The expected device-type codes and amxdtype integers were reverse-engineered
-from real Live 12 MIDI Tool devices.
+The expected device-type codes and amxdtype integers match what Live 12
+writes for MIDI Tool devices.
 """
 
 import json

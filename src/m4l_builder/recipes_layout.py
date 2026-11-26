@@ -9,7 +9,7 @@ def two_panel_strip(device, id_prefix, *, main_width=174, side_width=56, height=
     """Two-panel channel-strip SHELL — a premium channel-strip grammar: a wide MAIN
     panel for the primary controls + a narrow SIDE column for toggles/meters.
 
-    Geometry is grounded in measured premium-device proportions: main panel ``[0,0,174,167]`` + side
+    Geometry follows premium-device proportions: main panel ``[0,0,174,167]`` + side
     panel ``[176,0,55,167]`` (gap 2). The device width should be
     ``main_width + gap + side_width`` (231 by default). Fill the panels with
     :func:`dial_label_cell` cells, a DSP module via
@@ -95,7 +95,7 @@ def dial_value_cell(device, id_prefix, param_name, dial_rect, *, label=None,
     """The premium channel-strip atomic control cell: an uppercase caption
     ABOVE a native ``live.dial`` whose OWN persistent value reads out BELOW the knob.
 
-    Grounded in measured premium-device proportions: its dials are 41x35, ``showname=0``, with an accent
+    Follows premium-device proportions: its dials are 41x35, ``showname=0``, with an accent
     ring (``activedialcolor``) + grey value arc (``activefgdialcolor``) and rely on
     the native value display (``shownumber=1`` — the Max ``live.dial`` reference:
     "shownumber toggles the display of the parameter value"). NO ``paint_control``:
@@ -104,7 +104,7 @@ def dial_value_cell(device, id_prefix, param_name, dial_rect, *, label=None,
     caption is placed just above it.
 
     ``accent`` -> ``activedialcolor`` (the lit ring, the device accent); ``fill`` ->
-    ``activefgdialcolor`` (the value arc; defaults to a neutral grey like premium channel-strip devices).
+    ``activefgdialcolor`` (the value arc; defaults to a neutral grey).
     Extra ``dial_kwargs`` pass through to ``device.add_dial`` (``parameter_exponent``,
     ``annotation_name`` …). Returns a StageResult with ``dial``/``label`` ids, the
     overall cell ``rect`` and the param.
@@ -302,9 +302,9 @@ def modulator_slot_component(device, *, accent, text_color=None,
                              uplink_pname=False, uplink_dname=False,
                              ratio_lcd=False):
     """The E2/E3 mapping slot — ONE ``#1``-parameterized Subpatcher to stamp N
-    times via :meth:`Device.add_component_rack` (the measured slot pattern, F2+E2).
+    times via :meth:`Device.add_component_rack` (the slot pattern, F2+E2).
 
-    Presentation is the STOCK-MODULATOR ROW (Live 12 LFO / Envelope Follower:
+    Presentation is the STOCK-MODULATOR ROW (as in Live 12's stock modulators:
     the whole mapping UI is one ~15px strip — Map button, target chip, inline
     percent values; knobs are for the device's own DSP only):
     ``MAP | target readout | Depth% | Min% | Max% | BI`` at ``width x height``
@@ -320,9 +320,8 @@ def modulator_slot_component(device, *, accent, text_color=None,
 
     I/O (``#1`` = instance number, standalone tokens only — Live-proven:
     ``#1`` EMBEDDED mid-symbol like ``depth_#1``/``msig_r#1`` stays LITERAL).
-    Everything crosses the bpatcher boundary by inlet/outlet, the
-    corpus-verbatim discipline (this pattern's slot feeds its sinks from inlet
-    boxes and talks to the parent through outlets). Inlets by x-position:
+    Everything crosses the bpatcher boundary by inlet/outlet (the slot feeds
+    its sinks from inlet boxes and talks to the parent through outlets). Inlets by x-position:
       inlet 0: mapper messages (``settarget``/``setid``/``unmap``/``map``,
                and the parent's ``announce N`` fan-back for exclusivity);
       inlet 1: live.remote~ signal (native units unless ``normalized=1``);
@@ -408,7 +407,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
         MAP_X, PNAME_X, DEP_X, MIN_X, MAX_X, BI_X = 18, 46, 114, 148, 178, 208
     else:
         MAP_X, PNAME_X, DEP_X, MIN_X, MAX_X, BI_X = 0, 31, 96, 135, 174, 213
-    # value_bar (catalog #21, Rnd Gen): a 5px live-output meter at the row's
+    # value_bar (catalog #21): a 5px live-output meter at the row's
     # LEFT edge — everything else shifts right 7px.
     if value_bar and icon:
         raise ValueError("modulator_slot_component: value_bar with "
@@ -467,16 +466,16 @@ def modulator_slot_component(device, *, accent, text_color=None,
                                 parameter_type=2, initial=0,
                                 initial_enable=True, linknames=1)))
     # ---- optional Remote/Mod switch + "+" add chip (catalog #15/#16) --------
-    # corpus/Live-12 grammar: orange = Remote (live.remote~ takeover, user
+    # Live-12 grammar: orange = Remote (live.remote~ takeover, user
     # loses the dial), teal = Mod (live.modulate~ grey-ring, additive around
     # the dial). The chip drives the retarget sink's mode inlet, which
-    # hot-swaps the stored id between sinks (corpus-verbatim re-emit).
+    # hot-swaps the stored id between sinks (re-emitting it verbatim).
     RM_X = BI_X + 17
     ADD_X = RM_X + (17 if mode_switch else 0)
     UN_X = ADD_X + (17 if add_chip else 0)
     RA_X = UN_X + (15 if unmap_button else 0)
     if ratio_lcd:
-        # catalog #29 (MEQ8): mapping-with-math — a per-row multiplier LCD
+        # catalog #29: mapping-with-math — a per-row multiplier LCD
         # ("x 5.04"); engines consume the `ratio v` ctl uplink and multiply
         # the lane signal before this row's sink (target = source × ratio).
         sub.add_box(number_box(
@@ -558,7 +557,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
     sink_boxes, sink_lines = retargetable_param_sink(
         "slot_sink", normalized=normalized)
     sub.add_dsp(sink_boxes, sink_lines)
-    # signal delivery is by bpatcher INLET (corpus-verbatim: the
+    # signal delivery is by bpatcher INLET (the
     # mapping slot feeds live.remote~/live.modulate~ from inlet boxes, never
     # send~/receive~ across the bpatcher boundary) — inlet order is by
     # x-position: 0 = mapper messages, 1 = remote signal, 2 = modulate signal
@@ -1312,9 +1311,9 @@ def mode_stack(device, id_prefix, *, rect, modes, param_name="Mode",
     scripting-ready init) re-fires the tab's restored value through the
     wiring at load, so a set saved on mode 2 reopens showing mode 2.
 
-    ``tab_rect`` defaults to a narrow column just LEFT of ``rect`` (~22px —
-    Auto_Gate's "Time Mode" tab is 21px x 3 rows); the tab renders vertical
-    via ``num_lines_* = len(modes)`` + ``multiline=1`` (corpus-exact).
+    ``tab_rect`` defaults to a narrow column just LEFT of ``rect`` (~22px,
+    e.g. a 21px x 3-row tab); the tab renders vertical
+    via ``num_lines_* = len(modes)`` + ``multiline=1``.
     Returns a StageResult: ``tab`` / ``thispatcher`` / ``thisdevice`` ids,
     ``content_rect``, ``managed`` (label -> names) and the enum ``param``.
     """
@@ -1427,7 +1426,7 @@ def mode_stack(device, id_prefix, *, rect, modes, param_name="Mode",
 def randomize_matrix(device, id_prefix, *, rect, targets, columns=4,
                      chip_h=15, gap=2, labels=None, seed=True,
                      variation=False):
-    """Per-param RANDOMIZE page (an Auto-Gate device) — catalog #11 + #12.
+    """Per-param RANDOMIZE page — catalog #11 + #12.
 
     Every entry in ``targets`` (box ids/refs of NATIVE param controls already
     on the device) gets an enable chip; the RND button rolls a fresh random
@@ -1444,7 +1443,7 @@ def randomize_matrix(device, id_prefix, *, rect, targets, columns=4,
     ``random`` objects are seeded at load from ``cpuclock`` (+k per lane so
     lanes decorrelate) — the Max-8-safe equivalent of a v8
     ``Date.now()`` seed idiom; without it every load replays one sequence.
-    No ``---disarm`` guard (corpus Tempo Scale Setter) is used: unlike a
+    No ``---disarm`` guard is used: unlike a
     set-level tempo/scale roll, device-param randomize is a plain undoable
     edit.
 
@@ -1453,7 +1452,7 @@ def randomize_matrix(device, id_prefix, *, rect, targets, columns=4,
     and a ``columns``-wide chip grid growing downward; size ``rect`` for
     ``1 + ceil(len(targets)/columns)`` rows of ``chip_h + gap``.
 
-    ``variation=True`` (catalog #27, Chordsaus "Random Variation %"): adds a
+    ``variation=True`` (catalog #27, a "Random Variation %"): adds a
     ``Rnd Var`` % param to the header and rolls each enabled target AROUND
     ITS CURRENT VALUE (± var% of its range, clipped) instead of uniformly
     across the range — humanize-style nudging. Each target's last value is

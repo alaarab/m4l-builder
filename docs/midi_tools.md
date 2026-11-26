@@ -7,8 +7,8 @@ create or rewrite notes. There are two kinds:
 - **MIDI Transformation** (`MidiTransformation`) — *rewrites* the selected notes.
 
 m4l-builder emits both as first-class `.amxd` device types. The format isn't
-well documented publicly; the device-type codes and `amxdtype` values below were
-reverse-engineered from shipping Live 12 devices and are byte-verified.
+well documented publicly; the device-type codes and `amxdtype` values below are
+byte-verified against Live 12's own MIDI Tool files.
 
 ## Building one
 

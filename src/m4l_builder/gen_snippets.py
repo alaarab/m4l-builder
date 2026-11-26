@@ -1469,7 +1469,7 @@ def transient_split(
         {out} = max({env_f} - {env_s}, 0.);
 
     ``out`` spikes on attacks (fast outruns slow) and returns to ~0 in steady
-    state — the detector core for transient designers / Snap. Caller declares
+    state — the detector core for transient shapers / Snap. Caller declares
     ``History {env_f}(0.); History {env_s}(0.);``. Larger coeff = faster envelope.
     """
     return (
@@ -1533,7 +1533,7 @@ def moog_ladder(
     s4: str = "ml_s4",
     fb: str = "ml_fb",
 ) -> str:
-    """4-pole Moog-style ladder lowpass with resonance feedback.
+    """4-pole transistor-ladder lowpass with resonance feedback.
 
     Four cascaded one-poles inside a resonance feedback loop::
 
@@ -1543,7 +1543,7 @@ def moog_ladder(
 
     ``g`` is the one-pole coefficient (0..1, from cutoff: ``1 - exp(-2*pi*fc/sr)``);
     ``res`` is the resonance feedback amount (0..~4, self-oscillating near 4).
-    ``nonlinear=True`` wraps the feedback summing node in ``tanh`` — the Moog
+    ``nonlinear=True`` wraps the feedback summing node in ``tanh`` — the classic ladder
     character + graceful self-limiting at high resonance; ``False`` is the clean
     linear ladder (DC gain ``1/(1+res)``, unity at ``res == 0``). Caller declares
     ``History {s1}(0.); … {s4}(0.);``. Override the state names to stack ladders.

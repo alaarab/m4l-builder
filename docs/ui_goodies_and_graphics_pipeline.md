@@ -1,13 +1,13 @@
 # UI goodies & the "really good graphics" pipeline
 
-A living research file: inspiration mined from the reference plugins + how pros
+A living research file: UI inspiration + how pros
 actually generate high-quality plugin graphics, mapped to (a) concrete upgrades
 for our existing 7 flagships and (b) ideas for upcoming plugins. Graphics are a
 differentiator — this is the backlog that turns "works" into "looks expensive."
 
 Companion: `m4l_advanced_ui_techniques.md` (the v8ui API + MGraphics shape
-toolbox + Ableton production rules). This file is the *what to build* / *where to
-steal from*; that one is the *how it's wired*.
+toolbox + Ableton production rules). This file is the *what to build*; that one is
+the *how it's wired*.
 
 ---
 
@@ -61,23 +61,23 @@ JS drawing ports. Bookmarked, not yet mined deeply.
 
 ---
 
-## B. Goodies worth stealing (reference plugins)
+## B. Goodies worth building
 
-### A late-2024 flagship EQ — the category's gold standard
+### EQ interaction ideas
 - **Freehand curve-sketch** — draw the whole curve freehand in ONE gesture; the
-  plugin fits bands (low cut / bells / shelf) to your stroke. A marquee
+  EQ fits bands (low cut / bells / shelf) to your stroke. A marquee
   interactivity feature.
 - **Direct spectrum-grab** — grab a peak directly in the live analyzer to
   create/adjust a band there. Direct manipulation of the spectrum itself, not
   the curve.
 - **Multi-band selection + edit**; **collision detection** (overlapping bands
   highlighted — we already have analyzer collision in the LP engine).
-- **Character modes** — circuit-modelled saturation (Subtle/Warm) baked into an EQ.
+- **Character modes** — circuit-modelled saturation baked into an EQ.
 - Pre-EQ / Post-EQ / **external** spectrum; display ranges 3/6/12/30 dB; tilt;
   freeze; per-band mid/side; dynamic EQ with attack/release + sidechain filtering.
 - **Retina, GPU, resizable, full-screen** (our pop-out is the spiritual cousin).
 
-### A flagship compressor — display ideas (for Pressure / Ceiling)
+### Compressor display ideas (for Pressure / Ceiling)
 - **Live knee display** — the white transfer curve **turns green up to the current
   input level** in real time. A gorgeous, cheap-to-add "where am I on the curve"
   cue (we already stream env/GR probes — just color the curve up to the live x).
@@ -127,7 +127,6 @@ JS drawing ports. Bookmarked, not yet mined deeply.
 
 ---
 
-*Sources:* Product pages and display/metering documentation for a leading
-plugin EQ and compressor; Cycling '74 "Custom UI Objects with JavaScript" +
+*Sources:* Cycling '74 "Custom UI Objects with JavaScript" +
 jsui SVG forum; CDM "jsui + Figma"; KVR/JUCE NanoVG vector-UI threads; Figma
 SVG-export guides; "Knobs and Nodes" (Massey U. study of audio-plugin UI).

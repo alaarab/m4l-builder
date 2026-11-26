@@ -154,7 +154,7 @@ def retargetable_param_sink(id_prefix: str, *, default_mode: int = 0,
         # stored id list -> gate data inlet
         patchline(f"{p}_reg", 0, f"{p}_gate", 1),
         # mode change: set the gate outlet, then bang zl.reg to re-emit the
-        # stored id down the newly selected path (corpus + 1 / t b i)
+        # stored id down the newly selected path (via + 1 / t b i)
         patchline(f"{p}_mode", 0, f"{p}_tbi", 0),
         patchline(f"{p}_tbi", 1, f"{p}_gate", 0),
         patchline(f"{p}_tbi", 0, f"{p}_reg", 0),

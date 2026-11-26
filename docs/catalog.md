@@ -85,7 +85,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `phase_vocoder_subpatcher` | Return the pfft~ subpatcher dict for a phase vocoder. |
 | `pitch_quantize` | Quantize MIDI pitch to a musical scale using the scale Max object. |
 | `pitch_shift_gizmo` | Host box for the gizmo~ pitch shifter: an embedded ``pfft~``. |
-| `pitch_shift_gizmo_subpatcher` | pfft~ subpatcher for gizmo~ spectral pitch shift (T36/Q19 — the |
+| `pitch_shift_gizmo_subpatcher` | pfft~ subpatcher for gizmo~ spectral pitch shift (T36/Q19). |
 | `pitchbend_in` | Receive MIDI pitchbend and scale to semitone range. |
 | `poly_voices` | Polyphonic voice allocator using poly~. |
 | `probability_gate` | Probabilistic gate: pass an incoming bang only some fraction of the time. |

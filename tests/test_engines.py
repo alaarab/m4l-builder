@@ -258,7 +258,7 @@ def test_exciter_curve_reflects_delta_listen_state():
 def test_exciter_curve_draws_live_fft_spectrum():
     # The hero now reads the fft_analyzer buffer~ (set_analyzer_buffer +
     # set_samplerate, polled ~30 fps) and draws a spectrum behind the band
-    # curves so you SEE the harmonics each band adds (premium-exciter-style).
+    # curves so you SEE the harmonics each band adds.
     from m4l_builder.engines.exciter_curve import exciter_curve_js
     js = exciter_curve_js()
     for fn in ("function set_analyzer_buffer(name, bins)",
@@ -931,7 +931,7 @@ class TestEqCurveEngine:
         assert "function delete_band_at(idx)" in js
         assert "var DOUBLE_CLICK_MS = 320;" in js
         assert "var suppress_next_ondblclick_delete = 0;" in js
-        # premium-EQ semantics (it16): double-click RESETS the band; delete
+        # Double-click semantics (it16): double-click RESETS the band; delete
         # stays on the context menu (behavioral coverage in
         # tests/test_js_behavior.py).
         assert "function reset_band_at(idx)" in js
@@ -939,7 +939,7 @@ class TestEqCurveEngine:
         assert "delete_band_at(clicked_band);" not in js
         assert "suppress_next_ondblclick_delete = 1;" in js
         assert "if (dynamic_hit >= 0 || hit >= 0)" in js
-        # premium-EQ create gesture (user request): a single press on the empty graph
+        # Create gesture (user request): a single press on the empty graph
         # creates a band whose TYPE depends on the click position; an empty
         # double-click no longer creates.
         assert "function band_type_for_x(x)" in js
@@ -1016,8 +1016,8 @@ class TestEqCurveEngine:
     def test_draws_continuous_analyzer_fill(self):
         js = eq_curve_js()
         assert "analyzer_display[i] = analyzer_display[i] * 0.55 + incoming * 0.45;" in js
-        # A spectrum-EQ look: the
-        # max-per-column polyline ROUNDED with path_roundcorners (spectRCorners=4),
+        # The analyzer look: the
+        # max-per-column polyline ROUNDED with path_roundcorners (radius 4),
         # not Catmull-Rom grass; a light fill anchored just below the floor; a thin
         # 1.1px crisp envelope.
         assert "var ANALYZER_RCORNERS = 4.0;" in js
@@ -1028,16 +1028,16 @@ class TestEqCurveEngine:
     def test_analyzer_style_toggle_line_vs_eq8(self):
         js = eq_curve_js()
         # Runtime spectrum render style: 0 = Line (thin line + light wash),
-        # 1 = EQ8 (heavy grey solid fill + ±3-tap smoothing). Same FFT/data.
+        # 1 = filled (heavy grey solid fill + ±3-tap smoothing). Same FFT/data.
         assert "function set_analyzer_style(v)" in js
         assert "var ANALYZER_STYLE = 0;" in js
-        assert "var ANALYZER_EQ8_CLR  = [" in js
-        # 3-way: 0 Line, 1 EQ8, 2 Both (grey backdrop + cyan line).
-        assert "var eq8 = (style === 1);" in js
+        assert "var ANALYZER_SOLID_CLR = [" in js
+        # 3-way: 0 Line, 1 Filled, 2 Both (grey backdrop + cyan line).
+        assert "var filled = (style === 1);" in js
         assert "var both = (style === 2);" in js
-        # EQ8 path smooths + uses the grey fill; Line keeps the configured wash.
+        # The filled path smooths + uses the grey fill; Line keeps the configured wash.
         assert "ys = sm;" in js
-        # the EQ8 colour is overridable per device
+        # the fill colour is overridable per device
         assert eq_curve_js(analyzer_eq8_color="0.1, 0.2, 0.3, 1.0") != js
 
     def test_external_spectrum_mode_makes_jsui_transparent_overlay(self):
@@ -1054,7 +1054,7 @@ class TestEqCurveEngine:
         # the FFT data still feeds snap-to-peak + dynamics (poll not gated)
         assert "function poll_analyzer_buffer()" in ext
 
-    def test_pro_q_band_shading_tints_all_active_gain_bands(self):
+    def test_band_shading_tints_all_active_gain_bands(self):
         # Every enabled gain band tints its contribution (color-coded EQ);
         # the active band gets a stronger fill (0.34 vs 0.20) + an outline.
         js = eq_curve_js()

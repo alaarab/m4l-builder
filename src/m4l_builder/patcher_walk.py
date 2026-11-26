@@ -14,7 +14,7 @@ four functions are the one shared implementation of that dance.
 attributes) or a raw patcher-JSON dict/list (a normalized "snapshot" dict with
 top-level ``"boxes"``/``"lines"`` keys, or an already-extracted list of
 wrapper entries) — both shapes use the identical wrapper convention, so one
-implementation serves live authoring code and reverse-engineering/corpus code
+implementation serves live authoring code and patcher-analysis code
 alike.
 """
 
