@@ -263,8 +263,7 @@ with device.row(10, 10, spacing=8, height=70) as r:
 ### UI guidance
 
 Beyond the widget API above, deeper UI/visual-design guidance lives in
-[docs/ui_inputs_reference.md](docs/ui_inputs_reference.md) (every input
-widget's full behavior), [docs/m4l_advanced_ui_techniques.md](docs/m4l_advanced_ui_techniques.md),
+[docs/m4l_advanced_ui_techniques.md](docs/m4l_advanced_ui_techniques.md),
 [docs/ui_goodies_and_graphics_pipeline.md](docs/ui_goodies_and_graphics_pipeline.md),
 and [docs/ui_premium_playbook.md](docs/ui_premium_playbook.md).
 
