@@ -1016,7 +1016,7 @@ class TestEqCurveEngine:
     def test_draws_continuous_analyzer_fill(self):
         js = eq_curve_js()
         assert "analyzer_display[i] = analyzer_display[i] * 0.55 + incoming * 0.45;" in js
-        # A premium spectrum-EQ look (display.js StereoSpectrum.displayNormal): the
+        # A spectrum-EQ look: the
         # max-per-column polyline ROUNDED with path_roundcorners (spectRCorners=4),
         # not Catmull-Rom grass; a light fill anchored just below the floor; a thin
         # 1.1px crisp envelope.

@@ -1,13 +1,25 @@
-"""Stateful gen~ primitives (D1 core)."""
+"""Stateful gen~ primitives (D1 core).
+
+The DSP primitives are checked by behaviour, simulated with gen_sim: frequency
+response against closed-form references, energy, decay and timing. Primitives
+that need Data/Buffer access (granular, lfo_osc) are beyond the simulator and are
+covered by the gen lint build tests here and in test_motes_kit.py.
+"""
+
+import cmath
+import math
+import random
+
+import pytest
 
 from m4l_builder.gen_patcher import build_gendsp
+from m4l_builder.gen_sim import simulate
 from m4l_builder.gen_stateful import (
     RAMPSMOOTH_FN,
     allpass_fn,
     compose_gen_code,
     diffuse_fn,
     fade_env_fn,
-    granular_voice_fn,
     highpass_12_fn,
     lfo_osc_fn,
     lowpass_12_fn,
@@ -21,28 +33,6 @@ from m4l_builder.gen_stateful import (
     tanh_approx_fn,
     variable_sigmoid_fn,
 )
-
-
-def test_lowpass_12_is_verbatim_rbj_biquad():
-    code = lowpass_12_fn()
-    assert code.startswith("lowpass_12(sig, cf, q)")
-    assert code.count("{") == code.count("}")
-    # change()-gated coefficient recompute (CPU discipline) + DF1 history taps
-    assert "CHANGE = change(his_cf * his_q);" in code
-    assert "twopi / samplerate" in code
-    # y-feedback write is denormal-flushed (Q44); his_h1 copies the flushed cell
-    assert "his_h4 = fixdenorm(output);" in code
-    assert "his_h1 = his_h4;" in code
-
-
-def test_allpass_uses_gen_delay_operators():
-    code = allpass_fn()
-    assert code.startswith("allpass(x, g, delaySamps, delaySig1, delaySig2)")
-    assert "delaySig1.write(x);" in code
-    assert "delaySig1.read(delaySamps)" in code
-    # the feedback line write is denormal-flushed (Q44 silent-tail guard)
-    assert "delaySig2.write(fixdenorm(y));" in code
-    assert code.count("{") == code.count("}")
 
 
 def test_rampsmooth_is_a_valid_gen_function():
@@ -107,22 +97,6 @@ def test_composed_code_builds_a_valid_gendsp():
     assert '"classnamespace"' in gendsp and "dsp.gen" in gendsp
 
 
-def test_granular_voice_fn_balanced_and_stereo():
-    code = granular_voice_fn()
-    assert code.startswith("granular_vp(")
-    assert code.count("{") == code.count("}")
-    assert "his_thisIndex" in code and "data_freeze" in code
-    assert code.rstrip().endswith("return outR, outL;\n}")
-
-
-def test_highpass_12_is_verbatim_rbj_biquad():
-    code = highpass_12_fn()
-    assert code.startswith("highpass_12(sig, cf, q)")
-    assert code.count("{") == code.count("}")
-    assert "CHANGE = change(his_cf * his_q);" in code
-    assert "alpha = sn * 0.5 / his_q;" in code
-
-
 def test_variable_sigmoid_shape():
     code = variable_sigmoid_fn()
     assert code.startswith("variable_sigmoid(xin, pregain, postgain, sigmoid)")
@@ -133,101 +107,12 @@ def test_variable_sigmoid_shape():
     assert "pregain = dbtoa(clip(pregain, -48., 48.));" in code
 
 
-def test_modulated_allpass_reverb_grounded_topology():
-    code = modulated_allpass_reverb()
-    assert code.count("{") == code.count("}")
-    # Reverb constants, verbatim: pre-diffusion delay seeds, the 1.36255
-    # second-tap ratio, the 0.27 apRate, the change()-gated size recompute.
-    assert "allpass(preL, 0.75, 44.64," in code
-    assert "allpass(preL, 0.625, 61.014," in code
-    assert "1.36255" in code and "0.27" in code
-    assert "changeDelayTime = change(his_size);" in code
-    # lowpass-damped feedback tank, both channels; the tank write (THE feedback
-    # loop) is denormal-flushed (Q44)
-    assert "fbL = lowpass_12(rvbDecay * tankL.read(his_tank)" in code
-    assert "tankL.write(fixdenorm(mainL));" in code
-    assert "tankR.write(fixdenorm(mainR));" in code
-    # hunt #60 — R-channel decorrelation: identical L/R delays made a mono
-    # input produce a bit-identical (dual-mono) tail. R reads its OWN tank +
-    # main-allpass taps (~1.9-2.3% long) and its pre-diffusion delays scale
-    # by 1.019 (44.64 -> 45.4882); L keeps the verbatim source topology.
-    assert "fbR = lowpass_12(rvbDecay * tankR.read(his_tankR)" in code
-    assert "his_tankR = scaledSizeSamps * 1.023;" in code
-    assert "his_apd1R = his_apd1 * 1.019;" in code
-    assert "allpass(mainR, 0.625, his_apd1R," in code
-    assert "allpass(preR, 0.75, 45.4882," in code
-    # REGRESSION: Live's gen silences a codebox that declares a History AFTER an
-    # executable statement — every top-level History must precede the first
-    # statement. (A his_apd1-after-his_size= build passed no audio until reordered.)
-    assert code.index("History his_tank(0);") < code.index("his_size = (rvbSize")
-
-
 def test_modulated_allpass_reverb_builds_a_valid_gendsp():
     # the integration proof: lint accepts it as a real stereo effect — out1/out2
     # are driven by the tank, not a silent passthrough (nin=2, nout=2).
     code = modulated_allpass_reverb()
     gendsp = build_gendsp(code, 2, 2)
     assert '"classnamespace"' in gendsp and "dsp.gen" in gendsp
-
-
-# --- D3: premium synth-voice kit (verbatim) --------------------------------
-
-
-def test_op_is_fm_operator_with_feedback():
-    code = op_fn()
-    assert code.startswith("op(freq, mult, ph, pm, fb, trig)")
-    assert code.count("{") == code.count("}")
-    # phase-mod input + signed self-feedback + the hf feedback taming + note reset
-    assert "fb_factor = 13 * pow(0.5 - norm_f, 4);" in code
-    assert 'osc = cycle((phase - 0.25 + ph) + fbk + pm, index = "phase");' in code
-    assert "phasor(freq * mult, trig)" in code
-
-
-def test_qpow_iterative_power_curve():
-    code = qpow_fn()
-    assert code.startswith("qpow(x, p)")
-    assert code.count("{") == code.count("}")
-    assert "for (i = 0; i < z; i += 1) {" in code
-    assert "x = x * ((x * y) + (1 - y));" in code
-
-
-def test_fade_ad_envelope():
-    code = fade_env_fn()
-    assert code.startswith("fade(trig, attack, decay)")
-    assert code.count("{") == code.count("}")
-    assert "env += attack * (1.01 - env) * sr_n;" in code
-    assert "env += decay * (0 - env) * sr_n;" in code
-
-
-def test_ramp_scheduler_clock():
-    code = ramp_env_fn()
-    assert code.startswith("ramp(trig, time, rnd_t, rand)")
-    assert code.count("{") == code.count("}")
-    assert "y = 1 / (time + clip((noise() * time) * rand, time * -0.9, time * 10));" in code
-
-
-def test_tana_pade_tanh():
-    code = tanh_approx_fn()
-    assert code.startswith("tanA(x)")
-    assert code.count("{") == code.count("}")
-    assert "0.999999492001" in code and "0.009981877999" in code
-
-
-def test_svf_is_double_cascaded_tpt():
-    code = svf_fn()
-    assert code.startswith("svf(x, f, q, type)")
-    assert code.count("{") == code.count("}")
-    assert "g = tanA(f * pi / samplerate);" in code  # depends on tanA
-    # two cascaded TPT cores (y0..y1 then y2..y3) → 24 dB/oct
-    assert "return mix(lp0, hp0, type);" in code
-
-
-def test_lfo_osc_wavetable_with_phase_bend():
-    code = lfo_osc_fn()
-    assert code.startswith("lfo_osc(buf, phase, uni, wave, bend)")
-    assert code.count("{") == code.count("}")
-    assert "_phase = qpow(phase, bend);" in code  # depends on qpow
-    assert 'peek(buf, _phase + x_scan, uni, interp = "linear")' in code
 
 
 def test_filter_shaper_chain_builds_a_valid_gendsp():
@@ -248,3 +133,190 @@ def test_fm_voice_builds_a_valid_gendsp():
     )
     gendsp = build_gendsp(code, 1, 1)
     assert '"classnamespace"' in gendsp and "dsp.gen" in gendsp
+
+
+def test_wavetable_lfo_builds_a_valid_gendsp():
+    # integration proof: lfo_osc needs qpow and reads a Buffer by phase.
+    code = compose_gen_code(
+        functions=[qpow_fn(), lfo_osc_fn()],
+        body="Buffer shapes;\nout1 = lfo_osc(shapes, in1, 0, 0.5, 0.3);",
+    )
+    gendsp = build_gendsp(code, 1, 1)
+    assert '"classnamespace"' in gendsp and "dsp.gen" in gendsp
+
+
+# ── behaviour (gen_sim) ───────────────────────────────────────────────────────
+FS = 48000.0
+
+
+def _tone(freq, n, fs=FS, amp=0.5):
+    return [amp * math.sin(2.0 * math.pi * freq * i / fs) for i in range(n)]
+
+
+def _rms(values):
+    return math.sqrt(sum(v * v for v in values) / len(values))
+
+
+def _gain_db(kernel, freq, *, fs=FS, params=None):
+    """Steady-state sine gain of a 1-in/1-out kernel: settle 20 ms, then measure
+    over 50 ms (a whole number of periods at the test frequencies)."""
+    settle, measure = int(0.02 * fs), int(0.05 * fs)
+    x = _tone(freq, settle + measure, fs)
+    y = simulate(kernel, x, params=params, samplerate=fs)["out1"]
+    return 20.0 * math.log10(_rms(y[settle:]) / _rms(x[settle:]))
+
+
+def _rbj_db(kind, freq, f0, q, fs=FS):
+    """|H| in dB of the RBJ Audio EQ Cookbook 2-pole LPF/HPF (independent reference)."""
+    w0 = 2.0 * math.pi * f0 / fs
+    alpha, c = math.sin(w0) / (2.0 * q), math.cos(w0)
+    b = ((1 - c) / 2, 1 - c, (1 - c) / 2) if kind == "lp" else ((1 + c) / 2, -(1 + c), (1 + c) / 2)
+    a = (1 + alpha, -2 * c, 1 - alpha)
+    z = cmath.exp(-2j * math.pi * freq / fs)
+    h = (b[0] + b[1] * z + b[2] * z * z) / (a[0] + a[1] * z + a[2] * z * z)
+    return 20.0 * math.log10(abs(h))
+
+
+@pytest.mark.parametrize("fn,call,kind", [
+    (lowpass_12_fn, "lowpass_12", "lp"),
+    (highpass_12_fn, "highpass_12", "hp"),
+])
+def test_12db_filters_match_the_rbj_cookbook_response(fn, call, kind):
+    kernel = fn() + f"\nout1 = {call}(in1, 1000, 2);"
+    for freq in (100, 1000, 4000, 12000):
+        assert abs(_gain_db(kernel, freq) - _rbj_db(kind, freq, 1000, 2)) < 0.1, freq
+
+
+def test_lowpass_12_stays_bounded_while_its_cutoff_jumps_at_audio_rate():
+    rng = random.Random(7)
+    n = 9600
+    noise = [rng.uniform(-1.0, 1.0) for _ in range(n)]
+    cutoff = [40.0 if (i // 37) % 2 else 18000.0 for i in range(n)]
+    out = simulate(lowpass_12_fn() + "\nout1 = lowpass_12(in1, in2, 10);",
+                   {"in1": noise, "in2": cutoff})["out1"]
+    assert all(math.isfinite(v) for v in out)
+    assert max(abs(v) for v in out) < 20.0
+
+
+def test_allpass_is_a_lossless_schroeder_allpass():
+    g, m = 0.6, 7
+    kernel = allpass_fn() + f"\nDelay a(64);\nDelay b(64);\nout1 = allpass(in1, {g}, {m}, a, b);"
+    h = simulate(kernel, [1.0], num_samples=3000)["out1"]
+    # H(z) = (-g + z^-M) / (1 - g z^-M): h[0] = -g, h[M] = 1 - g^2, unit energy
+    assert math.isclose(h[0], -g) and math.isclose(h[m], 1 - g * g)
+    assert math.isclose(sum(v * v for v in h), 1.0, rel_tol=1e-9)
+    for freq in (500, 3000, 9600):
+        assert abs(_gain_db(kernel, freq)) < 0.01
+
+
+def test_reverb_dry_setting_is_an_exact_passthrough():
+    left, right = _tone(440, 300, 16000.0), _tone(660, 300, 16000.0)
+    out = simulate(modulated_allpass_reverb(), {"in1": left, "in2": right},
+                   params={"rvbMix": 0.0}, samplerate=16000.0)
+    assert out["out1"] == left and out["out2"] == right
+
+
+def test_reverb_tail_decays_and_decorrelates_a_mono_input():
+    n = 8000
+    impulse = [1.0] + [0.0] * (n - 1)
+    out = simulate(modulated_allpass_reverb(), {"in1": impulse, "in2": impulse},
+                   params={"rvbMix": 1.0, "rvbDecay": 0.7, "rvbSize": 0.3,
+                           "rvbDamp": 5000.0}, samplerate=16000.0)
+    left, right = out["out1"], out["out2"]
+    early = sum(v * v for v in left[:1600])
+    late = sum(v * v for v in left[6400:])
+    assert 0.0 < late < 0.5 * early          # a real tail that decays
+    cross = sum(a * b for a, b in zip(left[400:], right[400:], strict=True))
+    norm = math.sqrt(sum(a * a for a in left[400:]) * sum(b * b for b in right[400:]))
+    assert abs(cross / norm) < 0.5           # mono in, decorrelated stereo out
+
+
+def test_op_is_a_pure_sine_without_modulation_and_resets_on_trig():
+    n = 600
+    trig = [0.0] * n
+    trig[300] = 1.0
+    kernel = op_fn() + "\nout1 = op(440, 1.5, 0.25, 0, 0, in1);"
+    y = simulate(kernel, trig)["out1"]
+    f = 660.0 / FS
+    for i in range(300):
+        assert math.isclose(y[i], math.sin(2 * math.pi * (i * f + 0.25)), abs_tol=1e-9)
+    for i in range(300, n):  # the rising edge restarts the phase
+        assert math.isclose(y[i], math.sin(2 * math.pi * ((i - 300) * f + 0.25)), abs_tol=1e-9)
+
+
+def test_op_feedback_adds_harmonics_without_leaving_unit_range():
+    def harmonic(y, k, f0):
+        w = 2 * math.pi * k * f0 / FS
+        return abs(sum(v * cmath.exp(-1j * w * i) for i, v in enumerate(y))) / len(y)
+
+    kernel = op_fn() + "\nout1 = op(480, 1, 0, 0, in1, 0);"
+    clean = simulate(kernel, [0.0] * 4800)["out1"]
+    fed = simulate(kernel, [1.0] * 4800)["out1"]
+    assert harmonic(clean, 2, 480) < 1e-6
+    assert harmonic(fed, 2, 480) > 0.05 * harmonic(fed, 1, 480)
+    assert max(abs(v) for v in fed) <= 1.0
+
+
+def test_qpow_is_an_odd_monotonic_curve_bent_by_the_sign_of_p():
+    xs = [i / 50.0 for i in range(-60, 61)]          # symmetric, past |x| = 1
+    kernel = qpow_fn() + "\nParam p(0);\nout1 = qpow(in1, p);"
+    for p in (-3.0, -0.5, 0.0, 0.5, 3.0):
+        ys = simulate(kernel, xs, params={"p": p})["out1"]
+        assert all(math.isclose(y, -m, abs_tol=1e-12) for y, m in zip(ys, ys[::-1], strict=True))
+        assert all(b >= a for a, b in zip(ys, ys[1:], strict=False))
+        assert ys[xs.index(1.0)] == 1.0 and ys[-1] == 1.0    # clamped past |x| = 1
+        inner = [(x, y) for x, y in zip(xs, ys, strict=True) if 0.0 < x < 1.0]
+        if p > 0:
+            assert all(y < x for x, y in inner)
+        elif p < 0:
+            assert all(y > x for x, y in inner)
+        else:
+            assert all(math.isclose(y, x) for x, y in inner)
+
+
+def test_fade_rises_and_falls_with_one_pole_time_constants():
+    attack, decay = 20.0, 4.0           # rates per second -> 50 ms and 250 ms
+    up, down = int(FS / attack), int(FS / decay)
+    gate = [1.0] * up + [0.0] * down
+    env = simulate(fade_env_fn() + f"\nout1 = fade(in1, {attack}, {decay});", gate)["out1"]
+    assert math.isclose(env[up - 1], 1 - math.exp(-1), abs_tol=1e-3)
+    assert math.isclose(env[-1], env[up - 1] * math.exp(-1), abs_tol=1e-3)
+    assert all(b >= a for a, b in zip(env[:up], env[1:up], strict=False))
+    assert all(b <= a for a, b in zip(env[up:], env[up + 1:], strict=False))
+
+
+def _wrap_points(level):
+    return [i for i in range(1, len(level)) if level[i] > level[i - 1]]
+
+
+def test_ramp_clock_period_jitter_and_retrigger():
+    kernel = ramp_env_fn() + "\nParam draw(0);\nParam depth(0);\nout1 = ramp(in1, 10, draw, depth);"
+    level = simulate(kernel, [0.0] * 4800)["out1"]
+    wraps = _wrap_points(level)
+    assert level[0] == 1.0 and all(0.0 < v <= 1.0 for v in level)
+    assert len(wraps) == 9 and {b - a for a, b in zip(wraps, wraps[1:], strict=False)} <= {480, 481}
+    slow = simulate(kernel, [0.0] * 4800, params={"draw": 1.0, "depth": 1.0})["out1"]
+    assert _wrap_points(slow)[0] in (911, 912)          # 10 ms * 1.9
+    trig = [0.0] * 4800
+    trig[100] = 1.0
+    restarted = simulate(kernel, trig)["out1"]
+    assert restarted[100] == 1.0 and restarted[99] < 1.0
+
+
+def test_tana_tracks_tanh_and_saturates_smoothly():
+    xs = [i / 20.0 for i in range(-120, 121)]
+    ys = simulate(tanh_approx_fn() + "\nout1 = tanA(in1);", xs)["out1"]
+    assert max(abs(y - math.tanh(x)) for x, y in zip(xs, ys, strict=True)) < 0.025
+    assert all(b >= a for a, b in zip(ys, ys[1:], strict=False))
+    assert ys[0] == -1.0 and ys[-1] == 1.0
+
+
+def test_svf_is_a_24db_lowpass_morphing_to_highpass():
+    lp = svf_fn() + "\nout1 = svf(in1, 1000, 0.7071, 0);"
+    hp = svf_fn() + "\nout1 = svf(in1, 1000, 0.7071, 1);"
+    assert abs(_gain_db(lp, 100)) < 0.05
+    assert abs(_gain_db(lp, 1000) + 6.02) < 0.1        # two -3 dB Butterworth stages
+    assert -27.0 < _gain_db(lp, 8000) - _gain_db(lp, 4000) < -21.0   # 24 dB/oct
+    assert abs(_gain_db(hp, 12000)) < 0.1
+    assert abs(_gain_db(hp, 1000) + 6.02) < 0.1
+    assert _gain_db(hp, 100) < -75.0

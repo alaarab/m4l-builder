@@ -2,6 +2,7 @@
 
 from m4l_builder import AudioEffect, find_v8ui_contract_issues
 from m4l_builder.engines.buffer_viz import buffer_viz_js
+from m4l_builder.gen_sim import simulate
 from m4l_builder.gen_stateful import viz_declares, viz_poke_block
 from m4l_builder.theme import GRAPHITE
 
@@ -22,11 +23,15 @@ class TestGenEmitters:
         # no executable statements (no assignment outside decls)
         assert "=" not in decl.replace("(0)", "")
 
-    def test_viz_poke_block_is_counter_gated(self):
-        block = viz_poke_block("poke(buf_a, 1, 0, 0);", refresh_ms=40.0)
-        assert "wrap(his_guiCout + 1, 0, mstosamps(40.0))" in block
-        assert "if (his_guiCout == 1)" in block
-        assert "poke(buf_a, 1, 0, 0);" in block
+    def test_viz_poke_block_runs_its_body_once_per_refresh_period(self):
+        # 10 ms at 48 kHz = 480 samples: 4800 samples run the body 10 times,
+        # the first time on the 480th sample.
+        kernel = ("History his_guiCout(0);\nHistory ticks(0);\n"
+                  + viz_poke_block("ticks = ticks + 1;", refresh_ms=10.0)
+                  + "\nout1 = ticks;")
+        ticks = simulate(kernel, [0.0] * 4800, samplerate=48000.0)["out1"]
+        assert ticks[478] == 0 and ticks[479] == 1
+        assert ticks[-1] == 10
 
 
 class TestBufferVizJs:

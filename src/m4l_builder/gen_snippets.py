@@ -167,33 +167,31 @@ def ms_width_equal_power(
     mid: str = "mid",
     side: str = "side",
 ) -> str:
-    """Equal-power (constant-sum) M/S width — the standard orthonormal
-    equal-power M/S transform.
+    """Equal-power M/S stereo width: an orthonormal M/S encode/decode with a
+    sine/cosine gain law on mid and side.
 
-    Orthonormal ``/sqrt(2)`` encode + decode with the constant-SUM gain law
-    ``gMid + gSide = 2``, so widening does NOT inflate level the way the legacy
-    :func:`ms_width` does (that one scales the Side by ``width`` post-encode, which
-    boosts side energy by ``width**2`` — louder as it widens). Prefer this for any
-    real stereo-width control.
+    ``mid`` and ``side`` are ``(L ± R)/sqrt(2)``; the width angle
+    ``theta = width * pi/2`` scales them by ``sqrt(2)·cos(theta)`` and
+    ``sqrt(2)·sin(theta)``, and the result decodes back through ``/sqrt(2)``.
+    ``gMid² + gSide² = 2`` at every width, so for decorrelated L/R material the
+    output power stays constant from mono to full side — the usual equal-power
+    pan law applied to the M/S pair. The legacy :func:`ms_width` instead scales
+    the side by ``width`` (side energy grows with ``width**2``). Prefer this for
+    any real stereo-width control.
 
     CONVENTION DIFFERS from :func:`ms_width`: here ``width`` is ``0..1`` with **0.5
-    = neutral** (0 = mono, 1 = full-side); the legacy primitive uses ``1 =
-    neutral``. Emits::
-
-        mid       = (L + R) / sqrt(2);
-        side      = (L - R) / sqrt(2);
-        mid      *= 2 * (1 - width);
-        side     *= 2 * width;
-        out_left  = (mid + side) / sqrt(2);
-        out_right = (mid - side) / sqrt(2);
+    = neutral** (bit-for-bit passthrough within float rounding; 0 = mono, 1 =
+    side only); the legacy primitive uses ``1 = neutral``. ``width`` is clipped
+    to 0..1. ``mid`` / ``side`` name the scratch variables (rename them to avoid
+    a clash when the primitive is used twice in one codebox).
     """
     return (
-        f"{mid} = ({left} + {right}) / sqrt(2);\n"
-        f"{side} = ({left} - {right}) / sqrt(2);\n"
-        f"{mid} *= 2 * (1 - {width});\n"
-        f"{side} *= 2 * {width};\n"
-        f"{out_left} = ({mid} + {side}) / sqrt(2);\n"
-        f"{out_right} = ({mid} - {side}) / sqrt(2);"
+        f"{mid} = ({left} + {right}) * 0.7071067811865476;\n"
+        f"{side} = ({left} - {right}) * 0.7071067811865476;\n"
+        f"{mid} = {mid} * 1.4142135623730951 * cos(clip({width}, 0, 1) * halfpi);\n"
+        f"{side} = {side} * 1.4142135623730951 * sin(clip({width}, 0, 1) * halfpi);\n"
+        f"{out_left} = ({mid} + {side}) * 0.7071067811865476;\n"
+        f"{out_right} = ({mid} - {side}) * 0.7071067811865476;"
     )
 
 
