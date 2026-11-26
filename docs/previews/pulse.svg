@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="336" viewBox="0 0 200 168" font-family="Arial, Helvetica, sans-serif">
+<title>Pulse</title>
+<clipPath id="device"><rect width="200" height="150"/></clipPath>
+<rect x="0" y="0" width="200" height="18" fill="#454545"/>
+<circle cx="9" cy="9" r="3.5" fill="#f29e38"/>
+<text x="18" y="12.32" font-size="9.5" font-weight="bold" fill="#e6e6e6">Pulse</text>
+<g clip-path="url(#device)" transform="translate(0 18)">
+<rect x="0" y="0" width="200" height="150" fill="#2e2e2e"/>
+<g data-id="bg" data-maxclass="panel">
+<rect x="0" y="0" width="200" height="150" fill="#0f1712"/>
+</g>
+<g data-id="enable" data-maxclass="live.toggle">
+<rect x="20.5" y="24.5" width="21" height="21" rx="2" fill="#3d3d3d" stroke="#6b6b6b"/>
+</g>
+<g data-id="rate" data-maxclass="live.dial">
+<text x="94" y="25" font-size="9" text-anchor="middle" fill="#dbdbdb">rate</text>
+<text x="94" y="62" font-size="9" text-anchor="middle" fill="#dbdbdb">125</text>
+<path d="M87.28 46.72 A9.5 9.5 0 1 1 100.72 46.72" fill="none" stroke="#545454" stroke-width="1.98" stroke-linecap="round"/>
+<path d="M87.28 46.72 A9.5 9.5 0 0 1 84.63 38.42" fill="none" stroke="#4ccc66" stroke-width="1.98" stroke-linecap="round"/>
+<line x1="91.66" y1="39.6" x2="84.63" y2="38.42" stroke="#e0ebe0" stroke-width="1.19" stroke-linecap="round"/>
+</g>
+</g>
+<rect x="0.5" y="0.5" width="199" height="167" fill="none" stroke="#141414"/>
+</svg>

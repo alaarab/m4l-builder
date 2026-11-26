@@ -78,6 +78,18 @@ uv run python examples/02_generative_midi.py   # builds a generative MIDI device
 - [`05_euclidean_midi.py`](examples/05_euclidean_midi.py) — MIDI effect using the Euclidean rhythm generator
 - [`06_simple_synth.py`](examples/06_simple_synth.py) — `Instrument` device: oscillator through an ADSR amplitude envelope
 
+## Gallery
+
+What the [examples](examples/) look like, as drawn by `m4l preview` (see the
+[gallery page](docs/gallery.md)):
+
+| | | |
+|:---:|:---:|:---:|
+| <img src="docs/previews/my_gain.svg" alt="My Gain" height="140"> | <img src="docs/previews/sparkle.svg" alt="Sparkle" height="140"> | <img src="docs/previews/widener.svg" alt="Widener" height="140"> |
+| `01_gain_audio_effect.py` | `02_generative_midi.py` | `03_stereo_width.py` |
+| <img src="docs/previews/passthrough.svg" alt="Passthrough" height="140"> | <img src="docs/previews/pulse.svg" alt="Pulse" height="140"> | <img src="docs/previews/simple_synth.svg" alt="Simple Synth" height="140"> |
+| `04_midi_transformation.py` | `05_euclidean_midi.py` | `06_simple_synth.py` |
+
 ## Command line
 
 Installing the package adds an `m4l` command (also `python -m m4l_builder`):
@@ -87,6 +99,7 @@ m4l new "My Gain" --type audio     # scaffold my_gain/build.py (audio, midi or i
 m4l build my_gain/build.py         # run it; --out redirects the .amxd
 m4l watch my_gain/build.py         # rebuild into the User Library on every save
 m4l lint my_gain/build.py          # validation + box lint + GenExpr lint, no write
+m4l preview my_gain/build.py       # render the panel to an SVG (see the gallery above)
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts (--json too)
 ```
 

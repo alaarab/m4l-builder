@@ -1,4 +1,4 @@
-"""The ``m4l`` command line: scaffold, build, watch, lint and inspect devices.
+"""The ``m4l`` command line: scaffold, build, watch, lint, preview and inspect devices.
 
 Installed as the ``m4l`` console script (also ``python -m m4l_builder``)::
 
@@ -6,6 +6,7 @@ Installed as the ``m4l`` console script (also ``python -m m4l_builder``)::
     m4l build my_gain/build.py         # run it; --out redirects the .amxd
     m4l watch my_gain/build.py         # rebuild into the User Library on save
     m4l lint my_gain/build.py          # validation + box lint + GenExpr lint
+    m4l preview my_gain/build.py       # render the presentation view to SVG
     m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
 
 A build script is any Python file that makes a :class:`~m4l_builder.Device` and
@@ -500,17 +501,21 @@ def _cmd_build(args) -> int:
     return 0
 
 
-def _cmd_lint(args) -> int:
-    target = Path(args.target)
+def _load_devices(target: Path) -> list[Device]:
+    """The device in a .amxd (named after the file), or every device a build
+    script builds, captured without writing anything."""
     if target.suffix.lower() == ".amxd":
         from .amxd import device_from_amxd
 
         device = device_from_amxd(str(target))
         device.name = target.stem
-        devices = [device]
-    else:
-        devices = [record.device for record in
-                   run_build_script(target, lambda _d, _p: None, quiet=True)]
+        return [device]
+    return [record.device for record in
+            run_build_script(target, lambda _d, _p: None, quiet=True)]
+
+
+def _cmd_lint(args) -> int:
+    devices = _load_devices(Path(args.target))
 
     errors = warnings = 0
     for device in devices:
@@ -529,6 +534,24 @@ def _cmd_lint(args) -> int:
             print(f"  {mark} {issue.code}{where}: {issue.message}")
     if errors or (args.strict and warnings):
         return 1
+    return 0
+
+
+def _cmd_preview(args) -> int:
+    from .preview import render_svg
+
+    devices = _load_devices(Path(args.target))
+    out = Path(args.out) if args.out else Path(".")
+    single_file = out.suffix.lower() == ".svg"
+    if single_file and len(devices) > 1:
+        raise ScriptError(f"--out {out} names one file but there are {len(devices)} devices; "
+                          f"pass a directory instead")
+    for device in devices:
+        target = out if single_file else out / f"{slugify(device.name)}.svg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(render_svg(device, scale=args.scale, frame=not args.no_frame),
+                          encoding="utf-8")
+        print(f"preview {device.name} -> {target}")
     return 0
 
 
@@ -624,6 +647,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target", help="build script (.py) or device (.amxd)")
     p.add_argument("--strict", action="store_true", help="fail on warnings too")
     p.set_defaults(func=_cmd_lint)
+
+    p = sub.add_parser("preview", help="render a device's presentation view to SVG")
+    p.add_argument("target", help="build script (.py) or device (.amxd)")
+    p.add_argument("--out", help="a .svg file or a directory (default: <name>.svg here)")
+    p.add_argument("--scale", type=float, default=1.0,
+                   help="display size multiplier (default: 1)")
+    p.add_argument("--no-frame", action="store_true",
+                   help="leave out the title strip with the device name")
+    p.set_defaults(func=_cmd_preview)
 
     p = sub.add_parser("inspect", help="summarise a .amxd: type, size, parameters, boxes")
     p.add_argument("file", help="device (.amxd)")

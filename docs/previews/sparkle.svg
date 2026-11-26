@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="316" viewBox="0 0 200 158" font-family="Arial, Helvetica, sans-serif">
+<title>Sparkle</title>
+<clipPath id="device"><rect width="200" height="140"/></clipPath>
+<rect x="0" y="0" width="200" height="18" fill="#454545"/>
+<circle cx="9" cy="9" r="3.5" fill="#f29e38"/>
+<text x="18" y="12.32" font-size="9.5" font-weight="bold" fill="#e6e6e6">Sparkle</text>
+<g clip-path="url(#device)" transform="translate(0 18)">
+<rect x="0" y="0" width="200" height="140" fill="#2e2e2e"/>
+<g data-id="bg" data-maxclass="panel">
+<rect x="0" y="0" width="200" height="140" fill="#0f1217"/>
+</g>
+<g data-id="gen_enable" data-maxclass="live.toggle">
+<rect x="24.5" y="16.5" width="19" height="19" rx="2" fill="#3d3d3d" stroke="#6b6b6b"/>
+</g>
+<g data-id="gen_rate" data-maxclass="live.dial">
+<text x="52" y="49" font-size="9" text-anchor="middle" fill="#dbdbdb">gen_rate</text>
+<text x="52" y="94" font-size="9" text-anchor="middle" fill="#dbdbdb">250</text>
+<path d="M42.45 77.55 A13.5 13.5 0 1 1 61.55 77.55" fill="none" stroke="#545454" stroke-width="2.7" stroke-linecap="round"/>
+<path d="M42.45 77.55 A13.5 13.5 0 0 1 39.19 63.75" fill="none" stroke="#5999e6" stroke-width="2.7" stroke-linecap="round"/>
+<line x1="48.8" y1="66.94" x2="39.19" y2="63.75" stroke="#d9e0eb" stroke-width="1.62" stroke-linecap="round"/>
+</g>
+<g data-id="gen_density" data-maxclass="live.dial">
+<text x="138" y="49" font-size="9" text-anchor="middle" fill="#dbdbdb">gen_density</text>
+<text x="138" y="94" font-size="9" text-anchor="middle" fill="#dbdbdb">70 %</text>
+<path d="M128.45 77.55 A13.5 13.5 0 1 1 147.55 77.55" fill="none" stroke="#545454" stroke-width="2.7" stroke-linecap="round"/>
+<path d="M128.45 77.55 A13.5 13.5 0 1 1 148.92 60.06" fill="none" stroke="#5999e6" stroke-width="2.7" stroke-linecap="round"/>
+<line x1="140.73" y1="66.02" x2="148.92" y2="60.06" stroke="#d9e0eb" stroke-width="1.62" stroke-linecap="round"/>
+</g>
+</g>
+<rect x="0.5" y="0.5" width="199" height="157" fill="none" stroke="#141414"/>
+</svg>

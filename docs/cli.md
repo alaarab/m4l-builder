@@ -9,6 +9,7 @@ m4l new "My Gain" --type audio     # scaffold my_gain/build.py
 m4l build my_gain/build.py         # build it
 m4l watch my_gain/build.py         # rebuild into the User Library on every save
 m4l lint my_gain/build.py          # validate without writing
+m4l preview my_gain/build.py       # render the panel to my_gain.svg
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
 ```
 
@@ -101,6 +102,42 @@ Builds the device in memory (nothing is written) and runs the library's checks:
   handler for them.
 
 It exits 1 when any error is found, or with `--strict` when any warning is.
+
+## `m4l preview`
+
+```bash
+m4l preview SCRIPT|DEVICE.amxd [--out PATH] [--scale N] [--no-frame]
+```
+
+Draws the device's presentation view as an SVG, with nothing written to the
+User Library:
+
+![My Gain](previews/my_gain.svg)
+
+- **Drawn from the patcher:** every visible box with a `presentation_rect`,
+  in its theme colours, background boxes first.
+- **Native controls** (`live.dial`, `live.slider`, `live.toggle`, `live.text`,
+  `live.menu`, `live.tab`, `live.numbox`, meters, scopes, comments and panels)
+  are drawn as close approximations at their initial values. Dials and sliders
+  show the parameter name and the value formatted in its unit style (`1.00 kHz`,
+  `-6.0 dB`, `25L`).
+- **jsui / v8ui engines** draw at runtime, so they appear as dashed
+  placeholders labelled with their script name. Any other object appears as a
+  labelled outline.
+
+Output goes to `<device name>.svg` in the current folder (`"My Gain"` becomes
+`my_gain.svg`). `--out` takes a `.svg` file or a directory. `--scale 2`
+doubles the displayed size (the drawing stays vector). `--no-frame` drops the
+title strip. From Python:
+
+```python
+from m4l_builder.preview import render_svg
+
+svg = render_svg(device, scale=2)  # a Device, a patcher dict or a .amxd path
+```
+
+It's an approximation for docs, code review and spotting layout mistakes, not
+a pixel match with Live. See the [example gallery](gallery.md).
 
 ## `m4l inspect`
 

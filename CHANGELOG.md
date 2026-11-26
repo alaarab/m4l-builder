@@ -9,6 +9,10 @@
   runs a script with an optional `--out` redirect, `watch` rebuilds into the
   User Library on save and prints what changed, `lint` runs graph, box and
   GenExpr lint without writing, and `inspect` summarises an `.amxd`.
+- `m4l preview` and `m4l_builder.preview.render_svg`: draw a device's
+  presentation view as a stdlib-only SVG (theme colours, native controls at
+  their initial values, jsui/v8ui as labelled placeholders). The README and
+  docs gallery show the six examples, kept in sync by a golden test.
 
 ## [0.8.0] — 2026-11-26
 
