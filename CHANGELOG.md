@@ -33,6 +33,11 @@
   friends), and, marked approximate in `GenKernel.approximations` (refused
   with `strict=True`), `noise()` and cubic `Delay` reads.
   `tools/gen_sim_coverage.py` lists which snippets run.
+- `m4l watch --live`: after each build, swaps the device into the open Live
+  set through LiveMCP, in the same chain slot, with its parameter values
+  restored by name. A device not yet in the set loads onto the selected
+  track. Without LiveMCP it says so and keeps rebuilding. The client is
+  `m4l_builder.live_reload` (stdlib only).
 
 ### Fixed
 

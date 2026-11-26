@@ -9,6 +9,7 @@ turns an existing `.amxd` into a build script.
 m4l new "My Gain" --type audio     # scaffold my_gain/build.py
 m4l build my_gain/build.py         # build it
 m4l watch my_gain/build.py         # rebuild into the User Library on every save
+m4l watch my_gain/build.py --live  # ...and swap it into the open Live set
 m4l lint my_gain/build.py          # validate without writing
 m4l preview my_gain/build.py       # render the panel to my_gain.svg
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
@@ -63,7 +64,7 @@ written to the User Library. `--out` redirects the write:
 ## `m4l watch`
 
 ```bash
-m4l watch SCRIPT [--out PATH] [--interval SECONDS]
+m4l watch SCRIPT [--out PATH] [--interval SECONDS] [--live [--live-port PORT]]
 ```
 
 Checks the script's modification time (every 0.5 s by default) and rebuilds
@@ -84,6 +85,52 @@ watching my_gain/build.py (Ctrl-C to stop)
 A script that raises prints the error and the watch carries on, so a
 half-typed edit doesn't end the session. Only the script file itself is
 watched; restart the watch after editing a helper module it imports.
+
+### Hot reload into Live: `--live`
+
+With `--live`, each build is also swapped into the Live set you have open, so
+you hear the change a moment after you save:
+
+```text
+watching my_gain/build.py (Ctrl-C to stop)
+live: connected to LiveMCP on 127.0.0.1:9877
+[14:03:40] built My Gain -> ~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/My Gain.amxd
+           ~ parameter: Gain
+           live: My Gain: swapped 1 copy in place in 1.72s
+```
+
+It needs [LiveMCP](https://github.com/alaarab/livemcp)'s remote script
+running in Live (Preferences > Link, Tempo & MIDI > Control Surface: LiveMCP).
+For each build it:
+
+- finds every Max device on the set's tracks with the device's name and puts
+  the new build in the same slot on the same track (LiveMCP's `replace_device`;
+  older LiveMCP versions load the new copy, delete the old one and move the
+  new one into its slot);
+- restores parameter values by name, clamped to the new ranges. A parameter
+  you renamed or removed keeps its new default, and the watch says which;
+- loads the device onto the selected track if it isn't in the set yet.
+
+Live loads devices from its browser, so the build has to land in the User
+Library: the default output, or an `--out` folder inside it. A copy you
+renamed in Live is left alone. Devices inside racks aren't reloaded.
+
+How long a reload takes, measured on a 24-track set in Live 12.4:
+
+| LiveMCP | Reload |
+| --- | --- |
+| with `replace_device` | about 1.8 s per save (2.1 s from save to done) |
+| without it (older versions) | about 41 s: the older lookup searches the whole browser before the User Library |
+
+Each LiveMCP call costs a few tenths of a second inside Live, so the watch
+remembers where it found the device. The first reload, and the first after
+you add or remove a device anywhere in the set, rescans every track; on that
+set it took about 11 s. Older LiveMCP versions can't list devices on group
+tracks; the watch skips those tracks and says how many it skipped.
+
+If Live or LiveMCP isn't running, the watch says so once and keeps building;
+the next save after Live comes back reloads again. `--live-port` changes the
+port (default 9877). From Python, use `m4l_builder.live_reload.reload_device`.
 
 ## `m4l lint`
 
