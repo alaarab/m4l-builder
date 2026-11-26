@@ -1,7 +1,6 @@
 # Plugin Design Doc Template
 
-Use this for shipped plugin `.md` docs in
-`the device repo/plugins/<plugin>/README.md`.
+Use this for shipped plugin `.md` docs (one `README.md` per plugin).
 
 The goal is not marketing copy. The goal is to explain what problem the plugin
 solves, why it exists, how it works, and what tradeoffs come with the chosen

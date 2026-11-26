@@ -82,7 +82,6 @@ Restart Ableton (or refresh the browser) and the device appears in your User Lib
 - :material-book-open-variant: **[DSP & UI catalog](catalog.md)** — browse every building block.
 - :material-piano: **[MIDI Tools](midi_tools.md)** — Live 12 Generators & Transformations.
 - :material-api: **[API reference](api.md)** — every public class and function.
-- :material-backup-restore: **[a separate package](https://github.com/alaarab/a separate package)** — analyze and mine existing devices (separate package).
 - :material-link-variant: **[Resources](resources.md)** — Max/MSP and Max for Live sources.
 
 </div>

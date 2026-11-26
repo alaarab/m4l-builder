@@ -1,4 +1,4 @@
-# maxdiff textconv (vendored from Ableton/maxdevtools, MIT)
+# maxdiff textconv (vendored from Ableton/maxdevtools, MIT; see LICENSE)
 
 Human-readable git diffs for `.maxpat` / `.gendsp` / `.amxd`. One-time setup:
 

@@ -98,5 +98,3 @@ device.add_dsp(boxes, lines)
 - **[midi_tools.md](midi_tools.md)** — build Live 12 MIDI Generators and
   Transformations.
 - **[api.md](api.md)** — the detailed API reference.
-- **[a separate package](https://github.com/alaarab/a separate package)** — analyze
-  an existing `.amxd` back into Python (separate package).

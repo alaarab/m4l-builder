@@ -1669,7 +1669,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         Unlike ``add_subpatcher`` (an invisible ``p name`` box), this embeds the
         sub-patch as a ``bpatcher`` whose PRESENTATION view renders inside the
         device — the premium pattern for a self-contained DSP+UI module (e.g. a
-        channel-strip processor, as in channel-strip devices). ``embed=1`` bakes the
+        channel-strip processor). ``embed=1`` bakes the
         sub-patch into the .amxd. Box attrs match the real devices.
         """
         box = {

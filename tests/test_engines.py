@@ -1366,7 +1366,7 @@ class TestLinearPhaseEqDisplayEngine:
         # absent on the theory that an undefined constant "never matches". That is
         # not how JavaScript behaves: evaluating a case expression whose identifier
         # is undefined throws a ReferenceError, aborting response_db() — which is
-        # on the per-point curve-draw path. a downstream app's parameter soak surfaced
+        # on the per-point curve-draw path. A parameter soak test surfaced
         # it as a live console error. The value sits outside this device's 0..6
         # range so the branch stays unreachable.
         assert "var TYPE_ALLPASS = 7;" in js

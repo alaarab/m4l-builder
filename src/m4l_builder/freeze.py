@@ -181,9 +181,8 @@ def extract_frozen_amxd(data: bytes) -> dict[str, bytes]:
     frozen ``.amxd``'s ``mx@c`` block. Returns ``{filename: raw_bytes}`` covering
     the device's own JSON plus every embedded dependency — the real ``.maxpat``
     bpatcher UIs, ``.js`` painters/jsui scripts, ``.svg``/``.png`` knob images, and
-    ``.gendsp`` DSP. This is how the premium UI of a device is reused:
-    a ``.amxd`` ships its designed interface here as actual Max patchers
-    + assets, not in the patcher JSON.
+    ``.gendsp`` DSP. A frozen ``.amxd`` keeps its designed interface here as actual
+    Max patchers + assets, not in the patcher JSON.
 
     Raises ``ValueError`` if the file has no ``mx@c`` block (an unfrozen device with
     no bundled assets).
