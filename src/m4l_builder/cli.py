@@ -10,6 +10,7 @@ Installed as the ``m4l`` console script (also ``python -m m4l_builder``)::
     m4l preview my_gain/build.py       # render the presentation view to SVG
     m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
     m4l import "Their Device.amxd"     # write a build.py that rebuilds it
+    m4l render my_gain/build.py --in dry.wav --out wet.wav --param Gain=-6
 
 A build script is any Python file that makes a :class:`~m4l_builder.Device` and
 calls ``device.build(path)``, the way every example does. The CLI runs it as
@@ -619,6 +620,99 @@ def _cmd_import(args) -> int:
     return 0
 
 
+def _parse_params(pairs: list[str]) -> dict[str, str]:
+    params: dict[str, str] = {}
+    for pair in pairs:
+        name, sep, value = pair.partition("=")
+        if not sep or not name.strip():
+            raise ScriptError(f"--param {pair!r}: expected NAME=VALUE")
+        params[name.strip()] = value.strip()
+    return params
+
+
+def _render_source(target: Path, device_name: str | None):
+    if target.suffix.lower() == ".amxd":
+        return str(target)
+    devices = [record.device for record in
+               run_build_script(target, lambda _d, _p: None, quiet=True)]
+    if device_name is not None:
+        devices = [d for d in devices if d.name == device_name]
+        if not devices:
+            raise ScriptError(f"{target}: builds no device named {device_name!r}")
+    if len(devices) > 1:
+        names = ", ".join(repr(d.name) for d in devices)
+        raise ScriptError(f"{target} builds {len(devices)} devices ({names}); pick one "
+                          f"with --device NAME")
+    return devices[0]
+
+
+def _format_render(result, signal_label: str, dry_check) -> str:
+    def cell(value: float) -> str:
+        return f"{round(value, 1) + 0.0:8.1f}" if value != float("-inf") else "    -inf"
+
+    summary = result.summary()
+    labels = (["L", "R"] if len(result.output) == 2 else
+              [str(i + 1) for i in range(len(result.output))])
+    rows_in = summary["input"]
+    if len(rows_in) < len(labels):  # mono input fed to every channel
+        rows_in = rows_in + [rows_in[-1]] * (len(labels) - len(rows_in))
+    columns = [(f"in {lab}", row) for lab, row in zip(labels, rows_in, strict=False)]
+    columns += [(f"out {lab}", row) for lab, row in zip(labels, summary["output"], strict=True)]
+    lines = [f"{result.device}: rendered {result.seconds:.2f} s of {signal_label} "
+             f"at {result.samplerate:g} Hz through {len(result.path)} boxes"]
+    if result.params:
+        lines.append("  params      " + ", ".join(f"{k} = {v:g}" for k, v in result.params.items()))
+    lines.append("  dBFS        " + "".join(f"{name:>8}" for name, _ in columns))
+    lines.append("  rms         " + "".join(cell(row["rms_db"]) for _, row in columns))
+    lines.append("  peak        " + "".join(cell(row["peak_db"]) for _, row in columns))
+    for band in columns[0][1]["bands_db"]:
+        lines.append(f"  {band:<12}" + "".join(cell(row["bands_db"][band]) for _, row in columns))
+    if any(row["nonfinite"] for row in summary["output"]):
+        bad = sum(row["nonfinite"] for row in summary["output"])
+        lines.append(f"  WARNING     {bad} NaN/Inf output sample(s)")
+    if dry_check is not None:
+        verdict = "" if dry_check.ok else "  <- DRY: the output is the input, untouched"
+        lines.append(f"  change      {dry_check.detail.split(': ', 1)[1]}{verdict}")
+    for note in result.notes:
+        lines.append(f"  note        {note}")
+    return "\n".join(lines)
+
+
+def _cmd_render(args) -> int:
+    from .render import check_finite, check_not_dry, render
+
+    target = Path(args.target)
+    source = _render_source(target, args.device)
+    signal = args.input or args.signal
+    result = render(source, signal, params=_parse_params(args.param),
+                    samplerate=args.samplerate, seconds=args.seconds,
+                    level_db=args.level, freq=args.freq, seed=args.seed,
+                    strict=args.strict)
+    silent_in = all(v == 0.0 for ch in result.input for v in ch)
+    dry = None if silent_in else check_not_dry(result)
+    clipped = result.write(args.out) if args.out else None
+    if args.json:
+        payload = {"device": result.device, "samplerate": result.samplerate,
+                   "seconds": result.seconds, "params": result.params,
+                   "notes": result.notes, "path": result.path, **result.summary()}
+        if dry is not None:
+            payload["not_dry"] = dry.ok
+        print(json.dumps(payload, indent=2))
+    else:
+        label = args.input or args.signal
+        print(_format_render(result, label, dry))
+        if args.out:
+            print(f"wrote {args.out} (24-bit PCM"
+                  + (f", {clipped} sample(s) clipped to full scale)" if clipped else ")"))
+    if args.check:
+        sys.stdout.flush()
+        failed = [c for c in (dry, check_finite(result)) if c is not None and not c]
+        for check in failed:
+            print(f"m4l render: check failed: {check}", file=sys.stderr)
+        return 1 if failed else 0
+    return 0
+
+
 def watch(script: str | os.PathLike, *, out: str | None = None, interval: float = 0.5) -> int:
     """Rebuild ``script`` every time its mtime changes, until Ctrl-C.
 
@@ -719,6 +813,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-check", action="store_true",
                    help="skip running the script to confirm it rebuilds the device")
     p.set_defaults(func=_cmd_import)
+
+    from .render import SIGNAL_KINDS
+
+    p = sub.add_parser("render", help="run a device's audio path offline: WAV in, WAV out")
+    p.add_argument("target", help="build script (.py) or device (.amxd)")
+    source = p.add_mutually_exclusive_group()
+    source.add_argument("--in", dest="input", metavar="WAV", help="input WAV file")
+    source.add_argument("--signal", choices=SIGNAL_KINDS, default="noise",
+                        help="generated input when there is no --in (default: noise)")
+    p.add_argument("--out", metavar="WAV", help="write the output here (24-bit PCM)")
+    p.add_argument("--param", action="append", default=[], metavar="NAME=VALUE",
+                   help="set a parameter by name (repeatable)")
+    p.add_argument("--seconds", type=float, default=1.0,
+                   help="length of a generated signal (default: 1)")
+    p.add_argument("--samplerate", type=float, default=None,
+                   help="sample rate of a generated signal (default: 48000)")
+    p.add_argument("--level", type=float, default=-6.0,
+                   help="peak level of a generated signal in dBFS (default: -6)")
+    p.add_argument("--freq", type=float, default=440.0,
+                   help="frequency of --signal sine in Hz (default: 440)")
+    p.add_argument("--seed", type=int, default=0, help="seed for noise (default: 0)")
+    p.add_argument("--device", help="which device, when the script builds several")
+    p.add_argument("--strict", action="store_true",
+                   help="refuse approximate gen constructs instead of noting them")
+    p.add_argument("--check", action="store_true",
+                   help="exit 1 if the output is a dry copy of the input or has NaN/Inf")
+    p.add_argument("--json", action="store_true", help="print the summary as JSON")
+    p.set_defaults(func=_cmd_render)
     return parser
 
 

@@ -13,6 +13,7 @@ m4l lint my_gain/build.py          # validate without writing
 m4l preview my_gain/build.py       # render the panel to my_gain.svg
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
 m4l import "Their Device.amxd"     # write a build.py that rebuilds it
+m4l render my_gain/build.py --in dry.wav --out wet.wav --param Gain=-6
 ```
 
 ## What counts as a build script
@@ -171,3 +172,43 @@ and confirms it builds an identical device. Boxes no library call can
 reproduce are kept as raw `add_box` dicts marked `TODO(m4l import)` and listed
 in the output. It exits 1 when the rebuilt device differs. See
 [Bring an existing device](importing.md).
+
+## `m4l render`
+
+```bash
+m4l render SCRIPT|DEVICE.amxd [--in WAV | --signal sine|noise|impulse|silence]
+           [--out WAV] [--param NAME=VALUE ...] [--seconds S] [--samplerate HZ]
+           [--level DB] [--freq HZ] [--seed N] [--device NAME] [--strict]
+           [--check] [--json]
+```
+
+Runs the device's audio path in Python, without Live: `plugin~` to `plugout~`
+through gen~ codeboxes (simulated by `gen_sim`), MSP arithmetic and the
+parameter controls that feed them. The input is a WAV (`--in`) or a generated
+signal (default: 1 s of noise at -6 dBFS, different on each channel so
+stereo effects have something to act on). `--param` sets parameters by their
+Live name (or a gen `Param` as `BOX.param`); the rest keep their initial
+values. `--out` writes the result as 24-bit PCM.
+
+```text
+$ m4l render examples/03_stereo_width.py --param wid_width=2 --out wide.wav
+Widener: rendered 1.00 s of noise at 48000 Hz through 12 boxes
+  params      wid_width = 2
+  dBFS            in L    in R   out L   out R
+  rms            -10.8   -10.8    -6.8    -6.8
+  peak            -6.0    -6.0     0.0     0.0
+  20-120 Hz      -35.3   -35.5   -31.6   -31.7
+  ...
+  change      ch1 -3.0 dB, ch2 -3.0 dB
+  note        'wid_smooth_line' [line~] is held at its target 2 from the first sample (the ramp is not rendered)
+wrote wide.wav (24-bit PCM)
+```
+
+`change` is the level of output minus input, relative to the input. When the
+output is the input untouched (a gen~ that failed to compile, a parameter that
+isn't wired) the line ends `<- DRY`, and `--check` makes that, or any NaN/Inf
+in the output, exit 1. `--json` prints the same numbers for scripts.
+
+A device that holds anything the renderer can't run fails with the box's id,
+rather than rendering something wrong. See [Offline render](render.md) for what
+is supported and for the Python API and checks.

@@ -10,3 +10,9 @@ Regenerate these after adding, renaming, or removing public DSP blocks, recipes,
 |--------|-------------|
 | `build_catalog.py` | `uv run python tools/build_catalog.py` -> `docs/catalog.md` (full auto-generated index of DSP blocks, recipes, UI widgets, themes, engines) |
 | `build_palette.py` | `uv run python tools/build_palette.py` -> `docs/palette.md` (curated, composition-oriented tour of the kit) |
+
+## Reports
+
+| Script | Prints |
+|--------|--------|
+| `gen_sim_coverage.py` | `uv run python tools/gen_sim_coverage.py` -> a markdown table of which `gen_snippets` / `gen_character` / `gen_stateful` functions the offline simulator runs, runs approximately, or refuses (and why) |

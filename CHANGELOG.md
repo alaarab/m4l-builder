@@ -20,6 +20,26 @@
   across. Each call is checked against the source box, boxes with no library
   call stay raw with a TODO, and the command confirms the rebuilt device is
   identical. Guide: `docs/importing.md`.
+- Offline audio render (`m4l_builder.render`, `m4l render`): runs a device's
+  `plugin~` to `plugout~` path (gen~ codeboxes via `gen_sim`, MSP arithmetic,
+  and the parameter controls feeding them) on a WAV or generated signal and
+  writes the result as a WAV. Parameters are set by name. Checks for tests:
+  `check_not_dry` (catches a gen~ that passes audio through untouched),
+  `check_identity`, `check_silent`, `check_finite`, and `audit()` to run them
+  all; `summarize` gives RMS, peak and coarse band levels. Anything the
+  renderer can't run raises `RenderError` naming the box.
+- `gen_sim` runs more of the library's own snippets: `Data` with positional
+  `peek`/`poke`/`dim`/`channels`, `change()`, compound assignment (`+=` and
+  friends), and, marked approximate in `GenKernel.approximations` (refused
+  with `strict=True`), `noise()` and cubic `Delay` reads.
+  `tools/gen_sim_coverage.py` lists which snippets run.
+
+### Fixed
+
+- `gen_sim`'s `fold()` returned its input unchanged; it now reflects into the
+  range like gen's. Unknown names, unparseable expressions and arithmetic
+  errors (a division by zero) now raise `UnsupportedKernel` naming the sample,
+  instead of a raw Python exception.
 
 ## [0.8.0] — 2026-11-26
 

@@ -11,6 +11,7 @@ import pytest
 
 from m4l_builder import cli
 from m4l_builder.cli import main
+from m4l_builder.render import read_wav
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 GAIN_EXAMPLE = EXAMPLES / "01_gain_audio_effect.py"
@@ -204,6 +205,48 @@ def test_python_dash_m_runs_the_cli(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert "audio_effect" in result.stdout
+
+
+# -- render ---------------------------------------------------------------- #
+
+WIDTH_EXAMPLE = EXAMPLES / "03_stereo_width.py"
+
+
+def test_render_writes_the_processed_wav(tmp_path, capsys):
+    out = tmp_path / "mono.wav"
+    assert main(["render", str(WIDTH_EXAMPLE), "--param", "wid_width=0",
+                 "--seconds", "0.05", "--out", str(out)]) == 0
+    (left, right), rate = read_wav(out)
+    assert rate == 48000 and len(left) == 2400
+    assert left == right and any(left)                 # width 0 folds to mono
+    text = capsys.readouterr().out
+    assert "Widener: rendered 0.05 s of noise" in text
+    assert "wid_width = 0" in text and f"wrote {out}" in text
+
+
+def test_render_check_fails_when_the_output_is_dry(capsys):
+    assert main(["render", str(WIDTH_EXAMPLE), "--param", "wid_width=1",
+                 "--seconds", "0.05", "--check"]) == 1
+    captured = capsys.readouterr()
+    assert "DRY: the output is the input" in captured.out
+    assert "check failed: FAIL not dry" in captured.err
+
+
+def test_render_a_built_amxd_as_json(tmp_path, capsys):
+    amxd = tmp_path / "gain.amxd"
+    assert main(["build", str(GAIN_EXAMPLE), "--out", str(amxd)]) == 0
+    capsys.readouterr()
+    assert main(["render", str(amxd), "--signal", "sine", "--seconds", "0.1",
+                 "--param", "Gain=-6", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["params"] == {"Gain": -6.0} and report["not_dry"] is True
+    for before, after in zip(report["input"], report["output"], strict=True):
+        assert after["rms_db"] == pytest.approx(before["rms_db"] - 6.0, abs=0.01)
+
+
+def test_render_rejects_a_malformed_param(capsys):
+    assert main(["render", str(WIDTH_EXAMPLE), "--param", "wid_width"]) == 1
+    assert "expected NAME=VALUE" in capsys.readouterr().err
 
 
 # -- watch ----------------------------------------------------------------- #
