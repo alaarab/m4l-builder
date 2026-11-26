@@ -12,31 +12,41 @@ never silently mis-evaluates and reports a false green):
 
 * ``History name(init);`` — per-voice state read at the TOP of the per-sample
   block (previous sample's value) and committed at the END.
-* ``Param name(default);`` — a held scalar the test overrides.
-* ``in1``..``inN`` per-sample inputs and the ``samplerate`` constant.
+* ``Param name(default[, min=.., max=..]);`` — a held scalar the test overrides.
+* ``in1``..``inN`` per-sample inputs, the ``samplerate`` constant, ``pi`` /
+  ``twopi`` / ``halfpi`` and ``mstosamps()`` / ``sampstoms()``.
 * ``lhs = expr;`` statements (``lhs`` a scratch var, an ``outK``, or a History
-  var) and ``if (c) {...} else if (c) {...} else {...}`` blocks (incl. nesting).
+  var), ``a, b = f(...);`` multi-assignment from a function returning two values,
+  and ``if (c) {...} else if (c) {...} else {...}`` blocks (incl. nesting).
 * ``+ - * /`` arithmetic and the ``cond ? a : b`` ternary, parsed
   parenthesis/precedence-correct (gen ternary binds BELOW arithmetic and is
   right-associative — reproduced exactly, NOT via Python's ``a if c else b``).
 * comparison / logic ``> < >= <= == != && || !`` inside conditions.
 * the pure scalar function table in :data:`_FUNCS`.
-* ``Delay name(size);`` lines with ``name.write(expr);`` statements and
-  ``name.read(taps)`` / ``name.read(taps, interp="linear")`` in expressions. A read
-  before the sample's write sees past input only (``read(1)`` = previous sample),
-  matching gen's read-then-write idiom; a read after the write sees it at tap 0.
+* ``Delay name(size);`` lines (``size`` may use ``samplerate``) with
+  ``name.write(expr);`` statements and ``name.read(taps)`` /
+  ``name.read(taps, interp="linear")`` in expressions. A read before the
+  sample's write sees past input only (``read(1)`` = previous sample), matching
+  gen's read-then-write idiom; a read after the write sees it at tap 0.
+* user function definitions at the top of the codebox
+  (``name(a, b) { ...; return x[, y]; }``), with their own ``History`` state.
+  Every call SITE gets its own state, as in gen, and a function may call an
+  earlier one. ``Delay`` lines pass into functions as arguments. The body must
+  end in exactly one top-level ``return``.
 
 Explicitly NOT modelled (refused): ``Buffer``/``Data`` and
-``peek``/``poke``/``index``/``pfft``/``filtercoeff``/``biquad`` access, other
-``Delay`` interpolation modes, indexed history ``h[n]``, and
-``for``/``while``/function definitions. Those kernels (FFT, LUFS integration
-windows) need the live render path; the simulator refuses them so such a path is
-never reported as passing.
+``peek``/``poke``/``index``/``pfft``/``filtercoeff``/``biquad`` access, stateful
+operators such as ``noise``/``cycle``/``sah``, other ``Delay`` interpolation
+modes, indexed history ``h[n]``, ``for``/``while`` loops, and ``Delay``/``Param``
+declarations inside a function. Those kernels need the live render path; the
+simulator refuses them so such a path is never reported as passing.
 """
 
 from __future__ import annotations
 
+import functools
 import math
+import re
 
 from .gen_lint import _strip_comments
 
@@ -69,6 +79,8 @@ _FUNCS = {
     "clip": _clamp,  # gen alias
     "min": min,
     "max": max,
+    "minimum": min,
+    "maximum": max,
     "abs": abs,
     "sign": _sign,
     "wrap": lambda x, lo, hi: lo + ((x - lo) % (hi - lo)),
@@ -97,6 +109,10 @@ _FUNCS = {
     "trunc": math.trunc,
     "fract": lambda x: x - math.floor(x),
     "int": math.trunc,  # gen int() truncates toward zero
+    # gen constants
+    "pi": math.pi,
+    "twopi": 2.0 * math.pi,
+    "halfpi": 0.5 * math.pi,
     # denormal guard: gen fixdenorm flushes SUBNORMALS to 0 and passes
     # everything else (incl. 0/inf/nan) through — bit-exact for normal values.
     # 2.2250738585072014e-308 is DBL_MIN (the smallest normal double).
@@ -235,6 +251,105 @@ def _logic_to_py(expr: str) -> str:
     return "".join(out)
 
 
+_FN_HEAD = re.compile(r"([A-Za-z_]\w*)\s*\(([^()]*)\)\s*\{")
+_CONTROL_WORDS = frozenset({"if", "else", "for", "while"})
+
+
+def _split_top_commas(expr: str) -> list[str]:
+    """Split ``expr`` on commas that sit outside any parentheses."""
+    parts, depth, start = [], 0, 0
+    for i, ch in enumerate(expr):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(expr[start:i])
+            start = i + 1
+    parts.append(expr[start:])
+    return parts
+
+
+def _mangle_calls(text: str, names, sites: dict) -> str:
+    """Give every call of a user function in ``text`` its own site name.
+
+    gen keeps separate state per call site, so ``f(a) + f(b)`` is two
+    instances; the rewrite ``f(`` -> ``_gfnN_(`` lets the runtime bind each
+    site to its own :class:`_FnInstance`.
+    """
+    if not names:
+        return text
+    pattern = re.compile(r"(?<![\w.])(" + "|".join(map(re.escape, names)) + r")\s*\(")
+
+    def _site(match):
+        site = f"_gfn{len(sites)}_"
+        sites[site] = match.group(1)
+        return site + "("
+
+    return pattern.sub(_site, text)
+
+
+def _has_return(nodes) -> bool:
+    for node in nodes:
+        if node[0] == "return":
+            return True
+        if node[0] == "if":
+            if any(_has_return(block) for _, block in node[1]):
+                return True
+            if node[2] and _has_return(node[2]):
+                return True
+    return False
+
+
+class _GenFunction:
+    """A parsed user function: parameters, local Histories, body, return."""
+
+    def __init__(self, kernel: GenKernel, name: str, params, body: str, names):
+        if re.search(r"(?<![\w.])(Delay|Param)\s", body):
+            raise UnsupportedKernel(
+                f"function {name!r}: Delay/Param declarations inside a function "
+                f"are not simulated")
+        self.name = name
+        self.params = list(params)
+        self.sites: dict[str, str] = {}
+        body = _mangle_calls(body, names, self.sites)
+        self.histories, _ = GenKernel._parse_decls(body)
+        nodes = kernel._parse_block(body, 0, top=True)
+        if not nodes or nodes[-1][0] != "return" or _has_return(nodes[:-1]):
+            raise UnsupportedKernel(
+                f"function {name!r} must end in exactly one top-level return")
+        self.nodes = nodes[:-1]
+        self.ret = nodes[-1][1]
+
+
+class _FnInstance:
+    """One call site of a user function, holding that site's History state."""
+
+    def __init__(self, fn: _GenFunction, functions: dict, depth: int = 0):
+        if depth > 32:
+            raise UnsupportedKernel("recursive gen function calls are not supported")
+        self.fn = fn
+        self.hist = dict(fn.histories)
+        self.children = {site: _FnInstance(functions[callee], functions, depth + 1)
+                         for site, callee in fn.sites.items()}
+
+    def call(self, base: dict, *args):
+        fn = self.fn
+        if len(args) != len(fn.params):
+            raise UnsupportedKernel(
+                f"{fn.name}() takes {len(fn.params)} arguments, got {len(args)}")
+        ns = dict(base)
+        ns.update(self.hist)
+        ns.update(zip(fn.params, args, strict=True))
+        for site, child in self.children.items():
+            ns[site] = functools.partial(child.call, base)
+        GenKernel._exec_nodes(fn.nodes, ns)
+        result = eval(fn.ret, {"__builtins__": {}}, ns)  # noqa: S307
+        for h in self.hist:
+            self.hist[h] = ns[h]
+        return result
+
+
 class GenKernel:
     """A parsed, simulatable gen~ codebox kernel.
 
@@ -243,22 +358,31 @@ class GenKernel:
     persistent namespace (History values carry across samples). A History var
     written in several mutually-exclusive branches is fine — only the taken
     branch runs — and a sequential re-write within one block is last-wins, both
-    matching gen.
+    matching gen. Leading function definitions are parsed separately and run
+    per call site (see :class:`_FnInstance`).
     """
 
     def __init__(self, code: str):
         body = "\n".join(_strip_comments(code))
         self._refuse_unsupported(body)
+        defs, body = self._split_functions(body)
+        self.functions: dict[str, _GenFunction] = {}
+        for name, (params, fn_body) in defs.items():
+            # a function may call any function defined before it
+            self.functions[name] = _GenFunction(self, name, params, fn_body,
+                                                list(self.functions))
+        self.sites: dict[str, str] = {}
+        body = _mangle_calls(body, list(self.functions), self.sites)
         self.histories, self.params = self._parse_decls(body)
-        import re as _re
-        self.delays = {name: int(float(size)) for name, size in
-                       _re.findall(r"Delay\s+([A-Za-z_]\w*)\s*\(\s*([\d.]+)\s*\)", body)}
+        self.delays = dict(re.findall(
+            r"(?<![\w.])Delay\s+([A-Za-z_]\w*)\s*\(([^;]*?)\)\s*;", body))
         self.nodes = self._parse_block(body, 0, top=True)
+        if _has_return(self.nodes):
+            raise UnsupportedKernel("'return' outside a function definition")
         self.num_outs = self._count_outs(self.nodes)
 
     @staticmethod
     def _refuse_unsupported(body: str) -> None:
-        import re as _re
         for tok in _REFUSE_TOKENS:
             if tok in body:
                 raise UnsupportedKernel(
@@ -267,20 +391,36 @@ class GenKernel:
                 )
         if "[" in body:
             raise UnsupportedKernel("indexed access '[' is not supported")
-        # if/else ARE supported; loops and function defs are not.
+        # if/else ARE supported; loops are not.
         for kw in ("for", "while", "function"):
-            if _re.search(rf"(?<![A-Za-z0-9_]){kw}(?![A-Za-z0-9_])", body):
+            if re.search(rf"(?<![A-Za-z0-9_]){kw}(?![A-Za-z0-9_])", body):
                 raise UnsupportedKernel(
                     f"control-flow keyword {kw!r} is not supported"
                 )
 
     @staticmethod
+    def _split_functions(body: str):
+        """Peel the leading ``name(params) { ... }`` definitions off ``body``."""
+        defs: dict[str, tuple[list[str], str]] = {}
+        pos, n = 0, len(body)
+        while True:
+            while pos < n and body[pos] in " \t\r\n":
+                pos += 1
+            head = _FN_HEAD.match(body, pos)
+            if not head or head.group(1) in _CONTROL_WORDS:
+                break
+            close = GenKernel._match(body, head.end() - 1, "{", "}")
+            params = [p.strip() for p in head.group(2).split(",") if p.strip()]
+            defs[head.group(1)] = (params, body[head.end():close])
+            pos = close + 1
+        return defs, body[pos:]
+
+    @staticmethod
     def _parse_decls(body: str):
-        import re
         histories: dict[str, float] = {}
         params: dict[str, float] = {}
         for kind, name, init in re.findall(
-            r"(History|Param)\s+([A-Za-z_]\w*)\s*\(\s*(-?[\d.]+)\s*\)", body
+            r"(History|Param)\s+([A-Za-z_]\w*)\s*\(\s*(-?[\d.]+)\s*(?:,[^)]*)?\)", body
         ):
             (histories if kind == "History" else params)[name] = float(init)
         return histories, params
@@ -298,9 +438,12 @@ class GenKernel:
                     return i
         raise UnsupportedKernel(f"unbalanced {open_ch!r} in kernel")
 
+    @staticmethod
+    def _compile_expr(expr: str):
+        return compile(_ternary_to_py(_logic_to_py(expr.strip())), "<gen>", "eval")
+
     def _parse_block(self, body: str, pos: int, top: bool = False):
         """Parse a sequence of statements until ``}`` (or end-of-body if top)."""
-        import re
         nodes: list = []
         n = len(body)
         while pos < n:
@@ -323,10 +466,17 @@ class GenKernel:
             pos = semi + 1
             if not stmt or stmt.startswith(("History ", "Param ", "Delay ")):
                 continue
+            ret = re.fullmatch(r"return(?![A-Za-z0-9_])\s*(.*)", stmt, re.S)
+            if ret:
+                parts = [_ternary_to_py(_logic_to_py(part.strip()))
+                         for part in _split_top_commas(ret.group(1))]
+                expr = parts[0] if len(parts) == 1 else (
+                    "(" + ", ".join(f"({part})" for part in parts) + ")")
+                nodes.append(("return", compile(expr, "<gen>", "eval")))
+                continue
             write = re.fullmatch(r"([A-Za-z_]\w*)\.write\((.*)\)", stmt, re.S)
             if write:
-                expr = _ternary_to_py(_logic_to_py(write.group(2).strip()))
-                nodes.append(("write", write.group(1), compile(expr, "<gen>", "eval")))
+                nodes.append(("write", write.group(1), self._compile_expr(write.group(2))))
                 continue
             nodes.append(self._parse_assign(stmt))
         if top:
@@ -334,15 +484,16 @@ class GenKernel:
         raise UnsupportedKernel("unterminated block (missing '}')")
 
     def _parse_assign(self, stmt: str):
-        import re
         if "=" not in stmt:
             raise UnsupportedKernel(f"non-assignment statement: {stmt!r}")
         lhs, rhs = stmt.split("=", 1)
-        lhs = lhs.strip()
-        if not re.fullmatch(r"[A-Za-z_]\w*", lhs):
-            raise UnsupportedKernel(f"unsupported assignment target: {lhs!r}")
-        py_rhs = _ternary_to_py(_logic_to_py(rhs.strip()))
-        return ("assign", lhs, compile(py_rhs, "<gen>", "eval"))
+        targets = [t.strip() for t in lhs.split(",")]
+        for target in targets:
+            if not re.fullmatch(r"[A-Za-z_]\w*", target):
+                raise UnsupportedKernel(f"unsupported assignment target: {lhs.strip()!r}")
+        if len(targets) > 1:
+            return ("massign", targets, self._compile_expr(rhs))
+        return ("assign", targets[0], self._compile_expr(rhs))
 
     def _parse_if(self, body: str, pos: int):
         """Parse ``if (c){...} else if (c){...} else {...}`` into an if-node."""
@@ -356,7 +507,6 @@ class GenKernel:
                 raise UnsupportedKernel("expected '(' after 'if'")
             close = self._match(body, pos, "(", ")")
             cond = body[pos + 1:close].strip()
-            cond_py = _ternary_to_py(_logic_to_py(cond))
             pos = close + 1
             while body[pos] in " \t\r\n":
                 pos += 1
@@ -364,13 +514,12 @@ class GenKernel:
                 raise UnsupportedKernel("expected '{' after if-condition")
             end = self._match(body, pos, "{", "}")
             block, _ = self._parse_block(body, pos + 1)
-            branches.append((compile(cond_py, "<gen>", "eval"), block))
+            branches.append((self._compile_expr(cond), block))
             pos = end + 1
             # look for a following 'else' / 'else if'
             save = pos
             while pos < len(body) and body[pos] in " \t\r\n":
                 pos += 1
-            import re
             if not re.match(r"else(?![A-Za-z0-9_])", body[pos:]):
                 pos = save
                 break
@@ -388,15 +537,16 @@ class GenKernel:
         return ("if", branches, else_nodes), pos
 
     def _count_outs(self, nodes) -> int:
-        import re
         num = 0
         for node in nodes:
             if node[0] == "write":
                 continue
-            if node[0] == "assign":
-                m = re.fullmatch(r"out(\d+)", node[1])
-                if m:
-                    num = max(num, int(m.group(1)))
+            if node[0] in ("assign", "massign"):
+                targets = node[1] if node[0] == "massign" else [node[1]]
+                for target in targets:
+                    m = re.fullmatch(r"out(\d+)", target)
+                    if m:
+                        num = max(num, int(m.group(1)))
             else:  # if-node
                 for _, block in node[1]:
                     num = max(num, self._count_outs(block))
@@ -411,6 +561,13 @@ class GenKernel:
                 ns[node[1]].write(eval(node[2], {"__builtins__": {}}, ns))  # noqa: S307
             elif node[0] == "assign":
                 ns[node[1]] = eval(node[2], {"__builtins__": {}}, ns)  # noqa: S307
+            elif node[0] == "massign":
+                values = eval(node[2], {"__builtins__": {}}, ns)  # noqa: S307
+                if not isinstance(values, tuple) or len(values) != len(node[1]):
+                    raise UnsupportedKernel(
+                        f"{len(node[1])} targets but the call returned "
+                        f"{len(values) if isinstance(values, tuple) else 1} value(s)")
+                ns.update(zip(node[1], values, strict=True))
             else:  # ("if", branches, else_nodes)
                 for cond_code, block in node[1]:
                     if eval(cond_code, {"__builtins__": {}}, ns):  # noqa: S307
@@ -437,14 +594,24 @@ class GenKernel:
         if params:
             pvals.update({k: float(v) for k, v in params.items()})
 
+        sr = float(samplerate)
+        base = dict(_FUNCS)
+        base["samplerate"] = sr
+        base["mstosamps"] = lambda ms: ms * sr * 0.001
+        base["sampstoms"] = lambda samps: samps * 1000.0 / sr
+
         outs = {f"out{k}": [0.0] * num_samples for k in range(1, self.num_outs + 1)}
-        delays = {name: _DelayLine(size) for name, size in self.delays.items()}
+        delays = {name: _DelayLine(int(eval(size, {"__builtins__": {}}, base)))  # noqa: S307
+                  for name, size in self.delays.items()}
+        sites = {site: functools.partial(
+                     _FnInstance(self.functions[callee], self.functions).call, base)
+                 for site, callee in self.sites.items()}
         for n in range(num_samples):
-            ns = dict(_FUNCS)
+            ns = dict(base)
             ns.update(delays)
             ns.update(hist)
             ns.update(pvals)
-            ns["samplerate"] = float(samplerate)
+            ns.update(sites)
             for name, seq in inputs.items():
                 ns[name] = float(seq[n]) if n < len(seq) else 0.0
             self._exec_nodes(self.nodes, ns)

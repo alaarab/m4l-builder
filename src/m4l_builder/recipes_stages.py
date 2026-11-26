@@ -1132,8 +1132,8 @@ def poly_midi_gate(device, id_prefix, x=30, y=30):
 def mc_poly_spine(device, id_prefix, *, voices=16, gen_name=None, gen_inlets=2,
                   mpe=False, steal=True, autogain=False, x=30, y=30):
     """Add the modern ``mc.*`` polyphony spine — the poly~-free voice allocator
-    that synths use (``@voices 16`` / ``@mpemode 1 @voices 8 @steal 1``).
-    Topology + port indices follow the documented objects.
+    built from Max's documented ``mc.noteallocator~`` / ``mc.gen~`` objects
+    (``@voices 16`` / ``@mpemode 1 @voices 8 @steal 1``).
 
     Builds and wires::
 

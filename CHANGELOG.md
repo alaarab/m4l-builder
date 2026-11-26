@@ -21,6 +21,10 @@
 
 ### Added
 
+- `gen_sim` runs user-defined gen functions (state per call site, `Delay`
+  arguments, two-value returns), `Param` declarations with `min`/`max`, `Delay`
+  sizes that use `samplerate`, and the `mstosamps`/`sampstoms`, `pi`/`twopi`/
+  `halfpi` and `minimum`/`maximum` builtins.
 - `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
   optional and inferred from the object text (`m4l_builder.object_io`).
   Argument rules cover pack/pak/unpack, route/routepass, sel/select,
@@ -90,6 +94,24 @@
 
 ### Changed
 
+- Rewrote these gen~ primitives from published DSP references, keeping every
+  name, signature and caller contract: `lowpass_12_fn`/`highpass_12_fn`
+  (Zavalishin TPT state-variable filter; same magnitude response as the RBJ
+  cookbook filters), `allpass_fn` (Schroeder direct form I), `svf_fn` (two
+  cascaded TPT cores; no longer needs `tanh_approx_fn`), `tanh_approx_fn`
+  (rational approximation with a smooth ±1 clamp at |x| = 3), `op_fn`,
+  `qpow_fn` (closed-form signed power curve), `fade_env_fn` (exact one-pole
+  rates), `ramp_env_fn` (free-running clock; `rnd_t` is now the caller's -1..1
+  random draw), `lfo_osc_fn` (one shape per buffer channel, `wave` scans them),
+  `granular_voice_fn` + `freeze_capture_block` (hop-clocked grains,
+  overlap-normalised; sin/cos freeze crossfade; the capture length is stored in
+  the last frame of the freeze Data), `viz_poke_block` (fires on reaching the
+  refresh period, so non-integer periods keep ticking), `ms_width_equal_power`
+  (sine/cosine law: constant power for decorrelated input; mono is now
+  `(L+R)/sqrt(2)`, 3 dB below the old `L+R`) and `modulated_allpass_reverb`
+  (Dattorro input diffusers into a modulated figure-8 tank; declares its own
+  Params). Their tests now check behaviour (frequency response, energy, decay,
+  timing) in `gen_sim` instead of matching source text.
 - `_amxd_codegen` is now mypy-gated, shrinking the type-checking backlog
   to `_amxd_legacy` and `livemcp_bridge`.
 - CI now enforces an 85% coverage floor (`fail_under` in pyproject;
@@ -109,6 +131,10 @@
 
 ### Removed
 
+- The `m4l_builder.native` Max and Live compatibility C++ (`max_compat/`,
+  `live_compat/`, including the Max module host) and its Max/Live specs and
+  reference fixtures moved out of this repository. The modal engine,
+  `NativeInstrument` and `modal_external` stay.
 - analysis and library analysis moved out of m4l-builder into a
   separate package: `reverse`, `amxd_snapshot`,
   `amxd_patterns`, `amxd_analysis`, `amxd_codegen`, `analysis`,
