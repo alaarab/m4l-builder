@@ -3,17 +3,16 @@
 A ``jspainterfile`` is a small ES5 ``.js`` that PAINTS a *native* Live control
 (``live.dial`` / ``live.numbox`` / ``toggle`` …) — the control keeps full native
 behaviour and parameter storage (``parameter_enable: 1``); the script only draws
-it. The library leans on this hard — it is how they get a custom look
-without a hidden second control. Attach one with
+it. This is how to get a custom look without a hidden second control. Attach one with
 :meth:`m4l_builder.device.Device.paint_control`.
 
-NOTE: the library ``.amxd`` only references each painter by *filename* (the script
-bytes are a separate bundled file, not in the patcher JSON), so these painters are
+NOTE: an ``.amxd`` only references each painter by *filename* (the script
+bytes are a separate bundled file, not in the patcher JSON). These painters are
 authored from the documented ``mgraphics`` API (the same one the ``jsui`` engines
-already use) rather than reused — their RENDER must be Live-verified when
-a device first uses them. To stay low-risk these are BACKGROUND painters: they fill
-the control's rectangle (dimensions baked in at build time, so no reliance on the
-runtime size-query API) and never try to read the control value.
+already use) — their RENDER must be Live-verified when a device first uses them.
+To stay low-risk these are BACKGROUND painters: they fill the control's rectangle
+(dimensions baked in at build time, so no reliance on the runtime size-query API)
+and never try to read the control value.
 """
 
 from __future__ import annotations

@@ -181,7 +181,7 @@ var DISPLAY_FLOOR = -180;
 var MIN_Q = 0.1;
 var MAX_Q = 30.0;
 var ANALYZER_MIN_DB = -78.0;
-// Headroom above 0 dBFS so a loud signal sits ~80% up as a backdrop (filled-style),
+// Headroom above 0 dBFS so a loud signal sits ~80% up as a backdrop,
 // not pegged at the top of the plot. Matches the Parametric EQ analyzer.
 var ANALYZER_MAX_DB = 12.0;
 // Spectrum Grab (premium-EQ): a plain press over an analyzer peak louder than this
@@ -1866,7 +1866,7 @@ function update_analyzer_from_fft(mags) {
             if (mag > peak) peak = mag;
             sum += mag; cnt++;
         }
-        // Peak-dominant so a tone reads as a TIGHT spike like filled (the higher-res
+        // Peak-dominant so a tone reads as a TIGHT spike (the higher-res
         // 4096-pt FFT keeps the floor smooth); small mean term only lifts valleys
         // slightly so harmonics stay connected.
         energy = cnt > 0 ? (0.65 * peak + 0.35 * (sum / cnt)) : 0.0;

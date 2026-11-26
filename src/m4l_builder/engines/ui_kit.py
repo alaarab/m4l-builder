@@ -225,8 +225,8 @@ def custom_knob_js(
         "    mgraphics.move_to(cx + Math.cos(av) * R * 0.32, cy + Math.sin(av) * R * 0.32);\n"
         "    mgraphics.line_to(cx + Math.cos(av) * R * 0.82, cy + Math.sin(av) * R * 0.82);\n"
         "    mgraphics.stroke();\n"
-        # 9.0 / 10.5, not 6.5 / 7.5: the old sizes sat well under Ableton's own
-        # device labels (Limiter's "Ceiling"/"Lookahead" read ~9-11px) and were
+        # 9.0 / 10.5, not 6.5 / 7.5: the old sizes sat well under native Live
+        # device labels (which read ~9-11px) and were
         # part of the fleet-wide sub-7px chrome smell. User-flagged on Hush.
         "    mgraphics.select_font_face(FONT);\n"
         "    mgraphics.set_font_size(10.5);\n"

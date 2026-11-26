@@ -481,7 +481,7 @@ def _param_decl(p) -> str:
 
     A string is passed through (a trailing `;` is ensured). A tuple is
     ``(name, default)`` or ``(name, default, min, max)`` →
-    ``Param name(default[, min=.., max=..]);`` (the real library syntax).
+    ``Param name(default[, min=.., max=..]);`` (the gen ``Param`` syntax).
     """
     if isinstance(p, str):
         return p if p.rstrip().endswith(";") else p + ";"
@@ -1124,8 +1124,7 @@ def dattorro_plate_tank(in_sig: str, out_l: str, out_r: str,
 def clickless_delay(x: str, out: str, time_ms: str = "time_ms", *,
                     prefix: str = "cxd", max_ms: float = 2000.0,
                     xfade_ms: float = 50.0) -> str:
-    """Click-free variable delay (T36/Q19 — the vdelay~ Building
-    Block as a gen~ kernel).
+    """Click-free variable delay (T36/Q19) as a gen~ kernel.
 
     Two read taps on one line: the CURRENT tap keeps sounding while a
     time change fades the NEW tap in over ``xfade_ms`` (equal-power), then

@@ -9,8 +9,8 @@ from typing import Any
 
 _UNSET = object()
 
-# When reconstructing a ParameterSpec from a REAL device's valueof (cloning a
-# shipping .amxd), Live's data legitimately violates our stricter AUTHORING rules
+# When reconstructing a ParameterSpec from an EXISTING device's valueof
+# (round-tripping a built .amxd), Live's data legitimately violates our stricter AUTHORING rules
 # (e.g. an enum initial index beyond the option count, an empty enum option). This
 # flag relaxes those opinionated raises so a faithful rebuild preserves the original
 # values verbatim. Authoring (the default) stays strict. NOT a dataclass field — a
@@ -21,7 +21,7 @@ _STRICT_VALIDATION = True
 @contextmanager
 def tolerant_reconstruction():
     """Within this context, ParameterSpec skips opinionated authoring validation
-    (for faithfully cloning real devices). Restores the prior setting on exit."""
+    (for faithfully reconstructing existing devices). Restores the prior setting on exit."""
     global _STRICT_VALIDATION
     prev = _STRICT_VALIDATION
     _STRICT_VALIDATION = False

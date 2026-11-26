@@ -1,6 +1,6 @@
 """buffer_viz — the jsui read side of the D4 gen->named-buffer->jsui viz bus.
 
-The library keystone for live displays: the gen~ engine pokes per-frame
+The keystone for live displays: the gen~ engine pokes per-frame
 screen state into ``---``-scoped ``buffer~`` objects (see
 ``gen_stateful.viz_declares`` / ``viz_poke_block``), and THIS v8ui peeks the
 same buffers on a self-owned poll ``Task`` and redraws — zero patchcord

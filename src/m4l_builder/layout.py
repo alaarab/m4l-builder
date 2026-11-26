@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 
 def snap_rect(rect):
-    """Snap a rect to whole-integer pixels (official-adopt 4, Ableton's
-    whole-pixel convention): fractional ``presentation_rect`` coordinates
+    """Snap a rect to whole-integer pixels (Ableton's whole-pixel
+    convention): fractional ``presentation_rect`` coordinates
     render blurry / off-grid in Live. Rounds each component; int-valued
     floats collapse to ints so emitted JSON stays clean."""
     return [int(round(v)) for v in rect]

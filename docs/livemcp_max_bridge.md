@@ -17,7 +17,7 @@ enable_livemcp_bridge(device, include_ui=True)
 device.build("My Bridge Device.amxd")
 ```
 
-For a compact reference device with the bridge badge already laid out:
+For a compact demo device with the bridge badge already laid out:
 
 ```python
 from m4l_builder import build_livemcp_bridge_demo

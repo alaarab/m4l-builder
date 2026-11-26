@@ -1,4 +1,4 @@
-"""Component rack (F2 — library P11): stamp one Subpatcher N times via #1 args."""
+"""Component rack (F2): stamp one Subpatcher N times via #1 args."""
 
 import json
 

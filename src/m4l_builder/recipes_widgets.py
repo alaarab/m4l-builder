@@ -305,11 +305,11 @@ def page_selector(device, id_prefix, *, at, n_pages, rows_per_page,
 def takeover_menu(device, id_prefix, *, rect, policies=("Latest", "Hold",
                                                         "Pickup"),
                   param_name="Takeover", accent=None):
-    """Takeover policy menu (catalog #27, a device): how an incoming
+    """Takeover policy menu (catalog #27): how an incoming
     control merges with mapped/engine values. The recipe is the CONTRACT
     layer — an automatable enum + a ``policy_out`` port; the semantics are
     engine-side (wire ``policy_out`` into whatever merges your sources).
-    Pair with :func:`randomize_matrix` ``variation=True`` for a device'
+    Pair with :func:`randomize_matrix` ``variation=True`` for the
     Random-Variation half of the panel.
     """
     from .parameters import ParameterSpec
@@ -335,11 +335,11 @@ def takeover_menu(device, id_prefix, *, rect, policies=("Latest", "Hold",
 
 def mod_source_matrix(device, id_prefix, *, rect, sources, n_targets,
                       param_name="Mod Matrix", accent=None, dim_color=None):
-    """Mod-source routing matrix (catalog #28, a device): ``sources`` ×
+    """Mod-source routing matrix (catalog #28): ``sources`` ×
     ``n_targets`` grid of toggle cells — MPE dimensions (or any control
     streams) as routable mod sources per target.
 
-    Persistence rides the LIBRARY-PROVEN path: the ``matrixctrl`` itself is a
+    Persistence rides the PROVEN path: the ``matrixctrl`` itself is a
     Blob parameter (``parameter_type=3`` stores the whole grid with the
     set). Cell edits stream out ``cells_out`` as ``<col> <row> <val>`` for
     the engine's routing (e.g. a ``router``/``matrix~`` recompute); source
@@ -543,7 +543,7 @@ def param_link(device, id_prefix, *, a, b, mode="mirror", link_rect,
 
 def dim_steppers(device, id_prefix, *, dims, at, cell_w=34, gap=4,
                  accent="0.30, 0.80, 0.84"):
-    """Compact multi-dimension stepper cluster (catalog #38, a device
+    """Compact multi-dimension stepper cluster (catalog #38, e.g.
     "X 3 Y 1 Z 1 W 1"): one :meth:`add_custom_stepper` per dim in a row.
     ``dims``: list of ``(letter, vmin, vmax, initial)``.
     """
@@ -565,9 +565,9 @@ def dim_steppers(device, id_prefix, *, dims, at, cell_w=34, gap=4,
 
 def ghost_label(device, id_prefix, *, rect, text, accent, dim_color=None,
                 fontsize=9.0):
-    """Ghosted state label (catalog #39, a device "Reverse Stretch"):
+    """Ghosted state label (catalog #39, e.g. "Reverse Stretch"):
     the label sits dimmed until the mode ENGAGES, then lights in accent —
-    state-as-typography. Library mechanism (a device Thru/Blocked): TWO
+    state-as-typography. Mechanism: TWO
     same-rect comments swapped via parent-side ``script sendbox <id>
     hidden`` (the Live-proven bus). Wire an int 0/1 into ``state_in``.
     """
@@ -708,10 +708,10 @@ def display_header(device, id_prefix, *, rect, title, accent,
 
 def hero_readout(device, id_prefix, *, rect, accent, fontsize=34.0,
                  initial="—"):
-    """Giant hero READOUT (catalog #41, a device "G0"): the value IS the
+    """Giant hero READOUT (catalog #41, e.g. "G0"): the value IS the
     hero — 34px+ display type on a transparent field. Feed ready-made
-    ``set <text…>`` messages into ``text_in`` (library alternative for pure
-    numerics: a giant ``appearance=4`` live.numbox, a device).
+    ``set <text…>`` messages into ``text_in`` (alternative for pure
+    numerics: a giant ``appearance=4`` live.numbox).
     """
     from .ui import textedit
 

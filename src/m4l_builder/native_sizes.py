@@ -1,9 +1,8 @@
-"""Native control sizes (px) — MEASURED from stock devices.
+"""Native control sizes (px) for ``live.*`` controls.
 
-Ground truth (parsed presentation_rect from the unencrypted official devices; the
-flagship ones like LFO/Shaper are DRM-encrypted and were not touched). Use these as the
-DEFAULT sizes for native ``live.*`` controls so devices read native-grade + dense
-(Ableton / premium-dense style) instead of oversized. See ``docs/ui_inputs_reference.md``.
+Use these as the DEFAULT sizes for native ``live.*`` controls so devices read
+native-grade + dense (Ableton / premium-dense style) instead of oversized. See
+``docs/ui_inputs_reference.md``.
 
     from m4l_builder import native_sizes as ns
     device.add_dial("amt", "Amount", [x, y, *ns.DIAL], ...)
@@ -15,7 +14,7 @@ DIAL = (44, 47)          # ⚠️ un-grounded guess — prefer DIAL_COMPACT (pre
 DIAL_HERO = (48, 50)     # slightly bigger feature knob (also seen: 56x56)
 DIAL_BIG = (56, 56)
 MENU = (48, 15)          # NARROW dropdown — height is ALWAYS 15, never wide
-NUMBOX = (39, 15)        # mode of 170 official numboxes (39x15, x75); H always 15
+NUMBOX = (39, 15)        # the common numbox size; H always 15
 TOGGLE = (12, 13)        # tiny
 TEXT = (32, 15)          # textbutton / live.text
 TEXT_MINI = (16, 15)
@@ -24,7 +23,7 @@ TAB_H = 16               # live.tab row height (16-18)
 TAB_SEG_W = 28           # approx per-segment width → 3 segs ≈ 84
 VSLIDER = (18, 110)      # vertical fader (18 x ~101-120)
 HSLIDER = (64, 15)       # horizontal level slider
-# a mapping-row grammar (library-measured:
+# a mapping-row grammar (e.g.
 # 9 rows of 268x16 at 16px pitch = 72 destinations across 8 pages in a
 # 169px face). Use for pixel-faithful mapping tables; the modulator
 # component's dynamic row_h remains the default.
@@ -39,38 +38,36 @@ LABEL_FONTSIZE = 7.0     # a live.comment label above a control (renders small)
 VALUE_FONTSIZE = 9.0
 FONTSIZE = 10            # the live.* default fontsize
 
-# Premium tiers — MEASURED across a 15-device reference set (own count of
-# presentation_rect sizes; counts in parens). The standard DIAL above (44,47) was a
+# Premium tiers. The standard DIAL above (44,47) was a
 # guess and is NOT how premium devices size knobs; prefer DIAL_COMPACT going forward.
-DIAL_COMPACT = (41, 35)   # THE workhorse — 38 of 82 library dials. Premium default.
-DIAL_RAIL = (41, 48)      # taller labelled rail dial (7)
-DIAL_TINY = (54, 36)      # wide-short tiny dial, appearance=1 (5)
-DIAL_LCD = (51, 63)       # tall LCD-stacked dial, appearance=3 (5)
-NUMBOX_WIDE = (50, 15)    # wider numeric readout (18)
-NUMBOX_MINI = (17, 15)    # tiny inline number (5)
-VSLIDER_NATIVE = (22, 113)  # measured vertical fader (12) — wider than VSLIDER=(18,110)
-TAB_BAR_H = 20            # full-width mode-bar height (the ~175x20 selector, 14x) — taller than TAB_H=16
-TEXT_ICON = (15, 15)      # square glyph/icon live.text (17) — the LED/icon-toggle cell
-TEXT_SPLIT = (24, 15)     # short/split label live.text (10)
+DIAL_COMPACT = (41, 35)   # THE workhorse. Premium default.
+DIAL_RAIL = (41, 48)      # taller labelled rail dial
+DIAL_TINY = (54, 36)      # wide-short tiny dial, appearance=1
+DIAL_LCD = (51, 63)       # tall LCD-stacked dial, appearance=3
+NUMBOX_WIDE = (50, 15)    # wider numeric readout
+NUMBOX_MINI = (17, 15)    # tiny inline number
+VSLIDER_NATIVE = (22, 113)  # native vertical fader — wider than VSLIDER=(18,110)
+TAB_BAR_H = 20            # full-width mode-bar height (the ~175x20 selector) — taller than TAB_H=16
+TEXT_ICON = (15, 15)      # square glyph/icon live.text — the LED/icon-toggle cell
+TEXT_SPLIT = (24, 15)     # short/split label live.text
 LED_DOT = (10, 10)        # tiny status dot
-ROW_PITCH_TIGHT = 17      # measured tight row spacing (dense premium-device grids)
+ROW_PITCH_TIGHT = 17      # tight row spacing (dense premium-device grids)
 LABEL_FONTSIZE_PRIMARY = 9.5  # the premium label size; LABEL_FONTSIZE 7.0 = _TINY
 
-# Remaining measured premium tiers.
+# Remaining premium tiers.
 NUMBOX_LCD = (40, 17)     # appearance=4 LCD readout (the premium numbox)
 NUMBOX_HERO = (72, 23)    # big touched-value hero readout (fontsize ~18)
-METER_FADER = (35, 163)   # full-height meter+fader lane (seen in the library, x3)
+METER_FADER = (35, 163)   # full-height meter+fader lane
 DIAL_LABELLED = (44, 65)  # dial with native name+number shown (showname/shownumber 1)
 
 # ── Surface cell grammar ─────────────────────────────────────────────────────
 # The vocabulary the Surface layout engine (m4l_builder.surface) composes with.
-# A VALUE CELL is the library atomic control (seen across premium channel-strip
-# and synth devices):
+# A VALUE CELL is the atomic control:
 # uppercase caption ABOVE a bare DIAL_COMPACT dial whose native shownumber=1
 # value reads out inside the dial rect (recipes.dial_value_cell). Persistent
 # values are the fleet standard — valuepopup hover was the value-less regression.
 CELL_W = 44               # cell width over a 41-wide dial (caption spans this)
-COL_PITCH = 48            # x pitch between dial columns
+COL_PITCH = 48            # x pitch between dial columns (typically 44-51)
 CAPTION_H = 10            # caption rect height (dial_value_cell default)
 CAPTION_GAP = 1           # caption -> dial gap
 VALUE_CELL_H = 46         # CAPTION_H + CAPTION_GAP + DIAL_COMPACT height
@@ -78,7 +75,7 @@ SECTION_HEADER_H = 14     # labeled section title band inside a card
 MAX_VALUE_ROWS = 3        # HARD RULE: persistent-value dial rows per 156px column
                           # (4 rows only ever fit with the value hidden — rejected)
 PARK_RECT = [900, 900, 1, 1]  # canonical off-canvas parking for hidden probe params
-ALPHA_TIERS = (1.0, 0.5, 0.25, 0.10)  # P5: one accent expressed at tiered alphas
+ALPHA_TIERS = (1.0, 0.5, 0.25, 0.10)  # one accent expressed at tiered alphas
 
 # Typography standard (fleet-wide): captions 7.5, section headers 9.5.
 # The 5.6 dense-card caption size is retired.
@@ -94,10 +91,10 @@ FRAME_MARGIN = 6         # keep control cells this far inside the panel border
 def knob_row(x0, y, n, *, pitch=KNOB_PITCH, size=DIAL_COMPACT):
     """``n`` knob rects in a row starting at ``x0``, spaced by ``pitch``.
 
-    Defaults to ``DIAL_COMPACT`` (41x35) — THE premium library workhorse — to match
+    Defaults to ``DIAL_COMPACT`` (41x35) — THE premium workhorse — to match
     ``knob_row_fit`` and the documented preference. (The old ``DIAL`` (44,47) default
-    was an un-grounded guess; ``KNOB_PITCH`` 48 gives a library-reasonable ~7px gap on
-    a 41-wide knob — premium devices' 41-wide dials sit at pitch ~51.)
+    was an un-grounded guess; ``KNOB_PITCH`` 48 gives a reasonable ~7px gap on
+    a 41-wide knob — premium layouts often space 41-wide dials at pitch ~51.)
     """
     w, h = size
     return [[x0 + i * pitch, y, w, h] for i in range(n)]
@@ -131,7 +128,7 @@ def knob_column(x, y0, n, *, height=DENSE_COL_H, knob_w=40, label_h=KNOB_LABEL_H
     """LEGACY (valuepopup era) — prefer ``m4l_builder.surface.Surface`` sections.
     This helper's 4-high column only ever fit by HIDING the dial value
     (``valuepopup`` hover), which the fleet standard now forbids (persistent
-    values, max 3 rows — see ``MAX_VALUE_ROWS``). Kept for the rebuild studies.
+    values, max 3 rows — see ``MAX_VALUE_ROWS``).
 
     ``n`` dense knob CELLS stacked vertically to fill ``height`` (a premium-device /
     Pressure look). Returns a list of ``(label_rect, dial_rect)`` tuples — caption rect above,

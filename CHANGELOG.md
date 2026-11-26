@@ -135,13 +135,12 @@
   `live_compat/`, including the Max module host) and its Max/Live specs and
   reference fixtures moved out of this repository. The modal engine,
   `NativeInstrument` and `modal_external` stay.
-- analysis and library analysis moved out of m4l-builder into a
-  separate package: `reverse`, `amxd_snapshot`,
-  `amxd_patterns`, `amxd_analysis`, `amxd_codegen`, `analysis`,
-  `library_analysis`, `library_fixture`, the `_amxd_*` / `_library_*` modules,
-  every `AMXD_EXPORTS` / `ANALYSIS_EXPORTS` root name (`snapshot_from_amxd`,
-  `analyze_amxd_library`, `generate_*_python_from_*`, ...), and the library report
-  tools. No shim remains.
+- The `.amxd` analysis and Python-regeneration tooling moved out of m4l-builder
+  into a separate package: `reverse`, `amxd_snapshot`, `amxd_patterns`,
+  `amxd_analysis`, `amxd_codegen`, `analysis` with its companion analysis
+  and fixture modules, the private `_amxd_*` and analysis helpers, every
+  `AMXD_EXPORTS` / `ANALYSIS_EXPORTS` root name (`snapshot_from_amxd`,
+  `generate_*_python_from_*`, ...), and the report tools. No shim remains.
   `m4l_builder.amxd.device_from_amxd` / `Device.from_amxd` and the LiveMCP
   bridge stay here.
 - Untracked `tmp/` scratch audio and screenshots and the stale UI-sprint notes
@@ -167,8 +166,8 @@
   win and existing calls build byte-identical output.
 **Live 12 MIDI Tools**
 - `MidiTransformation` and `MidiGenerator` device types (`.amxd` device-type
-  codes `natt` / `nagg`, derived and byte-verified against shipping
-  devices), with round-trip read-back via `device_from_amxd`.
+  codes `natt` / `nagg`, byte-verified against Live 12's own MIDI Tool files),
+  with round-trip read-back via `device_from_amxd`.
 - `midi_tool_io` block: the `live.miditool.in` / `live.miditool.out` scaffold.
 - `docs/midi_tools.md` guide.
 

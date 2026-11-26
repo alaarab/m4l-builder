@@ -40,7 +40,7 @@ def _non_chip(outlets):
 
 class TestEqCurveNoteNames:
     def test_note_name_maps_known_pitches(self):
-        # it131: frequency readouts show the nearest musical note (premium-EQ style).
+        # it131: frequency readouts show the nearest musical note.
         result = run_jsui(eq_curve_js(), """
             dump({a3: note_name(220.0), a4: note_name(440.0),
                   c4: note_name(261.63), low: note_name(0.0)});
@@ -158,7 +158,7 @@ class TestEqCurveGestures:
         assert _named(result.outlets, "delete_band") == []
 
     def test_press_on_empty_plot_creates_band(self):
-        # premium-EQ create gesture: a single plain press on the empty graph creates a
+        # Create gesture: a single plain press on the empty graph creates a
         # band (a double-click no longer creates — the single press already does).
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
@@ -172,7 +172,7 @@ class TestEqCurveGestures:
 
     def test_spectrum_grab_snaps_new_band_to_analyzer_peak(self):
         # Build an analyzer peak at 1 kHz, double-click NEAR it (850 Hz):
-        # the new band should snap onto the 1 kHz resonance (a premium-EQ grab).
+        # the new band should snap onto the 1 kHz resonance.
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
             analyzer_enabled = 1;
@@ -307,7 +307,7 @@ class TestEqCurveGestures:
             var nx = freq_to_x(800.0);
             var ny = gain_to_y(3.0);
             onpointerdown({x: nx, y: ny, buttons: 1, altKey: 1});  // arm
-            onpointerup({x: nx, y: ny, buttons: 0});               // tap -> disables (premium-EQ Alt+click)
+            onpointerup({x: nx, y: ny, buttons: 0});               // tap -> disables (Alt+click)
             var first = bands[1].enabled;
             onpointerdown({x: nx, y: ny, buttons: 1, altKey: 1});  // arm
             onpointerup({x: nx, y: ny, buttons: 0});               // tap -> re-enables
@@ -321,7 +321,7 @@ class TestEqCurveGestures:
         assert [e[2:] for e in enables] == [[1, 0], [1, 1]]
 
     def test_alt_drag_constrains_to_dominant_axis(self):
-        # premium-EQ: Alt+DRAG locks to ONE axis by the dominant initial travel. A
+        # Alt+DRAG locks to ONE axis by the dominant initial travel. A
         # horizontal-dominant alt-drag moves only frequency (gain held even though
         # the cursor also moved vertically); a vertical-dominant one moves only gain
         # (freq held). Neither toggles bypass (that's the Alt+CLICK tap).
@@ -518,7 +518,7 @@ class TestEqCurveDynamic:
 
     def test_dynamic_handle_drag_emits_band_dynamic_amount(self):
         # Dragging the dynamic ring (drag_mode 2) emits band_dynamic_amount so
-        # the product can route it to the Dyn param (the premium-EQ ring-drag).
+        # the product can route it to the Dyn param.
         result = run_jsui(eq_curve_js(), """
             set_num_bands(8);
             set_band(0, 1000.0, 6.0, 1.0, 0, 1);
@@ -869,7 +869,7 @@ class TestLevelHistoryBehavior:
 
     def test_shift_fine_adjust_ref_line(self):
         # Shift = fine-adjust: the ceiling/threshold line eases ~15% toward the
-        # cursor instead of snapping (premium-limiter/premium-comp precision placement).
+        # cursor instead of snapping (precision placement).
         plain = run_jsui(level_history_js(interactive=True, lo_db=-48, hi_db=6,
                                           ref_db=-0.3), """
             onpointerdown({y: 20, buttons: 1});

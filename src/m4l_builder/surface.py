@@ -1,6 +1,6 @@
 """Surface — the semantic device-faceplate layout engine (UI Foundations v2).
 
-The library audit found the kit had the right *primitives* (``dial_value_cell``,
+A fleet audit found the kit had the right *primitives* (``dial_value_cell``,
 ``knob_column``, the theme bus) but 16 of 17 devices still hand-wrote every
 label+dial rect — and drifted (8 dial sizes, 3 value-display strategies, hover
 values, stale widths). ``Surface`` owns that rect math. A device author
@@ -8,7 +8,7 @@ declares hero displays and labeled sections of cells; the engine computes every
 rect from the :mod:`native_sizes` cell grammar, derives the final device width
 from content (no more stale ``full_width``/dead zones), and wires the hybrid
 brand-accent theme bus (baked accent while enabled, Live "zombie" grey on
-bypass — library P1) into every dial it placed.
+bypass) into every dial it placed.
 
 Composition rules it enforces at build time (:class:`SurfaceError`):
 
@@ -205,8 +205,8 @@ class Section:
                on: str = "ON", off: str = "OFF", initial: int = 0,
                shortname: str | None = None,
                at: tuple[int, int] | None = None, **kwargs: Any) -> str:
-        """A captioned 2-state ``live.text`` cell (self-documenting enum, library
-        convention). Returns the button box id."""
+        """A captioned 2-state ``live.text`` cell (self-documenting enum).
+        Returns the button box id."""
         col, row = self._take_slot(at)
         cx, cy = self._cell_xy(col, row)
         p = f"{self.id}_{_slug(param_name)}"

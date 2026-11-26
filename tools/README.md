@@ -10,9 +10,3 @@ Regenerate these after adding, renaming, or removing public DSP blocks, recipes,
 |--------|-------------|
 | `build_catalog.py` | `uv run python tools/build_catalog.py` -> `docs/catalog.md` (full auto-generated index of DSP blocks, recipes, UI widgets, themes, engines) |
 | `build_palette.py` | `uv run python tools/build_palette.py` -> `docs/palette.md` (curated, composition-oriented tour of the kit) |
-
-## Library mining & analysis reports
-
-Not part of this repo. The reverse/library report builders (`mine_amxd_library.py`,
-`build_family_report.py`, `build_library_fixture.py`, ...) were removed with the
-reverse/library code.

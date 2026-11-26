@@ -1,7 +1,7 @@
 """Q3: beat_phase_gate framework recipe — transport beat-phase from
 plugsync~. Outlet map LIVE-PROBED (tools/probe_plugsync.py, 2026-07-03):
 0 running · 1 elapsed ms · 2 beat-in-bar · 3 BEAT PHASE 0..1 · 4 list ·
-5 tempo BPM · 6/7 counters · 8 bar. (The docs/library-inferred map was wrong;
+5 tempo BPM · 6/7 counters · 8 bar. (The docs-inferred map was wrong;
 the probe corrected it.)"""
 
 from m4l_builder import AudioEffect

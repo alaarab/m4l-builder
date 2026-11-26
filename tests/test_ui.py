@@ -180,7 +180,7 @@ class TestDial:
         assert result["box"]["presentation_rect"] == rect
 
     def test_triangle_defaults_to_zero(self):
-        # Max default + premium norm (83/85 library dials): no reset-arrow marker.
+        # Max default + premium norm: no reset-arrow marker.
         result = dial("d-1", "cutoff", [10, 10, 45, 45])
         assert result["box"]["triangle"] == 0
 
@@ -927,7 +927,7 @@ class TestNumberBox:
         assert "box" in result
 
     def test_theme_mapping_themes_body_and_text(self):
-        # live.numbox body = activebgcolor, text = bare
+        # live.numbox body = activebgcolor (not bare bgcolor), text = bare
         # textcolor (no active twin). Each colour is mode-specific so all map safely.
         from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
         tm = DEVICE_WIDGET_SPECS["number_box"].theme_mapping
@@ -975,7 +975,7 @@ class TestNumberBox:
         assert valueof["parameter_unitstyle"] == 1
 
     def test_appearance_defaults_to_lcd(self):
-        # kit default = appearance 4 (LCD) — the dominant premium numbox look AND the
+        # kit default = appearance 4 (LCD) — the premium numbox look AND the
         # mode the themed lcd* colours render in (unset default left them DEAD).
         result = number_box("nb-1", "velocity", [0, 0, 44, 15])
         assert result["box"]["appearance"] == 4
@@ -1225,16 +1225,16 @@ class TestLiveText:
 
     def test_automation_labels_mirror_enum(self):
         # Live's display/automation labels for live.text come from the
-        # BOX-level automation/automationon attrs (library: premium EQs/channel-strip
-        # devices) — parameter_enum alone leaves "val1"/"val2" showing in
-        # Live's LOM display_value, automation lanes and MIDI map.
+        # BOX-level automation/automationon attrs — parameter_enum alone leaves
+        # "val1"/"val2" showing in Live's LOM display_value, automation lanes
+        # and MIDI map.
         result = live_text("lt-1", "bypass", [0, 0, 60, 20],
                             text_on="ACTIVE", text_off="BYPASS")
         assert result["box"]["automation"] == "BYPASS"
         assert result["box"]["automationon"] == "ACTIVE"
 
     def test_info_view_annotations_default_to_longname(self):
-        # Official-adopt 2: every UI param box carries annotation_name +
+        # Every UI param box carries annotation_name +
         # annotation (Live Info View) — defaulting to the param longname.
         result = live_text("lt-1", "bypass", [0, 0, 60, 20])
         assert result["box"]["annotation_name"] == "bypass"
@@ -1467,7 +1467,7 @@ class TestFunction:
         assert box["numoutlets"] == 4
 
     def test_outlettype_is_float_bang(self):
-        # LIBRARY (all 20): float on outlet 0, bang on outlet 3
+        # float on outlet 0, bang on outlet 3
         assert function("fn-1", [0, 0, 100, 50])["box"]["outlettype"] == [
             "float", "", "", "bang"]
 
@@ -1491,7 +1491,7 @@ class TestFunction:
         assert "parameter_enable" not in box   # opt-in
 
     def test_data_store_mode_no_presentation(self):
-        # presentation=0 = the library-style patching-layer curve-DATA store
+        # presentation=0 = a patching-layer curve-DATA store
         box = function("fn-1", [0, 0, 100, 50], presentation=0)["box"]
         assert "presentation" not in box
         assert "presentation_rect" not in box
@@ -1554,9 +1554,8 @@ class TestFpic:
         result = fpic("fp-1", [0, 0, 100, 100])
         assert result["box"]["outlettype"] == ["jit_matrix"]
 
-    def test_library_attrs_set_when_provided(self):
-        # MEASURED library attrs the prior stub omitted (forceaspect 33/35,
-        # embed 17/35, hidden 23/35, background 1/35)
+    def test_optional_attrs_set_when_provided(self):
+        # attrs the prior stub omitted (forceaspect, embed, hidden, background)
         box = fpic("fp-1", [0, 0, 100, 100], pic="algo1.svg", forceaspect=1,
                    embed=1, hidden=1, background=1)["box"]
         assert box["forceaspect"] == 1
@@ -1564,7 +1563,7 @@ class TestFpic:
         assert box["hidden"] == 1       # stacked SVG state-graphic, revealed by patch
         assert box["background"] == 1
 
-    def test_library_attrs_not_set_by_default(self):
+    def test_optional_attrs_not_set_by_default(self):
         box = fpic("fp-1", [0, 0, 100, 100])["box"]
         for attr in ("forceaspect", "embed", "hidden", "background"):
             assert attr not in box
@@ -1689,7 +1688,7 @@ class TestMultislider:
         assert result["box"]["custom_ms"] is True
 
     def test_display_preset_is_the_verified_meter(self):
-        # 4/5 library multisliders are ghostbar + ignoreclick displays
+        # the display preset is a ghostbar + ignoreclick meter
         box = multislider("ms-1", [0, 0, 100, 50], display=True)["box"]
         assert box["ghostbar"] == 1
         assert box["ignoreclick"] == 1
@@ -1828,7 +1827,7 @@ class TestAdsrui:
         assert result["box"]["presentation_rect"] == rect
 
     def test_numinlets_is_10(self):
-        # LIBRARY (2/2): live.adsrui is 10-in / 10-out (was wrongly 1/4)
+        # live.adsrui is 10-in / 10-out (was wrongly 1/4)
         result = adsrui("adsr-1", [0, 0, 200, 80])
         assert result["box"]["numinlets"] == 10
 
@@ -2074,7 +2073,7 @@ class TestSwatch:
         assert result["box"]["presentation_rect"] == rect
 
     def test_numinlets_is_3(self):
-        # LIBRARY: swatch is 3-in / 2-out (the stub's 1/4 was guessed)
+        # swatch is 3-in / 2-out (the stub's 1/4 was guessed)
         result = swatch("sw-1", [0, 0, 40, 20])
         assert result["box"]["numinlets"] == 3
 
@@ -2140,7 +2139,7 @@ class TestTextedit:
         assert result["box"]["numoutlets"] == 4
 
     def test_outlettype_correct(self):
-        # LIBRARY (all 4 instances): the int outlet is outlet 1, not outlet 3.
+        # The int outlet is outlet 1, not outlet 3.
         result = textedit("te-1", [0, 0, 150, 25])
         assert result["box"]["outlettype"] == ["", "int", "", ""]
 
@@ -2193,8 +2192,8 @@ class TestTextedit:
         result = textedit("te-1", [0, 0, 150, 25], custom_attr="hello")
         assert result["box"]["custom_attr"] == "hello"
 
-    def test_library_attrs_set_when_provided(self):
-        # MEASURED library attrs the prior stub omitted
+    def test_optional_attrs_set_when_provided(self):
+        # attrs the prior stub omitted
         box = textedit("te-1", [0, 0, 150, 25], text="0", keymode=1, tabmode=0,
                        border=0.0, rounded=0.0, textjustification=1)["box"]
         assert box["text"] == "0"
@@ -2210,7 +2209,7 @@ class TestTextedit:
         assert textedit("te", [0, 0, 9, 9], parameter_enable=1)["box"][
             "parameter_enable"] == 1
 
-    def test_library_attrs_not_set_by_default(self):
+    def test_optional_attrs_not_set_by_default(self):
         box = textedit("te-1", [0, 0, 150, 25])["box"]
         for attr in ("text", "keymode", "tabmode", "border", "rounded",
                      "textjustification", "parameter_enable"):
@@ -2224,7 +2223,7 @@ class TestTextedit:
 
 
 class TestLiveStep:
-    """Tests for live_step() — library-measured (4 lanes)."""
+    """Tests for live_step()."""
 
     def test_returns_box_dict(self):
         result = live_step("ls-1", [0, 0, 300, 100])
@@ -2252,7 +2251,7 @@ class TestLiveStep:
         assert result["box"]["numinlets"] == 1
 
     def test_numoutlets_is_5(self):
-        # library: 5 lane-data outlets (pitch/velocity/duration/extra1/extra2)
+        # 5 lane-data outlets (pitch/velocity/duration/extra1/extra2)
         result = live_step("ls-1", [0, 0, 300, 100])
         assert result["box"]["numoutlets"] == 5
 
@@ -2261,8 +2260,8 @@ class TestLiveStep:
         assert result["box"]["outlettype"] == ["", "", "", "", ""]
 
     def test_no_hallucinated_attrs(self):
-        # REGRESSION: nstep/nseq/loop_start/loop_end were guessed; no real library
-        # live.step has them (step count lives in the parameter_type=3 Blob).
+        # REGRESSION: nstep/nseq/loop_start/loop_end were guessed; a real live.step
+        # has none of them (step count lives in the parameter_type=3 Blob).
         box = live_step("ls-1", [0, 0, 300, 100])["box"]
         for attr in ("nstep", "nseq", "loop_start", "loop_end"):
             assert attr not in box
@@ -2326,7 +2325,7 @@ class TestLiveStep:
         from m4l_builder.ui_registry import DEVICE_WIDGET_SPECS
         tm = DEVICE_WIDGET_SPECS["live_step"].theme_mapping
         assert tm["stepcolor"] == "accent"
-        assert tm["stepcolor2"] == "accent2"   # second step colour (solid, library 4/4)
+        assert tm["stepcolor2"] == "accent2"   # second step colour (solid)
         assert tm["bgcolor"] == "bg"
         assert tm["bordercolor"] == "panel_border"
         # alpha-wash attrs are NOT token-mapped (a solid colour would mis-render them)
@@ -2334,7 +2333,7 @@ class TestLiveStep:
 
 
 class TestLiveGrid:
-    """Tests for live_grid() — library-measured (12×12, 32×32)."""
+    """Tests for live_grid()."""
 
     def test_returns_box_dict(self):
         result = live_grid("lg-1", [0, 0, 200, 100])
@@ -2358,12 +2357,12 @@ class TestLiveGrid:
         assert result["box"]["presentation_rect"] == rect
 
     def test_numinlets_is_2(self):
-        # library FIX: live.grid has 2 inlets (the stub said 1)
+        # FIX: live.grid has 2 inlets (the stub said 1)
         result = live_grid("lg-1", [0, 0, 200, 100])
         assert result["box"]["numinlets"] == 2
 
     def test_numoutlets_is_6(self):
-        # library FIX: live.grid has 6 outlets (the stub said 4)
+        # FIX: live.grid has 6 outlets (the stub said 4)
         result = live_grid("lg-1", [0, 0, 200, 100])
         assert result["box"]["numoutlets"] == 6
 
@@ -2431,7 +2430,7 @@ class TestLiveGrid:
         tm = DEVICE_WIDGET_SPECS["live_grid"].theme_mapping
         assert tm["stepcolor"] == "accent"
         assert tm["bgstepcolor"] == "section"
-        assert tm["bordercolor2"] == "panel_border"   # second border (solid, library 2/2)
+        assert tm["bordercolor2"] == "panel_border"   # second border (solid)
         assert tm["directioncolor"] == "accent2"
         # alpha-wash attrs (hover/amount washes) are deliberately NOT token-mapped
         assert "hbgcolor" not in tm and "amountcolor" not in tm
@@ -2941,7 +2940,7 @@ class TestUmenu:
         assert result["box"]["custom_attr"] == "val"
 
     def test_display_preset_is_the_verified_readout(self):
-        # the measured library pattern: ignoreclick=1, arrow=0, allowdrag=0
+        # the display pattern: ignoreclick=1, arrow=0, allowdrag=0
         box = umenu("um-1", [0, 0, 120, 22], display=True)["box"]
         assert box["ignoreclick"] == 1
         assert box["arrow"] == 0
@@ -2966,9 +2965,9 @@ class TestUmenu:
         assert "ignoreclick" not in box and "arrow" not in box
 
     def test_bgcolor_mirrors_into_flat_bgfillcolor(self):
-        # a umenu's RENDERED fill is bgfillcolor (type "color"), not bare bgcolor —
-        # library-measured 25/25 keep bgfillcolor_color == bgcolor. So a themed bg must
-        # be mirrored or the readout draws Max's default fill and ignores the theme.
+        # a umenu's RENDERED fill is bgfillcolor (type "color"), not bare bgcolor,
+        # and bgfillcolor_color must equal bgcolor. So a themed bg must be
+        # mirrored or the readout draws Max's default fill and ignores the theme.
         fill = [0.12, 0.13, 0.15, 1.0]
         box = umenu("um-1", [0, 0, 120, 22], bgcolor=fill)["box"]
         assert box["bgfillcolor_type"] == "color"
@@ -3206,8 +3205,8 @@ class TestMatrixctrl:
         result = matrixctrl("mc-1", [0, 0, 120, 120], custom_attr="val")
         assert result["box"]["custom_attr"] == "val"
 
-    def test_autosize_defaults_to_library_norm(self):
-        # 6/7 library matrixctrls + the Max default = autosize 1 (cells fit the rect)
+    def test_autosize_defaults_to_1(self):
+        # the Max default = autosize 1 (cells fit the rect)
         result = matrixctrl("mc-1", [0, 0, 120, 120])
         assert result["box"]["autosize"] == 1
 
@@ -3263,7 +3262,7 @@ class TestUbutton:
         assert result["box"]["numoutlets"] == 4
 
     def test_outlettype(self):
-        # OFFICIAL LIBRARY (43/43): outlet 1 is a down-bang (was wrongly "")
+        # outlet 1 is a down-bang (was wrongly "")
         result = ubutton("ub-1", [0, 0, 60, 60])
         assert result["box"]["outlettype"] == ["bang", "bang", "", "int"]
 
@@ -3407,7 +3406,7 @@ def test_filtergraph_compiled_object_io_override():
 
 
 class TestFiltergraphGrounded:
-    """filtergraph~ corrected to the official-library structure (11 instances)."""
+    """filtergraph~ corrected to its real structure."""
 
     def test_default_io_is_8_in_7_out(self):
         box = filtergraph("fg", [0, 0, 300, 120])["box"]
@@ -3419,7 +3418,7 @@ class TestFiltergraphGrounded:
         assert box["outlettype"] == ["list", "float", "float", "float", "float",
                                      "list", "int"]
 
-    def test_library_attrs_set_when_provided(self):
+    def test_optional_attrs_set_when_provided(self):
         box = filtergraph("fg", [0, 0, 300, 120], domain=[20.0, 22050.0],
                           value_range=[0.0725, 4.0], nfilters=1,
                           setfilter=[0, 6, 0], logmarkers=[50.0, 500.0, 5000.0],
@@ -3475,7 +3474,7 @@ class TestTwoAccentInvariant:
 
 
 class TestSnapRect:
-    """Official-adopt 4: layout containers emit whole-integer pixel rects
+    """Layout containers emit whole-integer pixel rects
     (fractional presentation_rects render blurry/off-grid in Live)."""
 
     def test_snap_rect_rounds_components(self):

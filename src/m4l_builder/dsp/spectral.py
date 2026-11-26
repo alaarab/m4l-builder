@@ -315,8 +315,7 @@ def phase_vocoder_subpatcher() -> dict:
 
 
 def pitch_shift_gizmo_subpatcher(fft_size: int = 2048) -> dict:
-    """pfft~ subpatcher for gizmo~ spectral pitch shift (T36/Q19 — the
-    M4L Building Blocks pitch-shift block).
+    """pfft~ subpatcher for gizmo~ spectral pitch shift (T36/Q19).
 
     fftin~ 1 -> gizmo~ -> fftout~ 1; the transposition RATIO arrives as a
     float through ``in 2`` into gizmo~'s RIGHT (third) inlet — the pitch

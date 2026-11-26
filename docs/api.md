@@ -75,10 +75,6 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 
 `Device.from_amxd(path)` -- Class method. Parse a .amxd file into a Device (AudioEffect, Instrument, or MidiEffect based on type code). Works on `AudioEffect.from_amxd()` too.
 
-### analysis and library mining
-
-Not part of this package. `Device.from_amxd` is the only reader m4l-builder keeps.
-
 ### Layout shortcuts
 
 `device.row(x, y, *, spacing=8, height=None, width=None)` -- Returns a Row context manager
