@@ -6,6 +6,7 @@ Installed as the ``m4l`` console script (also ``python -m m4l_builder``)::
     m4l new "My Gain" --type audio     # scaffold my_gain/build.py
     m4l build my_gain/build.py         # run it; --out redirects the .amxd
     m4l watch my_gain/build.py         # rebuild into the User Library on save
+    m4l watch my_gain/build.py --live  # ...and swap it into the open Live set
     m4l lint my_gain/build.py          # validation + box lint + GenExpr lint
     m4l preview my_gain/build.py       # render the presentation view to SVG
     m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
@@ -39,6 +40,13 @@ from pathlib import Path
 from typing import Any
 
 from .device import Device
+from .live_reload import (
+    DEFAULT_PORT,
+    LiveClient,
+    LiveCommandError,
+    LiveUnavailable,
+    reload_device,
+)
 
 __all__ = ["main", "run_build_script", "device_summary", "lint_device", "ScriptBuild"]
 
@@ -725,17 +733,72 @@ def _cmd_render(args) -> int:
     return 0
 
 
-def watch(script: str | os.PathLike, *, out: str | None = None, interval: float = 0.5) -> int:
+class _LiveReloader:
+    """``watch --live``: after each build, swap the device into the open set.
+
+    Never raises: when LiveMCP is unreachable it says so once and the watch
+    keeps rebuilding, then picks Live back up on a later save.
+    """
+
+    def __init__(self, client: LiveClient) -> None:
+        self.client = client
+        self.reachable: bool | None = None
+
+    def check(self) -> None:
+        try:
+            self.client.call("get_session_info")
+        except LiveUnavailable as exc:
+            self._unreachable(exc)
+        else:
+            self.reachable = True
+            print(f"live: connected to LiveMCP on {self.client.host}:{self.client.port}",
+                  flush=True)
+
+    def reload(self, written_path: str) -> None:
+        try:
+            result = reload_device(self.client, written_path)
+        except LiveUnavailable as exc:
+            self._unreachable(exc)
+            return
+        except (LiveCommandError, ValueError) as exc:
+            print(f"           live: not reloaded: {exc}")
+            return
+        except Exception as exc:  # an odd reply must not end the watch
+            print(f"           live: not reloaded: {type(exc).__name__}: {exc}")
+            return
+        if self.reachable is False:
+            print("           live: LiveMCP is back")
+        self.reachable = True
+        print(f"           live: {result.summary()}")
+        for warning in result.warnings:
+            print(f"           live: {warning}")
+
+    def _unreachable(self, exc: LiveUnavailable) -> None:
+        if self.reachable is False:
+            print("           live: still can't reach LiveMCP; built only")
+        else:
+            print(f"live: {exc}\nlive: builds carry on and the next save tries Live again",
+                  flush=True)
+        self.reachable = False
+
+
+def watch(script: str | os.PathLike, *, out: str | None = None, interval: float = 0.5,
+          live: bool = False, live_port: int = DEFAULT_PORT) -> int:
     """Rebuild ``script`` every time its mtime changes, until Ctrl-C.
 
     Each build goes to the User Library (``device_output_path``) unless ``out``
     names a directory or ``.amxd`` file, and prints what changed since the last
-    build. A script that raises reports the error and keeps watching.
+    build. A script that raises reports the error and keeps watching. With
+    ``live``, each build is also swapped into the open Live set through
+    LiveMCP (see :mod:`m4l_builder.live_reload`).
     """
     path = Path(script)
     previous: dict[str, dict] = {}
     last_mtime: float | None = None
+    reloader = _LiveReloader(LiveClient(port=live_port)) if live else None
     print(f"watching {path} (Ctrl-C to stop)", flush=True)
+    if reloader:
+        reloader.check()
     try:
         while True:
             try:
@@ -744,14 +807,18 @@ def watch(script: str | os.PathLike, *, out: str | None = None, interval: float 
                 mtime = None
             if mtime is not None and mtime != last_mtime:
                 last_mtime = mtime
-                _rebuild(path, out, previous)
+                _rebuild(path, out, previous, reloader)
             time.sleep(interval)
     except KeyboardInterrupt:
         print("stopped")
+    finally:
+        if reloader:
+            reloader.client.close()
     return 0
 
 
-def _rebuild(path: Path, out: str | None, previous: dict[str, dict]) -> None:
+def _rebuild(path: Path, out: str | None, previous: dict[str, dict],
+             reloader: _LiveReloader | None = None) -> None:
     stamp = time.strftime("%H:%M:%S")
     redirect = _out_redirect(out) if out else _user_library_target
     try:
@@ -767,11 +834,14 @@ def _rebuild(path: Path, out: str | None, previous: dict[str, dict]) -> None:
         for change in diff_summaries(previous.get(key), summary):
             print(f"           {change}")
         previous[key] = summary
+        if reloader and record.written_path:
+            reloader.reload(record.written_path)
     sys.stdout.flush()
 
 
 def _cmd_watch(args) -> int:
-    return watch(args.script, out=args.out, interval=args.interval)
+    return watch(args.script, out=args.out, interval=args.interval,
+                 live=args.live, live_port=args.live_port)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -797,6 +867,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", help="write here instead of the User Library")
     p.add_argument("--interval", type=float, default=0.5,
                    help="seconds between checks (default: 0.5)")
+    p.add_argument("--live", action="store_true",
+                   help="also swap each build into the open Live set (needs LiveMCP)")
+    p.add_argument("--live-port", type=int, default=DEFAULT_PORT,
+                   help=f"LiveMCP port (default: {DEFAULT_PORT})")
     p.set_defaults(func=_cmd_watch)
 
     p = sub.add_parser("lint", help="validate a build script or .amxd without writing")

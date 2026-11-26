@@ -63,7 +63,7 @@ written to the User Library. `--out` redirects the write:
 ## `m4l watch`
 
 ```bash
-m4l watch SCRIPT [--out PATH] [--interval SECONDS]
+m4l watch SCRIPT [--out PATH] [--interval SECONDS] [--live [--live-port PORT]]
 ```
 
 Checks the script's modification time (every 0.5 s by default) and rebuilds
@@ -84,6 +84,38 @@ watching my_gain/build.py (Ctrl-C to stop)
 A script that raises prints the error and the watch carries on, so a
 half-typed edit doesn't end the session. Only the script file itself is
 watched; restart the watch after editing a helper module it imports.
+
+### Hot reload into Live: `--live`
+
+With `--live`, each build is also swapped into the Live set you have open, so
+you hear the change a moment after you save:
+
+```text
+watching my_gain/build.py (Ctrl-C to stop)
+live: connected to LiveMCP on 127.0.0.1:9877
+[14:03:40] built My Gain -> ~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/My Gain.amxd
+           + parameter: Drive
+           live: My Gain: swapped 1 copy in place, restored 1 parameter values in 0.62s
+```
+
+It needs [LiveMCP](https://github.com/alaarab/livemcp)'s remote script
+running in Live (Preferences > Link, Tempo & MIDI > Control Surface: LiveMCP).
+For each build it:
+
+- finds every Max device on the set's tracks with the device's name and puts
+  the new build in the same slot on the same track (LiveMCP's `replace_device`;
+  older LiveMCP versions load it beside the old copy and delete the old one);
+- restores parameter values by name, clamped to the new ranges. A parameter
+  you renamed or removed keeps its new default, and the watch says which;
+- loads the device onto the selected track if it isn't in the set yet.
+
+Live loads devices from its browser, so the build has to land in the User
+Library: the default output, or an `--out` folder inside it. A copy you
+renamed in Live is left alone. Devices inside racks aren't reloaded.
+
+If Live or LiveMCP isn't running, the watch says so once and keeps building;
+the next save after Live comes back reloads again. `--live-port` changes the
+port (default 9877). From Python, use `m4l_builder.live_reload.reload_device`.
 
 ## `m4l lint`
 

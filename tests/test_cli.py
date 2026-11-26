@@ -293,3 +293,84 @@ def test_watch_rebuilds_on_save_reports_changes_and_survives_errors(
     assert "+ parameter: Drive" in out
     assert "build failed: RuntimeError: half-typed edit" in out
     assert out.rstrip().endswith("stopped")
+
+
+# -- watch --live ---------------------------------------------------------- #
+
+def _free_port() -> int:
+    import socket
+
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    return port
+
+
+def _watch_two_saves(tmp_path, monkeypatch, argv_extra):
+    script = _write(tmp_path / "build.py", """
+        from m4l_builder import WARM, AudioEffect
+        device = AudioEffect("Live One", 120, 100, theme=WARM)
+        device.add_panel("bg", [0, 0, 120, 100])
+        device.build("Live One.amxd")
+    """)
+    edits = [script.read_text() + "\n# saved again\n"]
+
+    def save_next_edit(_interval):
+        if not edits:
+            raise KeyboardInterrupt
+        script.write_text(edits.pop(0))
+        stat = script.stat()
+        os.utime(script, (stat.st_atime, stat.st_mtime + 5))
+
+    monkeypatch.setattr(cli.time, "sleep", save_next_edit)
+    return main(["watch", str(script), *argv_extra])
+
+
+def test_watch_live_without_livemcp_says_so_and_keeps_building(
+        tmp_path, user_library, monkeypatch, capsys):
+    port = _free_port()
+    assert _watch_two_saves(tmp_path, monkeypatch, ["--live", "--live-port", str(port)]) == 0
+    out = capsys.readouterr().out
+    assert out.count("built Live One ->") == 2
+    assert f"can't reach LiveMCP at 127.0.0.1:{port}" in out
+    assert out.count("Is Live open") == 1  # the full message once, then a short one
+    assert "still can't reach LiveMCP; built only" in out
+    assert out.rstrip().endswith("stopped")
+
+
+def test_watch_live_reloads_each_written_build(tmp_path, user_library, monkeypatch, capsys):
+    from m4l_builder.live_reload import ReloadResult
+
+    reloaded = []
+
+    def fake_reload(client, path):
+        reloaded.append(path)
+        return ReloadResult("Live One", "replace_device", [(0, 1)], restored=2, seconds=0.4,
+                            warnings=["track 1: not restored (gone or not loaded yet): Drive"])
+
+    monkeypatch.setattr(cli.LiveClient, "call", lambda self, command, params=None: {})
+    monkeypatch.setattr(cli, "reload_device", fake_reload)
+    assert _watch_two_saves(tmp_path, monkeypatch, ["--live"]) == 0
+
+    out = capsys.readouterr().out
+    built = user_library / "Presets/Audio Effects/Max Audio Effect/Live One.amxd"
+    assert reloaded == [str(built), str(built)]
+    assert "live: connected to LiveMCP on 127.0.0.1:9877" in out
+    assert out.count("live: Live One: swapped 1 copy in place, restored 2 parameter values in 0.40s") == 2
+    assert "live: track 1: not restored (gone or not loaded yet): Drive" in out
+
+
+def test_watch_live_reports_a_refused_reload_and_carries_on(
+        tmp_path, user_library, monkeypatch, capsys):
+    from m4l_builder.live_reload import LiveCommandError
+
+    def refusing(client, path):
+        raise LiveCommandError("replace_device: Browser item not found")
+
+    monkeypatch.setattr(cli.LiveClient, "call", lambda self, command, params=None: {})
+    monkeypatch.setattr(cli, "reload_device", refusing)
+    assert _watch_two_saves(tmp_path, monkeypatch, ["--live"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("live: not reloaded: replace_device: Browser item not found") == 2
+    assert out.rstrip().endswith("stopped")
