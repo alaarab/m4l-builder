@@ -125,9 +125,8 @@ DEVICE_WIDGET_SPECS = {
     "scope": DeviceWidgetSpec(
         scope,
         # live.scope~ is a display: its trace color is the BARE linecolor (the
-        # color you always see), like the meter — NOT activelinecolor. Verified
-        # across the whole real-device library: only linecolor,
-        # gridcolor, bgcolor are ever used; activelinecolor appears nowhere, so
+        # color you always see), like the meter — NOT activelinecolor. Only
+        # linecolor, gridcolor and bgcolor render; activelinecolor does nothing, so
         # the old mapping left themed scope traces Live-default.
         theme_mapping={
             "bgcolor": "scope_bgcolor",
@@ -139,24 +138,24 @@ DEVICE_WIDGET_SPECS = {
         plot,
         theme_mapping={"bgcolor": "scope_bgcolor"},
     ),
-    # filtergraph~: the freq grid is markercolor (NOT gridcolor —
+    # filtergraph~ (observed): the freq grid is markercolor (NOT gridcolor —
     # that was dead); response curve = accent, highlighted curve = accent2.
     "filtergraph": DeviceWidgetSpec(
         filtergraph,
         theme_mapping={"bgcolor": "scope_bgcolor", "markercolor": "grid_color",
                        "curvecolor": "accent", "hcurvecolor": "accent2"},
     ),
-    # function: native breakpoint/curve editor; library uses it as a patching-layer
+    # function: native breakpoint/curve editor; typically used as a patching-layer
     # curve-DATA store (no presentation, no colors) so it carries no theme_mapping.
     "function": DeviceWidgetSpec(function),
-    # waveform~: buffer~ display + drag-select. Trace = accent,
+    # waveform~ (observed): buffer~ display + drag-select. Trace = accent,
     # selection highlight = accent2, display bg/grid from the scope tokens.
     "waveform": DeviceWidgetSpec(
         waveform,
         theme_mapping={"waveformcolor": "accent", "selectioncolor": "accent2",
                        "bgcolor": "scope_bgcolor", "gridcolor": "grid_color"},
     ),
-    # spectrumdraw~: multi-trace FFT display. Primary trace =
+    # spectrumdraw~ (observed): multi-trace FFT display. Primary trace =
     # accent, the comparison trace = accent2, display bg = scope bg.
     "spectrumdraw": DeviceWidgetSpec(
         spectrumdraw,
@@ -171,13 +170,13 @@ DEVICE_WIDGET_SPECS = {
             "hotcolor": "meter_hot",
             "overloadcolor": "meter_over",
             # The UNLIT segments. live.gain~/meter~ have inactive twins ONLY for cold &
-            # warm (no inactivehotcolor — hot/overload only show when triggered). Library
-            # sets these to a mid-grey ~0.5 = the text_dim token, so the
+            # warm (no inactivehotcolor — hot/overload only show when triggered). Set
+            # these to a mid-grey ~0.5 = the text_dim token, so the
             # meter track reads as a consistent dim rail instead of Live-default grey.
             "inactivecoldcolor": "text_dim",
             "inactivewarmcolor": "text_dim",
             # slidercolor = the meter's recessed BACKGROUND rail (live.gain~ maxref:
-            # "the slider background color"). Library live.meter~ sets it dark ~0.098 (≈
+            # "the slider background color"). Set it dark ~0.098 (≈
             # the surface token, NOT the accent), so the channel behind the segments
             # matches the panel instead of Live-default grey. live_gain themes this too.
             "slidercolor": "surface",
@@ -185,14 +184,13 @@ DEVICE_WIDGET_SPECS = {
     ),
     "menu": DeviceWidgetSpec(
         menu,
-        # live.menu has its OWN colour model: the
+        # live.menu has its OWN colour model (NOT live.tab's): the
         # factory routes bgoncolor -> hltcolor (highlighted item bg) and textoncolor ->
         # hlttextcolor (highlighted item TEXT). We feed the tab accent tokens so the
         # highlighted item matches the selected tab: bg = tab_bg_on (accent2), and its
         # TEXT = tab_text_on. Without the textoncolor mapping the highlighted item's text
-        # stayed Live-default over the accent highlight (often illegible) — the library
-        # themes hlttextcolor (6/25 menus), and the tab already maps all four colours;
-        # this brings live.menu to parity.
+        # stayed Live-default over the accent highlight (often illegible). The tab
+        # already maps all four colours; this brings live.menu to parity.
         theme_mapping={"bgcolor": "tab_bg", "bgoncolor": "tab_bg_on",
                        "textcolor": "tab_text", "textoncolor": "tab_text_on"},
         parameter_arg_index=0,
@@ -204,8 +202,8 @@ DEVICE_WIDGET_SPECS = {
         # lcd* only at appearance=4 (the dominant premium look), activeslidercolor only at
         # appearance=2 (Slider), activebgcolor is the BODY bg for the non-LCD modes (0/1/3).
         # Setting an off-mode colour is harmless (not rendered), so theme them all
-        # unconditionally — library-grounded: numboxes use activebgcolor (30) + bare textcolor
-        # (41), never bare bgcolor (0); 17 library numboxes set activebgcolor AND lcd together.
+        # unconditionally — numboxes use activebgcolor + bare textcolor, never bare
+        # bgcolor; set activebgcolor AND the lcd colours together.
         theme_mapping={
             "activebgcolor": "surface",
             "activeslidercolor": "dial_color",
@@ -222,7 +220,7 @@ DEVICE_WIDGET_SPECS = {
         # BARE slidercolor (no active twin, unlike live.numbox which DOES have
         # activeslidercolor). Mapping the non-existent active attr left themed
         # sliders Live-grey; slidercolor is the real fill. textcolor = the value
-        # readout (doc-confirmed, set by 14/14 reference channel-strip sliders) — theme it
+        # readout (doc-confirmed) — theme it
         # too or the digits render Live-default. The mod/automation triangle trio
         # (tricolor/trioncolor/tribordercolor) is left to Live's modulation colour.
         theme_mapping={"slidercolor": "dial_color", "textcolor": "text"},
@@ -267,12 +265,12 @@ DEVICE_WIDGET_SPECS = {
         },
         parameter_arg_index=0,
     ),
-    # Verified library multislider colors: slidercolor=the bars (accent), bgcolor=backdrop.
+    # Verified multislider colors: slidercolor=the bars (accent), bgcolor=backdrop.
     "multislider": DeviceWidgetSpec(
         multislider,
         theme_mapping={"slidercolor": "accent", "bgcolor": "bg"},
     ),
-    # live.adsrui: the active* colors are what render; the line +
+    # live.adsrui (observed): the active* colors are what render; the line +
     # handles take accent, the display bg the scope bg.
     "adsrui": DeviceWidgetSpec(
         adsrui,
@@ -288,17 +286,17 @@ DEVICE_WIDGET_SPECS = {
     ),
     "bpatcher": DeviceWidgetSpec(bpatcher),
     "swatch": DeviceWidgetSpec(swatch),
-    # textedit: editable text/numeric field; transparent bg +
-    # colored text in the library. Theme the text + field bg.
+    # textedit (observed): editable text/numeric field; usually a transparent bg +
+    # colored text. Theme the text + field bg.
     "textedit": DeviceWidgetSpec(
         textedit,
         theme_mapping={"textcolor": "text", "bgcolor": "section"},
     ),
-    # Library-measured Blob-param sequencers (not in synced docs). step bars / lit
+    # Blob-param sequencers (not in synced docs). step bars / lit
     # cell = accent; backdrop = bg/section; border = panel_border; grid direction
     # strip = accent2.
-    # live.step / live.grid (sequencer lanes, no synced doc — grounded on measured
-    # Max device conventions). Map only the SOLID (alpha=1.0) attrs to tokens:
+    # live.step / live.grid (sequencer lanes, no synced doc — grounded on observed
+    # Max behaviour). Map only the SOLID (alpha=1.0) attrs to tokens:
     # the lit step (stepcolor=accent) + second step (stepcolor2=accent2), the grid
     # direction arrow (directioncolor=accent2) and the two borders. ⚠️ The PREMIUM look
     # also uses ALPHA-FADED washes a solid token CANNOT express — the zebra (bgstepcolor
@@ -318,8 +316,8 @@ DEVICE_WIDGET_SPECS = {
     ),
     "live_line": DeviceWidgetSpec(
         live_line,
-        # live.line is a divider; its ONLY style attr is linecolor (verified across
-        # the library: 40 uses, no thickness/orientation attrs — orientation is
+        # live.line is a divider; its ONLY style attr is linecolor (no
+        # thickness/orientation attrs — orientation is
         # implicit from the rect aspect). Theme it to the subtle panel border so
         # dividers aren't a stray Live-default line. Was unthemed.
         theme_mapping={"linecolor": "panel_border"},
@@ -337,15 +335,15 @@ DEVICE_WIDGET_SPECS = {
         textbutton,
         theme_mapping={"bgcolor": "surface", "bgoncolor": "accent", "textcolor": "text"},
     ),
-    # umenu is non-parameter; in the library it's a styled read-only display, so it
-    # only needs bg + text colors (no on-state). Verified attrs from 25/26 library umenus.
+    # umenu is non-parameter; typically a styled read-only display, so it
+    # only needs bg + text colors (no on-state).
     "umenu": DeviceWidgetSpec(
         umenu,
         theme_mapping={"bgcolor": "tab_bg", "textcolor": "tab_text"},
     ),
     "radiogroup": DeviceWidgetSpec(radiogroup),
     "nodes": DeviceWidgetSpec(nodes),
-    # Verified cell-color attrs from library matrixctrl: color=ON cell (accent),
+    # Verified matrixctrl cell-color attrs: color=ON cell (accent),
     # elementcolor=OFF cell, bgcolor=backdrop.
     "matrixctrl": DeviceWidgetSpec(
         matrixctrl,

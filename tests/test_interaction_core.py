@@ -187,7 +187,7 @@ class TestMigratedEnginesContainExpectedSharedBlocks:
 GOLDEN_SHA256 = {
     "ballistics_curve_js": ("c51c9943187efe5551d0167632a350734c047e33ab961f21e5dd1dbf83729f46", 12357),
     "delay_trail_js": ("db52b252ed497f14515a932eaa97b547063056f3ba36e856c4a4f53d3f098fd9", 37858),
-    "eq_curve_js": ("6b53347417b5c3c187e5b5b663e9fdf22677a1c1aec11e6226fc6ee3a2e259e9", 130435),
+    "eq_curve_js": ("1a19a3660a5834da0cd809fbde081f7f823d8821c72fdc2530683374f71b9383", 130388),
     "exciter_curve_js": ("497f90e209a10514d61ee7861a1e9abc3853ad69491aeb01a98e85e8630287cc", 19581),
     # Bumped 2026-08-01: level_history carries BYPASS_DIM_JS + the paint scrim
     # (same treatment as transfer_curve; inert until add_bypass_dim is wired).
@@ -195,7 +195,7 @@ GOLDEN_SHA256 = {
     "level_meter_js": ("4ae60d290ee6cec9499ab61844106a08497d26c8c40ca9a7781a1bfd81e5387c", 5408),
     # Updated 2026-09-11: added the missing DISPLAY_FLOOR and TYPE_ALLPASS
     # declarations that graph_core requires (both were ReferenceErrors).
-    "linear_phase_eq_display_js": ("8e94b6d0def7a5584a68cef6f0ea9552db5d77368482d9bd062ef9ca945bf84a", 94476),
+    "linear_phase_eq_display_js": ("4d7dee9222dae14aad7048d02365ff60def03f4abddc8c8afc54b04c91fe332b", 94455),
     "loop_filter_curve_js": ("083b0e76b60ea1fd70a6780c5c336f318ea41d29887d6e1372a151ed8c4689f9", 10029),
     # Bumped 2026-08-01: transfer_curve now carries BYPASS_DIM_JS and calls
     # paint_bypass_scrim() at the end of paint(). Inert until a device wires

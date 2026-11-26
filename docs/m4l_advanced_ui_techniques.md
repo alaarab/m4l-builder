@@ -182,8 +182,7 @@ animated, "looks-expensive" UI:
 - **Arbitrary polygons + real hit-testing** — build a path with `move_to`/`line_to`,
   then **`in_fill([x,y])`** returns 1 if a point is inside the *actual* path. This
   is the key to INTERESTING interactive SHAPES: hexagons, triangles, hand-drawn
-  zones, isometric tiles — hit-test the true shape, not a bounding box. (The
-  article's "other tools" uses polygon note-triggering exactly this way.)
+  zones, isometric tiles — hit-test the true shape, not a bounding box.
 - **Transforms** — `save`/`restore`, `rotate`, `scale`, `translate`, `transform`,
   `set_matrix`. → rotary knobs drawn by rotating one needle path; isometric/skew
   projections (the article's "Bumps"); mirrored layouts from one draw fn.

@@ -23,7 +23,7 @@ def test_lom_mapper_js_contract():
     assert 'outlet(0, "id", id)' in js    # sink bus speaks id lists only
 
 
-def test_sinks_are_two_inlet_library_shapes():
+def test_sinks_are_two_inlet_shapes():
     (rb,), _ = live_remote("t")
     assert rb["box"]["numinlets"] == 2
     assert rb["box"]["saved_object_attributes"]["_persistence"] == 1

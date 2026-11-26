@@ -1,11 +1,12 @@
 """Scrolling transient-shaper history display (input level + bipolar gain).
 
-The signature view for a transient designer: the moment-to-moment gain the
+The signature view for a transient shaper: the moment-to-moment gain the
 shaper applies scrolls right-to-left as a BIPOLAR trace around a center zero
 line — boost (added punch) ignites UP in green, cut (tamed transients/sustain)
 hangs DOWN in amber — over a faint scrolling input-level silhouette so gain
 events visibly line up with the transients that triggered them. This is the
-differentiator over the analog-style transient designers (analog transient designer / hardware unit), which show no live read of what the processor is doing.
+differentiator over analog-style transient shapers, which show no live read
+of what the processor is doing.
 
 Two stacked lanes share the plot:
   * GAIN lane (upper ~62%): bipolar applied gain, +/- ``gain_scale_db`` around a

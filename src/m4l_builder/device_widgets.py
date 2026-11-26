@@ -68,7 +68,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
             drop the compiled object (what Parametric EQ V2 does), or remove it. Do
             NOT rely on ``ignoreclick`` for ``spectroscope~``: it is a valid
             *universal* box attr (Common Box Attributes, ``[int]``), but click
-            pass-through is library-proven only for ``waveform~``.
+            pass-through is proven only for ``waveform~``.
           • NON-interactive graticule-behind-fill look: set ``overlay_behind=True``
             — the overlay is added FIRST (behind) and draws its own opaque
             ``overlay_bgcolor`` while the compiled object stays transparent (pass a
@@ -357,7 +357,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         device_height: float | None = None,
         inset: float = 4.0,
     ) -> str:
-        """Add a compact row of hand-drawn GLYPH buttons (a premium device's mode-glyphs)
+        """Add a compact row of hand-drawn GLYPH buttons (premium-style mode glyphs)
         bound to a HIDDEN automatable ``live.tab``. ``glyphs`` are icon names (see
         ``engines.ui_icons.ICON_NAMES``); ``option_labels`` names the enum values
         in Live's automation lane (defaults to the glyph names, upper-cased).
@@ -1001,7 +1001,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
     ) -> str:
         """Add a DRAGGABLE ADSR envelope editor (jsui) bound to FOUR HIDDEN
         automatable ``live.dial`` params (catalog kit engine #1 — the
-        a gate device / FM-synth envelope-editor look).
+        gate / FM-synth envelope-editor look).
 
         The jsui DRAWS the envelope (accent polyline + under-curve fill + dim
         grid + square nodes + an A/D/S/R value row) and owns the pointer via
@@ -1110,10 +1110,10 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         accepts the blob but never re-delivers it across track duplication in
         Live 12.4 (kit pitfalls file, headless-counter proven). The kit's
         duplication-safe pattern is per-value hidden ``live.*`` parameter
-        hosts (Parametric EQ precedent), which is ALSO exactly how a boutique
-        device ships editor state (its devices carry dozens of
-        ``parameter_invisible: 1`` stored-only scalar params and rebuild the
-        curve display from them at load — never a blob). So: ``1 + 2*max_points``
+        hosts (Parametric EQ precedent), which is ALSO the established way to
+        ship editor state (dozens of ``parameter_invisible: 1`` stored-only
+        scalar params, with the curve display rebuilt from them at load — never
+        a blob). So: ``1 + 2*max_points``
         hidden ``live.dial`` hosts (``{id}_count`` + ``{id}_p{k}x/y``, longnames
         ``"{state_param} Points"`` / ``"{state_param} P{k} X"``…). With
         ``stored_only=True`` (default) they are marked Stored-Only
@@ -1247,8 +1247,8 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
                         outlettype=["int"], patching_rect=[100, 520, 32, 20])
         funnel_id = f"{id}_funnel"
         # listfunnel emits "index value" pairs (base 0, matching spray's default
-        # offset); outlettype ["list"] is the library-measured declaration
-        # (the library ships `listfunnel 1` + `spray 12` with exactly this shape).
+        # offset); outlettype ["list"] is the observed declaration
+        # (`listfunnel 1` + `spray 12` use exactly this shape).
         self.add_newobj(funnel_id, "listfunnel", numinlets=1, numoutlets=1,
                         outlettype=["list"], patching_rect=[160, 520, 70, 20])
         spray_id = f"{id}_spray"
@@ -1670,7 +1670,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         sub-patch as a ``bpatcher`` whose PRESENTATION view renders inside the
         device — the premium pattern for a self-contained DSP+UI module (e.g. a
         channel-strip processor). ``embed=1`` bakes the
-        sub-patch into the .amxd. Box attrs match the real devices.
+        sub-patch into the .amxd.
         """
         box = {
             "id": id,
@@ -1712,8 +1712,8 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         outlettype: list | None = None,
     ) -> list:
         """Stamp ONE Subpatcher component ``count`` times as embedded bpatchers —
-        the library P11 rack (grounded in measured device conventions: six ``bpatcher args=[i]``
-        of one component whose param longnames embed ``#1``; NO
+        a component rack (``bpatcher args=[i]`` per instance of one component
+        whose param longnames embed ``#1``; NO
         parameter_overrides — Max's ``#1`` substitution IS the mechanism).
 
         Author the component ONCE with placeholder param names
@@ -1757,7 +1757,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         x: int = 700,
         y: int = 2600,
     ) -> dict:
-        """Wire the D4 gen->named-buffer->jsui viz bus (the library keystone for
+        """Wire the D4 gen->named-buffer->jsui viz bus (the keystone for
         live displays; the standard viz-bus contract).
 
         ``buffers``: list of ``(name, samps, channels)``. For each, adds a
@@ -1832,7 +1832,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         y: int = 3000,
     ):
         """Re-base this device on the user's ACTUAL Live skin in one call — the
-        stock-theme recipe the library devices hand-wire (derail, strata, cleave,
+        stock-theme recipe the fleet devices hand-wired (derail, strata, cleave,
         cleaver, oracle, overtone, tapeworm each invented their own selector
         names for the same four tokens; this standardizes it).
 
@@ -1845,7 +1845,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         * ``cards`` — section/card panels subscribe to ``surface_bg`` (the
           Live device-panel token) via the live.colors bus. On the default
           skins this reads FLAT against the native face — which is the stock
-          look (Stock EQ groups with dividers, not contrasting cards).
+          look (stock devices group with dividers, not contrasting cards).
         * ``insets`` — LCD wells (graph/readout backdrops) subscribe to
           ``lcd_bg``, staying dark against the face the way stock displays do.
         * ``canvases`` — jsui/v8ui displays receive the four standard
@@ -1863,9 +1863,8 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         Everything dynamic rides ONE shared distributor (one
         ``live.thisdevice`` + one ``live.colors``), re-fired on load and on a
         skin switch. The authored theme colors remain the static appearance in
-        the patcher editor; the bus overrides at load — the library pattern
-        ("premium devices never bake colors" means never SHIP baked, not never
-        author defaults).
+        the patcher editor; the bus overrides at load ("premium devices never
+        bake colors" means never SHIP baked, not never author defaults).
 
         Returns ``{"buses": [...], "colors": ..., "thisdevice": ...}`` (empty
         dict if every group was empty).
@@ -1931,7 +1930,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
     # skin colors and re-tint on a theme switch — that IS "default Ableton".
     # panel / jsui / v8ui are deliberately absent: shells ride the
     # apply_stock_theme buses and graph CONTENT keeps its data colors (stock
-    # devices color their curves too — Stock EQ's bands are not grey).
+    # devices color their curves too — EQ bands are not grey).
     _NATIVE_COLOR_MAXCLASSES = frozenset({
         "live.dial", "live.slider", "live.tab", "live.text", "live.menu",
         "live.numbox", "live.button", "live.toggle", "live.gain~",
@@ -2007,8 +2006,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
     ):
         """Wire the runtime ``live.colors`` theme bus (B1) into this device so every
         native control re-tints from the user's actual Live skin — on load AND on a
-        light/dark theme switch. The #1 library jewel (13/15 devices use it); premium
-        devices never bake colors at build time.
+        light/dark theme switch. Premium devices never bake colors at build time.
 
         ``specs``: list of ``(skin_token, attr, bus)`` triples — broadcast the Live
         color named ``skin_token`` (see :data:`engines.live_theme.LIVE_SKIN`) over
@@ -2060,7 +2058,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         x: int = 320,
         y: int = 20,
     ):
-        """Wire the bypass "zombie" DIM gate (the second half of the J1 theme jewel):
+        """Wire the bypass "zombie" DIM gate (the second half of the runtime theme):
         controls on ``bus`` carry the Live ACTIVE accent while the device is enabled
         and the DIMMED accent when bypassed, so the whole device greys out on bypass
         like a stock device. Grounded in the ``live.thisdevice`` middle outlet

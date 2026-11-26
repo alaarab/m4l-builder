@@ -292,12 +292,6 @@ device.add_dial("new_knob", "NewParam", [10, 10, 50, 70])
 device.build("path/to/modified.amxd")
 ```
 
-## analysis
-
-Studying existing `.amxd` devices (snapshots, pattern detection, Python
-regeneration) is not part of this package. This repo builds devices;
-`from_amxd` above is the only reader it keeps.
-
 ## LiveMCP bridge (optional)
 
 Entirely optional: `enable_livemcp_bridge` embeds a self-contained JSON-lines

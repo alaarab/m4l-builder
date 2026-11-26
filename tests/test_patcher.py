@@ -110,8 +110,8 @@ class TestBuildPatcher:
     def test_no_default_parameterbanks_stub(self):
         # Live 12.4.5b's param_banks_fromdictionary SEGFAULTS on a bank with
         # an empty parameters list when any control surface reads bank counts
-        # at device load (proven: our devices crashed the beta, Ableton's own
-        # M4L LFO — which omits the key — did not). No banks registered = no
+        # at device load (proven: our devices crashed the beta, while a device
+        # that omits the key did not). No banks registered = no
         # parameterbanks key; Live auto-banks.
         result = build_patcher([], [])
         assert result["patcher"]["parameters"] == {}

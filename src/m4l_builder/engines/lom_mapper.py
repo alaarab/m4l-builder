@@ -1,6 +1,6 @@
 """lom_mapper — the E2/E3 runtime click-to-map target picker (LiveAPI js).
 
-The library signature feature (the ``js js_LOM_mapping_3.0 #1 #2 #3`` pattern):
+The click-to-map pattern:
 a per-slot script that arms Live's ``live_set view`` selected_parameter
 observer, guards against mapping the device's own mapping controls, reads the
 picked parameter's real range and labels, and hands the LOM id to the
@@ -9,7 +9,7 @@ retargetable sink (``dsp.live.retargetable_param_sink`` — ``zl.reg`` →
 
 Ships as a plain non-UI ``v8`` box (the modern ``js``): register the source as
 a device asset and add ``v8 <filename> #1`` inside the slot component — ``#1``
-becomes ``jsarguments[1]`` (the slot index) at load, exactly the library
+becomes ``jsarguments[1]`` (the slot index) at load, the standard ``#1``
 instancing scheme.
 
 Message contract (inlet 0):
@@ -42,9 +42,9 @@ def lom_mapper_js(*, self_map_guard: str = DEFAULT_SELF_MAP_GUARD,
     """Source for the per-slot ``v8`` mapper script.
 
     ``self_map_guard``: regex of OWN-device parameter names that must refuse
-    mapping (the library footgun guard — arming MAP selects the Map param
+    mapping (the footgun guard — arming MAP selects the Map param
     itself, and mapping a slot to its own Depth dial feeds back).
-    ``debounce_ms``: the library 20ms Task debounce on selection changes.
+    ``debounce_ms``: the 20ms Task debounce on selection changes.
     """
     return f"""// lom_mapper — E2/E3 click-to-map target picker
 autowatch = 0;
@@ -107,7 +107,7 @@ function announce(i) {{
     if (i != SLOT && armed) disarm();
 }}
 
-// ---- selection observer (debounced, library 20ms Task) ----------------------
+// ---- selection observer (debounced, 20ms Task) -----------------------------
 function on_selected_param(args) {{
     if (!armed) return;
     var a = arrayfromargs(args);

@@ -18,7 +18,7 @@ def test_is_balanced_es5_function():
 
 def test_covers_every_unitstyle_branch():
     js = unitstyle_readout_js()
-    # the premium LCD behaviours, one assertion per unitstyle code
+    # the LCD behaviours, one assertion per unitstyle code
     assert "us === 0" in js                       # INT -> Math.round
     assert '(v / 1000.).toFixed(2) + " s"' in js  # TIME ms -> s rollover
     assert '(v / 1000.).toFixed(2) + " kHz"' in js  # HZ -> kHz rollover

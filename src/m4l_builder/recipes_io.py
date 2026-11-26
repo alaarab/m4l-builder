@@ -281,7 +281,7 @@ function msg_float(n) { note(Math.round(n)); }
 
 
 def scale_awareness(device, id_prefix, *, chip_rect, fontsize=8.0):
-    """Live 12 scale awareness (catalog #53, a device / a device): observe
+    """Live 12 scale awareness (catalog #53): observe
     the SET's root+scale, render a scale chip styled with Live's dedicated
     ``live_scale_awareness`` theme color, and fold notes to the scale.
 
@@ -387,7 +387,7 @@ function writeClip() {
 
 
 def record_midi(device, id_prefix, *, rect, accent=None):
-    """Record-MIDI capture (catalog #55, a device): a red REC pill that
+    """Record-MIDI capture (catalog #55): a red REC pill that
     collects the device's generated MIDI while lit and, on release, writes
     the take into this track's first empty session clip via the LOM
     (``create_clip`` + ``add_new_notes``) — the capture IS a real Live clip
@@ -435,7 +435,7 @@ def record_midi(device, id_prefix, *, rect, accent=None):
     )
 
 
-_DEVICE_PALETTE_JS = """/* device_palette.js - Spawner-class native-device inserter (T15, #51).
+_DEVICE_PALETTE_JS = """/* device_palette.js - native-device inserter (T15, #51).
    `spawn <Name...>` inserts a NATIVE Live device on the selected track via
    the Live 12 LOM Track.insert_device(name, index?). `policyidx 0|1|2`
    places it Left of / Right of the selected device / Last in chain.
@@ -561,7 +561,7 @@ function status(s) { outlet(0, ["set"].concat(("" + s).split(" "))); }
 def device_palette(device, id_prefix, *, names, rect, columns=3,
                    policy_tab=None, status_rect=None, accent=None,
                    gap=2, fontsize=6.5):
-    """Spawner-class native-device palette (catalog #51, Spawner v1.08).
+    """Native-device palette (catalog #51).
 
     A grid of ``textbutton`` chips over ``rect`` — clicking one inserts that
     NATIVE Live device on the *selected* track via the Live 12 LOM
@@ -570,7 +570,7 @@ def device_palette(device, id_prefix, *, names, rect, columns=3,
     device / 1 Right of it / 2 Last), wired from ``policy_tab`` (a live.tab
     box id emitting 0..2) when given. Extra verbs on ``ctl_in``:
     ``spawnrandom`` (dice — no immediate repeat), ``removedevice`` (delete
-    the selected device — library remove.maxpat), ``dupesflag 0|1`` (block
+    the selected device), ``dupesflag 0|1`` (block
     re-inserting a class already on the track).
 
     The name list is registered into the js at load time (live.thisdevice →
@@ -674,7 +674,8 @@ _SAMPLE_EXPORT_JS = """/* sample_export.js - buffer~ -> wav on disk (T15, #56 ou
    `save` emits `writewave <dir>/<stem>_NNN.wav` for the wired buffer~
    (outlet 0) + a status line (outlet 1). `setdir <path...>` (re)targets
    the folder — args are re-joined so paths with spaces survive. True
-   OS-level drag-out needs the 3rd-party `11dragfiles` external; the portable stock path is saving into
+   OS-level drag-out needs a 3rd-party drag-files external; the
+   portable stock path is saving into
    the User Library so the file appears in Live's browser to drag from. */
 this.autowatch = 1;
 this.outlets = 2;
@@ -707,10 +708,9 @@ def sample_export(device, id_prefix, buffer_box_id, *, rect,
     (catalog #56, out-half). One SAVE click = one numbered file
     (``<stem>_001.wav`` …) written via ``buffer~``'s stock ``writewave``.
 
-    The library does true OS drag-out with the 3rd-party
-    ``11dragfiles`` external (a device v2.0: path → ``prepend
-    drag`` → ``11dragfiles``) — a binary external the portable kit won't
-    embed. Point ``default_dir`` at a User Library folder instead and the
+    True OS drag-out needs a 3rd-party drag-files external (path →
+    ``prepend drag`` → the external) — a binary external the portable kit
+    won't embed. Point ``default_dir`` at a User Library folder instead and the
     export lands in Live's browser, which drags anywhere.
 
     Wire your own path source into ``dir_in`` (e.g. an ``opendialog fold``)
@@ -850,7 +850,7 @@ def sample_lfo(device, id_prefix, *, key, rate_rect, samps=None,
 _REGION_TRANSLATE_JS = """/* region_translate.js - slide every presentation box whose origin is
    at-or-beyond a start point (a region-translate primitive, T16 #57). `setUiPos
    <startX> <startY> <newX> <newY>` translates the region by (new-start);
-   the library idempotence guard (a box must sit EXACTLY at the start
+   the idempotence guard (a box must sit EXACTLY at the start
    origin) prevents double-moves when toggles re-fire. Outlet 0 reports
    `moved <n>` / `skipped`. */
 this.autowatch = 1;
@@ -893,7 +893,7 @@ def region_translate(device, id_prefix):
     """The region-translate primitive (catalog #57):
     a js whose ``setUiPos <startX> <startY> <newX> <newY>`` message slides
     EVERY presentation box at-or-beyond the start origin by the delta —
-    reflowing panels without naming each box. The library guard (some box
+    reflowing panels without naming each box. The idempotence guard (some box
     must sit exactly at the start origin) makes repeated sends idempotent,
     so author the sliding region with one box anchored AT the origin —
     the minimum x-offset AND y-offset across matching boxes must each be
@@ -921,7 +921,7 @@ def region_translate(device, id_prefix):
 def expandable_column(device, id_prefix, *, arrow_rect, base_width,
                       column_width, param_name="Panel",
                       accent="0.30, 0.80, 0.84"):
-    """Right-side expandable column (catalog #57, the Spawner settings
+    """Right-side expandable column (catalog #57, a settings
     column). Author the device at FULL width (``base_width +
     column_width``) with the column content at ``x >= base_width``; this
     stage adds the ▸/◂ arrow (an expand/collapse glyph cycle bound to a
@@ -995,7 +995,7 @@ def header_strip(device, id_prefix, *, title, title_w, chips=(), y=3,
     ports = {}
     cx = x + title_w + gap
     if version is not None:
-        # catalog #61: every library device titles itself "Name vN.N" — the
+        # catalog #61: the device titles itself "Name vN.N" — the
         # version lives on the face, dim, right after the title
         device.add_comment(f"{p}_ver", [cx - gap + 1, y, version_w, height],
                            f"v{version}", textcolor=dc,
