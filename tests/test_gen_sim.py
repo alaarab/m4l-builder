@@ -180,12 +180,36 @@ def test_and_condition_with_double_bound():
     assert simulate(k, {"in1": [0., 0.], "in2": [1., 0.]}, num_samples=2)["out1"] == [1.0, 0.0]
 
 
+# ── user function definitions ────────────────────────────────────────────────
+_ACC_FN = "acc(x) {\n\tHistory s(0);\n\ts = s + x;\n\treturn s;\n}\n"
+
+
+def test_every_function_call_site_keeps_its_own_history():
+    # gen gives each call site its own state, including sites nested in another
+    # function: twice(n) = two independent running sums of n.
+    k = (_ACC_FN + "twice(x) {\n\treturn acc(x) + acc(x);\n}\n"
+         "out1 = acc(1);\nout2 = twice(in1);")
+    out = simulate(k, {"in1": [10., 10., 10.]})
+    assert out["out1"] == [1., 2., 3.]
+    assert out["out2"] == [20., 40., 60.]
+
+
+def test_function_takes_a_delay_line_and_returns_two_values():
+    k = ("tap(x, d) {\n\tlate = d.read(2);\n\td.write(x);\n\treturn x, late;\n}\n"
+         "Delay line(8);\nnow, past = tap(in1, line);\nout1 = now;\nout2 = past;")
+    out = simulate(k, {"in1": [1., 2., 3., 4.]})
+    assert out["out1"] == [1., 2., 3., 4.]
+    assert out["out2"] == [0., 0., 1., 2.]
+
+
 # ── refusal of the out-of-subset constructs (never a false green) ────────────
 @pytest.mark.parametrize("code,label", [
     ("Delay d(512);\nout1 = d.read(10, interp=\"cubic\");\nd.write(in1);", "Delay cubic interp"),
     ("History h(0.);\nh = peek(buf, 3);\nout1 = h;", "peek"),
     ("out1 = in1; for (i = 0; i < 3; i = i + 1) { out1 = out1 + 1.; }", "for-loop"),
     ("out1 = data[3];", "indexed access"),
+    ("f(x) {\n\tx = x + 1;\n}\nout1 = f(in1);", "function without return"),
+    ("out1 = in1;\nreturn out1;", "return outside a function"),
 ])
 def test_refuses_unsupported_constructs(code, label):
     with pytest.raises(UnsupportedKernel):

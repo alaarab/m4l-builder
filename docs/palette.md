@@ -33,7 +33,7 @@ Clean building blocks — filters, dynamics gain-computers, saturators, M/S, lou
 - **`ms_encode`** — Encode L/R -> Mid/Side: ``mid = (L+R)/2``, ``side = (L-R)/2``
 - **`ms_decode`** — Decode Mid/Side -> L/R: ``L = M+S``, ``R = M-S`` (inverse of ms_encode)
 - **`ms_width`** — Stereo-width via M/S: scale the Side by ``width`` then decode
-- **`ms_width_equal_power`** — Equal-power (constant-sum) M/S width — the standard orthonormal equal-power M/S transform
+- **`ms_width_equal_power`** — Equal-power M/S stereo width: an orthonormal M/S encode/decode with a sine/cosine gain law on mid and side
 - **`ms_mode_split`** — Complete gen~ code for a processing-Mode M/S SPLIT matrix (2 in, 4 out)
 - **`ms_mode_merge`** — Complete gen~ code for the M/S RECOMBINE matrix (4 in, 2 out)
 - **`mono_below`** — Bass-mono primitive (catalog Q51): SUM the band below ``freq`` to mono, keep everything above it stereo — the vinyl-cut / club-system low-end discipline
@@ -86,26 +86,26 @@ Bigger stateful kernels — the viz bus, the LFO cluster, click-free variable de
 `m4l_builder.gen_stateful` — 22 functions
 
 - **`viz_declares`** — Declarations for a viz bus: bare ``Buffer`` decls (bound at load by the device-side rebind message) plus the GUI-tick counter ``History``
-- **`viz_poke_block`** — The counter-gated GUI tick: every ``refresh_ms`` worth of samples, run ``body`` once — the block that pokes per-voice/per-frame screen state into the viz Buffers
+- **`viz_poke_block`** — Run ``body`` once per ``refresh_ms`` of samples — the GUI tick that pokes per-voice/per-frame screen state into the viz Buffers
 - **`poly_mod_engine`** — The MERGED Orbit modulator codebox (#76: Orbit + Entropy in one)
-- **`freeze_capture_block`** — The freeze gesture for a granular caller: on the RISING edge of ``freeze_param``, copy the last ``capture_samps`` of both Delay ``lines`` TIME-REVERSED into ``data`` (channels 0/1 — ``index = freezeSamps - i``), then slew a 0..1 ramp over ``ramp_ms`` whose equal-power split ``freezeG = sqrt(ramp)`` / ``invFreezeG = sqrt(1-ramp)`` feeds ``granular_vp``'s freeze/invFreeze gains — the click-free seam
+- **`freeze_capture_block`** — The freeze gesture for a ``granular_voice_fn`` caller: capture the newest audio when ``freeze_param`` rises and crossfade live to frozen
 - **`rampsmooth_fn`** — Return the gen function-definition string for ``rampsmooth(in, up, dw)``
 - **`ring_delay`** — Data-backed ring buffer: write ``input`` at the head, read a ``delay``-sample- old value (wrapped), advance the head
-- **`lowpass_12_fn`** — Return the gen function-definition for ``lowpass_12(sig, cf, q)`` — a 2-pole RBJ lowpass with smoothed coeffs + change()-gated recompute
-- **`highpass_12_fn`** — Return the gen function-definition for ``highpass_12(sig, cf, q)`` — the 2-pole RBJ highpass twin of ``lowpass_12``
-- **`allpass_fn`** — Return the gen function-definition for ``allpass(x, g, delaySamps, d1, d2)`` where d1/d2 are gen ``Delay`` operators — a Schroeder/Dattorro diffuser stage
+- **`lowpass_12_fn`** — Return the gen function-definition for ``lowpass_12(sig, cf, q)`` — a 12 dB/oct lowpass (Zavalishin TPT state-variable filter; the RBJ cookbook LPF magnitude response at cutoff ``cf`` Hz and resonance ``q``) with smoothed, modulation-safe controls
+- **`highpass_12_fn`** — Return the gen function-definition for ``highpass_12(sig, cf, q)`` — the 12 dB/oct highpass output of the same TPT state-variable filter as ``lowpass_12``
+- **`allpass_fn`** — Return the gen function-definition for ``allpass(x, g, delaySamps, d1, d2)`` where d1/d2 are gen ``Delay`` operators — a Schroeder allpass (direct form I) for reverb diffusion
 - **`diffuse_fn`** — Return the gen function-definition for ``diffuse(sig, delaySamps, d, coef)`` where ``d`` is a gen ``Delay`` — the compact one-multiply Schroeder allpass
-- **`granular_voice_fn`** — Return the gen function-definition for the granular voice scatter: an interval-gated round-robin grain scheduler + a polyphonic playback loop with a freeze mode, returning ``(outR, outL)``
+- **`granular_voice_fn`** — Return the gen function-definition for the granular voice scatter: a hop-clocked round-robin grain scheduler plus a polyphonic playback loop that reads the live delay lines, the frozen capture, or a crossfade of both, returning ``(outR, outL)``
 - **`compose_gen_code`** — Assemble a gen~ codebox string for :func:`gen_patcher.build_gendsp`
 - **`variable_sigmoid_fn`** — Return the gen function-definition for ``variable_sigmoid(xin, pregain, postgain, sigmoid)`` — a drive-able logistic saturator (pre/post gain in dB, knee set by ``sigmoid``): ``sigmoid``=-2 approximates tanh, -5 is tape-like
 - **`modulated_allpass_reverb`** — Emit a complete stereo allpass-reverb gen~ program (ready for ``build_gendsp(code, nin=2, nout=2)``)
-- **`op_fn`** — Return the gen function-definition for ``op(freq, mult, ph, pm, fb, trig)`` — a classic FM operator (Chowning FM) with a phase-modulation input and signed self-feedback
-- **`qpow_fn`** — Return the gen function-definition for ``qpow(x, p)`` — an iterative power-curve waveshaper (signed ``p``), used for parameter curves and CZ-style phase distortion
-- **`fade_env_fn`** — Return the gen function-definition for ``fade(trig, attack, decay)`` — the AD gate envelope (rate-per-second one-pole slews)
-- **`ramp_env_fn`** — Return the gen function-definition for ``ramp(trig, time, rnd_t, rand)`` — a per-note-jitterable 1→0 ramp/scheduler clock
-- **`tanh_approx_fn`** — Return the gen function-definition for ``tanA(x)`` — a fast Padé tanh approximation
-- **`svf_fn`** — Return the gen function-definition for ``svf(x, f, q, type)`` — Émilie Gillet's TPT state-variable filter cascaded to 24 dB/oct, ``type`` morphing LP↔HP
-- **`lfo_osc_fn`** — Return the gen function-definition for ``lfo_osc(buf, phase, uni, wave, bend)`` — a wavetable LFO with ``qpow`` phase-distortion morph
+- **`op_fn`** — Return the gen function-definition for ``op(freq, mult, ph, pm, fb, trig)`` — a phase-modulation FM operator (Chowning FM) at ``freq * mult`` Hz with a phase offset ``ph`` and modulation input ``pm`` (both in cycles), signed self-feedback ``fb`` (-1..1) and a phase reset on each rising ``trig``
+- **`qpow_fn`** — Return the gen function-definition for ``qpow(x, p)`` — a signed power curve (``p`` = 0 identity, > 0 bends toward 0, < 0 toward 1) for parameter curves, waveshaping and CZ-style phase distortion
+- **`fade_env_fn`** — Return the gen function-definition for ``fade(trig, attack, decay)`` — a one-pole AR gate envelope: rises toward 1 while ``trig`` > 0, falls toward 0 otherwise, ``attack``/``decay`` in rate per second (time constant 1/rate s)
+- **`ramp_env_fn`** — Return the gen function-definition for ``ramp(trig, time, rnd_t, rand)`` — a free-running 1→0 ramp clock of ``time`` ms per cycle, restarted by a rising ``trig``, with each cycle's length jittered by ``rand`` (depth) times ``rnd_t`` (the caller's -1..1 random draw)
+- **`tanh_approx_fn`** — Return the gen function-definition for ``tanA(x)`` — a fast rational tanh approximation that reaches ±1 smoothly at |x| = 3
+- **`svf_fn`** — Return the gen function-definition for ``svf(x, f, q, type)`` — two cascaded Zavalishin TPT state-variable filters (24 dB/oct), ``type`` morphing lowpass (0) to highpass (1)
+- **`lfo_osc_fn`** — Return the gen function-definition for ``lfo_osc(buf, phase, uni, wave, bend)`` — a wavetable LFO that scans the shapes stored one per channel of ``buf`` (``wave``) with ``qpow`` phase distortion (``bend``) and an optional 0..1 output (``uni``)
 - **`lfo_voice_fn`** — Return the gen function-definition for one Orbit LFO voice (phase + 6 analytic shapes; state in caller Data rows)
 
 ### DSP object emitters

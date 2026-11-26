@@ -44,8 +44,8 @@ def viz_declares(*buffers: str, counter: str = "his_guiCout") -> str:
     executable statement (gen requires all decls first).
 
     When TWO OR MORE buffers are passed (the second is a scrolling wave RING),
-    also declares the ring write-head ``History his_wvh(0.)`` that
-    :func:`viz_poke_block` advances — forgetting it makes the whole codebox
+    also declares the ring write-head ``History his_wvh(0.)`` that the poke
+    body passed to :func:`viz_poke_block` advances — forgetting it makes the whole codebox
     silently fail to compile ("failed to compile genpatcher"), a trap that cost
     real hours. Do NOT also declare ``his_wvh`` manually (gen rejects the
     duplicate)."""
@@ -590,6 +590,7 @@ def _tpt_svf_12(name: str, output: str, prefix: str) -> str:
 
 
 LOWPASS_12_FN = _tpt_svf_12("lowpass_12", "lp", "lp12")
+HIGHPASS_12_FN = _tpt_svf_12("highpass_12", "hp", "hp12")
 
 
 # Schroeder's allpass (M. R. Schroeder, "Natural Sounding Artificial
@@ -628,9 +629,6 @@ def diffuse_fn() -> str:
     where ``d`` is a gen ``Delay`` — the compact one-multiply Schroeder allpass.
     Chain several (mutually-prime delays) for reverb diffusion."""
     return DIFFUSE_FN
-
-
-HIGHPASS_12_FN = _tpt_svf_12("highpass_12", "hp", "hp12")
 
 
 def lowpass_12_fn() -> str:
@@ -706,20 +704,10 @@ def variable_sigmoid_fn() -> str:
 # allpasses into that side's loop delay. Times are ms at a size scale of 1;
 # `size` 0..1 maps to a 0.35..2.0 scale.
 _PRE_DIFFUSER_GAINS = (0.75, 0.75, 0.625, 0.625)
-
-
 _R_STRETCH = 1.037
-
-
 _TANK_MS = {"L": (41.3, 17.1, 23.3), "R": (47.9, 18.7, 25.9)}  # loop, ap 1, ap 2
-
-
 _TANK_AP_GAINS = (0.6, 0.5)
-
-
 _MOD_HZ = 0.5
-
-
 _MOD_DEPTH = 0.0035
 
 
@@ -794,10 +782,6 @@ def modulated_allpass_reverb(*, in_left: str = "in1", in_right: str = "in2",
     return compose_gen_code(functions=[ALLPASS_FN, LOWPASS_12_FN], params=params,
                             body="\n".join(decls + stmts))
 
-
-# ===========================================================================
-# D3 — synth-voice kit (FM operator, wavetable LFO, envelopes, SVF)
-# ===========================================================================
 
 # ── Synth-voice primitives ──────────────────────────────────────────────────
 # FM operator in the phase-modulation form of J. Chowning, "The Synthesis of
@@ -983,7 +967,8 @@ def tanh_approx_fn() -> str:
 def svf_fn() -> str:
     """Return the gen function-definition for ``svf(x, f, q, type)`` — two
     cascaded Zavalishin TPT state-variable filters (24 dB/oct), ``type``
-    morphing lowpass (0) to highpass (1). Self-contained."""
+    morphing lowpass (0) to highpass (1). Self-contained: it no longer calls
+    ``tanA``, so emitting ``tanh_approx_fn`` alongside is optional."""
     return SVF_FN
 
 

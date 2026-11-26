@@ -1594,24 +1594,30 @@ def test_kweight_lufs_tracks_level_in_db():
     assert -6.0 < lufs_loud < 6.0
 
 
-def _run_sqrt(code, **vars):
-    from math import sqrt
-    ns = {"sqrt": sqrt}
-    ns.update(vars)
-    exec(code, ns)
-    return ns
+_WIDTH = "Param w(0.5);\n" + ms_width_equal_power("in1", "in2", "out1", "out2", "w")
 
 
-def test_ms_width_equal_power_neutral_at_half():
-    ns = _run_sqrt(ms_width_equal_power("L", "R", "Lo", "Ro", "W"), L=0.61, R=-0.27, W=0.5)
-    assert abs(ns["Lo"] - 0.61) < 1e-12
-    assert abs(ns["Ro"] - (-0.27)) < 1e-12
+def test_ms_width_equal_power_neutral_at_half_and_mono_at_zero():
+    left, right = [0.61, -0.2, 0.05], [-0.27, 0.4, 0.3]
+    same = simulate(_WIDTH, {"in1": left, "in2": right}, params={"w": 0.5})
+    assert all(abs(a - b) < 1e-12 for a, b in zip(same["out1"], left, strict=True))
+    assert all(abs(a - b) < 1e-12 for a, b in zip(same["out2"], right, strict=True))
+    mono = simulate(_WIDTH, {"in1": left, "in2": right}, params={"w": 0.0})
+    for lo, ro, li, ri in zip(mono["out1"], mono["out2"], left, right, strict=True):
+        assert abs(lo - ro) < 1e-12 and abs(lo - (li + ri) / math.sqrt(2)) < 1e-12
 
 
-def test_ms_width_equal_power_zero_is_mono():
-    ns = _run_sqrt(ms_width_equal_power("L", "R", "Lo", "Ro", "W"), L=0.6, R=-0.2, W=0.0)
-    assert abs(ns["Lo"] - 0.4) < 1e-12   # both channels -> (L+R)
-    assert abs(ns["Ro"] - 0.4) < 1e-12
+def test_ms_width_equal_power_keeps_decorrelated_power_constant():
+    # orthogonal L/R (sine/cosine over whole periods): mid and side carry equal,
+    # uncorrelated power, so an equal-power law holds total power at every width.
+    n = 480
+    left = [math.sin(2 * math.pi * 5 * i / n) for i in range(n)]
+    right = [math.cos(2 * math.pi * 5 * i / n) for i in range(n)]
+    power_in = sum(a * a + b * b for a, b in zip(left, right, strict=True))
+    for w in (0.0, 0.2, 0.5, 0.8, 1.0):
+        out = simulate(_WIDTH, {"in1": left, "in2": right}, params={"w": w})
+        power = sum(a * a + b * b for a, b in zip(out["out1"], out["out2"], strict=True))
+        assert abs(power / power_in - 1.0) < 1e-9, w
 
 
 def test_grain_window_lookup_normalized_phase_idiom():
