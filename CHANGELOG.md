@@ -13,6 +13,13 @@
   presentation view as a stdlib-only SVG (theme colours, native controls at
   their initial values, jsui/v8ui as labelled placeholders). The README and
   docs gallery show the six examples, kept in sync by a golden test.
+- `m4l import DEVICE.amxd` (and `m4l_builder.importer`): writes a readable
+  `build.py` that rebuilds an existing device, frozen or not. Controls become
+  `add_dial` / `add_menu` / ... calls, objects `add_newobj`, patch cords
+  `add_line`; gen~ code, scripts, subpatchers, banks and the theme carry
+  across. Each call is checked against the source box, boxes with no library
+  call stay raw with a TODO, and the command confirms the rebuilt device is
+  identical. Guide: `docs/importing.md`.
 
 ## [0.8.0] — 2026-11-26
 

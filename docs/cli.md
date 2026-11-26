@@ -2,7 +2,8 @@
 
 Installing m4l-builder adds an `m4l` command (also available as
 `python -m m4l_builder`). It runs your build scripts for you, rebuilds them on
-save, checks them without writing anything, and summarises a built `.amxd`.
+save, checks them without writing anything, summarises a built `.amxd`, and
+turns an existing `.amxd` into a build script.
 
 ```bash
 m4l new "My Gain" --type audio     # scaffold my_gain/build.py
@@ -11,6 +12,7 @@ m4l watch my_gain/build.py         # rebuild into the User Library on every save
 m4l lint my_gain/build.py          # validate without writing
 m4l preview my_gain/build.py       # render the panel to my_gain.svg
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
+m4l import "Their Device.amxd"     # write a build.py that rebuilds it
 ```
 
 ## What counts as a build script
@@ -156,3 +158,16 @@ My Gain  (audio_effect, 150 x 110 px)
 ```
 
 `--json` prints the same summary as JSON for scripts and CI.
+
+## `m4l import`
+
+```bash
+m4l import DEVICE.amxd [--out PATH] [--force] [--no-check]
+```
+
+Writes a build script (by default `<name>/build.py`) that rebuilds an existing
+device, with its scripts and `.gendsp` files beside it, then runs the script
+and confirms it builds an identical device. Boxes no library call can
+reproduce are kept as raw `add_box` dicts marked `TODO(m4l import)` and listed
+in the output. It exits 1 when the rebuilt device differs. See
+[Bring an existing device](importing.md).
