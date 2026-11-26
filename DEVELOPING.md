@@ -73,8 +73,7 @@ by current build and development tooling. The docs dependency Markdown 3.11
 requires Python 3.11+, so Python 3.10 resolves its latest compatible 3.10.3;
 newer interpreters use 3.11.
 
-CI uses the self-hosted runner's disk-backed temporary directory for native C++
-compilation because its `/tmp` tmpfs is quota-limited. Documentation builds on
+CI runs on GitHub-hosted `ubuntu-latest` runners. Documentation builds on
 PRs; deployment requires an explicit manual workflow dispatch.
 
 ## Building & publishing
