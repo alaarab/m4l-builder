@@ -16,6 +16,7 @@ from m4l_builder.cli import run_build_script
 from m4l_builder.dsp import gen_codebox
 from m4l_builder.gen_snippets import ms_width_equal_power
 from m4l_builder.render import (
+    Render,
     RenderError,
     audit,
     check_not_dry,
@@ -157,6 +158,23 @@ def test_anything_the_renderer_cannot_run_raises_naming_the_box(add, message):
         render(_with_box(add), "noise", seconds=0.01)
 
 
+def test_a_wired_cold_inlet_on_a_bare_pack_is_refused():
+    device = AudioEffect("Ramp", 100, 100)
+    device.add_dial("g", "Gain", [10, 10, 40, 40], min_val=0.0, max_val=1.0, initial=0.5)
+    device.add_newobj("ms", "loadmess 50", numinlets=1, numoutlets=1)
+    device.add_newobj("pk", "pack", numinlets=2, numoutlets=1)
+    device.add_newobj("ln", "line~", numinlets=2, numoutlets=2, outlettype=["signal", "bang"])
+    device.add_newobj("vca", "*~", numinlets=2, numoutlets=1, outlettype=["signal"])
+    device.add_line("g", 0, "pk", 0)
+    device.add_line("ms", 0, "pk", 1)
+    device.add_line("pk", 0, "ln", 0)
+    device.add_line("ln", 0, "vca", 1)
+    device.add_line("obj-plugin", 0, "vca", 0)
+    device.add_line("vca", 0, "obj-plugout", 0)
+    with pytest.raises(RenderError, match=r"box 'pk' \[pack\]: control inlet 1 is wired"):
+        render(device, "noise", seconds=0.01)
+
+
 def test_feedback_without_a_delay_is_refused():
     device = AudioEffect("Loop", 100, 100)
     device.add_newobj("a", "+~", numinlets=2, numoutlets=1, outlettype=["signal"])
@@ -173,8 +191,19 @@ def test_approximate_gen_constructs_are_noted_or_refused():
     dither = "Param width(0.5);\nout1 = in1 + noise() * 1e-5;\nout2 = in2;"
     result = render(_gen_device(dither), "noise", seconds=0.01)
     assert any("noise()" in note for note in result.notes)
+    # gen noise() must be independent of the generated input noise
+    added = [o - i for o, i in zip(result.output[0], result.input[0], strict=True)]
+    dot = sum(a * b for a, b in zip(added, result.input[0], strict=True))
+    norms = math.sqrt(sum(a * a for a in added) * sum(b * b for b in result.input[0]))
+    assert abs(dot / norms) < 0.3
     with pytest.raises(RenderError, match="strict"):
         render(_gen_device(dither), "noise", seconds=0.01, strict=True)
+
+
+def test_a_nan_output_is_not_reported_as_dry():
+    result = Render("x", 48000.0, [[0.5, -0.5]], [[float("nan"), float("nan")]])
+    check = check_not_dry(result)
+    assert check and "2 NaN/Inf" in check.detail
 
 
 # -- signals, WAV files and the summary ----------------------------------- #
@@ -190,10 +219,16 @@ def test_wav_round_trip_and_clipping(tmp_path):
         assert _close(channels[1], [0.0, 0.125, -1.0, -1.0], tol)
 
 
-def test_reads_32_bit_float_wav(tmp_path):
+FLOAT_GUID = b"\x03\x00\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71"
+
+
+@pytest.mark.parametrize("fmt", [
+    struct.pack("<HHIIHH", 3, 2, 48000, 48000 * 8, 8, 32),
+    struct.pack("<HHIIHHHHI", 0xFFFE, 2, 48000, 48000 * 8, 8, 32, 22, 32, 3) + FLOAT_GUID,
+], ids=["ieee-float", "extensible-float"])
+def test_reads_32_bit_float_wav(tmp_path, fmt):
     samples = [0.5, -0.5, 0.25, -1.25]   # interleaved stereo, one over full scale
     data = struct.pack("<4f", *samples)
-    fmt = struct.pack("<HHIIHH", 3, 2, 48000, 48000 * 8, 8, 32)
     riff = (b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt
             + b"data" + struct.pack("<I", len(data)) + data)
     path = tmp_path / "float.wav"

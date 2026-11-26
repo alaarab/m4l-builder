@@ -764,7 +764,10 @@ class GenKernel:
         outs = {f"out{k}": [0.0] * num_samples for k in range(1, self.num_outs + 1)}
         state: dict = {name: _DelayLine(_size(size)) for name, size in self.delays.items()}
         for name, args in self.datas.items():
-            state[name] = _Data(*(_size(arg) for arg in _split_top_commas(args)))
+            sizes = [_size(arg) for arg in _split_top_commas(args)]
+            if not 1 <= len(sizes) <= 2:
+                raise UnsupportedKernel(f"Data {name}({args}): expected (size[, channels])")
+            state[name] = _Data(*sizes)
         sites = {site: _STATEFUL_OPS[callee]() if callee in _STATEFUL_OPS else
                  functools.partial(_FnInstance(self.functions[callee], self.functions).call,
                                    base)

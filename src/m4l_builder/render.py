@@ -38,6 +38,7 @@ Stdlib only: WAV files go through :mod:`wave` (PCM) or a small RIFF reader for
 from __future__ import annotations
 
 import cmath
+import hashlib
 import json
 import math
 import os
@@ -160,10 +161,10 @@ def read_wav(path: str | os.PathLike) -> tuple[Channels, int]:
     path = Path(path)
     try:
         handle = wave.open(str(path), "rb")
-    except wave.Error as exc:
-        if "unknown format" in str(exc):
-            return _read_float_wav(path)
-        raise ValueError(f"{path}: {exc}") from exc
+    except wave.Error:
+        # wave reads PCM only; float (plain or extensible) goes through our reader,
+        # which raises a clear error for anything else.
+        return _read_float_wav(path)
     with handle:
         nch, width = handle.getnchannels(), handle.getsampwidth()
         rate, raw = handle.getframerate(), handle.readframes(handle.getnframes())
@@ -446,6 +447,12 @@ _CONTROL_OPS = {
 _NUMBER = re.compile(r"^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$")
 
 
+def _gen_seed(seed: int, box_id: str) -> int:
+    """A noise() seed per gen~ box, unrelated to the generated input's seeds."""
+    digest = hashlib.blake2b(f"gen~:{seed}:{box_id}".encode(), digest_size=8).digest()
+    return int.from_bytes(digest, "little")
+
+
 def _number(atom: str) -> float | None:
     return float(atom) if _NUMBER.match(atom) else None
 
@@ -627,9 +634,10 @@ class _Renderer:
         if head == "loadmess":
             return [_number(a) if _number(a) is not None else a for a in args]
         if head in ("pack", "pak"):
-            self._require_cold_inlets_free(box_id, max(1, len(args)))
+            atoms = args or ["0", "0"]   # a bare pack has two int inlets
+            self._require_cold_inlets_free(box_id, len(atoms))
             first = self._needed(box_id, 0)
-            rest = [_number(a) if _number(a) is not None else 0.0 for a in args[1:]]
+            rest = [_number(a) if _number(a) is not None else 0.0 for a in atoms[1:]]
             return [first[0], *rest]
         if head in ("prepend", "append"):
             msg = self._needed(box_id, 0)
@@ -854,7 +862,8 @@ class _Renderer:
                 for name in names:
                     kernel_in[name] = inlet_signals[inlet]
             try:
-                result = gen.kernel.run(kernel_in, gen.params, self.sr, self.n, seed=self.seed)
+                result = gen.kernel.run(kernel_in, gen.params, self.sr, self.n,
+                                        seed=_gen_seed(self.seed, box_id))
             except UnsupportedKernel as exc:
                 raise self._unsupported(box_id, f"gen_sim cannot run its codebox: {exc}") from exc
             outputs: dict[int, list[float]] = {}
@@ -1025,8 +1034,12 @@ def check_not_dry(result: Render, *, min_change_db: float = -60.0) -> Check:
         if level == 0.0:
             parts.append(f"ch{c + 1} input is silent")
             continue
-        diff = _rms(a - b for a, b in zip(out, src, strict=True) if math.isfinite(a))
-        rel = _db(diff / level)
+        bad = sum(1 for v in out if not math.isfinite(v))
+        if bad:   # NaN/Inf is a change, just not a healthy one (see check_finite)
+            changed = True
+            parts.append(f"ch{c + 1} has {bad} NaN/Inf sample(s)")
+            continue
+        rel = _db(_rms(a - b for a, b in zip(out, src, strict=True)) / level)
         changed = changed or rel >= min_change_db
         parts.append(f"ch{c + 1} {rel:.1f} dB")
     return Check("not dry", changed,

@@ -212,6 +212,7 @@ def test_function_takes_a_delay_line_and_returns_two_values():
     ("Delay d(512);\nout1 = d.read(10, interp=\"spline\");\nd.write(in1);", "Delay spline interp"),
     ('Buffer b("tbl");\nout1 = peek(b, 3);', "Buffer"),
     ('Data d(8);\nout1 = peek(d, 2, 0, interp="linear");', "peek option"),
+    ("Data d(16, 2, 3);\nout1 = in1;", "malformed Data declaration"),
     ("out1 = in1; for (i = 0; i < 3; i = i + 1) { out1 = out1 + 1.; }", "for-loop"),
     ("out1 = data[3];", "indexed access"),
     ("f(x) {\n\tx = x + 1;\n}\nout1 = f(in1);", "function without return"),

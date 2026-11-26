@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import math
 import os
 import re
 import runpy
@@ -678,6 +679,17 @@ def _format_render(result, signal_label: str, dry_check) -> str:
     return "\n".join(lines)
 
 
+def _finite_json(value):
+    """-inf dB (silence) and other non-finite floats become null: strict JSON."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _finite_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_finite_json(v) for v in value]
+    return value
+
+
 def _cmd_render(args) -> int:
     from .render import check_finite, check_not_dry, render
 
@@ -697,7 +709,7 @@ def _cmd_render(args) -> int:
                    "notes": result.notes, "path": result.path, **result.summary()}
         if dry is not None:
             payload["not_dry"] = dry.ok
-        print(json.dumps(payload, indent=2))
+        print(json.dumps(_finite_json(payload), indent=2, allow_nan=False))
     else:
         label = args.input or args.signal
         print(_format_render(result, label, dry))

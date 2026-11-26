@@ -244,6 +244,17 @@ def test_render_a_built_amxd_as_json(tmp_path, capsys):
         assert after["rms_db"] == pytest.approx(before["rms_db"] - 6.0, abs=0.01)
 
 
+def test_render_json_is_strict_json_for_silence(capsys):
+    assert main(["render", str(WIDTH_EXAMPLE), "--signal", "silence", "--seconds", "0.05",
+                 "--json"]) == 0
+
+    def reject(token):
+        raise AssertionError(f"non-standard JSON token {token}")
+
+    report = json.loads(capsys.readouterr().out, parse_constant=reject)
+    assert report["output"][0]["rms_db"] is None and "not_dry" not in report
+
+
 def test_render_rejects_a_malformed_param(capsys):
     assert main(["render", str(WIDTH_EXAMPLE), "--param", "wid_width"]) == 1
     assert "expected NAME=VALUE" in capsys.readouterr().err
