@@ -2,7 +2,7 @@
 
 A browsable index of the public building blocks. Regenerate with `uv run python tools/build_catalog.py`.
 
-## DSP blocks (119)
+## DSP blocks (121)
 
 | Name | Summary |
 |------|---------|
@@ -24,7 +24,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `comb_resonator` | Create N parallel comb~ filters summed to a single output. |
 | `compressor` | Create a log-domain stereo compressor. |
 | `convolver` | Convolve a signal with an impulse response stored in a buffer~. |
-| `crossover_3band` | Create a 3-band crossover using two cross~ objects. |
+| `crossover_3band` | NOT allpass-compensated — the bands do NOT sum flat. |
 | `ctlin` | Receive MIDI continuous controller messages. |
 | `ctlout` | Send MIDI continuous controller messages. |
 | `cv_recorder` | Record and playback CV to a table object. |
@@ -84,6 +84,8 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `peaking_eq` | Create a parametric peaking EQ band using filtercoeff~ and biquad~. |
 | `phase_vocoder_subpatcher` | Return the pfft~ subpatcher dict for a phase vocoder. |
 | `pitch_quantize` | Quantize MIDI pitch to a musical scale using the scale Max object. |
+| `pitch_shift_gizmo` | Host box for the gizmo~ pitch shifter: an embedded ``pfft~``. |
+| `pitch_shift_gizmo_subpatcher` | pfft~ subpatcher for gizmo~ spectral pitch shift (T36/Q19 — the |
 | `pitchbend_in` | Receive MIDI pitchbend and scale to semitone range. |
 | `poly_voices` | Polyphonic voice allocator using poly~. |
 | `probability_gate` | Probabilistic gate: pass an incoming bang only some fraction of the time. |
@@ -93,7 +95,7 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `random_walk` | Brownian motion smooth random CV signal. |
 | `receive_msg` | Create a receive object for message-domain routing without patch cords. |
 | `receive_signal` | Create a receive~ object for signal-domain routing without patch cords. |
-| `retargetable_param_sink` | The verbatim multi-target retarget sink: one ``id <n>`` stream drives |
+| `retargetable_param_sink` | The retarget sink: one ``id <n>`` stream drives |
 | `reverb_network` | Schroeder reverb network with parallel combs and series allpasses. |
 | `sample_and_hold` | Sample-and-hold modulation source. |
 | `sample_and_hold_triggered` | Sample-and-hold with external trigger signal. |
@@ -207,13 +209,13 @@ A browsable index of the public building blocks. Regenerate with `uv run python 
 | `switchable_bank` | A/B / multi-algorithm signal bank (F4): a ``selector~ N 1`` whose active |
 | `tempo_synced_delay` | Add a tempo-synced delay: two dials + tapin~/tapout~ with transport. |
 | `transport_sync_lfo_recipe` | Add a transport-synced LFO with depth dial and division menu. |
-| `two_panel_strip` | Two-panel channel-strip SHELL — the classic channel-strip grammar: a wide MAIN |
+| `two_panel_strip` | Two-panel channel-strip SHELL — a premium channel-strip grammar: a wide MAIN |
 
 ## Themes (16)
 
 `AMBER`, `COBALT`, `COOL`, `FOREST`, `GRAPHITE`, `INDUSTRIAL`, `LIGHT`, `LOFI`, `MAGMA`, `MIDNIGHT`, `NEBULA`, `NEON`, `SOLAR`, `SYNTHWAVE`, `VIOLET`, `WARM`
 
-## Engines (67)
+## Engines (65)
 
 JavaScript (jsui) visualization generators.
 
@@ -224,7 +226,7 @@ JavaScript (jsui) visualization generators.
 | `band_chip_row` | `band_chip_row_js` |
 | `buffer_viz` | `buffer_viz_js`, `multi_lane_thumbnail_js`, `waveform_layers_js` |
 | `chaos_lanes` | `chaos_lanes_js` |
-| `compressor_display` | `compressor_display_js` |
+| `complementary_split` | `complementary_mixer_code`, `lowpass_kernel` |
 | `crossover_display` | `crossover_display_js` |
 | `curve_editor` | `curve_editor_js` |
 | `delay_trail` | `delay_trail_js` |
@@ -241,16 +243,14 @@ JavaScript (jsui) visualization generators.
 | `goniometer_graticule` | `goniometer_graticule_js` |
 | `grain_cloud` | `grain_cloud_js` |
 | `grain_display` | `grain_display_js` |
-| `graph_core` | `graph_core_js` |
 | `grid_sequencer_display` | `grid_sequencer_display_js` |
 | `icon_overlay` | `icon_overlay_js` |
 | `integrated_lufs` | `integrated_lufs_js` |
 | `interaction_core` | `plot_geometry_long_js`, `plot_geometry_short_js` |
 | `level_history` | `level_history_js` |
 | `level_meter` | `level_meter_js` |
-| `lfo_display` | `lfo_display_js` |
 | `linear_phase_eq_display` | `linear_phase_eq_display_js` |
-| `live_theme` | `live_brand_dim`, `live_colors_bus`, `live_theme_receiver`, `live_theme_state_dim` |
+| `live_theme` | `live_brand_dim`, `live_bypass_state`, `live_colors_bus`, `live_device_active_state`, `live_theme_receiver`, `live_theme_state_dim` |
 | `lom_mapper` | `lom_mapper_js` |
 | `loop_filter_curve` | `loop_filter_curve_js` |
 | `painters` | `lcd_dial_painter_js`, `lcd_panel_painter_js`, `lcd_slider_painter_js` |
@@ -274,14 +274,14 @@ JavaScript (jsui) visualization generators.
 | `transient_history` | `transient_history_js` |
 | `ui_curve_node` | `drag_curve_node_js` |
 | `ui_icons` | `ui_icons_js` |
-| `ui_interaction` | `draggable_node_js`, `edit_overlay_js`, `modifier_drag_js`, `tooltip_js`, `ui_interaction_js` |
+| `ui_interaction` | `ui_interaction_js` |
 | `ui_kit` | `custom_cycle_js`, `custom_glyph_selector_js`, `custom_knob_js`, `custom_readout_js`, `custom_segment_js`, `custom_slider_js`, `custom_stepper_js`, `custom_toggle_js`, `panel_bg_js` |
-| `ui_motion` | `glow_js`, `tween_js`, `ui_motion_js` |
+| `ui_motion` | `ui_motion_js` |
 | `ui_xy_pad` | `custom_xy_pad_js` |
 | `unit_format` | `unitstyle_readout_js` |
 | `value_readout` | `value_readout_js` |
 | `velocity_curve_display` | `velocity_curve_display_js` |
-| `waveform_display` | `waveform_display_dsp`, `waveform_display_js` |
+| `waveform_display` | `waveform_display_js` |
 | `waveshape_curve` | `waveshape_curve_js` |
 | `wavetable_display` | `wavetable_display_js` |
 | `wavetable_editor` | `wavetable_editor_js` |

@@ -64,8 +64,8 @@ Original Drum Cell executes with this host on arm64 iOS Simulator. This is not
 real-time safety: an interposed six-instance workload observes allocations,
 frees and locks in both original rendering and MIDI delivery. Integration must
 keep that work off the audio callback; do not enable devices from these probes.
-Exact evidence and the original code/data provenance receipt are under
-`~/.phren/objectstudio/reference/drumcell-ios-20260911-oWmlug/`.
+Exact evidence and the original code/data provenance receipt are kept
+outside this repo (`drumcell-ios-20260911-oWmlug`).
 
 ## Original stock-module probe extension (2026-09-11)
 

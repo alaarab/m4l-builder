@@ -11,10 +11,10 @@ WHY NOT THE LOM: in Live 12.4 the exposed ``DeviceParameter`` has no
 ``Song.View.selected_parameter`` is read-only. There is no message-level way
 to fake a native touch.
 
-THE FIX (the corpus mechanism): put an INVISIBLE native control on top of
+THE FIX (the standard mechanism): put an INVISIBLE native control on top of
 the drawn art and let it own the gesture. This is exactly how the premium
-M4L corpus builds drawn controls ("jsui-drawn controls over hidden live.*
-params" — Particle-Reverb teardown): the native object hosts the param,
+M4L devices build drawn controls ("jsui-drawn controls over hidden live.*
+params"): the native object hosts the param,
 handles the drag, reports the touch, and Live selects the lane. The art
 below stays a pure display, driven by the control's value echo.
 

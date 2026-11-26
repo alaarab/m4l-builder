@@ -271,7 +271,7 @@ def test_public_api_exports():
     assert hasattr(m4l_builder, "assemble_frozen_amxd")
 
 
-# --- extract_frozen_amxd (the inverse — reuse a download's bundled assets) ----
+# --- extract_frozen_amxd (the inverse — read a frozen device's bundled assets)
 
 
 class TestExtractFrozenAmxd:

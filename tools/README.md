@@ -13,6 +13,6 @@ Regenerate these after adding, renaming, or removing public DSP blocks, recipes,
 
 ## Corpus mining & reverse-engineering reports
 
-Moved to [m4l-research](https://github.com/alaarab/m4l-research) along with the
-reverse/corpus code (`mine_amxd_corpus.py`, `build_family_report.py`,
-`build_corpus_fixture.py`, and the other report builders).
+Not part of this repo. The reverse/corpus report builders (`mine_amxd_corpus.py`,
+`build_family_report.py`, `build_corpus_fixture.py`, ...) were removed with the
+reverse/corpus code.

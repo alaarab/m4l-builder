@@ -7,7 +7,7 @@ from m4l_builder.gen_stateful import freeze_capture_block
 
 def test_freeze_capture_block_verbatim_shape():
     blk = freeze_capture_block()
-    # rising-edge detect + TIME-REVERSED copy of both lines (Particle verbatim)
+    # rising-edge detect + TIME-REVERSED copy of both lines (verbatim from the reference device)
     assert "change(freezeTgt > 0.5)" in blk
     assert "fz_idx = freezeSamps - fz_i;" in blk
     assert "poke(data_freeze, delaySigR.read(fz_idx), fz_i, 0);" in blk

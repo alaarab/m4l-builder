@@ -1,4 +1,4 @@
-// pfft~ against Live 12.4.5 captures (max4liveplugins probes):
+// pfft~ against Live 12.4.5 captures (probe runs):
 //  * bare [fftin~ 1] -> [fftout~ 1] passthrough at 2048/4 and 2048/2 is unity
 //    and delayed by one frame (size, not size-hop);
 //  * [cycle~ 1000] into 2048/4 with [fftin~ 1] -> [cartopol~] -> [poke~] gives

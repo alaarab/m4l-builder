@@ -2,10 +2,10 @@
 
 Captured from the installed Max 9 ARM64 selector~ external on 2026-09-10 in
 isolated silent patches. Source patches, original module disassembly, capture
-configuration, completion witnesses and restore readbacks are retained under
-`~/.phren/objectstudio/reference/all68-runtime-20260910/`.
+configuration, completion witnesses and restore readbacks are retained outside
+this repo (`reference/all68-runtime-20260910/`).
 
-ObjectStudio's `tools/collect_selector_reference.py` regenerates this fixture
+A separate `collect_selector_reference.py` tool regenerates this fixture
 and `Tests/Fixtures/Original Selector Max.fixture` from the same 10 certified
 captures. It excludes the explicitly marked overlapping exploratory captures.
 

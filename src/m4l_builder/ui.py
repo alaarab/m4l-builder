@@ -1414,7 +1414,7 @@ def rslider(id: str, rect: list, *, min_val: int = 0, max_val: int = 127,
 
     ⚠️ NOT M4L-idiomatic / UNGROUNDED. ``rslider`` is a stock-Max control with NO
     ``live.*`` theming — it renders unthemed/out-of-place in a premium device — and
-    is absent from the synced Max docs, used by ZERO commercial-corpus devices, ZERO
+    is absent from the synced Max docs, used by ZERO reference-set devices, ZERO
     M4L Factory-Pack devices, and ZERO kit devices (verified 2026-06 across all
     three sources). It is NOT a Live parameter (does not save/automate). The
     ``min``/``max`` box attrs set here are therefore UNVERIFIED (no maxref to ground
@@ -1620,7 +1620,7 @@ def nodes(id: str, rect: list, *, numnodes: int = 4, xmin: float | None = None,
 
     ⚠️ UNGROUNDED + non-M4L. ``nodes`` is a stock-Max object but is absent from the
     synced Max docs AND used by ZERO devices across the Ableton Factory Packs and the
-    downloaded commercial corpus (verified 2026-06) — so the IO and attrs here
+    reference device set (verified 2026-06) — so the IO and attrs here
     (3 outlets; ``numnodes`` / ``xmin`` / ``xmax`` / ``ymin`` / ``ymax``) are
     UNVERIFIED guesses, and it carries no ``live.*`` theming (renders out-of-place in
     a device). For device UI prefer: ``function`` (breakpoint / transfer curve),
@@ -1759,7 +1759,7 @@ def plot(id: str, rect: list, *, numinlets: int = 1, numoutlets: int = 1,
 
     ⚠️ UNGROUNDED. ``plot~`` is absent from the synced Max docs (only the unrelated
     Jitter ``jit.plot`` is documented) AND used by ZERO devices across the Ableton
-    Factory Packs and the downloaded commercial corpus (verified 2026-06), so the
+    Factory Packs and the reference device set (verified 2026-06), so the
     attrs suggested here (``rgba`` / ``bgrgba`` / ``range`` / ``domain`` / ``style``)
     are UNVERIFIED — confirm them in Max before relying on them. For a GROUNDED
     display prefer: ``scope`` (live.scope~, signal time-domain), ``function`` /

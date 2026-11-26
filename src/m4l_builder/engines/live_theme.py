@@ -1,7 +1,7 @@
 """Runtime ``live.colors`` theme bus — re-tints native controls from the user's
 actual Live skin, live (including on a light/dark theme switch).
 
-THE #1 most-cited jewel from the commercial corpus (13 of 15 devices use
+THE #1 most-cited pattern in the reference device set (13 of 15 devices use
 ``live.colors``; a premium channel strip alone has 19 instances). Premium devices never
 bake colors at build time — they read the user's Live theme at load and broadcast
 each color over a device-scoped ``---`` send bus, so every control tracks the skin.

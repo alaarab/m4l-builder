@@ -99,4 +99,4 @@ Then refresh Live's browser; the tool appears in the clip editor's MIDI Tools.
 | MIDI Generator | `MidiGenerator` | `nagg` | `1851877223` (big-endian `"nagg"`) |
 
 `device_from_amxd` reads both back into the correct class, so you can round-trip
-existing MIDI Tools (m4l-research's `snapshot_from_amxd` handles them too).
+existing MIDI Tools.

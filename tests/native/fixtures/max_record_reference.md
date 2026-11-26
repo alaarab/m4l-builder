@@ -4,7 +4,7 @@ Captured from Max 9.0.10 ARM64 on 2026-09-10 using Object Studio's
 `tools/prepare_record_probe.py`; converted with `collect_record_reference.py`.
 Original capture SHA256:
 `92781a444d1b19fde813b466c33465cff6d096570e1ad016e39c54888d74c627`.
-Raw source lives in Phren objectstudio
+Raw source is kept outside this repo at
 `reference/all68-runtime-20260910/record-traced-44100-max/max.json`.
 
 Input left is n+1, right is -(n+1)/2. Three captures: 131-frame mono loop,

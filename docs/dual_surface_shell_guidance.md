@@ -7,9 +7,9 @@ Use it for flagship instruments and any effect whose compact surface should
 preserve a strong performance identity while deferring deeper editing to an
 expanded view.
 
-Primary candidate in the sibling `Max4LivePlugins` repo:
+Primary candidate:
 
-- `Max4LivePlugins/plugins/granular_sampler/README.md`
+- a granular sampler
 
 Future likely candidates:
 
@@ -145,4 +145,4 @@ The Granular Sampler lane should use this shell pattern as follows:
 
 See:
 
-- `Max4LivePlugins/plugins/granular_sampler/ui_shell_spec.md`
+- the granular sampler's UI shell spec

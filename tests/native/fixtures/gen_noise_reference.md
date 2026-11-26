@@ -5,8 +5,8 @@ with state `[1,2,3,4]`, then converted as `(next() >> 11) * 2^-52 - 1`.
 Source: https://prng.di.unimi.it/xoshiro256plus.c
 Retrieved source SHA256: `2aeecf6d9f5deb0ecee280b26d422798bdfe34dea1f92c4cf6decde811f02fc5`.
 This verifies the generator algorithm, not an inferred Max clock seed. Current
-Max captures and its installed double-precision definition are retained in
-Phren's ObjectStudio `reference/script-runtime-20260910/` evidence.
+Max captures and its installed double-precision definition are retained
+outside this repo (`reference/script-runtime-20260910/`).
 
 Run from the repository root:
 

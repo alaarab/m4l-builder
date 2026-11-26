@@ -143,7 +143,7 @@ private:
     // overlap-add is normalised per sample by the synthesis window's own
     // squared overlap sum, so a matched-window passthrough is exactly unity
     // (MEASURED in Live 12.4.5: unity at overlap 2 and 4). Latency is one
-    // frame (MEASURED: size, not size-hop). MEASURED (max4liveplugins bin
+    // frame (MEASURED: size, not size-hop). MEASURED (bin
     // dump, 1 kHz into 2048/4): the default window is the PERIODIC HANN
     // 0.5-0.5cos(2*pi*n/N) and fftin~ emits the RAW unnormalised DFT sum
     // (bins 44..49 = 13.25/103.58/451.21/416.45/71.56/11.26, digit-exact
@@ -1088,7 +1088,7 @@ private:
         auto& n=nodes_[index]; const auto& d=n.definition;(void)n;(void)d;(void)inlet;
         // Emits one [index value] list per element, first to last, with
         // the optional offset added to the index. MEASURED in Live 12.4.5
-        // (max4liveplugins batch4 probe): 10 20 30 -> (0 10) (1 20) (2 30),
+        // (batch4 probe): 10 20 30 -> (0 10) (1 20) (2 30),
         // 0-based, left to right.
         std::array<Atom,Message::capacity> atoms{};const int count=m.dataAtoms(atoms.data());
         if(count<0) {fault_=true;return true;}
@@ -2531,7 +2531,7 @@ public:
                 node.ring.assign(size_t(definition.arguments[0]),0.);
             }
             if(definition.op==Op::onePole) {
-                // onepole~ <fc>: MEASURED in Live 12.4.5 (max4liveplugins batch4
+                // onepole~ <fc>: MEASURED in Live 12.4.5 (batch4
                 // probe, step via line~, tau within 0.1%): a1 = exp(-2*pi*fc/SR),
                 // y = (1-a1)*x + a1*y1. The frequency is fixed at construction;
                 // the right inlet accepts a float to change it.

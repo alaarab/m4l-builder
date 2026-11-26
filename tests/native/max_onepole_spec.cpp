@@ -1,4 +1,4 @@
-// onepole~: MEASURED in Live 12.4.5 / Max 9.0.10 by the max4liveplugins batch4
+// onepole~: MEASURED in Live 12.4.5 / Max 9.0.10 by the batch4
 // probe (line~ step into [onepole~ 100], snapshot~ at 1/3/10/30/100 ms):
 // 0.0 / 0.62584 / 0.99542 / 1.0 / 1.0 at 44.1 kHz, tau = 1.5900 ms against the
 // textbook 1/(2*pi*100) = 1.5915 ms. That fixes a1 = exp(-2*pi*fc/SR) and

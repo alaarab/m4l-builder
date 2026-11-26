@@ -222,7 +222,7 @@ DEVICE_WIDGET_SPECS = {
         # BARE slidercolor (no active twin, unlike live.numbox which DOES have
         # activeslidercolor). Mapping the non-existent active attr left themed
         # sliders Live-grey; slidercolor is the real fill. textcolor = the value
-        # readout (doc-confirmed, set by 14/14 corpus AS-Console sliders) — theme it
+        # readout (doc-confirmed, set by 14/14 reference channel-strip sliders) — theme it
         # too or the digits render Live-default. The mod/automation triangle trio
         # (tricolor/trioncolor/tribordercolor) is left to Live's modulation colour.
         theme_mapping={"slidercolor": "dial_color", "textcolor": "text"},

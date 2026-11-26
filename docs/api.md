@@ -77,8 +77,7 @@ All place objects in presentation mode at `rect=[x, y, w, h]`. Any Max attribute
 
 ### Reverse engineering and corpus mining
 
-Moved to the separate [m4l-research](https://github.com/alaarab/m4l-research)
-package (`from m4l_research import snapshot_from_amxd, analyze_amxd_corpus, ...`).
+Not part of this package. `Device.from_amxd` is the only reader m4l-builder keeps.
 
 ### Layout shortcuts
 
@@ -327,7 +326,7 @@ Max for Live Live API integration.
 `device_active_state(id_prefix, *, from_device_outlet=None)` -- `prepend active` + `live.thisdevice` pair for device active-state control. By default it emits the toggle-style `prepend active -> live.thisdevice` line, but it can also preserve external-device `live.thisdevice -> prepend active` variants by setting `from_device_outlet`. Returns `(boxes, lines)`.
 
 All Live API helpers also accept explicit box IDs and patching rect overrides so
-regenerated code (m4l-research) can preserve original geometry and wiring targets while
+regenerated code can preserve original geometry and wiring targets while
 still using semantic helper calls.
 
 ---

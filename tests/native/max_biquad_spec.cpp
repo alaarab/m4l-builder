@@ -44,7 +44,7 @@ int main(){
     assert(rt.send(1,0,Message::anything(lowpass)));assert(rt.send(2,0,Message::anything(clear)));run(100,200);
     assert(std::abs(rms(right,4096)-0.7071)<0.03);
     assert(!rt.faulted());
-    // Live 12.4.5 capture (max4liveplugins): [filtercoeff~ peaknotch] freq 1000, gain 2 (linear), Q 1 at 44.1 k.
+    // Live 12.4.5 capture: [filtercoeff~ peaknotch] freq 1000, gain 2 (linear), Q 1 at 44.1 k.
     Definition pk;pk.op=Op::filterCoeff;pk.arguments={4,1};Definition o2;o2.op=Op::output;
     Runtime r2(std::vector<Definition>{pk,o2},std::vector<Edge>{},sr,sy);r2.setDSPActive(true);
     assert(r2.send(0,0,Message::number(1000)));assert(r2.send(0,1,Message::number(2)));assert(r2.send(0,2,Message::number(1)));

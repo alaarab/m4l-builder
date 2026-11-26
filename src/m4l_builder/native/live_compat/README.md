@@ -16,8 +16,8 @@ Live semantic mapping is established. Parameter indices, units, defaults and
 Live state bindings are also separate device-specific evidence. Do not infer
 full device compatibility from seven matching export names or a constructor.
 
-ObjectStudio's private bundle probes exercise the installed binaries and retain
-original-versus-Simulator audio, metadata and real-time observations in Phren.
+Separate, private bundle probes exercise the installed binaries and retain
+original-versus-Simulator audio, metadata and real-time observations.
 Those probes must verify compatible entry-point code/ABI before adding another
 bundle. This boundary does not register any device as ready in the app and does
 not establish physical-phone operation, the complete Live wrapper or ALS parity.
@@ -37,7 +37,7 @@ initializes activity from the presence of MIDI; this is not registration of
 Corpus's distinct effect interface. Portable fake-callback tests do not
 authorize original bundle loading on other architectures.
 
-ObjectStudio's original clock oracle verifies beat/BPM arithmetic against pinned
+A separate original clock oracle verifies beat/BPM arithmetic against pinned
 original Analog instructions on macOS and Simulator. Complete transport, preset
 and device fidelity are not implied. Shared ABI tests and zero observed render
 allocation/lock events cannot override failed original-device checks.

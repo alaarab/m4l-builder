@@ -295,10 +295,8 @@ device.build("path/to/modified.amxd")
 ## Reverse engineering
 
 Studying existing `.amxd` devices (snapshots, pattern detection, Python
-regeneration, corpus mining) lives in the separate
-[m4l-research](https://github.com/alaarab/m4l-research) package, which depends
-on m4l-builder. This repo builds devices; `from_amxd` above is the only reader
-it keeps.
+regeneration) is not part of this package. This repo builds devices;
+`from_amxd` above is the only reader it keeps.
 
 ## LiveMCP bridge (optional)
 
@@ -357,8 +355,7 @@ implementation of the box/line traversal dance (`iter_boxes`, `boxes_by_id`,
 `iter_patchlines`, `unwrap_box`) that used to be hand-rolled independently
 throughout the library. It accepts a live `Device`/`GraphContainer`, a raw
 patcher dict, or an already-extracted list of wrapper entries, so the same
-functions serve live authoring code and code that reads existing patchers
-(including m4l-research).
+functions serve live authoring code and code that reads existing patchers.
 
 ### `idioms.py` and `bridge_probe.py`
 
@@ -406,4 +403,6 @@ theme, and engine at a glance, or the full [API docs](docs/api.md).
 
 ## License
 
-MIT
+MIT. Files vendored from Ableton's
+[maxdevtools](https://github.com/Ableton/maxdevtools) (`src/m4l_builder/vendor/maxdiff/`,
+`tools/maxdiff/`) are MIT, (c) 2024 Ableton AG; their license text sits next to them.

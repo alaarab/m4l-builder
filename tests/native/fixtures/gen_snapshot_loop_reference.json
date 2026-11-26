@@ -1,7 +1,7 @@
 {
   "rawSHA256": "0b8c95c38e9d5dd2724fe8b8602858046b3cb90c2e98831877b043e59f8e409e",
   "source": {
-    "path": "/Users/squidbot/.phren/objectstudio/reference/all68-runtime-20260910/gen-snapshot-loop-binary.genexpr",
+    "path": "reference/all68-runtime-20260910/gen-snapshot-loop-binary.genexpr",
     "sha256": "6ca73c789df38b5b03fb99d9ab886dc8b482e50ff4b6dd457d6c480b7abb08e4",
     "scope": "Original Gen section, not complete device compatibility",
     "rootProgram": true,

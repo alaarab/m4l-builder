@@ -178,7 +178,7 @@ class TestMcPolySpine:
 
 
 class TestTwoPanelStrip:
-    def test_grounded_as_console_geometry(self):
+    def test_grounded_channel_strip_geometry(self):
         device = AudioEffect("test", width=231, height=167)
         res = two_panel_strip(device, "strip")
         # a premium two-panel channel-strip grammar: wide main + narrow side, gap 2
