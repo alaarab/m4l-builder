@@ -344,7 +344,7 @@ def test_watch_live_reloads_each_written_build(tmp_path, user_library, monkeypat
 
     reloaded = []
 
-    def fake_reload(client, path):
+    def fake_reload(client, path, **kwargs):
         reloaded.append(path)
         return ReloadResult("Live One", "replace_device", [(0, 1)], restored=2, seconds=0.4,
                             warnings=["track 1: not restored (gone or not loaded yet): Drive"])
@@ -365,7 +365,7 @@ def test_watch_live_reports_a_refused_reload_and_carries_on(
         tmp_path, user_library, monkeypatch, capsys):
     from m4l_builder.live_reload import LiveCommandError
 
-    def refusing(client, path):
+    def refusing(client, path, **kwargs):
         raise LiveCommandError("replace_device: Browser item not found")
 
     monkeypatch.setattr(cli.LiveClient, "call", lambda self, command, params=None: {})

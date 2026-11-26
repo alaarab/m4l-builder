@@ -95,8 +95,8 @@ you hear the change a moment after you save:
 watching my_gain/build.py (Ctrl-C to stop)
 live: connected to LiveMCP on 127.0.0.1:9877
 [14:03:40] built My Gain -> ~/Music/Ableton/User Library/Presets/Audio Effects/Max Audio Effect/My Gain.amxd
-           + parameter: Drive
-           live: My Gain: swapped 1 copy in place, restored 1 parameter values in 0.62s
+           ~ parameter: Gain
+           live: My Gain: swapped 1 copy in place in 1.72s
 ```
 
 It needs [LiveMCP](https://github.com/alaarab/livemcp)'s remote script
@@ -105,7 +105,8 @@ For each build it:
 
 - finds every Max device on the set's tracks with the device's name and puts
   the new build in the same slot on the same track (LiveMCP's `replace_device`;
-  older LiveMCP versions load it beside the old copy and delete the old one);
+  older LiveMCP versions load the new copy, delete the old one and move the
+  new one into its slot);
 - restores parameter values by name, clamped to the new ranges. A parameter
   you renamed or removed keeps its new default, and the watch says which;
 - loads the device onto the selected track if it isn't in the set yet.
@@ -113,6 +114,19 @@ For each build it:
 Live loads devices from its browser, so the build has to land in the User
 Library: the default output, or an `--out` folder inside it. A copy you
 renamed in Live is left alone. Devices inside racks aren't reloaded.
+
+How long a reload takes, measured on a 24-track set in Live 12.4:
+
+| LiveMCP | Reload |
+| --- | --- |
+| with `replace_device` | about 1.8 s per save (2.1 s from save to done) |
+| without it (older versions) | about 41 s: the older lookup searches the whole browser before the User Library |
+
+Each LiveMCP call costs a few tenths of a second inside Live, so the watch
+remembers where it found the device. The first reload, and the first after
+you add or remove a device anywhere in the set, rescans every track; on that
+set it took about 11 s. Older LiveMCP versions can't list devices on group
+tracks; the watch skips those tracks and says how many it skipped.
 
 If Live or LiveMCP isn't running, the watch says so once and keeps building;
 the next save after Live comes back reloads again. `--live-port` changes the

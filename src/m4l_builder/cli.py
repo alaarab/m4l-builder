@@ -45,6 +45,7 @@ from .live_reload import (
     LiveClient,
     LiveCommandError,
     LiveUnavailable,
+    SlotCache,
     reload_device,
 )
 
@@ -743,6 +744,7 @@ class _LiveReloader:
     def __init__(self, client: LiveClient) -> None:
         self.client = client
         self.reachable: bool | None = None
+        self.cache = SlotCache()
 
     def check(self) -> None:
         try:
@@ -756,7 +758,7 @@ class _LiveReloader:
 
     def reload(self, written_path: str) -> None:
         try:
-            result = reload_device(self.client, written_path)
+            result = reload_device(self.client, written_path, cache=self.cache)
         except LiveUnavailable as exc:
             self._unreachable(exc)
             return

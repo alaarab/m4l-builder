@@ -15,9 +15,11 @@ from pathlib import Path
 import pytest
 
 from m4l_builder.live_reload import (
+    TIMED_OUT,
     LiveClient,
     LiveCommandError,
     LiveUnavailable,
+    SlotCache,
     find_device_instances,
     reload_device,
     user_library_uri,
@@ -34,11 +36,13 @@ def _params(**values):
 class FakeLive:
     """In-memory LiveMCP. ``build`` is what the rebuilt file loads as."""
 
-    def __init__(self, tracks, build, *, has_replace=True, polls_until_loaded=2):
+    def __init__(self, tracks, build, *, has_replace=True, polls_until_loaded=2,
+                 loads_at_end=False):
         self.tracks = tracks  # list of lists of device dicts
         self.build = build  # {"name":..., "params": [...]} for the new file
         self.has_replace = has_replace
         self.polls_until_loaded = polls_until_loaded
+        self.loads_at_end = loads_at_end
         self.selected = (0, None)
         self.calls = []
 
@@ -56,12 +60,18 @@ class FakeLive:
         if command == "get_track_info":
             return {"devices": [{"index": i, "name": dev["name"], "class_name": dev["class_name"]}
                                 for i, dev in enumerate(self.tracks[t])]}
+        if command == "get_all_tracks_info":
+            return {"tracks": [{"index": i, "device_count": len(chain)}
+                               for i, chain in enumerate(self.tracks)]}
         if command == "get_device_parameters":
+            if d >= len(self.tracks[t]):
+                raise LiveCommandError("get_device_parameters: Device index out of range")
             dev = self.tracks[t][d]
             if dev.get("polls_left", 0) > 0:  # patcher still loading
                 dev["polls_left"] -= 1
-                return {"parameters": dev["params"][:1]}
-            return {"parameters": [dict(p, index=i) for i, p in enumerate(dev["params"])]}
+                return {"device_name": dev["name"], "parameters": dev["params"][:1]}
+            return {"device_name": dev["name"],
+                    "parameters": [dict(p, index=i) for i, p in enumerate(dev["params"])]}
         if command == "replace_device":
             if not self.has_replace:
                 raise LiveCommandError("replace_device: Unknown command: replace_device")
@@ -73,9 +83,13 @@ class FakeLive:
         if command == "load_browser_item":
             chain = self.tracks[t]
             sel_t, sel_d = self.selected
-            at = sel_d + 1 if sel_t == t and sel_d is not None else len(chain)
+            after_selection = sel_t == t and sel_d is not None and not self.loads_at_end
+            at = sel_d + 1 if after_selection else len(chain)
             chain.insert(at, self._new_device())
             return {"loaded": True}
+        if command == "move_device":
+            self.tracks[t].insert(params["new_index"], self.tracks[t].pop(d))
+            return {}
         if command == "delete_device":
             del self.tracks[t][d]
             return {}
@@ -140,7 +154,25 @@ def test_old_livemcp_falls_back_to_load_beside_then_delete(library):
     result = reload_device(live, amxd, library=root, sleep=_no_sleep)
     assert live.names(0) == ["EQ", "My Gain", "Utility"]
     assert result.method == "delete+load"
+    assert "without replace_device" in result.summary()
     assert live.tracks[0][1]["params"][1]["value"] == -6.0
+
+
+def test_fallback_moves_a_copy_live_loaded_at_the_end_back_into_the_slot(library):
+    """The installed LiveMCP on a real set: Live appended the new copy after
+    the neighbour, so it has to be moved back, and values restored into it."""
+    root, amxd = library
+    live = FakeLive(
+        [[_device("My Gain", _params(Gain=(-12.0, -70.0, 6.0))), _device("Utility", _params())]],
+        build={"name": "My Gain", "params": _params(Gain=(0.0, -70.0, 12.0))},
+        has_replace=False, loads_at_end=True,
+    )
+    result = reload_device(live, amxd, library=root, sleep=_no_sleep)
+    assert live.names(0) == ["My Gain", "Utility"]
+    assert "polls_left" in live.tracks[0][0]
+    assert live.tracks[0][0]["params"][1]["value"] == -12.0
+    assert result.restored == 1
+    assert ("move_device", {"track_index": 0, "device_index": 1, "new_index": 0}) in live.calls
 
 
 def test_every_copy_is_swapped_and_renamed_copies_are_left_alone(library):
@@ -175,7 +207,8 @@ def test_keep_parameters_false_skips_the_snapshot(library):
                     build={"name": "My Gain", "params": _params(Gain=(0.0, -70.0, 6.0))})
     result = reload_device(live, amxd, library=root, keep_parameters=False, sleep=_no_sleep)
     assert result.restored == 0
-    assert not [c for c in live.calls if c[0] == "get_device_parameters"]
+    assert not [c for c in live.calls if c[0] == "set_device_parameter"]
+    assert live.tracks[0][0]["params"][1]["value"] == 0.0  # new default kept
 
 
 def test_device_not_in_the_set_is_loaded_onto_the_selected_track(library):
@@ -220,6 +253,126 @@ def test_other_command_errors_are_not_mistaken_for_an_old_livemcp(library):
     with pytest.raises(LiveCommandError, match="Browser item not found"):
         reload_device(live, amxd, library=root, sleep=_no_sleep)
     assert live.names(0) == ["My Gain"]
+
+
+def test_tracks_livemcp_cannot_describe_are_skipped_with_a_warning(library):
+    root, amxd = library
+
+    class GroupTrackBug(FakeLive):
+        def call(self, command, params=None):
+            if command == "get_track_info" and (params or {}).get("track_index") == 0:
+                raise LiveCommandError(
+                    "get_track_info: Main and Return Tracks have no 'Arm' state!")
+            return super().call(command, params)
+
+    live = GroupTrackBug([[], [_device("My Gain", _params())]],
+                         build={"name": "My Gain", "params": _params()})
+    result = reload_device(live, amxd, library=root, sleep=_no_sleep)
+    assert result.slots == [(1, 0)]
+    assert any("1 track(s)" in w for w in result.warnings)
+
+
+class SlowLoadLive(FakeLive):
+    """Older LiveMCP on a big library: the load outlives LiveMCP's 15 s wait,
+    so it replies with an error, but Live finishes the load anyway
+    (``lands`` False: it never does)."""
+
+    def __init__(self, *args, lands=True, **kwargs):
+        super().__init__(*args, has_replace=False, **kwargs)
+        self.lands = lands
+
+    def call(self, command, params=None):
+        if command == "load_browser_item":
+            if self.lands:
+                super().call(command, params)
+            self.calls.append(("load_browser_item(timed out)", params))
+            raise LiveCommandError(f"load_browser_item: {TIMED_OUT}")
+        return super().call(command, params)
+
+
+def test_fallback_waits_out_a_load_that_outlives_livemcps_timeout(library):
+    root, amxd = library
+    live = SlowLoadLive([[_device("EQ", _params()), _device("My Gain", _params())]],
+                        build={"name": "My Gain", "params": _params()})
+    result = reload_device(live, amxd, library=root, sleep=_no_sleep)
+    assert live.names(0) == ["EQ", "My Gain"]
+    assert "polls_left" in live.tracks[0][1]  # the new copy, in the old slot
+    assert result.method == "delete+load"
+
+
+def test_a_load_that_never_lands_fails_without_deleting_the_old_copy(library):
+    root, amxd = library
+    live = SlowLoadLive([[_device("My Gain", _params())]],
+                        build={"name": "My Gain", "params": _params()}, lands=False)
+    now = [0.0]
+
+    def tick(seconds):
+        now[0] += seconds
+
+    import m4l_builder.live_reload as lr
+    original = lr._load
+
+    def fast_clock_load(client, track_index, uri, count_before):
+        return original(client, track_index, uri, count_before, timeout=2.0,
+                        clock=lambda: now[0], sleep=tick)
+
+    lr._load = fast_clock_load
+    try:
+        with pytest.raises(LiveCommandError, match="hadn't appeared"):
+            reload_device(live, amxd, library=root, sleep=_no_sleep)
+    finally:
+        lr._load = original
+    assert live.names(0) == ["My Gain"]
+    assert "polls_left" not in live.tracks[0][0]
+
+
+def test_first_load_waits_out_a_slow_load_too(library):
+    root, amxd = library
+    live = SlowLoadLive([[]], build={"name": "My Gain", "params": _params()})
+    live.selected = (0, None)
+    result = reload_device(live, amxd, library=root, sleep=_no_sleep)
+    assert result.method == "load"
+    assert live.names(0) == ["My Gain"]
+
+
+def _scans(live):
+    return sum(1 for command, _ in live.calls if command == "get_track_info")
+
+
+def test_cache_skips_the_scan_while_the_set_is_unchanged(library):
+    root, amxd = library
+    live = FakeLive([[_device("EQ", _params())], [_device("My Gain", _params())]],
+                    build={"name": "My Gain", "params": _params()})
+    cache = SlotCache()
+    reload_device(live, amxd, library=root, sleep=_no_sleep, cache=cache)
+    scans = _scans(live)
+    assert scans >= 2
+    result = reload_device(live, amxd, library=root, sleep=_no_sleep, cache=cache)
+    assert _scans(live) == scans  # no get_track_info this time
+    assert result.slots == [(1, 0)]
+
+
+def test_cache_rescans_when_a_copy_is_added_elsewhere(library):
+    root, amxd = library
+    live = FakeLive([[_device("My Gain", _params())], []],
+                    build={"name": "My Gain", "params": _params()})
+    cache = SlotCache()
+    reload_device(live, amxd, library=root, sleep=_no_sleep, cache=cache)
+    live.tracks[1].append(_device("My Gain", _params()))  # user adds a copy
+    result = reload_device(live, amxd, library=root, sleep=_no_sleep, cache=cache)
+    assert result.slots == [(0, 0), (1, 0)]
+
+
+def test_cache_never_swaps_a_device_that_moved_into_a_remembered_slot(library):
+    root, amxd = library
+    live = FakeLive([[_device("My Gain", _params()), _device("Utility", _params())]],
+                    build={"name": "My Gain", "params": _params()})
+    cache = SlotCache()
+    reload_device(live, amxd, library=root, sleep=_no_sleep, cache=cache)
+    live.tracks[0].reverse()  # same device count, different order
+    result = reload_device(live, amxd, library=root, sleep=_no_sleep, cache=cache)
+    assert live.names(0) == ["Utility", "My Gain"]
+    assert result.slots == [(0, 1)]
 
 
 def test_user_library_uri_rejects_files_outside_the_library(tmp_path):
@@ -270,6 +423,8 @@ class _OneShotServer:
 
 def test_client_round_trip_and_error_reply():
     def respond(request):
+        if request["type"] == "slow":
+            return {"id": request["id"], "status": "error", "error": ""}
         if request["type"] == "boom":
             return {"id": request["id"], "status": "error",
                     "error": {"code": "x", "message": "Unknown command: boom"}}
@@ -281,7 +436,9 @@ def test_client_round_trip_and_error_reply():
         with pytest.raises(LiveCommandError, match="Unknown command: boom"):
             client.call("boom")
         assert client.call("ping") == {"echo": {}}
-    assert [r["id"] for r in server.requests] == [1, 2, 3]
+        with pytest.raises(LiveCommandError, match="stopped waiting for Live"):
+            client.call("slow")
+    assert [r["id"] for r in server.requests] == [1, 2, 3, 4]
 
 
 def test_client_reports_live_unavailable_when_nothing_listens():
@@ -300,3 +457,13 @@ def test_reload_rejects_a_build_outside_the_user_library(tmp_path):
     live = FakeLive([[]], build={"name": "x", "params": _params()})
     with pytest.raises(ValueError):
         reload_device(live, Path(tmp_path) / "x.amxd", library=tmp_path / "UL")
+
+
+def test_client_reports_a_slow_reply_as_a_timeout_not_unreachable():
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)  # accepts, never answers
+    client = LiveClient(port=server.getsockname()[1], timeout=0.3)
+    with pytest.raises(LiveUnavailable, match="didn't answer get_session_info within 0.3s"):
+        client.call("get_session_info")
+    server.close()
