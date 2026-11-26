@@ -2,24 +2,33 @@
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-26
+
+The first published release since 0.7.0. `pyproject.toml` has said 0.8.0
+since 2026-05-30, but nothing was tagged or published until now, so this
+entry covers everything since 0.7.0.
+
 ### Compatibility
 
 - Require Python 3.10+ for standalone device authoring. This library does not run
   inside Ableton's bundled Python; the new minimum permits current development
   and build tooling, including mypy 2 and pytest 9. No runtime dependencies added.
 
-<!-- FIXME(changelog): the entries below covering device freezing, sample_drop_target,
-     gen_snippets' harmonic-exciter foundation, engines/exciter_curve.py, NoteEvent/notes_dict,
-     the device_output_path fix, and the three Changed items were previously filed under a
-     second "## [0.8.0] - 2026-06-22" heading. That heading was a mis-versioned duplicate:
-     pyproject.toml was bumped 0.7.0 -> 0.8.0 in commit 7fc0886 (2026-05-30), the SAME commit
-     that added the "[0.8.0] — 2026-05-30" entry below, and has not been bumped since — so
-     nothing has actually shipped as its own release since 0.8.0 (05-30). The 06-22 heading
-     re-used an already-claimed version number instead of getting a real one. Folded back into
-     Unreleased here rather than guess which number it should have had (0.9.0? 0.8.1?) —
-     assign the real version at the next actual release/version bump. -->
-
 ### Added
+
+**Live 12 MIDI Tools**
+
+- `MidiTransformation` and `MidiGenerator` device types (`.amxd` device-type
+  codes `natt` / `nagg`, byte-verified against Live 12's own MIDI Tool files),
+  with round-trip read-back via `device_from_amxd`.
+- `midi_tool_io` block: the `live.miditool.in` / `live.miditool.out` scaffold.
+- `docs/midi_tools.md` guide.
+- `NoteEvent` / `notes_dict` (new `notes` module): pure-Python builders for
+  the Live 12 MIDI Tool notes dictionary (`{"notes": [...]}`), with range
+  validation and JSON-ready output. Structure-building only — sending the
+  dict to `live.miditool.out` still needs Live-side wiring (see roadmap).
+
+**Device authoring**
 
 - `gen_sim` runs user-defined gen functions (state per call site, `Delay`
   arguments, two-value returns), `Param` declarations with `min`/`max`, `Delay`
@@ -76,10 +85,19 @@
 - `engines/exciter_curve.py` (`exciter_curve_js`): a harmonic-exciter-style hero —
   a log-frequency band-lift envelope with draggable LOW/HIGH handles (drag X =
   tune, Y = amount) and a live output glow.
-- `NoteEvent` / `notes_dict` (new `notes` module): pure-Python builders for
-  the Live 12 MIDI Tool notes dictionary (`{"notes": [...]}`), with range
-  validation and JSON-ready output. Structure-building only — sending the
-  dict to `live.miditool.out` still needs Live-side wiring (see roadmap).
+
+**Generative building blocks**
+
+- `probability_gate`, `random_note`, and `euclidean_rhythm` DSP blocks.
+- `generative_midi_stage`, `euclidean_sequencer_stage`, and `stereo_width_stage`
+  recipes.
+
+**Docs & examples**
+
+- Six runnable example devices (`examples/`) covering every device category,
+  guarded by `tests/test_examples.py`.
+- `docs/getting_started.md`, a generated `docs/catalog.md`, `docs/roadmap.md`,
+  plus `CONTRIBUTING.md` / `DEVELOPING.md`.
 
 ### Fixed
 
@@ -101,7 +119,6 @@
   instead of BPM. It now goes midiin -> `select 248` -> `counter 0 23` carry
   -> `sel 1` -> `t b b` -> `timer` -> `/ 1000.` -> `!/ 60.`, and the unused
   midiparse box is gone. The output is still `{prefix}_bpm_scale` outlet 0.
-
 - `sysex_out` byte validation: out-of-range values used to wrap silently
   (`256 -> 0`, `-1 -> 255`); they now raise, and body bytes are checked to be
   7-bit (only the 0xF0/0xF7 framing may exceed 127).
@@ -113,6 +130,9 @@
 
 ### Changed
 
+- GitHub Actions CI: lint, type-check and a pytest matrix on Python 3.10–3.14.
+- Configured ruff and mypy in `pyproject.toml`; added a `py.typed` marker;
+  modernized type annotations (PEP 585/604).
 - Reimplemented the stateful gen primitives (`lowpass_12_fn`,
   `highpass_12_fn`, `allpass_fn`, `svf_fn`, `tanh_approx_fn`, `op_fn`,
   `qpow_fn`, `fade_env_fn`, `ramp_env_fn`, `lfo_osc_fn`, `granular_voice_fn`,
@@ -137,6 +157,7 @@
   (runtime loading stays lazy).
 - mypy is fully gated: no `ignore_errors` overrides remain (`device_widgets`
   and `livemcp_bridge` now type-check) and `implicit_optional` is off.
+- Hardened `.amxd` serialization errors and bridge color-mixing validation.
 
 ### Removed
 
@@ -147,61 +168,10 @@
 - Dead helpers: `ParameterSpec.with_bank`, `constants.DEFAULT_BG_COLOR`,
   `constants.DEFAULT_ACCENT_COLOR`, `gen_character.HALF_PI`.
 
-## [0.8.0] — 2026-05-30
-
-### Added
-
-- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
-  optional and inferred from the object text (`m4l_builder.object_io`).
-  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
-  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
-  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
-  other objects use the vendored maxdiff dataset (bare, or with arguments
-  for objects whose shape doesn't depend on them). Unknown or
-  context-dependent objects raise `UnknownObjectIO`. Explicit values always
-  win and existing calls build byte-identical output.
-**Live 12 MIDI Tools**
-- `MidiTransformation` and `MidiGenerator` device types (`.amxd` device-type
-  codes `natt` / `nagg`, byte-verified against Live 12's own MIDI Tool files),
-  with round-trip read-back via `device_from_amxd`.
-- `midi_tool_io` block: the `live.miditool.in` / `live.miditool.out` scaffold.
-- `docs/midi_tools.md` guide.
-
-**Generative building blocks**
-- `probability_gate`, `random_note`, and `euclidean_rhythm` DSP blocks.
-- `generative_midi_stage`, `euclidean_sequencer_stage`, and `stereo_width_stage`
-  recipes.
-
-**Docs & examples**
-- Six runnable example devices (`examples/`) covering every device category,
-  guarded by `tests/test_examples.py`.
-- `docs/getting_started.md`, a generated `docs/catalog.md`, `docs/roadmap.md`,
-  plus `CONTRIBUTING.md` / `DEVELOPING.md`.
-
-### Changed
-
-**Quality & tooling**
-- GitHub Actions CI (lint + type-check + a pytest matrix on Python 3.9–3.13).
-- Configured ruff and mypy in `pyproject.toml`; added a `py.typed` marker;
-  modernized type annotations (PEP 585/604). Mypy now gates all but two legacy
-  modules.
-
-**Refactor**
-- Hardened `.amxd` serialization errors and bridge color-mixing validation.
-
 ## [0.7.0] — 2026-03-04
 
 ### Added
 
-- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
-  optional and inferred from the object text (`m4l_builder.object_io`).
-  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
-  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
-  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
-  other objects use the vendored maxdiff dataset (bare, or with arguments
-  for objects whose shape doesn't depend on them). Unknown or
-  context-dependent objects raise `UnknownObjectIO`. Explicit values always
-  win and existing calls build byte-identical output.
 **New JS Engines**
 - `lfo_display_js()` — animated LFO waveform with sweeping playhead; inlets: shape, phase, depth
 - `compressor_display_js()` — transfer curve with live gain-reduction dot riding the curve; inlets: threshold, ratio, gr
@@ -242,15 +212,6 @@
 
 ### Added
 
-- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
-  optional and inferred from the object text (`m4l_builder.object_io`).
-  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
-  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
-  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
-  other objects use the vendored maxdiff dataset (bare, or with arguments
-  for objects whose shape doesn't depend on them). Unknown or
-  context-dependent objects raise `UnknownObjectIO`. Explicit values always
-  win and existing calls build byte-identical output.
 **Recipes (#91-#100)**
 - `convolver_controlled_stage` — convolver + wet/dry dial
 - `sidechain_compressor_recipe` — sidechain_routing + compressor + display + 2 dials
@@ -300,15 +261,6 @@
 
 ### Added
 
-- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
-  optional and inferred from the object text (`m4l_builder.object_io`).
-  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
-  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
-  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
-  other objects use the vendored maxdiff dataset (bare, or with arguments
-  for objects whose shape doesn't depend on them). Unknown or
-  context-dependent objects raise `UnknownObjectIO`. Explicit values always
-  win and existing calls build byte-identical output.
 **Device methods**
 - `device.validate()` — static analysis returning list of warnings (duplicate IDs, bad patchlines, missing plugin~/plugout~, orphan boxes)
 - `device.to_json(indent=2)` — patcher dict as formatted JSON string for inspection/diffing
@@ -343,15 +295,6 @@
 
 ### Added
 
-- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
-  optional and inferred from the object text (`m4l_builder.object_io`).
-  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
-  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
-  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
-  other objects use the vendored maxdiff dataset (bare, or with arguments
-  for objects whose shape doesn't depend on them). Unknown or
-  context-dependent objects raise `UnknownObjectIO`. Explicit values always
-  win and existing calls build byte-identical output.
 **DSP blocks (#50-61, #66-69)**
 - `auto_gain` — RMS-based loudness normalization with soft-knee makeup gain
 - `midi_clock_out` — send MIDI clock (24 ppqn) + start/stop synced to Live transport
@@ -392,15 +335,6 @@
 
 ### Added
 
-- `add_newobj` / `newobj`: `numinlets`, `numoutlets` and `outlettype` are now
-  optional and inferred from the object text (`m4l_builder.object_io`).
-  Argument rules cover pack/pak/unpack, route/routepass, sel/select,
-  trigger, gate/gate~, switch, selector~, join/unjoin, spray, funnel,
-  int/float/signal math, send/receive, expr/if/sprintf and mc.pack~/unpack~;
-  other objects use the vendored maxdiff dataset (bare, or with arguments
-  for objects whose shape doesn't depend on them). Unknown or
-  context-dependent objects raise `UnknownObjectIO`. Explicit values always
-  win and existing calls build byte-identical output.
 **Layout system**
 - `Row`, `Column`, `Grid` layout helpers for auto-positioning UI elements
 
