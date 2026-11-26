@@ -1,7 +1,7 @@
 # m4l-builder — local dev gate. `make check` mirrors CI exactly (ruff + mypy +
 # pytest), so a green `make check` means a green GitHub Actions run. Run it
 # before every push; it is also wired as a pre-push hook (see .githooks/).
-.PHONY: check lint typecheck test fix hooks help
+.PHONY: check lint typecheck test fix hooks previews help
 
 help:            ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -20,6 +20,9 @@ test:            ## Pytest
 
 fix:             ## Auto-fix what ruff can (imports, simple lint)
 	uv run ruff check --fix src tests
+
+previews:        ## Re-render docs/previews/*.svg from examples/ (golden files for tests/test_preview.py)
+	@for f in examples/[0-9]*.py; do uv run m4l preview "$$f" --out docs/previews/ --scale 2 || exit 1; done
 
 hooks:           ## Enable the repo's pre-push hook in this clone
 	git config core.hooksPath .githooks

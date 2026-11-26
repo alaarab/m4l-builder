@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="336" viewBox="0 0 140 168" font-family="Arial, Helvetica, sans-serif">
+<title>Widener</title>
+<clipPath id="device"><rect width="140" height="150"/></clipPath>
+<rect x="0" y="0" width="140" height="18" fill="#454545"/>
+<circle cx="9" cy="9" r="3.5" fill="#f29e38"/>
+<text x="18" y="12.32" font-size="9.5" font-weight="bold" fill="#e6e6e6">Widener</text>
+<g clip-path="url(#device)" transform="translate(0 18)">
+<rect x="0" y="0" width="140" height="150" fill="#2e2e2e"/>
+<g data-id="bg" data-maxclass="panel">
+<rect x="0" y="0" width="140" height="150" fill="#121214"/>
+</g>
+<g data-id="wid_dial" data-maxclass="live.dial">
+<text x="70" y="39" font-size="9" text-anchor="middle" fill="#dbdbdb">wid_width</text>
+<text x="70" y="78" font-size="9" text-anchor="middle" fill="#dbdbdb">1</text>
+<path d="M62.58 62.42 A10.5 10.5 0 1 1 77.42 62.42" fill="none" stroke="#545454" stroke-width="2.16" stroke-linecap="round"/>
+<path d="M62.58 62.42 A10.5 10.5 0 0 1 70 44.5" fill="none" stroke="#73bfa6" stroke-width="2.16" stroke-linecap="round"/>
+<line x1="70" y1="52.38" x2="70" y2="44.5" stroke="#e0e0e0" stroke-width="1.3" stroke-linecap="round"/>
+</g>
+</g>
+<rect x="0.5" y="0.5" width="139" height="167" fill="none" stroke="#141414"/>
+</svg>
