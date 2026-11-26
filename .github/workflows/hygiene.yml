@@ -2,8 +2,7 @@ name: Public hygiene
 
 # Fails a PR that adds private or third-party material to this public repo:
 # added lines, commit messages and the PR title are matched against pattern
-# lists kept in the HYGIENE_PATTERNS secret (never committed), and commit
-# author/committer emails must be noreply addresses.
+# lists kept in the HYGIENE_PATTERNS secret (never committed).
 on:
   pull_request:
 
@@ -23,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Scan added lines, commit messages and emails
+      - name: Scan added lines and commit messages
         env:
           HYGIENE_PATTERNS: ${{ secrets.HYGIENE_PATTERNS }}
           # Fork and Dependabot PRs don't receive repository secrets; skip there.
