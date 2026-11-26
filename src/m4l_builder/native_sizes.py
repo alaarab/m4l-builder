@@ -39,7 +39,7 @@ LABEL_FONTSIZE = 7.0     # a live.comment label above a control (renders small)
 VALUE_FONTSIZE = 9.0
 FONTSIZE = 10            # the live.* default fontsize
 
-# Premium tiers — MEASURED across the 15-device library (own count of
+# Premium tiers — MEASURED across a 15-device reference set (own count of
 # presentation_rect sizes; counts in parens). The standard DIAL above (44,47) was a
 # guess and is NOT how premium devices size knobs; prefer DIAL_COMPACT going forward.
 DIAL_COMPACT = (41, 35)   # THE workhorse — 38 of 82 library dials. Premium default.

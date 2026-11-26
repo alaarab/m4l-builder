@@ -29,7 +29,6 @@ Curated, authoritative sources for the technologies `m4l-builder` sits on top of
 | [GitHub — alaarab/m4l-builder](https://github.com/alaarab/m4l-builder) | Source, issues, and the example scripts under `examples/`. |
 | [PyPI — m4l-builder](https://pypi.org/project/m4l-builder/) | Released versions; `pip install m4l-builder`. |
 | [API reference](api.md) | Every public class and function in the library. |
-| [a separate package](https://github.com/alaarab/a separate package) | analysis and library analysis of existing `.amxd` devices (separate package). |
 | [LiveMCP bridge](livemcp_max_bridge.md) | Drive a built device live in Ableton from an MCP client. |
 
 ## File format background

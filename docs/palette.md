@@ -27,13 +27,13 @@ The "vibe" algorithms — harvested from shipping devices, each proven in Live. 
 
 Clean building blocks — filters, dynamics gain-computers, saturators, M/S, loudness, oversampling, fractional delay reads.
 
-`m4l_builder.gen_snippets` — 48 functions
+`m4l_builder.gen_snippets` — 49 functions
 
 - **`flush`** — Denormal-flush a feedback state write: ``fixdenorm(x)`` (gen built-in)
 - **`ms_encode`** — Encode L/R -> Mid/Side: ``mid = (L+R)/2``, ``side = (L-R)/2``
 - **`ms_decode`** — Decode Mid/Side -> L/R: ``L = M+S``, ``R = M-S`` (inverse of ms_encode)
 - **`ms_width`** — Stereo-width via M/S: scale the Side by ``width`` then decode
-- **`ms_width_equal_power`** — Equal-power (constant-sum) M/S width — the standard equal-power law
+- **`ms_width_equal_power`** — Equal-power (constant-sum) M/S width — the standard orthonormal equal-power M/S transform
 - **`ms_mode_split`** — Complete gen~ code for a processing-Mode M/S SPLIT matrix (2 in, 4 out)
 - **`ms_mode_merge`** — Complete gen~ code for the M/S RECOMBINE matrix (4 in, 2 out)
 - **`mono_below`** — Bass-mono primitive (catalog Q51): SUM the band below ``freq`` to mono, keep everything above it stereo — the vinyl-cut / club-system low-end discipline
@@ -45,6 +45,7 @@ Clean building blocks — filters, dynamics gain-computers, saturators, M/S, lou
 - **`hardclip_adaa`** — First-order antiderivative-anti-aliased HARD clipper (clamp at +/-1)
 - **`square_adaa`** — First-order antiderivative-anti-aliased SQUARER (``x^2``)
 - **`peak_follower`** — Attack/release peak envelope follower (the dynamics detector core)
+- **`peak_hold`** — Instant attack with exponential decay of constant duration at every SR
 - **`isp_catmull_4x`** — 4x inter-sample-peak (ISP) estimate for one channel via cubic Catmull-Rom
 - **`kweight_coeffs_bs1770`** — ITU-R BS.1770-4 K-weighting biquad coefficients, computed at the live rate
 - **`exp_pole`** — One-pole smoothing/ballistics coefficient: ``out = exp(-1/(tau*sr))``
@@ -84,7 +85,7 @@ Bigger stateful kernels — the viz bus, the LFO cluster, click-free variable de
 
 `m4l_builder.gen_stateful` — 22 functions
 
-- **`viz_declares`** — Declarations for a viz bus: bare ``Buffer`` decls (bound at load by the device-side rebind message — the granular-viz contract) plus the GUI-tick counter ``History``
+- **`viz_declares`** — Declarations for a viz bus: bare ``Buffer`` decls (bound at load by the device-side rebind message) plus the GUI-tick counter ``History``
 - **`viz_poke_block`** — The counter-gated GUI tick: every ``refresh_ms`` worth of samples, run ``body`` once — the block that pokes per-voice/per-frame screen state into the viz Buffers
 - **`poly_mod_engine`** — The MERGED Orbit modulator codebox (#76: Orbit + Entropy in one)
 - **`freeze_capture_block`** — The freeze gesture for a granular caller: on the RISING edge of ``freeze_param``, copy the last ``capture_samps`` of both Delay ``lines`` TIME-REVERSED into ``data`` (channels 0/1 — ``index = freezeSamps - i``), then slew a 0..1 ramp over ``ramp_ms`` whose equal-power split ``freezeG = sqrt(ramp)`` / ``invFreezeG = sqrt(1-ramp)`` feeds ``granular_vp``'s freeze/invFreeze gains — the click-free seam
@@ -96,11 +97,11 @@ Bigger stateful kernels — the viz bus, the LFO cluster, click-free variable de
 - **`diffuse_fn`** — Return the gen function-definition for ``diffuse(sig, delaySamps, d, coef)`` where ``d`` is a gen ``Delay`` — the compact one-multiply Schroeder allpass
 - **`granular_voice_fn`** — Return the gen function-definition for the granular voice scatter: an interval-gated round-robin grain scheduler + a polyphonic playback loop with a freeze mode, returning ``(outR, outL)``
 - **`compose_gen_code`** — Assemble a gen~ codebox string for :func:`gen_patcher.build_gendsp`
-- **`variable_sigmoid_fn`** — Return the gen function-definition for ``variable_sigmoid(xin, pregain, postgain, sigmoid)`` — a drive-able logistic saturator (pre/post gain in dB, knee set by ``sigmoid``)
+- **`variable_sigmoid_fn`** — Return the gen function-definition for ``variable_sigmoid(xin, pregain, postgain, sigmoid)`` — a drive-able logistic saturator (pre/post gain in dB, knee set by ``sigmoid``): ``sigmoid``=-2 approximates tanh, -5 is tape-like
 - **`modulated_allpass_reverb`** — Emit a complete stereo allpass-reverb gen~ program (ready for ``build_gendsp(code, nin=2, nout=2)``)
-- **`op_fn`** — Return the gen function-definition for ``op(freq, mult, ph, pm, fb, trig)`` — an FM operator with a phase-modulation input and signed self-feedback
+- **`op_fn`** — Return the gen function-definition for ``op(freq, mult, ph, pm, fb, trig)`` — a classic FM operator (Chowning FM) with a phase-modulation input and signed self-feedback
 - **`qpow_fn`** — Return the gen function-definition for ``qpow(x, p)`` — an iterative power-curve waveshaper (signed ``p``), used for parameter curves and CZ-style phase distortion
-- **`fade_env_fn`** — Return the gen function-definition for ``fade(trig, attack, decay)`` — an AD gate envelope (rate-per-second one-pole slews;)
+- **`fade_env_fn`** — Return the gen function-definition for ``fade(trig, attack, decay)`` — the AD gate envelope (rate-per-second one-pole slews)
 - **`ramp_env_fn`** — Return the gen function-definition for ``ramp(trig, time, rnd_t, rand)`` — a per-note-jitterable 1→0 ramp/scheduler clock
 - **`tanh_approx_fn`** — Return the gen function-definition for ``tanA(x)`` — a fast Padé tanh approximation
 - **`svf_fn`** — Return the gen function-definition for ``svf(x, f, q, type)`` — Émilie Gillet's TPT state-variable filter cascaded to 24 dB/oct, ``type`` morphing LP↔HP
@@ -132,26 +133,28 @@ Higher-level DSP that emits Max objects/patchers (not just GenExpr): delay lines
 
 The visual heroes — EQ curves, meters, spectra, waveforms, XY pads, goniometers, histories. Each returns jsui/v8ui draw code.
 
-`m4l_builder.engines/` — 67 modules
+`m4l_builder.engines/` — 69 modules
 
 - **`arc_knob_cluster`** — Arc-knob cluster — a bespoke, interactive premium control grid (v8ui)
 - **`ballistics_curve`** — Ballistics curve — compressor attack/release step-response display
-- **`band_chip_row`** — Shared band-chip-row jsui — a pro-plugin-style band overview strip used by BOTH flagship EQs (Linear Phase + Parametric)
+- **`band_chip_row`** — Shared band-chip-row jsui — a premium-EQ-style band overview strip used by BOTH flagship EQs (Linear Phase + Parametric)
 - **`buffer_viz`** — buffer_viz — the jsui read side of the D4 gen->named-buffer->jsui viz bus
 - **`chaos_lanes`** — chaos_lanes — Entropy's hero: N stacked scrolling chaos traces
+- **`complementary_split`** — Stereo linear-phase low-pass kernel for the Split device
 - **`compressor_display`** — Compressor transfer curve display engine for jsui
 - **`crossover_display`** — Interactive narrow crossover graph for jsui (spectrum + draggable splits)
 - **`curve_editor`** — General breakpoint curve editor for jsui (catalog kit engines #2-#6)
-- **`delay_trail`** — Delay tap-trail display (premium-delay-style hero graph) + the TIDE
+- **`delay_trail`** — Delay tap-trail display (a premium-delay-style hero graph)
 - **`design_system`** — Shared design-system for the jsui/v8ui display engines
 - **`energy_history`** — Scrolling multi-band energy-history display (jsui)
 - **`envelope_display`** — ADSR envelope display engine for jsui
 - **`envelope_editor`** — Draggable ADSR envelope editor for jsui (catalog kit engine #1)
 - **`eq_band_column`** — Selected-band control column engine for EQ-family devices
 - **`eq_curve`** — Parametric EQ curve display with draggable nodes for jsui
-- **`exciter_curve`** — Harmonic-exciter band display (premium-exciter-style hero graph)
+- **`exciter_curve`** — Harmonic-exciter band display (harmonic-exciter-style hero graph)
 - **`fft_analyzer`** — Real FFT spectrum-analysis backend (``pfft~`` + ``buffer~``)
 - **`filter_curve`** — Filter curve display engine for jsui
+- **`flux_detector`** — flux_detector -- THE onset detector, shared verbatim by both canvases
 - **`glass_panel_bg`** — Premium drawing-techniques library + a showcase glass/metal background
 - **`goniometer_graticule`** — Opaque backdrop graticule for a compiled ``scope~`` X-Y goniometer
 - **`grain_cloud`** — grain_cloud — Motes' hero: grain dots blooming over a rolling input wave
@@ -161,7 +164,7 @@ The visual heroes — EQ curves, meters, spectra, waveforms, XY pads, goniometer
 - **`icon_overlay`** — Static icon overlay — a crisp vector glyph floating over a real control
 - **`integrated_lufs`** — Integrated loudness accumulator (ITU-R BS.1770-4 / EBU R128 gated)
 - **`interaction_core`** — interaction_core — shared verbatim JS boilerplate for interactive display engines
-- **`level_history`** — Scrolling level + gain-reduction history display (premium compressor/limiter style)
+- **`level_history`** — Scrolling level + gain-reduction history display (premium-comp / premium-limiter style)
 - **`level_meter`** — Compact stereo output level meter (reusable v8ui widget)
 - **`lfo_display`** — LFO waveform display engine for jsui
 - **`linear_phase_eq_display`** — Linear-phase EQ display engine with analyzer, HUD, and node editing
@@ -174,7 +177,7 @@ The visual heroes — EQ curves, meters, spectra, waveforms, XY pads, goniometer
 - **`piano_roll`** — Piano roll display engine for jsui
 - **`resonance_bank_display`** — Resonance bank display engine for jsui
 - **`seed_history`** — Seed-history "dice brain" for variation macros (Shard's DICE)
-- **`settings_bar`** — settings_bar — the session-mapping-randomizer LEFT sidebar opener (classic jsui)
+- **`settings_bar`** — settings_bar — a randomizer's LEFT sidebar opener (classic jsui)
 - **`shape_icon`** — shape_icon — a clickable per-lane waveform/source glyph (v8ui)
 - **`sidechain_display`** — Sidechain envelope display engine for jsui
 - **`slice_overview`** — Slice overview display engine for jsui
@@ -185,7 +188,7 @@ The visual heroes — EQ curves, meters, spectra, waveforms, XY pads, goniometer
 - **`spectrum_analyzer`** — Spectrum analyzer display engine for jsui
 - **`step_bars`** — Step-bar lane editor for jsui (catalog kit engines #7-#8)
 - **`step_grid_display`** — Step sequencer grid display engine for jsui
-- **`transfer_curve`** — Compressor/saturator transfer-curve display (premium-compressor-style hero graph)
+- **`transfer_curve`** — Compressor/saturator transfer-curve display (premium-comp-style hero graph)
 - **`transient_history`** — Scrolling transient-shaper history display (input level + bipolar gain)
 - **`ui_curve_node`** — Premium draggable curve node (v8ui) — an EQ-band-style node on a graph
 - **`ui_icons`** — Hand-drawn v8ui glyph library — a compact icon vocabulary

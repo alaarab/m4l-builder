@@ -1,4 +1,4 @@
-"""Native sizing tiers measured from the library."""
+"""Native sizing tiers measured from the reference device set."""
 
 from m4l_builder import native_sizes as ns
 

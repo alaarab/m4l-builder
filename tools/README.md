@@ -13,6 +13,6 @@ Regenerate these after adding, renaming, or removing public DSP blocks, recipes,
 
 ## Library mining & analysis reports
 
-Moved to [a separate package](https://github.com/alaarab/a separate package) along with the
-reverse/library code (`mine_amxd_library.py`, `build_family_report.py`,
-`build_library_fixture.py`, and the other report builders).
+Not part of this repo. The reverse/library report builders (`mine_amxd_library.py`,
+`build_family_report.py`, `build_library_fixture.py`, ...) were removed with the
+reverse/library code.

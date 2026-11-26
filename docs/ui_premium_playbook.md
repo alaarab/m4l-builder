@@ -11,7 +11,7 @@
 
 ## The library principles the fleet now encodes
 
-Distilled from a 16-device reference set:
+Distilled from a 16-device reference study:
 
 - **P2 — the value of every parameter is always legible.** Persistent native value
   under/in each knob (`shownumber=1`). Hover-only `valuepopup` knobs are the
@@ -81,8 +81,7 @@ painter-drawn dials (Nimbus) and dial-less meters have no applicable targets.
    identical — `parameter_longname` is the ONLY save-set identity; rects/colors/ids
    are free to change.
 3. Run BOTH gates: the kit gate (`ruff` + `mypy` + `pytest` in m4l-builder) AND the
-   devices suite (`uv run --project ~/Projects/m4l-builder python -m pytest tests -q`
-   in the device repo).
+   devices suite of the repo that builds your devices.
 4. Live-verify: load on a throwaway track, meter > 0, hero animating, and a REAL
    power-button click for the dim (LiveMCP's `enable_device` is a phantom — it
    reports success without flipping Device On).

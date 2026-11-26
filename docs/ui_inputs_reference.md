@@ -23,9 +23,8 @@ the Device-On-param `live.observer`, the only reliable runtime source). See
 `docs/ui_premium_playbook.md` for the API walkthrough and migration discipline.
 
 Corrections to the old text kept here for the record:
-- The extraction workflow lives at `the device repo/_assets/extracted/` (built by
-  `_assets/extract_all.py` from the owned downloads) — **study-only, never shipped**;
-  the old `research/extracted/` path never existed in this repo. Devices ship
+- There is no extraction workflow in this repo (the old `research/extracted/` path
+  never existed here). Devices ship
   ORIGINAL painters only (`engines/painters.py`).
 - `paint_control` (`jspainterfile`) remains Live-proven (Nimbus) but is the path for
   a genuinely bespoke ONE-OFF control, **not** the default knob — painters hide the
@@ -120,9 +119,9 @@ There are TWO valid size regimes; pick by the look you want:
 - **OFFICIAL-NATIVE (spacious)** — the table above (dial **44×47**, numbox **39×15**). Matches
   Ableton's stock devices. Use for a utility / "feels built-in" device, or when the device sits
   next to stock devices and should not look out of place. Constants: `ns.DIAL`, `ns.NUMBOX`, …
-- **PREMIUM-COMPACT (dense boutique)** — measured from the 15 reference devices (dial
+- **PREMIUM-COMPACT (dense boutique)** — measured from a 15-device reference set (dial
   **41×35** `DIAL_COMPACT`, `NUMBOX_WIDE=50×15`, `VSLIDER_NATIVE=22×113`, `TAB_BAR_H=20`,
-  `ROW_PITCH_TIGHT=17`). Denser + flatter; matches the downloaded dense boutique layouts.
+  `ROW_PITCH_TIGHT=17`). Denser + flatter; matches dense boutique layouts.
   Use for a flagship/character device where dense, tightly-packed controls read as
   premium. Constants: `ns.DIAL_COMPACT`, `ns.DIAL_RAIL`, `ns.NUMBOX_WIDE`, `ns.knob_row_fit(...)`.
 
@@ -314,8 +313,8 @@ for the unselected fill). Theme the `active*` attrs.
 
 ## ✅ Runtime THEME BUS (`live.colors`) + bypass "zombie" dim — the #1 library jewel
 
-Library-grounded (13 of 15 devices use `live.colors`; a typical channel-strip has 19 instances; all 9
-review.md reports flag it). Not in the synced Max docs — grounded from the library + `engines/
+Grounded (13 of 15 reference devices use `live.colors`; one channel-strip device has 19 instances).
+Not in the synced Max docs — grounded from the reference set + `engines/
 live_theme.py`. **Premium devices never bake colors at build time** — they read the user's actual Live
 skin at load + on every theme change and broadcast it so every native control tracks the skin
 (dark/light/custom). This is the single biggest "looks like a first-party Ableton device" cue.
@@ -433,7 +432,7 @@ device. A custom v8ui can read the same bus (`r ---<bus>` → a `set_<attr>` han
   non-existent `activeslidercolor` → sliders rendered Live-grey; **fixed → maps the real
   `slidercolor → dial_color`.**
 - **`textcolor` = the value-readout text** (doc-confirmed: *"Sets the display color for the
-  live.slider object's text"*; set by 14/14 library a channel strip sliders). The registry now maps
+  live.slider object's text"*; set by 14/14 sliders in a reference channel-strip device). The registry now maps
   `textcolor → text` (was unmapped → digits rendered Live-default).
 - `tricolor`/`trioncolor`/`tribordercolor`: the mod/automation triangle (shown only when the
   param is modulated) — left to Live's modulation colour, not token-mapped. `modulationcolor`,
@@ -836,7 +835,8 @@ Route it through `prepend read` into a `buffer~` / `sfplay~` / `jit.movie` to ac
 
 ## ✅ swatch  (colour picker / display — utility)
 
-Observed Max behaviour (1 instance; absent from synced docs and the library). A clickable colour field that outputs the chosen colour. **3 inlets / 2 outlets**
+Observed Max behaviour (1 instance; absent from synced docs and the reference
+set). A clickable colour field that outputs the chosen colour. **3 inlets / 2 outlets**
 `["", "float"]` (the prior stub's 1-in / 4-out was guessed and wrong) — outlet 0 emits the colour
 (list), outlet 1 a float. No styling box attrs: its displayed colour IS its runtime VALUE (set by
 a message), so there is nothing to theme. Measured attrs: `compatibility` (a Max compatibility-mode
@@ -1132,7 +1132,7 @@ muscle memory expects from a premium EQ / Stock EQ. Grounded two ways:
 ## ⚠️ spectrumdraw~  (multi-trace spectrum — needs a BUNDLED external, does NOT render bare)
 
 Observed Max behaviour (4 instances, 100% consistent; absent from synced docs and
-the library). The multi-trace FFT spectrum graph. **4 signal inlets / 1 outlet** (`[""]`)
+the reference set). The multi-trace FFT spectrum graph. **4 signal inlets / 1 outlet** (`[""]`)
 — feed up to 4 signals to OVERLAY 4 spectra (input vs output, L / R, with / without sidechain).
 
 > ⚠️ **LIVE-VERIFIED GOTCHA (DisplayProbe, 2026-06):** `spectrumdraw~` is a **compiled external
@@ -1177,7 +1177,7 @@ check before adding any new compiled object to the kit.
 ## ✅ waveform~  (buffer~ audio display + drag-to-select region)
 
 Observed Max behaviour (7 instances, 100% consistent; absent from synced docs and
-the library). Draws the audio in a named `buffer~` and (unless `ignoreclick`) lets the
+the reference set). Draws the audio in a named `buffer~` and (unless `ignoreclick`) lets the
 user drag-select a region. **5 inlets / 6 outlets** `["float","float","float","float","list",""]` —
 the float outlets emit the selection bounds (start / end) as you drag; outlet 4 is a list.
 
@@ -1198,7 +1198,7 @@ the float outlets emit the selection bounds (start / end) as you drag; outlet 4 
 ## ✅ live.adsrui  (ADSR envelope editor)
 
 Observed Max behaviour (2 instances, identical; absent from synced docs and the
-library). The native A / D / (S) / R envelope editor — drag the handles to shape it.
+reference set). The native A / D / (S) / R envelope editor — drag the handles to shape it.
 **10 inlets / 10 outlets, all UNTYPED** (`[""]*10`); the prior kit stub's 1-in / 4-out 'float'
 outlets were guessed and WRONG (it did already emit the right maxclass `live.adsrui`).
 
@@ -1218,7 +1218,7 @@ outlets were guessed and WRONG (it did already emit the right maxclass `live.ads
 ## ✅ filtergraph~  (EQ / filter-response editor → biquad coefficients)
 
 Observed Max behaviour (11 instances, 100% consistent; absent from the synced docs
-AND the library). The COMPILED native filter editor: drag the curve to design a filter,
+AND the reference set). The COMPILED native filter editor: drag the curve to design a filter,
 and outlet 0 emits the coefficient **list** for `biquad~` / `cascade~` — so it is BOTH the UI AND
 the coefficient source. **8 inlets / 7 outlets** `["list","float","float","float","float","list","int"]`
 (the prior stub defaulted to 1/1 — wrong).
@@ -1337,7 +1337,7 @@ outlet 1 = int when numeric).
 ## ✅ pictctrl  (image-filmstrip control — custom knob / button / slider)
 
 Observed Max behaviour (17 instances, 100% consistent; absent from synced docs and
-the library). Displays one frame of a sprite image and outputs the frame **index** as an
+the reference set). Displays one frame of a sprite image and outputs the frame **index** as an
 `int`. 1 inlet / 1 outlet (`["int"]`).
 
 - **`name`**: the sprite file (a filmstrip — e.g. a 68-frame vertical strip). **`frames`**: the
@@ -1392,7 +1392,7 @@ scale) and reveals the premium patterns the prior stub omitted:
   theme_mapping `bgcolor→tab_bg, textcolor→tab_text`. Interactive enum → `live.menu`.
 - ✅ **ubutton** — DONE (see button-family section). Grounded from the OFFICIAL M4L library
   (building blocks / Essentials packs, 43 instances) since it is absent from the synced docs
-  AND the library: fixed outlettype to `["bang","bang","","int"]` (outlet 1 = down-bang),
+  AND the reference set: fixed outlettype to `["bang","bang","","int"]` (outlet 1 = down-bang),
   added `hltcolor` (click flash) + `handoff`, theme `hltcolor → accent`.
 - ✅ **multislider** — DONE (see "multislider" section). Strip of N bars; library uses it mostly
   as a non-interactive multi-bar meter/GR DISPLAY (`display=True`: ghostbar+ignoreclick, dB
@@ -1462,7 +1462,7 @@ uikit_compare / uikit_lab. Width is the CELL (control + its label/value).
 | tiny           | 54×36    | `DIAL_TINY`    | wide-short, appearance=1 (5) |
 | LCD-stacked    | 51×63    | `DIAL_LCD`     | tall LCD readout, appearance=3 (5) |
 
-> **MEASURED across the 15-device library** (own count of `presentation_rect`).
+> **MEASURED across the 15-device reference set** (own count of `presentation_rect`).
 > The old `DIAL=(44,47)` was a guess and is NOT how premium devices size knobs (it's not
 > even in the library top-6 — confirms "too tall/chunky"). Prefer **`DIAL_COMPACT=(41,35)`**.
 > Other verified tiers: `NUMBOX=(44,15)` (primary, 53×) + `NUMBOX_MINI=(17,15)`,
@@ -1526,7 +1526,7 @@ authored height).
 > / `note_generator`) render in a different UI and are **exempt** (not grounded to the 168 row).
 >
 > **The rebuild-parity EXCEPTION — `allow_tall=True`.** "Never author height > 168" governs
-> ORIGINAL designs. A faithful **1:1 reproduction** of a taller original legitimately
+> ORIGINAL designs. A faithful **1:1 reproduction** of a taller existing device legitimately
 > exceeds it to match the source's verbatim rects — **a 190px rebuild** mirrors its original (and
 > inherits the original's own bottom-clip). Such a clone passes
 > `AudioEffect(..., allow_tall=True)` to opt out of the lint, rather than condensing (which would

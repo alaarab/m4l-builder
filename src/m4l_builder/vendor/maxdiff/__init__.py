@@ -1,4 +1,4 @@
-"""Ableton maxdevtools/maxdiff datasets (MIT, (c) 2024 Ableton AG)."""
+"""Ableton maxdevtools/maxdiff datasets (MIT, (c) 2024 Ableton AG; see LICENSE)."""
 
 from .default_patcher import default_patcher
 from .known_objects import known_objects
