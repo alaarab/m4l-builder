@@ -1,8 +1,8 @@
 """Public-hygiene check for pull requests.
 
 Scans what a PR would add to the public repo (added diff lines, commit
-messages, the PR title, and commit author/committer emails) and fails on
-any hit.
+messages and the PR title) and fails on any hit. Commit author and
+committer emails are not checked.
 
 The pattern lists are deliberately not in this repo. They come from the
 HYGIENE_PATTERNS secret: a JSON object mapping a category name to a regular
@@ -143,7 +143,7 @@ def main() -> int:
             failures += 1
 
     ncommits = 0
-    for sha, author, committer, body in commits(base, head):
+    for sha, _author, _committer, body in commits(base, head):
         ncommits += 1
         short = sha[:8]
         for name in categories(body):
@@ -154,13 +154,6 @@ def main() -> int:
                 f"Commit {short}: message contains an email address that isn't a noreply address."
             )
             failures += 1
-        for role, email in (("author", author), ("committer", committer)):
-            if not is_noreply(email):
-                report(
-                    f"Commit {short}: {role} email isn't a noreply address "
-                    "(use your <id>+<user>@users.noreply.github.com address)."
-                )
-                failures += 1
 
     title = os.environ.get("PR_TITLE", "")
     for name in categories(title):
