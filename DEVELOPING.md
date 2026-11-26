@@ -80,7 +80,16 @@ PRs; deployment requires an explicit manual workflow dispatch.
 
 ```bash
 uv build                              # builds sdist + wheel into dist/
-uv publish --token <pypi-token>       # or set UV_PUBLISH_TOKEN
 ```
+
+Releases go to PyPI from CI through trusted publishing, so no token is needed:
+
+1. Set `version` in `pyproject.toml`, move the `[Unreleased]` entries in
+   `CHANGELOG.md` under `## [X.Y.Z] — YYYY-MM-DD`, and merge that to `main`.
+2. Publish a GitHub release tagged `vX.Y.Z` on that commit, with the
+   changelog section as its notes.
+3. The Release workflow (`.github/workflows/release.yml`) checks that the tag
+   matches the package version, builds the sdist and wheel, and uploads them
+   to PyPI.
 
 The `py.typed` marker ships in the wheel so downstream users get inline types.
