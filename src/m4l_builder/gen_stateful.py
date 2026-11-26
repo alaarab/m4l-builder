@@ -967,8 +967,7 @@ def tanh_approx_fn() -> str:
 def svf_fn() -> str:
     """Return the gen function-definition for ``svf(x, f, q, type)`` — two
     cascaded Zavalishin TPT state-variable filters (24 dB/oct), ``type``
-    morphing lowpass (0) to highpass (1). Self-contained: it no longer calls
-    ``tanA``, so emitting ``tanh_approx_fn`` alongside is optional."""
+    morphing lowpass (0) to highpass (1). Self-contained."""
     return SVF_FN
 
 
