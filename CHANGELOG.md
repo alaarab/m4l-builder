@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- `m4l` command line (console script, also `python -m m4l_builder`): `new`
+  scaffolds a build script for an audio, MIDI or instrument device, `build`
+  runs a script with an optional `--out` redirect, `watch` rebuilds into the
+  User Library on save and prints what changed, `lint` runs graph, box and
+  GenExpr lint without writing, and `inspect` summarises an `.amxd`.
+
 ## [0.8.0] — 2026-11-26
 
 The first published release since 0.7.0. `pyproject.toml` has said 0.8.0

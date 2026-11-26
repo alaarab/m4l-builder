@@ -20,6 +20,9 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 
+[project.scripts]
+m4l = "m4l_builder.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/alaarab/m4l-builder"
 Repository = "https://github.com/alaarab/m4l-builder"
