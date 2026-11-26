@@ -9,6 +9,7 @@ turns an existing `.amxd` into a build script.
 m4l new "My Gain" --type audio     # scaffold my_gain/build.py
 m4l build my_gain/build.py         # build it
 m4l watch my_gain/build.py         # rebuild into the User Library on every save
+m4l watch my_gain/build.py --live  # ...and swap it into the open Live set
 m4l lint my_gain/build.py          # validate without writing
 m4l preview my_gain/build.py       # render the panel to my_gain.svg
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
