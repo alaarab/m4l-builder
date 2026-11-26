@@ -600,6 +600,9 @@ def _cmd_import(args) -> int:
     if result.missing:
         print(f"missing support files: {', '.join(result.missing)} (not inside the device "
               "or next to it)")
+    if result.source.unsafe:
+        print(f"ignored support files pointing outside the device folder: "
+              f"{', '.join(result.source.unsafe)}")
     if not args.no_check:
         try:
             diffs = check_import(result.source, target)

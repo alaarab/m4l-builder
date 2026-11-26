@@ -66,7 +66,7 @@ if __name__ == "__main__":
 | In the device | In the script |
 |---|---|
 | Device type | `AudioEffect`, `Instrument`, `MidiEffect`, `MidiTransformation` or `MidiGenerator` |
-| Width and height | constructor arguments (`allow_tall=True` when taller than Live's device view) |
+| Width and height | constructor arguments (`allow_tall=True` when taller than Live's device view). A device Max saved with no width (Live sizes it) gets its content width |
 | Colours that match a built-in theme | `theme=WARM` (or whichever matches best); otherwise explicit colours |
 | `live.dial`, `live.slider`, `live.numbox`, `live.toggle`, `live.button`, `live.text`, `live.menu`, `live.tab`, `live.gain~` | `add_dial`, `add_slider`, `add_number_box`, ... with their range, initial value, unit style and presentation rect |
 | `panel`, `live.comment`, `live.meter~`, `live.scope~`, `live.line` | `add_panel`, `add_comment`, `add_meter`, `add_scope`, `add_live_line` |
@@ -136,10 +136,12 @@ lists them when it runs.
 ## Support files
 
 A frozen device carries its scripts and `.gendsp` files inside it, so the
-import finds everything. For a device that isn't frozen, keep its files in
-the same folder as the `.amxd`. Files found in neither place are listed as
-missing, marked with a TODO in the script, and the round-trip check fails
-until you copy them in.
+import finds everything, including bundled files the device doesn't list as
+dependencies. For a device that isn't frozen, keep its files in the same
+folder as the `.amxd`. Files found in neither place are listed as missing,
+marked with a TODO in the script, and the round-trip check fails until you
+copy them in. A dependency name that points outside the device's folder (an
+absolute path or `../`) is never read.
 
 ## The round-trip check
 
@@ -149,11 +151,14 @@ builds with the one you imported:
 - every box with all of its attributes, including embedded gen~ patchers and
   subpatchers (box IDs may differ);
 - every patch cord, by the boxes it connects;
-- device type, size, latency, MPE flag, parameter banks and the list of
-  support files, and the contents of each support file.
+- device type, size, latency, MPE flag, Push banks and the list of support
+  files, and the contents of each support file.
 
 Settings Max writes again on every save are not compared: timestamps, window
-positions, the patcher's default font and its parameter index. If anything
+positions, the patcher's default font and its parameter index. Neither are
+empty Push banks (Max saves an empty bank 0 by default; the library only
+writes banks that hold parameters), nor the width of a device Max left for
+Live to size. If anything
 else differs, the command lists it and exits 1.
 
 ## From Python

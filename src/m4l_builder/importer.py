@@ -18,25 +18,32 @@ the rebuilt patcher with the source (:func:`patcher_differences`).
 from __future__ import annotations
 
 import copy
+import hashlib
 import inspect
 import json
 import keyword
 import math
 import re
 import runpy
+import struct
 import textwrap
 import warnings
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from . import objects, theme, ui
 from .constants import DEVICE_TYPE_CODES
 from .device import Device
 from .dsp import stereo_io
-from .freeze import _patcher_dict_from_payload, _read_amxd, extract_frozen_amxd
+from .freeze import (
+    _patcher_dict_from_payload,
+    _read_amxd,
+    extract_frozen_amxd,
+    footer_type_for,
+)
 from .gen_patcher import gendsp_support_name
 from .native_sizes import DEVICE_H
 from .patcher_walk import unwrap_box
@@ -82,14 +89,62 @@ class SourceDevice:
     assets: dict[str, bytes]
     missing: list[str]
     frozen: bool
+    # Frozen files the device bundles but doesn't list in its dependency_cache.
+    unlisted: list[str] = field(default_factory=list)
+    # Dependency names pointing outside the device's folder; never read.
+    unsafe: list[str] = field(default_factory=list)
+
+    @property
+    def auto_width(self) -> bool:
+        """Max saved no width (``devicewidth`` 0): Live sizes it to its content."""
+        return _device_width(self.patcher) is None
 
     @property
     def width(self) -> Any:
-        return self.patcher.get("devicewidth", self.patcher.get("openrect", [0, 0, 400, 170])[2])
+        return _device_width(self.patcher) or _content_extent(self.patcher, 0) or 400
 
     @property
     def height(self) -> Any:
-        return self.patcher.get("openrect", [0, 0, 400, 170])[3]
+        openrect = self.patcher.get("openrect")
+        height = openrect[3] if isinstance(openrect, list) and len(openrect) == 4 else None
+        if _positive(height):
+            return height
+        return _content_extent(self.patcher, 1) or DEVICE_H
+
+
+def _positive(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+
+
+def _device_width(patcher: dict) -> Any:
+    """The width the device was saved with, or None when Max left it to Live."""
+    openrect = patcher.get("openrect")
+    for value in (patcher.get("devicewidth"),
+                  openrect[2] if isinstance(openrect, list) and len(openrect) == 4 else None):
+        if _positive(value):
+            return value
+    return None
+
+
+def _content_extent(patcher: dict, axis: int) -> int:
+    """Right (axis 0) or bottom (axis 1) edge of the presentation content."""
+    edge = 0.0
+    for entry in patcher.get("boxes", []):
+        box = unwrap_box(entry)
+        rect = box.get("presentation_rect")
+        if box.get("presentation") == 1 and isinstance(rect, list) and len(rect) == 4:
+            try:
+                edge = max(edge, float(rect[axis]) + float(rect[axis + 2]))
+            except (TypeError, ValueError):
+                continue
+    return math.ceil(edge)
+
+
+def _safe_name(name: str) -> bool:
+    """A support file name that stays inside the device's folder."""
+    pure = PurePosixPath(name.replace("\\", "/"))
+    return (bool(name) and not pure.is_absolute() and ".." not in pure.parts
+            and not PureWindowsPath(name).drive)
 
 
 def read_device(path: str | Path) -> SourceDevice:
@@ -116,23 +171,32 @@ def read_device(path: str | Path) -> SourceDevice:
             assets = {name: contents[name] for name in names[1:]}
         else:
             top = _patcher_dict_from_payload(payload)
-    except ValueError as exc:
+    except (ValueError, struct.error) as exc:
         raise ValueError(f"{path}: patcher JSON could not be read ({exc})") from exc
     patcher = top.get("patcher") if isinstance(top, dict) else None
     if not isinstance(patcher, dict):
         raise ValueError(f"{path}: no patcher in the device")
 
+    unsafe = [name for name in list(assets) if not _safe_name(name)]
+    for name in unsafe:
+        del assets[name]
+    listed = _dependency_names(patcher)
     missing = []
-    for name in _dependency_names(patcher):
-        if name in assets:
+    for name in listed:
+        if name in assets or name in unsafe:
+            continue
+        if not _safe_name(name):
+            unsafe.append(name)
             continue
         sidecar = path.parent / name
         if sidecar.is_file():
             assets[name] = sidecar.read_bytes()
         else:
             missing.append(name)
+    unlisted = [name for name in assets if name not in listed]
     return SourceDevice(path=path, name=path.stem, device_type=_TYPE_BY_CODE[type_code],
-                        patcher=patcher, assets=assets, missing=missing, frozen=frozen)
+                        patcher=patcher, assets=assets, missing=missing, frozen=frozen,
+                        unlisted=unlisted, unsafe=unsafe)
 
 
 def _dependency_names(patcher: dict) -> list[str]:
@@ -271,6 +335,16 @@ def _str_constant(text: str) -> str:
     if not chunks:
         return '""'
     return "(\n" + "\n".join("    " + chunk for chunk in chunks) + "\n)"
+
+
+def _one_line(text: str) -> str:
+    """``text`` safe inside a ``#`` comment or a docstring line."""
+    return "".join(ch if ch.isprintable() else repr(ch)[1:-1] for ch in str(text))
+
+
+def _doc(text: str) -> str:
+    """``text`` safe inside a triple-quoted docstring."""
+    return _one_line(text).replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
 
 
 def _slug(text: str) -> str:
@@ -897,7 +971,8 @@ def _convert_subpatcher(ctx: _Ctx, box: dict, target: str, scope: str,
     header = {key: val for key, val in inner.items() if key not in ("boxes", "lines")}
     if not _same(header, _subpatcher_header()):
         return "Max-saved subpatcher (its patcher settings have no Subpatcher equivalent)"
-    name = str(box.get("text", "")).split(None, 1)[1] if " " in str(box.get("text", "")) else ""
+    parts = str(box.get("text", "")).split(None, 1)
+    name = parts[1] if len(parts) > 1 else ""
     if not name:
         return "unnamed subpatcher"
     base = f"sub_{_slug(name) or 'patch'}"
@@ -963,7 +1038,7 @@ def _convert_raw(ctx: _Ctx, box: dict, target: str, reason: str) -> _Emit:
     literal = _hoist_code(ctx, copy.deepcopy(box), box["id"], constants)
     head = f"    {target}.add_box({{\"box\": "
     body = _py_block(literal, 4)
-    lines = [f"    # {TODO}: kept raw -- {reason}", head + body + "})"]
+    lines = [f"    # {TODO}: kept raw -- {_one_line(reason)}", head + body + "})"]
     return _Emit(code=lines, box_id=box["id"], raw_reason=reason, constants=constants,
                  cost=1000)
 
@@ -1005,7 +1080,7 @@ def _line_code(target: str, line: dict, ids: set[str]) -> str:
     except (KeyError, TypeError, ValueError):
         return f"    # {TODO}: skipped a malformed patchline: {_py(line)}"
     if src not in ids or dst not in ids:
-        return f"    # {TODO}: skipped a patchline to a missing box: {src} -> {dst}"
+        return f"    # {TODO}: skipped a patchline to a missing box: {_one_line(f'{src} -> {dst}')}"
     extra = {key: val for key, val in line.items() if key not in ("source", "destination")}
     return _render_call(f"{target}.add_line", [src, outlet, dst, inlet], extra)
 
@@ -1099,15 +1174,17 @@ class ImportedDevice:
     def write(self, script_path: str | Path) -> list[Path]:
         """Write the script and its support files; returns every path written."""
         script_path = Path(script_path)
+        folder = script_path.parent.resolve()
+        targets = {name: script_path.parent / name for name in self.files}
+        for name, target in targets.items():
+            if not _safe_name(name) or not target.resolve().is_relative_to(folder):
+                raise ValueError(f"support file would land outside {script_path.parent}: {name}")
         script_path.parent.mkdir(parents=True, exist_ok=True)
         script_path.write_text(self.script, encoding="utf-8")
         written = [script_path]
-        for name, content in self.files.items():
-            target = script_path.parent / name
-            if not target.resolve().is_relative_to(script_path.parent.resolve()):
-                raise ValueError(f"support file would land outside {script_path.parent}: {name}")
+        for name, target in targets.items():
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(content)
+            target.write_bytes(self.files[name])
             written.append(target)
         return written
 
@@ -1177,9 +1254,35 @@ def _bank_code(patcher: dict) -> list[str]:
                 kwargs["bank_name"] = bank_name
             code.append(_render_call("device.assign_parameter_bank", [name], kwargs))
             assigned = True
-        if bank_name and not assigned:
-            code.append(_render_call("device.set_parameter_bank_name", [index, bank_name], {}))
     return code
+
+
+def _bank_slots(patcher: dict) -> dict[int, tuple[str, list[str]]]:
+    """Push banks that hold parameters, as ``{index: (name, 8 slots)}``.
+
+    Max saves an empty bank 0 (all ``-``) by default; the library writes only
+    banks with parameters, so empty banks are not part of the comparison.
+    """
+    banks = patcher.get("parameters", {}).get("parameterbanks", {})
+    out: dict[int, tuple[str, list[str]]] = {}
+    if not isinstance(banks, dict):
+        return out
+    for key, bank in banks.items():
+        try:
+            index = int(key)
+        except ValueError:
+            continue
+        slots = ["-"] * 8
+        for position, entry in enumerate(bank.get("parameters", []) if isinstance(bank, dict)
+                                         else []):
+            name, at = ((entry.get("name"), entry.get("index", position))
+                        if isinstance(entry, dict) else (entry, position))
+            if isinstance(name, str) and name and name != "-" and isinstance(at, int) \
+                    and 0 <= at < 8:
+                slots[at] = name
+        if any(slot != "-" for slot in slots):
+            out[index] = (str(bank.get("name") or ""), slots)
+    return out
 
 
 _HELPERS = {
@@ -1218,9 +1321,15 @@ def _asset_code(source: SourceDevice, consumed: set[str]) -> tuple[list[str], di
     helpers: set[str] = set()
     types = {dep.get("name"): dep.get("type", "TEXT")
              for dep in source.patcher.get("dependency_cache", []) if isinstance(dep, dict)}
+    for name in source.unlisted:
+        types.setdefault(name, footer_type_for(name))
     missing = []
-    for name in _dependency_names(source.patcher):
+    for name in _dependency_names(source.patcher) + source.unlisted:
         if name in consumed:
+            continue
+        if name in source.unsafe:
+            code.append(f"    # {TODO}: {name!r} points outside the device's folder, so it")
+            code.append("    # was not read; register the file it should be with add_support_file().")
             continue
         if name not in source.assets:
             missing.append(name)
@@ -1305,7 +1414,10 @@ def import_amxd(path: str | Path, *, script_name: str = "build.py") -> ImportedD
             and isinstance(source.height, (int, float)) and source.height > DEVICE_H)
     if tall:
         ctor_kwargs["allow_tall"] = True
-    build: list[str] = [_render_call(f"device = {class_name}", [Code("NAME", None)], ctor_kwargs)]
+    build: list[str] = []
+    if source.auto_width:
+        build.append("    # The source left its width to Live (devicewidth 0); this is its content width.")
+    build.append(_render_call(f"device = {class_name}", [Code("NAME", None)], ctor_kwargs))
     if source.device_type == "audio_effect" and not keep_io:
         build.append("    # This device wires its own plugin~ / plugout~: drop the pair "
                      "AudioEffect adds.")
@@ -1368,13 +1480,13 @@ def _assemble(source: SourceDevice, script_name: str, class_name: str,
         notes.append(f"Missing support files: {', '.join(missing)}.")
     note_text = "".join("\n" + textwrap.fill(note, 79) + "\n" for note in notes)
     out = [
-        f'"""{source.name} -- imported from {source.path.name} by `m4l import`.',
+        f'"""{_doc(source.name)} -- imported from {_doc(source.path.name)} by `m4l import`.',
         "",
         "Rebuilds an equivalent device with m4l-builder. Edit it like any build script:",
         "",
-        f"    m4l build {script_name}     # write it to your Ableton User Library",
-        f"    m4l watch {script_name}     # rebuild on every save",
-        f"    m4l lint {script_name}      # check it without writing anything",
+        f"    m4l build {_doc(script_name)}     # write it to your Ableton User Library",
+        f"    m4l watch {_doc(script_name)}     # rebuild on every save",
+        f"    m4l lint {_doc(script_name)}      # check it without writing anything",
         note_text + '"""',
         "",
     ]
@@ -1423,7 +1535,17 @@ def _box_label(box: dict) -> str:
     return f"{label} [{box.get('id')}]"
 
 
+def _digest(value: Any) -> str:
+    return hashlib.sha1(json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def _patcher_signature(patcher: dict) -> tuple[Counter, Counter, dict[str, str], dict]:
+    """Box and patchline signatures that ignore box IDs.
+
+    A box's signature is its content, then refined twice by what it connects
+    to (Weisfeiler-Lehman style), so two identical boxes with their wiring
+    swapped don't count as the same device.
+    """
     boxes = [unwrap_box(entry) for entry in patcher.get("boxes", [])]
     sigs: dict[str, str] = {}
     labels: dict[str, str] = {}
@@ -1431,11 +1553,8 @@ def _patcher_signature(patcher: dict) -> tuple[Counter, Counter, dict[str, str],
         body = {key: val for key, val in box.items() if key != "id"}
         if isinstance(body.get("patcher"), dict):
             body["patcher"] = _nested_signature(body["patcher"])
-        sig = json.dumps(body, sort_keys=True)
-        sigs[str(box.get("id"))] = sig
-        labels.setdefault(sig, _box_label(box))
-    line_sigs: Counter = Counter()
-    line_labels: dict[str, str] = {}
+        sigs[str(box.get("id"))] = _digest(body)
+    wires = []
     for entry in patcher.get("lines", []):
         line = entry.get("patchline", entry)
         try:
@@ -1443,11 +1562,24 @@ def _patcher_signature(patcher: dict) -> tuple[Counter, Counter, dict[str, str],
         except (KeyError, TypeError, ValueError):
             continue
         extra = {key: val for key, val in line.items() if key not in ("source", "destination")}
-        sig = json.dumps([sigs.get(src), outlet, sigs.get(dst), inlet, extra], sort_keys=True)
+        wires.append((str(src), outlet, str(dst), inlet, extra))
+    for _ in range(2):
+        around: dict[str, list[str]] = {box_id: [] for box_id in sigs}
+        for src, outlet, dst, inlet, extra in wires:
+            if src in around:
+                around[src].append(_digest(["out", outlet, sigs.get(dst), inlet, extra]))
+            if dst in around:
+                around[dst].append(_digest(["in", inlet, sigs.get(src), outlet, extra]))
+        sigs = {box_id: _digest([sig, sorted(around[box_id])]) for box_id, sig in sigs.items()}
+    for box in boxes:
+        labels.setdefault(sigs[str(box.get("id"))], _box_label(box))
+    line_sigs: Counter = Counter()
+    for src, outlet, dst, inlet, extra in wires:
+        sig = _digest([sigs.get(src), outlet, sigs.get(dst), inlet, extra])
         line_sigs[sig] += 1
-        line_labels.setdefault(sig, f"{src}:{outlet} -> {dst}:{inlet}")
+        labels.setdefault(sig, f"{src}:{outlet} -> {dst}:{inlet}")
     header = {key: val for key, val in patcher.items() if key not in ("boxes", "lines")}
-    return Counter(sigs.values()), line_sigs, {**labels, **line_labels}, header
+    return Counter(sigs.values()), line_sigs, labels, header
 
 
 def _nested_signature(patcher: dict) -> dict:
@@ -1456,30 +1588,41 @@ def _nested_signature(patcher: dict) -> dict:
             "lines": sorted(line_sigs.elements())}
 
 
-def patcher_differences(source: dict, rebuilt: dict) -> list[str]:
+def patcher_differences(source: dict, rebuilt: dict, *,
+                        extra_dependencies: frozenset[str] | set[str] = frozenset()) -> list[str]:
     """How two device patchers differ, ignoring box IDs (empty = equivalent).
 
     Compares every box (all attributes, embedded patchers included), every
-    patchline by the boxes it joins, the device size, latency, MPE flag,
-    parameter banks and the dependency list. Patcher-level settings Max
-    regenerates (timestamps, window rects, the parameter index) are ignored.
+    patchline by the boxes it joins, the device size (the width only when the
+    source saved one), latency, MPE flag, Push banks that hold parameters and
+    the dependency list (``extra_dependencies`` may appear only in
+    ``rebuilt``). Patcher-level settings Max writes again on every save
+    (timestamps, window rects, default font, the parameter index) are ignored.
     """
     diffs: list[str] = []
-    for key in ("devicewidth", "latency"):
-        if not _same(source.get(key, 0), rebuilt.get(key, 0)):
-            diffs.append(f"{key}: {source.get(key)!r} != {rebuilt.get(key)!r}")
-    if not _same(source.get("openrect", [0, 0, 0, 0])[2:4], rebuilt.get("openrect",
-                                                                       [0, 0, 0, 0])[2:4]):
-        diffs.append(f"size: {source.get('openrect')} != {rebuilt.get('openrect')}")
+    width = _device_width(source)
+    if width is not None and not _same(width, _device_width(rebuilt)):
+        diffs.append(f"width: {width!r} != {_device_width(rebuilt)!r}")
+    heights = [p.get("openrect", [0, 0, 0, 0])[3:4] for p in (source, rebuilt)]
+    if heights[0] and _positive(heights[0][0]) and not _same(*heights):
+        diffs.append(f"height: {heights[0][0]!r} != {(heights[1] or [None])[0]!r}")
+    if not _same(source.get("latency", 0), rebuilt.get("latency", 0)):
+        diffs.append(f"latency: {source.get('latency')!r} != {rebuilt.get('latency')!r}")
     if bool(source.get("is_mpe")) != bool(rebuilt.get("is_mpe")):
         diffs.append("is_mpe differs")
-    banks = [p.get("parameters", {}).get("parameterbanks", {}) for p in (source, rebuilt)]
-    if not _same(*banks):
+    banks = [_bank_slots(p) for p in (source, rebuilt)]
+    if banks[0] != banks[1]:
         diffs.append(f"parameter banks: {banks[0]} != {banks[1]}")
-    deps = [sorted((d.get("name"), d.get("type")) for d in p.get("dependency_cache", [])
-                   if isinstance(d, dict)) for p in (source, rebuilt)]
-    if deps[0] != deps[1]:
-        diffs.append(f"dependencies: {deps[0]} != {deps[1]}")
+    deps = [{d.get("name"): d.get("type") for d in p.get("dependency_cache", [])
+             if isinstance(d, dict)} for p in (source, rebuilt)]
+    for name in sorted(set(deps[0]) | set(deps[1]), key=str):
+        if name not in deps[1]:
+            diffs.append(f"dependency not rebuilt: {name}")
+        elif name not in deps[0]:
+            if name not in extra_dependencies:
+                diffs.append(f"dependency not in source: {name}")
+        elif deps[0][name] != deps[1][name]:
+            diffs.append(f"dependency type: {name}: {deps[0][name]} != {deps[1][name]}")
     src_boxes, src_lines, src_labels, _ = _patcher_signature(source)
     new_boxes, new_lines, new_labels, _ = _patcher_signature(rebuilt)
     for sig in (src_boxes - new_boxes).elements():
@@ -1501,13 +1644,16 @@ def check_import(source: SourceDevice, script_path: str | Path) -> list[str]:
     diffs = []
     if device.device_type != source.device_type:
         diffs.append(f"device type: {source.device_type} != {device.device_type}")
-    diffs += patcher_differences(source.patcher, device_to_patcher(device)["patcher"])
+    diffs += patcher_differences(source.patcher, device_to_patcher(device)["patcher"],
+                                 extra_dependencies=set(source.unlisted))
     rebuilt_assets = {}
     for asset in device.assets():
         content = asset.content
         rebuilt_assets[asset.filename] = (content if isinstance(content, bytes)
                                           else content.encode(asset.encoding))
     for name, content in source.assets.items():
-        if name in rebuilt_assets and rebuilt_assets[name] != content:
+        if name not in rebuilt_assets:
+            diffs.append(f"support file not rebuilt: {name}")
+        elif rebuilt_assets[name] != content:
             diffs.append(f"support file differs: {name}")
     return diffs
