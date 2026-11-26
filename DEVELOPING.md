@@ -74,7 +74,9 @@ requires Python 3.11+, so Python 3.10 resolves its latest compatible 3.10.3;
 newer interpreters use 3.11.
 
 CI runs on GitHub-hosted `ubuntu-latest` runners. Documentation builds on
-PRs; deployment requires an explicit manual workflow dispatch.
+PRs and deploys to <https://alaarab.github.io/m4l-builder/> on every push to
+`main` that touches `docs/`, `mkdocs.yml` or the Docs workflow (or by a manual
+workflow dispatch).
 
 ## Building & publishing
 
