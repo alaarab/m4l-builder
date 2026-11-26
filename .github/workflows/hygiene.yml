@@ -1,0 +1,34 @@
+name: Public hygiene
+
+# Fails a PR that adds private or third-party material to this public repo:
+# added lines, commit messages and the PR title are matched against pattern
+# lists kept in the HYGIENE_PATTERNS secret (never committed), and commit
+# author/committer emails must be noreply addresses.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hygiene-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: public hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan added lines, commit messages and emails
+        env:
+          HYGIENE_PATTERNS: ${{ secrets.HYGIENE_PATTERNS }}
+          # Fork and Dependabot PRs don't receive repository secrets; skip there.
+          HYGIENE_ALLOW_SKIP: ${{ (github.event.pull_request.head.repo.full_name != github.repository || github.event.pull_request.user.login == 'dependabot[bot]') && '1' || '' }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 -I .github/scripts/hygiene_scan.py "$BASE_SHA" "$HEAD_SHA"
