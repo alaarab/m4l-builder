@@ -206,8 +206,6 @@ def parametric_eq_band_backend(
     gain_pack_id = device.add_newobj(
         f"pk_gain_db_b{i}",
         "pack f 0. 20",
-        numinlets=2, numoutlets=1,
-        outlettype=[""],
         patching_rect=[control_x, control_y + 40, 80, 20],
     )
     gain_line_id = device.add_newobj(
@@ -269,8 +267,6 @@ def parametric_eq_band_backend(
     q_pack_id = device.add_newobj(
         f"pk_q_b{i}",
         "pack f 1. 20",
-        numinlets=2, numoutlets=1,
-        outlettype=[""],
         patching_rect=[control_x, control_y + 80, 80, 20],
     )
     q_line_id = device.add_newobj(
@@ -293,8 +289,6 @@ def parametric_eq_band_backend(
     type_sel_id = device.add_newobj(
         f"type_sel_b{i}",
         "select 0 1 2 3 4 5 6 7",
-        numinlets=1, numoutlets=9,
-        outlettype=["bang", "bang", "bang", "bang", "bang", "bang", "bang", "bang", ""],
         patching_rect=[type_x, control_y, 140, 20],
     )
     for type_index, type_name in enumerate(filter_types):
@@ -315,8 +309,6 @@ def parametric_eq_band_backend(
     on_sel_id = device.add_newobj(
         f"on_sel_b{i}",
         "select 0 1",
-        numinlets=1, numoutlets=3,
-        outlettype=["bang", "bang", ""],
         patching_rect=[enable_x, control_y, 60, 20],
     )
     off_id = device.add_box({

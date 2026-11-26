@@ -1608,7 +1608,7 @@ class TestTriangleLFO:
         boxes, _ = lfo("lfo", waveform="triangle")
         osc = _find_box(boxes, "lfo_osc")
         assert osc["text"] == "tri~"
-        assert osc["numinlets"] == 2
+        assert osc["numinlets"] == 3
         assert osc["numoutlets"] == 1
 
     def test_scale_and_offset_for_unipolar(self):
@@ -3918,10 +3918,21 @@ class TestMidiClockIn:
         b = _find_box(boxes, "mci_midiin")
         assert "midiin" in b["text"]
 
-    def test_has_midiparse(self):
-        boxes, _ = midi_clock_in("mci")
-        b = _find_box(boxes, "mci_midiparse")
-        assert "midiparse" in b["text"]
+    def test_wiring(self):
+        _, lines = midi_clock_in("mci")
+        edges = {(ln["patchline"]["source"][0][4:], ln["patchline"]["source"][1],
+                  ln["patchline"]["destination"][0][4:], ln["patchline"]["destination"][1])
+                 for ln in lines}
+        assert edges == {
+            ("midiin", 0, "clockdet", 0),     # raw bytes, 248 = timing clock
+            ("clockdet", 0, "counter", 0),
+            ("counter", 2, "beat", 0),        # carry flag: 1 once per 24 clocks
+            ("beat", 0, "beat_trig", 0),
+            ("beat_trig", 1, "timer", 1),     # report elapsed ms first (right inlet),
+            ("beat_trig", 0, "timer", 0),     # then restart the timer (left inlet)
+            ("timer", 0, "bpm", 0),
+            ("bpm", 0, "bpm_scale", 0),
+        }
 
     def test_has_clockdet(self):
         boxes, _ = midi_clock_in("mci")
@@ -4397,7 +4408,7 @@ class TestLoadbang:
     def test_inlets_outlets(self):
         boxes, _ = loadbang("lb")
         b = boxes[0]["box"]
-        assert b["numinlets"] == 0
+        assert b["numinlets"] == 1
         assert b["numoutlets"] == 1
         assert b["outlettype"] == ["bang"]
 
@@ -4655,7 +4666,7 @@ class TestPattrSystem:
         ap = _find_box(boxes, "ps_autopattr")
         assert ap["text"] == "autopattr"
         assert ap["numinlets"] == 1
-        assert ap["numoutlets"] == 1
+        assert ap["numoutlets"] == 4
 
     def test_pattrstorage_object(self):
         boxes, _ = pattr_system("ps")
@@ -4689,15 +4700,15 @@ class TestMidiChannelFilter:
         boxes, _ = midi_channel_filter("mcf")
         mi = _find_box(boxes, "mcf_midiin")
         assert mi["text"] == "midiin"
-        assert mi["numinlets"] == 0
-        assert mi["numoutlets"] == 2
+        assert mi["numinlets"] == 1
+        assert mi["numoutlets"] == 1
 
     def test_midiparse_object(self):
         boxes, _ = midi_channel_filter("mcf")
         mp = _find_box(boxes, "mcf_midiparse")
         assert mp["text"] == "midiparse"
         assert mp["numinlets"] == 1
-        assert mp["numoutlets"] == 7
+        assert mp["numoutlets"] == 8
 
     def test_sel_uses_channel(self):
         boxes, _ = midi_channel_filter("mcf", channel=5)

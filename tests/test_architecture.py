@@ -286,7 +286,7 @@ class TestPublicExportSurface:
 class TestTypedGraphHandles:
     def test_connect_accepts_typed_endpoints(self):
         device = Device("test", 200, 100)
-        source = device.add_newobj("src", "noise~", numinlets=0, numoutlets=1, outlettype=["signal"])
+        source = device.add_newobj("src", "noise~")
         dest = device.add_newobj("dst", "*~ 1.", numinlets=2, numoutlets=1, outlettype=["signal"])
 
         device.connect(source.outlet(0), dest.inlet(1))
@@ -297,7 +297,7 @@ class TestTypedGraphHandles:
 
     def test_add_line_accepts_outlet_and_inlet_refs(self):
         device = Device("test", 200, 100)
-        source = device.add_newobj("src", "noise~", numinlets=0, numoutlets=1, outlettype=["signal"])
+        source = device.add_newobj("src", "noise~")
         dest = device.add_newobj("dst", "dac~", numinlets=2, numoutlets=0)
 
         device.add_line(source.outlet(0), dest.inlet(0))
@@ -399,7 +399,7 @@ class TestValidation:
 
     def test_build_can_warn_and_continue(self, tmp_path):
         device = Device("test", 200, 100)
-        device.add_newobj("lonely", "noise~", numinlets=0, numoutlets=1)
+        device.add_newobj("lonely", "noise~")
         output = tmp_path / "warn.amxd"
 
         with pytest.warns(UserWarning):

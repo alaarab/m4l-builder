@@ -111,8 +111,7 @@ def xfade_matrix(id_prefix: str, sources: int = 4) -> tuple:
     boxes.append(newobj(f"{p}_ctrl", "pack f 10", numinlets=2, numoutlets=1,
                         outlettype=[""],
                         patching_rect=[30, 60, 80, 20]))
-    boxes.append(newobj(f"{p}_ctrl_line", "line~", numinlets=2, numoutlets=1,
-                        outlettype=["signal"],
+    boxes.append(newobj(f"{p}_ctrl_line", "line~",
                         patching_rect=[30, 90, 50, 20]))
     lines.append(patchline(f"{p}_ctrl", 0, f"{p}_ctrl_line", 0))
 

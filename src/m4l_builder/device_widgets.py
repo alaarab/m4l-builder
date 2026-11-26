@@ -2302,8 +2302,8 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
                                enum=["HIDE", "SHOW"], initial=[0],
                                initial_enable=True),
                            **bkw)
-        self.add_newobj(f"{button_id}_sel", "sel 1 0", numinlets=1, numoutlets=3,
-                        outlettype=["bang", "bang", ""], patching_rect=[700, 1400, 60, 20])
+        self.add_newobj(f"{button_id}_sel", "sel 1 0",
+                        patching_rect=[700, 1400, 60, 20])
         self.add_newobj(f"{button_id}_sshow", f"s {show_send}", numinlets=1,
                         numoutlets=0, patching_rect=[700, 1430, 90, 20])
         self.add_newobj(f"{button_id}_shide", f"s {hide_send}", numinlets=1,
@@ -2362,8 +2362,7 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         self.add_newobj(f"{button_id}_thisdev", "live.thisdevice", numinlets=1,
                         numoutlets=3, outlettype=["bang", "int", "int"],
                         patching_rect=[700, 1500, 90, 20])
-        self.add_newobj(f"{button_id}_sel", "sel 0 1", numinlets=1, numoutlets=3,
-                        outlettype=["bang", "bang", ""],
+        self.add_newobj(f"{button_id}_sel", "sel 0 1",
                         patching_rect=[700, 1530, 60, 20])
 
         def _setwidth_msg(mid, w, x):

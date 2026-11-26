@@ -128,40 +128,10 @@ def test_add_newobj_infers_and_lints_clean():
 # (explicit values win, and changing them would change built devices). A new
 # disagreement, or an entry that no longer occurs, fails the test.
 
-OLD_ROUTE = "pre-Max-8.6 shape: Max 8.6+ gives route/sel an inlet per argument"
-SHORT = "declaration is short of Max's shape (unwired extras are harmless)"
-WRONG = "declaration doesn't match Max's shape"
 MAX9 = "Max 9 saves this shape; the vendored Max 8.6 dataset differs"
 FIXTURE = "synthetic test fixture, not a Max shape"
 
 KNOWN_COUNT_DISAGREEMENTS = {
-    ("route", 1, 2): OLD_ROUTE,
-    ("route enable", 1, 2): OLD_ROUTE,
-    ("route enable rowcolor", 1, 3): OLD_ROUTE,
-    ("route lanes", 1, 2): OLD_ROUTE,
-    ("route rowcolor", 1, 2): OLD_ROUTE,
-    ("route mapped min max pname dname path flash announce", 1, 9): OLD_ROUTE,
-    ("sel 0 1", 1, 3): OLD_ROUTE,
-    ("sel 1 0", 1, 3): OLD_ROUTE,
-    ("select 0 1", 1, 3): OLD_ROUTE,
-    ("select 0 1 2 3 4 5 6 7", 1, 9): OLD_ROUTE,
-    ("select 248", 1, 2): OLD_ROUTE,
-    ("pack f 0. 20", 2, 1): SHORT,
-    ("pack f 1. 20", 2, 1): SHORT,
-    ("adsr~ 10 80 0.6 300", 5, 1): SHORT,
-    ("autopattr", 1, 1): SHORT,
-    ("counter 0 23", 1, 3): SHORT,
-    ("timer", 2, 1): SHORT,
-    ("snapshot~", 1, 1): SHORT,
-    ("line~", 2, 1): SHORT,
-    ("rect~", 2, 1): SHORT,
-    ("tri~", 2, 1): SHORT,
-    ("midiin", 0, 1): WRONG,
-    ("midiin", 0, 2): WRONG,
-    ("loadbang", 0, 1): WRONG,
-    ("cycle~", 2, 2): MAX9,
-    ("noise~", 0, 1): MAX9,
-    ("midiparse", 1, 7): MAX9,
     ("buffer~ b_smp", 1, 1): FIXTURE,
     ("buffer~ mybuf_smp", 1, 1): FIXTURE,
     ("live.thisdevice", 1, 2): FIXTURE,
@@ -174,9 +144,7 @@ KNOWN_COUNT_DISAGREEMENTS = {
 GENERIC = "declared a generic '' outlet where Max types it"
 TYPED = "declared a typed outlet where Max saves ''"
 KNOWN_TYPE_DISAGREEMENTS = {
-    ("* 60.", ("",)): GENERIC,
     ("+ 1", ("",)): GENERIC,
-    ("/ 1000.", ("",)): GENERIC,
     ("/ 2.5", ("",)): GENERIC,
     ("i", ("",)): GENERIC,
     ("i 248", ("",)): GENERIC,

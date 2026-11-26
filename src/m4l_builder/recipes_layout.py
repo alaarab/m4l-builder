@@ -549,8 +549,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
     # original message through, so map/unmap/setid/settarget/announce/extunmap
     # dispatch is unchanged; "enable"/"rowcolor" no longer hit the js (they are
     # already handled by slot_en_route/slot_rc_route) -> no "no function" errors.
-    sub.add_newobj("slot_js_gate", "route enable rowcolor", numinlets=1,
-                   numoutlets=3, outlettype=["", "", ""],
+    sub.add_newobj("slot_js_gate", "route enable rowcolor",
                    patching_rect=[220, 370, 140, 20])
     sub.add_line("slot_in", 0, "slot_js_gate", 0)
     sub.add_line("slot_js_gate", 2, "slot_js", 0)
@@ -579,10 +578,9 @@ def modulator_slot_component(device, *, accent, text_color=None,
     # zl.reg to re-emit the stored id down the current path (mapping restored,
     # nothing forgotten). Mode-aware for free: the gate always points at the
     # currently-selected sink.
-    sub.add_newobj("slot_en_route", "route enable", numinlets=1, numoutlets=2,
-                   outlettype=["", ""], patching_rect=[520, 340, 90, 20])
-    sub.add_newobj("slot_en_sel", "sel 0 1", numinlets=1, numoutlets=3,
-                   outlettype=["bang", "bang", ""],
+    sub.add_newobj("slot_en_route", "route enable",
+                   patching_rect=[520, 340, 90, 20])
+    sub.add_newobj("slot_en_sel", "sel 0 1",
                    patching_rect=[520, 365, 60, 20])
     sub.add_box({"box": {
         "id": "slot_en_id0", "maxclass": "message", "text": "id 0",
@@ -597,8 +595,6 @@ def modulator_slot_component(device, *, accent, text_color=None,
     # ---- status route bus ----------------------------------------------------
     sub.add_newobj("slot_route",
                    "route mapped min max pname dname path flash announce",
-                   numinlets=1, numoutlets=9,
-                   outlettype=["", "", "", "", "", "", "", "", ""],
                    patching_rect=[30, 430, 300, 20])
     sub.add_box({"box": {
         "id": "slot_seton", "maxclass": "message", "text": "set $1",
@@ -658,8 +654,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
         # stamped lane (each stamp has its own inlet cord) — recolors the
         # MAP/BI(/R/M/+) chips' on-state and the numbox LCDs so mapping
         # identity reads by color. live.* accept attribute-set messages.
-        sub.add_newobj("slot_rc_route", "route rowcolor", numinlets=1,
-                       numoutlets=2, outlettype=["", ""],
+        sub.add_newobj("slot_rc_route", "route rowcolor",
                        patching_rect=[620, 340, 100, 20])
         sub.add_line("slot_in", 0, "slot_rc_route", 0)
         rc_targets = ["slot_map", "slot_bipolar"]
@@ -745,8 +740,7 @@ def modulator_slot_component(device, *, accent, text_color=None,
         # reveal page idiom: "lanes N" on inlet 0 -> hide self when N < #1.
         # thispatcher inside a bpatcher addresses the BPATCHER BOX in the
         # parent, so "hidden $1" hides this stamped lane in presentation.
-        sub.add_newobj("slot_lanes_route", "route lanes", numinlets=1,
-                       numoutlets=2, outlettype=["", ""],
+        sub.add_newobj("slot_lanes_route", "route lanes",
                        patching_rect=[4, 560, 90, 20])
         sub.add_newobj("slot_lanes_cmp", "< #1", numinlets=2, numoutlets=1,
                        outlettype=["int"], patching_rect=[4, 590, 50, 20])
@@ -1009,8 +1003,7 @@ def settings_sidebar(device, id_prefix, *, mini_width, accent, controls,
     device.add_newobj(thisdev, "live.thisdevice", numinlets=1, numoutlets=3,
                       outlettype=["bang", "int", "int"], patching_rect=[520, 1600, 90, 20])
     sel = f"{p}_sel"
-    device.add_newobj(sel, "sel 0 1", numinlets=1, numoutlets=3,
-                      outlettype=["bang", "bang", ""], patching_rect=[700, 1630, 60, 20])
+    device.add_newobj(sel, "sel 0 1", patching_rect=[700, 1630, 60, 20])
     device.add_line(btn_id, 0, sel, 0)
     ctrig, otrig = f"{p}_ctrig", f"{p}_otrig"
     device.add_newobj(ctrig, "t b", numinlets=1, numoutlets=1,

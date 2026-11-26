@@ -181,8 +181,7 @@ class TestDeviceAddSubpatcher:
         sp.add_line("in", 0, "g", 0)
         sp.add_line("g", 0, "out", 0)
 
-        src_id = dev.add_newobj("obj-src", "noise~", numinlets=0, numoutlets=1,
-                                outlettype=["signal"])
+        src_id = dev.add_newobj("obj-src", "noise~")
         sub_id = dev.add_subpatcher(sp, "obj-sub", [50, 100, 80, 22],
                                     numinlets=1, numoutlets=1,
                                     outlettype=["signal"])

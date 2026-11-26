@@ -940,8 +940,7 @@ def expandable_column(device, id_prefix, *, arrow_rect, base_width,
                             option_labels=["Closed", "Open"],
                             accent=accent, initial=0)
     tab = f"{p}_arrow_tab"
-    device.add_newobj(f"{p}_sel", "sel 0 1", numinlets=1, numoutlets=3,
-                      outlettype=["bang", "bang", ""],
+    device.add_newobj(f"{p}_sel", "sel 0 1",
                       patching_rect=[900, 3960, 60, 20])
     device.add_box({"box": {
         "id": f"{p}_wbase", "maxclass": "message",

@@ -239,8 +239,7 @@ def live_brand_dim(bus, brand_rgba, *, attrs=("activedialcolor",),
     brand_text = " ".join(f"{float(c):g}" for c in brand_rgba)
     boxes, lines, (src_id, src_outlet), ist = live_device_active_state(p, x=x, y=y)
     boxes += [
-        newobj(sl, "sel 1 0", numinlets=1, numoutlets=3,
-               outlettype=["bang", "bang", ""], patching_rect=[x, y + 180, 60, 20]),
+        newobj(sl, "sel 1 0", patching_rect=[x, y + 180, 60, 20]),
         newobj(m_a, brand_text, numinlets=2, numoutlets=1, maxclass="message",
                patching_rect=[x, y + 210, 140, 18]),
         newobj(m_z, zombie_token, numinlets=2, numoutlets=1, maxclass="message",
@@ -312,8 +311,7 @@ def live_theme_state_dim(bus, *, attrs=("activedialcolor",),
                              f"{p}_mzomb", f"{p}_col", f"{p}_rt")
     boxes, lines, (src_id, src_outlet), _store = live_device_active_state(p, x=x, y=y)
     boxes += [
-        newobj(sl, "sel 1 0", numinlets=1, numoutlets=3,
-               outlettype=["bang", "bang", ""], patching_rect=[x, y + 180, 60, 20]),
+        newobj(sl, "sel 1 0", patching_rect=[x, y + 180, 60, 20]),
         newobj(m_a, active_token, numinlets=2, numoutlets=1, maxclass="message",
                patching_rect=[x, y + 210, 120, 18]),
         newobj(m_z, zombie_token, numinlets=2, numoutlets=1, maxclass="message",

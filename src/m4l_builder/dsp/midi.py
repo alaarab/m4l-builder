@@ -418,8 +418,7 @@ def midi_learn_chain(id_prefix: str, param_name: str) -> tuple:
                outlettype=[""],
                patching_rect=[30, 150, 20, 20]),
         # Route: only pass CC value when it matches stored CC number
-        newobj(f"{p}_route", "route", numinlets=1, numoutlets=2,
-               outlettype=["", ""],
+        newobj(f"{p}_route", "route",
                patching_rect=[30, 180, 50, 20]),
         # Send the value to the named parameter
         newobj(f"{p}_send", f"send {param_name}", numinlets=1, numoutlets=0,
@@ -532,39 +531,44 @@ def midi_clock_out(id_prefix: str) -> tuple:
 def midi_clock_in(id_prefix: str) -> tuple:
     """Detect incoming MIDI clock and output BPM as a float.
 
-    Counts 24 ppqn clock pulses via midiin + midiparse, outputs BPM.
+    Raw bytes from midiin go to ``select 248`` (0xF8 timing clock). A
+    ``counter 0 23`` counts the 24 ppqn pulses; its carry flag (outlet 2)
+    goes to 1 once per quarter note, and ``sel 1`` turns that into a bang
+    that reads and restarts a timer. BPM = 60 / (quarter-note ms / 1000).
     Output BPM float from {prefix}_bpm_scale outlet 0.
+
+    Inside Live, incoming MIDI clock is not passed to a device's ``midiin``;
+    follow Live's tempo there (``plugsync~`` / ``live.observer`` on
+    ``tempo``) and use this recipe for standalone Max patches.
     """
     p = id_prefix
     boxes = [
         newobj(f"{p}_midiin", "midiin",
-               numinlets=0, numoutlets=1, outlettype=[""],
                patching_rect=[30, 30, 60, 20]),
-        newobj(f"{p}_midiparse", "midiparse",
-               numinlets=1, numoutlets=7, outlettype=[""] * 7,
-               patching_rect=[30, 70, 80, 20]),
         newobj(f"{p}_clockdet", "select 248",
-               numinlets=1, numoutlets=2, outlettype=["bang", ""],
-               patching_rect=[30, 110, 80, 20]),
+               patching_rect=[30, 70, 80, 20]),
         newobj(f"{p}_counter", "counter 0 23",
-               numinlets=1, numoutlets=3, outlettype=["", "bang", ""],
-               patching_rect=[30, 150, 100, 20]),
+               patching_rect=[30, 110, 100, 20]),
+        newobj(f"{p}_beat", "sel 1",
+               patching_rect=[30, 150, 40, 20]),
+        newobj(f"{p}_beat_trig", "t b b",
+               patching_rect=[30, 190, 40, 20]),
         newobj(f"{p}_timer", "timer",
-               numinlets=2, numoutlets=1, outlettype=[""],
-               patching_rect=[30, 190, 60, 20]),
-        newobj(f"{p}_bpm", "/ 1000.",
-               numinlets=2, numoutlets=1, outlettype=[""],
                patching_rect=[30, 230, 60, 20]),
-        newobj(f"{p}_bpm_scale", "* 60.",
-               numinlets=2, numoutlets=1, outlettype=[""],
+        newobj(f"{p}_bpm", "/ 1000.",
                patching_rect=[30, 270, 60, 20]),
+        newobj(f"{p}_bpm_scale", "!/ 60.",
+               patching_rect=[30, 310, 60, 20]),
     ]
     lines = [
-        patchline(f"{p}_midiin", 0, f"{p}_midiparse", 0),
-        patchline(f"{p}_midiparse", 0, f"{p}_clockdet", 0),
+        patchline(f"{p}_midiin", 0, f"{p}_clockdet", 0),
         patchline(f"{p}_clockdet", 0, f"{p}_counter", 0),
-        patchline(f"{p}_counter", 1, f"{p}_timer", 1),
-        patchline(f"{p}_clockdet", 0, f"{p}_timer", 0),
+        patchline(f"{p}_counter", 2, f"{p}_beat", 0),
+        patchline(f"{p}_beat", 0, f"{p}_beat_trig", 0),
+        # right outlet fires first: report the elapsed time (timer's right
+        # inlet), then restart it (left inlet)
+        patchline(f"{p}_beat_trig", 1, f"{p}_timer", 1),
+        patchline(f"{p}_beat_trig", 0, f"{p}_timer", 0),
         patchline(f"{p}_timer", 0, f"{p}_bpm", 0),
         patchline(f"{p}_bpm", 0, f"{p}_bpm_scale", 0),
     ]
@@ -731,11 +735,8 @@ def midi_channel_filter(id_prefix: str, channel: int = 1) -> tuple:
     p = id_prefix
     boxes = [
         newobj(f"{p}_midiin", "midiin",
-               numinlets=0, numoutlets=2, outlettype=["int", "int"],
                patching_rect=[30, 30, 50, 20]),
         newobj(f"{p}_midiparse", "midiparse",
-               numinlets=1, numoutlets=7,
-               outlettype=["", "", "", "", "", "", ""],
                patching_rect=[30, 70, 70, 20]),
         newobj(f"{p}_sel", f"sel {channel}",
                numinlets=1, numoutlets=2, outlettype=["bang", ""],
