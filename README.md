@@ -78,6 +78,21 @@ uv run python examples/02_generative_midi.py   # builds a generative MIDI device
 - [`05_euclidean_midi.py`](examples/05_euclidean_midi.py) — MIDI effect using the Euclidean rhythm generator
 - [`06_simple_synth.py`](examples/06_simple_synth.py) — `Instrument` device: oscillator through an ADSR amplitude envelope
 
+## Command line
+
+Installing the package adds an `m4l` command (also `python -m m4l_builder`):
+
+```bash
+m4l new "My Gain" --type audio     # scaffold my_gain/build.py (audio, midi or instrument)
+m4l build my_gain/build.py         # run it; --out redirects the .amxd
+m4l watch my_gain/build.py         # rebuild into the User Library on every save
+m4l lint my_gain/build.py          # validation + box lint + GenExpr lint, no write
+m4l inspect "My Gain.amxd"         # type, size, parameters, box counts (--json too)
+```
+
+Any script that calls `device.build(path)` works, including everything in
+`examples/`. See the [command line guide](docs/cli.md).
+
 ## Key concepts
 
 ### Device types

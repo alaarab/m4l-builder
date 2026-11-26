@@ -67,6 +67,7 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Getting started: getting_started.md
+  - Command line: cli.md
   - Guides:
       - DSP & UI catalog: catalog.md
       - MIDI Tools (Live 12): midi_tools.md
