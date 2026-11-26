@@ -1,8 +1,7 @@
 """Native control sizes (px) for ``live.*`` controls.
 
 Use these as the DEFAULT sizes for native ``live.*`` controls so devices read
-native-grade + dense (Ableton / premium-dense style) instead of oversized. See
-``docs/ui_inputs_reference.md``.
+native-grade + dense (Ableton / premium-dense style) instead of oversized.
 
     from m4l_builder import native_sizes as ns
     device.add_dial("amt", "Amount", [x, y, *ns.DIAL], ...)

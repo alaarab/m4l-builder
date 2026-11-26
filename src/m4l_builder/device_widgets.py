@@ -54,8 +54,8 @@ class CompositeWidgetsMixin(DeviceWidgetMethods):
         optional CPU ``gate_src`` and an ``inset`` (so the compiled rect lands
         inside the overlay's axis margins) round it out.
 
-        Z-ORDER (Live-verified 2026-06 — see docs/ui_inputs_reference.md "Compiled
-        display OVER an interactive v8ui EATS the clicks"): EVERY compiled Max
+        Z-ORDER (Live-verified 2026-06; a compiled display over an interactive
+        v8ui eats its clicks): EVERY compiled Max
         display (``spectroscope~``, ``scope~``, ``waveform~``, ``meter~``,
         ``filtergraph~``) renders ABOVE a ``v8ui`` **regardless of patcher box
         order** AND captures the pointer in its rect — so a v8ui beneath it stops
