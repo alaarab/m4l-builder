@@ -102,10 +102,16 @@ m4l lint my_gain/build.py          # validation + box lint + GenExpr lint, no wr
 m4l preview my_gain/build.py       # render the panel to an SVG (see the gallery above)
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts (--json too)
 m4l import "Their Device.amxd"     # write a build.py that rebuilds an existing device
+m4l render my_gain/build.py --in dry.wav --out wet.wav --param Gain=-6
 ```
 
 Any script that calls `device.build(path)` works, including everything in
 `examples/`. See the [command line guide](docs/cli.md).
+
+`m4l render` (and `m4l_builder.render` in tests) runs a device's gen~ and MSP
+audio path offline, so you can hear the DSP and assert it actually processes:
+a gen~ that fails to compile in Live passes audio through dry without any
+error. See [Offline render](docs/render.md).
 
 ## Bring an existing device
 

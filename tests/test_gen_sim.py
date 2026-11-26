@@ -194,6 +194,11 @@ def test_every_function_call_site_keeps_its_own_history():
     assert out["out2"] == [20., 40., 60.]
 
 
+def test_declarations_may_precede_function_definitions():
+    k = "Param g(2.);\nHistory h(0.);\n" + _ACC_FN + "h = acc(in1) * g;\nout1 = h;"
+    assert simulate(k, {"in1": [1., 1., 1.]})["out1"] == [2., 4., 6.]
+
+
 def test_function_takes_a_delay_line_and_returns_two_values():
     k = ("tap(x, d) {\n\tlate = d.read(2);\n\td.write(x);\n\treturn x, late;\n}\n"
          "Delay line(8);\nnow, past = tap(in1, line);\nout1 = now;\nout2 = past;")
@@ -204,16 +209,94 @@ def test_function_takes_a_delay_line_and_returns_two_values():
 
 # ── refusal of the out-of-subset constructs (never a false green) ────────────
 @pytest.mark.parametrize("code,label", [
-    ("Delay d(512);\nout1 = d.read(10, interp=\"cubic\");\nd.write(in1);", "Delay cubic interp"),
-    ("History h(0.);\nh = peek(buf, 3);\nout1 = h;", "peek"),
+    ("Delay d(512);\nout1 = d.read(10, interp=\"spline\");\nd.write(in1);", "Delay spline interp"),
+    ('Buffer b("tbl");\nout1 = peek(b, 3);', "Buffer"),
+    ('Data d(8);\nout1 = peek(d, 2, 0, interp="linear");', "peek option"),
+    ("Data d(16, 2, 3);\nout1 = in1;", "malformed Data declaration"),
     ("out1 = in1; for (i = 0; i < 3; i = i + 1) { out1 = out1 + 1.; }", "for-loop"),
     ("out1 = data[3];", "indexed access"),
     ("f(x) {\n\tx = x + 1;\n}\nout1 = f(in1);", "function without return"),
     ("out1 = in1;\nreturn out1;", "return outside a function"),
+    ("out1 = phasor(10.);", "operator the simulator does not model"),
+    ("out1 = in1 / (in1 - 1.);", "division by zero"),
+    ("if (in1 > 0.) { out2 = 1.; }\nout1 = in1;", "output not assigned on every sample"),
 ])
 def test_refuses_unsupported_constructs(code, label):
     with pytest.raises(UnsupportedKernel):
         GenKernel(code).run({"in1": [1.0, 0.0]})
+
+
+def test_runtime_refusal_names_the_sample():
+    with pytest.raises(UnsupportedKernel, match="sample 2: unknown name 'later'"):
+        simulate("out1 = in1 > 0.5 ? later : 0.;", {"in1": [0., 0., 1.]})
+
+
+# ── approximate constructs are run, but always declared ─────────────────────
+def test_noise_is_seeded_bounded_and_declared_approximate():
+    kernel = GenKernel("out1 = noise();")
+    assert kernel.approximations and "noise()" in kernel.approximations[0]
+    first = kernel.run(num_samples=2000)["out1"]
+    assert all(-1.0 <= v < 1.0 for v in first) and max(first) - min(first) > 1.5
+    assert kernel.run(num_samples=2000)["out1"] == first
+    assert kernel.run(num_samples=2000, seed=1)["out1"] != first
+    with pytest.raises(UnsupportedKernel, match="strict"):
+        GenKernel("out1 = noise();", strict=True)
+
+
+def test_cubic_delay_read_is_exact_on_taps_and_on_a_cubic():
+    # 4-point Lagrange reproduces any cubic exactly, and hits whole taps exactly.
+    sig = [0.001 * n ** 3 - 0.02 * n ** 2 + 0.3 * n for n in range(40)]
+    kernel = GenKernel('Delay d(64);\nd.write(in1);\n'
+                       'out1 = d.read(5, interp="cubic");\nout2 = d.read(5.25, interp="cubic");')
+    assert kernel.approximations and "cubic" in kernel.approximations[0]
+    out = kernel.run({"in1": sig})
+    for n in range(10, 40):
+        assert out["out1"][n] == pytest.approx(sig[n - 5], abs=1e-12)
+        assert out["out2"][n] == pytest.approx(
+            0.001 * (n - 5.25) ** 3 - 0.02 * (n - 5.25) ** 2 + 0.3 * (n - 5.25), abs=1e-9)
+
+
+def test_exact_kernels_declare_no_approximations():
+    assert GenKernel('Delay d(8);\nout1 = d.read(1.5, interp="linear");\nd.write(in1);'
+                     ).approximations == []
+
+
+# ── fold / change / compound assignment / Data ───────────────────────────────
+def test_fold_reflects_into_the_range():
+    out = simulate("out1 = fold(in1, 0., 1.);", {"in1": [0.25, 1.3, -0.2, 2.5, 3.75]})
+    assert out["out1"] == pytest.approx([0.25, 0.7, 0.2, 0.5, 0.25])
+
+
+def test_change_is_the_sign_of_the_step_per_call_site():
+    k = ("hold(x) {\n\treturn change(x);\n}\n"
+         "out1 = change(in1);\nout2 = hold(in1) + hold(-in1);")
+    out = simulate(k, {"in1": [0., 1., 1., .5, 2.]})
+    assert out["out1"] == [0., 1., 0., -1., 1.]
+    assert out["out2"] == [0., 0., 0., 0., 0.]   # two sites, opposite signs
+
+
+def test_compound_assignment():
+    out = simulate("History h(0.);\nh += in1;\nout1 = h;\nout2 = in1;\nout2 *= 3.;",
+                   {"in1": [1., 2., 3.]})
+    assert out["out1"] == [1., 3., 6.]
+    assert out["out2"] == [3., 6., 9.]
+
+
+def test_data_ring_buffer_delays_by_three_samples():
+    k = ("Data buf(16);\nHistory w(0);\n"
+         "poke(buf, in1, w, 0);\n"
+         "out1 = peek(buf, wrap(w - 3, 0, dim(buf)), 0);\n"
+         "w = wrap(w + 1, 0, dim(buf));")
+    sig = [0., 0., 1., .5, 0., .25, 0., 0., 0., 0.]
+    assert simulate(k, {"in1": sig})["out1"] == [0., 0., 0., 0., 0., 1., .5, 0., .25, 0.]
+
+
+def test_data_out_of_range_reads_zero_and_writes_are_dropped():
+    k = ("Data d(4, 2);\n"
+         "poke(d, 7., 9, 0);\npoke(d, 5., 1, 3);\npoke(d, in1, 1, 1);\n"
+         "out1 = peek(d, 9, 0);\nout2 = peek(d, 1, 1);\nout3 = channels(d);")
+    out = simulate(k, {"in1": [2.]})
+    assert (out["out1"], out["out2"], out["out3"]) == ([0.], [2.], [2.])
 
 
 def test_delay_read_before_write_sees_the_past():

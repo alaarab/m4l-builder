@@ -16,13 +16,16 @@ never silently mis-evaluates and reports a false green):
 * ``in1``..``inN`` per-sample inputs, the ``samplerate`` constant, ``pi`` /
   ``twopi`` / ``halfpi`` and ``mstosamps()`` / ``sampstoms()``.
 * ``lhs = expr;`` statements (``lhs`` a scratch var, an ``outK``, or a History
-  var), ``a, b = f(...);`` multi-assignment from a function returning two values,
+  var), ``lhs += expr;`` (and ``-= *= /=``), ``a, b = f(...);``
+  multi-assignment from a function returning two values,
   and ``if (c) {...} else if (c) {...} else {...}`` blocks (incl. nesting).
 * ``+ - * /`` arithmetic and the ``cond ? a : b`` ternary, parsed
   parenthesis/precedence-correct (gen ternary binds BELOW arithmetic and is
   right-associative — reproduced exactly, NOT via Python's ``a if c else b``).
 * comparison / logic ``> < >= <= == != && || !`` inside conditions.
-* the pure scalar function table in :data:`_FUNCS`.
+* the pure scalar function table in :data:`_FUNCS`, and ``change(x)`` (the
+  sign of ``x`` minus its previous value, 0 before the first sample; every
+  call site keeps its own previous value).
 * ``Delay name(size);`` lines (``size`` may use ``samplerate``) with
   ``name.write(expr);`` statements and ``name.read(taps)`` /
   ``name.read(taps, interp="linear")`` in expressions. A read before the
@@ -33,20 +36,39 @@ never silently mis-evaluates and reports a false green):
   Every call SITE gets its own state, as in gen, and a function may call an
   earlier one. ``Delay`` lines pass into functions as arguments. The body must
   end in exactly one top-level ``return``.
+* ``Data name(size[, channels]);`` with positional ``peek(data, index[,
+  channel])``, ``poke(data, value, index[, channel])``, ``dim(data)`` and
+  ``channels(data)``: gen's default modes (sample index, no interpolation,
+  out-of-range reads return 0 and out-of-range writes are dropped). Any
+  ``peek``/``poke`` keyword option is refused.
 
-Explicitly NOT modelled (refused): ``Buffer``/``Data`` and
-``peek``/``poke``/``index``/``pfft``/``filtercoeff``/``biquad`` access, stateful
-operators such as ``noise``/``cycle``/``sah``, other ``Delay`` interpolation
-modes, indexed history ``h[n]``, ``for``/``while`` loops, and ``Delay``/``Param``
-declarations inside a function. Those kernels need the live render path; the
-simulator refuses them so such a path is never reported as passing.
+Simulated APPROXIMATELY, and listed in :attr:`GenKernel.approximations` so a
+caller can report or refuse them (``GenKernel(code, strict=True)`` refuses):
+
+* ``noise()``: white noise in [-1, 1) from a seeded Python RNG. Statistically
+  the same, but not gen's generator, so not sample-identical to Live.
+* ``Delay`` reads with ``interp="cubic"``: 4-point Lagrange interpolation
+  through the two taps either side of the read position. Not checked against
+  gen's own kernel.
+
+Explicitly NOT modelled (refused): ``Buffer`` and ``pfft``/``filtercoeff``/
+``biquad``/``index`` access, stateful operators such as ``cycle``/``sah``, other
+``Delay`` interpolation modes, ``peek``/``poke`` options, indexed history
+``h[n]``, ``for``/``while`` loops, and ``Delay``/``Data``/``Param`` declarations
+inside a function. Those kernels need the live render path; the simulator
+refuses them so such a path is never reported as passing. So do names the
+simulator does not know (an operator it does not model, a variable read before
+it is assigned) and arithmetic Python cannot finish (a division by zero, a log
+of zero): gen's own handling of those cases is not reproduced.
 """
 
 from __future__ import annotations
 
 import functools
 import math
+import random
 import re
+from typing import Any
 
 from .gen_lint import _strip_comments
 
@@ -70,6 +92,15 @@ def _scale(x, in_lo, in_hi, out_lo, out_hi):
     return out_lo + (x - in_lo) * (out_hi - out_lo) / (in_hi - in_lo)
 
 
+def _fold(x, lo, hi):
+    """gen ``fold``: reflect ``x`` back and forth into ``[lo, hi]``."""
+    span = hi - lo
+    if span <= 0:
+        raise UnsupportedKernel(f"fold() with hi <= lo ({lo}, {hi}) is not simulated")
+    v = (x - lo) % (2 * span)
+    return lo + (2 * span - v if v > span else v)
+
+
 _FUNCS = {
     # decibels <-> linear
     "dbtoa": lambda x: 10.0 ** (x / 20.0),
@@ -84,7 +115,7 @@ _FUNCS = {
     "abs": abs,
     "sign": _sign,
     "wrap": lambda x, lo, hi: lo + ((x - lo) % (hi - lo)),
-    "fold": lambda x, lo, hi: x,  # not in subset; defined to avoid NameError only
+    "fold": _fold,
     "scale": _scale,
     "mix": lambda a, b, t: a + (b - a) * t,
     # transcendental
@@ -123,9 +154,20 @@ _FUNCS = {
 
 # Tokens that put a kernel outside the supported subset.
 _REFUSE_TOKENS = (
-    "Buffer", "Data", "buffer", "peek", "poke", "index",
-    "pfft", "filtercoeff", "biquad", "cycle", "noise", "sah",
+    "Buffer", "buffer", "index",
+    "pfft", "filtercoeff", "biquad", "cycle", "sah",
 )
+
+_AUG_OPS = {"+": lambda a, b: a + b, "-": lambda a, b: a - b,
+            "*": lambda a, b: a * b, "/": lambda a, b: a / b}
+_NOISE_CALL = re.compile(r"(?<![\w.])noise\s*\(")
+_CUBIC_READ = re.compile(r"""interp\s*=\s*["']cubic["']""")
+_APPROX_NOTES = {
+    "noise": "noise() is a seeded Python RNG: white noise in [-1, 1), "
+             "not sample-identical to gen's generator",
+    "cubic": 'Delay read interp="cubic" is 4-point Lagrange interpolation, '
+             "not checked against gen's own kernel",
+}
 
 
 class _DelayLine:
@@ -152,13 +194,84 @@ class _DelayLine:
         return self.buf[(self.pos - k) % len(self.buf)]
 
     def read(self, taps: float, interp: str = "none") -> float:
-        if interp not in ("none", "linear"):
+        if interp not in ("none", "linear", "cubic"):
             raise UnsupportedKernel(f"Delay interp {interp!r} is not simulated")
-        if interp == "none":
-            return self._tap(int(math.floor(taps)))
-        whole = math.floor(taps)
+        whole = int(math.floor(taps))
         frac = taps - whole
-        return self._tap(int(whole)) * (1 - frac) + self._tap(int(whole) + 1) * frac
+        if interp == "none":
+            return self._tap(whole)
+        if interp == "linear":
+            return self._tap(whole) * (1 - frac) + self._tap(whole + 1) * frac
+        # 4-point Lagrange through taps whole-1 .. whole+2; frac runs from x to y.
+        w, x, y, z = (self._tap(whole + k) for k in (-1, 0, 1, 2))
+        a = frac
+        return (-a * (a - 1) * (a - 2) / 6 * w + (a + 1) * (a - 1) * (a - 2) / 2 * x
+                - (a + 1) * a * (a - 2) / 2 * y + (a + 1) * a * (a - 1) / 6 * z)
+
+
+class _Data:
+    """A gen ``Data``: ``channels`` zeroed rows of ``size`` samples."""
+
+    def __init__(self, size: int, channels: int = 1):
+        if size < 1 or channels < 1:
+            raise UnsupportedKernel(f"Data({size}, {channels}) needs a positive size")
+        self.size = int(size)
+        self.channels = int(channels)
+        self.rows = [[0.0] * self.size for _ in range(self.channels)]
+
+    def _slot(self, index, channel):
+        i, c = math.trunc(index), math.trunc(channel)
+        if 0 <= i < self.size and 0 <= c < self.channels:
+            return i, c
+        return None
+
+
+def _data_arg(data, op: str) -> _Data:
+    if not isinstance(data, _Data):
+        raise UnsupportedKernel(f"{op}() on something other than a Data is not simulated")
+    return data
+
+
+def _peek(data, index, channel=0, **options):
+    if options:
+        raise UnsupportedKernel(f"peek() options {sorted(options)} are not simulated")
+    slot = _data_arg(data, "peek")._slot(index, channel)
+    return 0.0 if slot is None else data.rows[slot[1]][slot[0]]
+
+
+def _poke(data, value, index, channel=0, **options):
+    if options:
+        raise UnsupportedKernel(f"poke() options {sorted(options)} are not simulated")
+    slot = _data_arg(data, "poke")._slot(index, channel)
+    if slot is not None:
+        data.rows[slot[1]][slot[0]] = float(value)
+    return 0.0
+
+
+def _dim(data):
+    return _data_arg(data, "dim").size
+
+
+def _channels(data):
+    return _data_arg(data, "channels").channels
+
+
+_DATA_FUNCS = {"peek": _peek, "poke": _poke, "dim": _dim, "channels": _channels}
+
+
+class _Change:
+    """gen ``change``: sign of the input minus its previous value."""
+
+    def __init__(self) -> None:
+        self.prev = 0.0
+
+    def __call__(self, x):
+        delta, self.prev = x - self.prev, x
+        return float((delta > 0) - (delta < 0))
+
+
+# Stateful operators: every call site gets its own instance (like a user function).
+_STATEFUL_OPS = {"change": _Change}
 
 
 def _strip_outer_parens(expr: str) -> str:
@@ -252,6 +365,7 @@ def _logic_to_py(expr: str) -> str:
 
 
 _FN_HEAD = re.compile(r"([A-Za-z_]\w*)\s*\(([^()]*)\)\s*\{")
+_DECL_HEAD = re.compile(r"(History|Param|Delay|Data)\s")
 _CONTROL_WORDS = frozenset({"if", "else", "for", "while"})
 
 
@@ -305,14 +419,14 @@ class _GenFunction:
     """A parsed user function: parameters, local Histories, body, return."""
 
     def __init__(self, kernel: GenKernel, name: str, params, body: str, names):
-        if re.search(r"(?<![\w.])(Delay|Param)\s", body):
+        if re.search(r"(?<![\w.])(Delay|Data|Param)\s", body):
             raise UnsupportedKernel(
-                f"function {name!r}: Delay/Param declarations inside a function "
+                f"function {name!r}: Delay/Data/Param declarations inside a function "
                 f"are not simulated")
         self.name = name
         self.params = list(params)
         self.sites: dict[str, str] = {}
-        body = _mangle_calls(body, names, self.sites)
+        body = _mangle_calls(body, [*names, *_STATEFUL_OPS], self.sites)
         self.histories, _ = GenKernel._parse_decls(body)
         nodes = kernel._parse_block(body, 0, top=True)
         if not nodes or nodes[-1][0] != "return" or _has_return(nodes[:-1]):
@@ -331,7 +445,9 @@ class _FnInstance:
         self.fn = fn
         self.hist = dict(fn.histories)
         self.children = {site: _FnInstance(functions[callee], functions, depth + 1)
-                         for site, callee in fn.sites.items()}
+                         for site, callee in fn.sites.items() if callee not in _STATEFUL_OPS}
+        self.ops = {site: _STATEFUL_OPS[callee]()
+                    for site, callee in fn.sites.items() if callee in _STATEFUL_OPS}
 
     def call(self, base: dict, *args):
         fn = self.fn
@@ -343,6 +459,7 @@ class _FnInstance:
         ns.update(zip(fn.params, args, strict=True))
         for site, child in self.children.items():
             ns[site] = functools.partial(child.call, base)
+        ns.update(self.ops)
         GenKernel._exec_nodes(fn.nodes, ns)
         result = eval(fn.ret, {"__builtins__": {}}, ns)  # noqa: S307
         for h in self.hist:
@@ -362,9 +479,18 @@ class GenKernel:
     per call site (see :class:`_FnInstance`).
     """
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, *, strict: bool = False):
         body = "\n".join(_strip_comments(code))
         self._refuse_unsupported(body)
+        #: Constructs this kernel uses that are simulated only approximately
+        #: (see the module docstring). Empty means every sample is exact.
+        self.approximations: list[str] = []
+        if _NOISE_CALL.search(body):
+            self.approximations.append(_APPROX_NOTES["noise"])
+        if _CUBIC_READ.search(body):
+            self.approximations.append(_APPROX_NOTES["cubic"])
+        if strict and self.approximations:
+            raise UnsupportedKernel("strict: " + "; ".join(self.approximations))
         defs, body = self._split_functions(body)
         self.functions: dict[str, _GenFunction] = {}
         for name, (params, fn_body) in defs.items():
@@ -372,10 +498,12 @@ class GenKernel:
             self.functions[name] = _GenFunction(self, name, params, fn_body,
                                                 list(self.functions))
         self.sites: dict[str, str] = {}
-        body = _mangle_calls(body, list(self.functions), self.sites)
+        body = _mangle_calls(body, [*self.functions, *_STATEFUL_OPS], self.sites)
         self.histories, self.params = self._parse_decls(body)
         self.delays = dict(re.findall(
             r"(?<![\w.])Delay\s+([A-Za-z_]\w*)\s*\(([^;]*?)\)\s*;", body))
+        self.datas = dict(re.findall(
+            r"(?<![\w.])Data\s+([A-Za-z_]\w*)\s*\(([^;]*?)\)\s*;", body))
         self.nodes = self._parse_block(body, 0, top=True)
         if _has_return(self.nodes):
             raise UnsupportedKernel("'return' outside a function definition")
@@ -400,12 +528,22 @@ class GenKernel:
 
     @staticmethod
     def _split_functions(body: str):
-        """Peel the leading ``name(params) { ... }`` definitions off ``body``."""
+        """Peel the leading ``name(params) { ... }`` definitions off ``body``.
+
+        Declarations may sit before or between them; they stay in the body.
+        """
         defs: dict[str, tuple[list[str], str]] = {}
+        decls: list[str] = []
         pos, n = 0, len(body)
         while True:
             while pos < n and body[pos] in " \t\r\n":
                 pos += 1
+            decl = _DECL_HEAD.match(body, pos)
+            if decl and ";" in body[pos:]:
+                end = body.index(";", pos) + 1
+                decls.append(body[pos:end])
+                pos = end
+                continue
             head = _FN_HEAD.match(body, pos)
             if not head or head.group(1) in _CONTROL_WORDS:
                 break
@@ -413,7 +551,7 @@ class GenKernel:
             params = [p.strip() for p in head.group(2).split(",") if p.strip()]
             defs[head.group(1)] = (params, body[head.end():close])
             pos = close + 1
-        return defs, body[pos:]
+        return defs, "\n".join([*decls, body[pos:]])
 
     @staticmethod
     def _parse_decls(body: str):
@@ -440,7 +578,7 @@ class GenKernel:
 
     @staticmethod
     def _compile_expr(expr: str):
-        return compile(_ternary_to_py(_logic_to_py(expr.strip())), "<gen>", "eval")
+        return _compile(_ternary_to_py(_logic_to_py(expr.strip())))
 
     def _parse_block(self, body: str, pos: int, top: bool = False):
         """Parse a sequence of statements until ``}`` (or end-of-body if top)."""
@@ -464,7 +602,7 @@ class GenKernel:
                 raise UnsupportedKernel(f"statement without ';': {body[pos:pos + 40]!r}")
             stmt = body[pos:semi].strip()
             pos = semi + 1
-            if not stmt or stmt.startswith(("History ", "Param ", "Delay ")):
+            if not stmt or stmt.startswith(("History ", "Param ", "Delay ", "Data ")):
                 continue
             ret = re.fullmatch(r"return(?![A-Za-z0-9_])\s*(.*)", stmt, re.S)
             if ret:
@@ -472,11 +610,14 @@ class GenKernel:
                          for part in _split_top_commas(ret.group(1))]
                 expr = parts[0] if len(parts) == 1 else (
                     "(" + ", ".join(f"({part})" for part in parts) + ")")
-                nodes.append(("return", compile(expr, "<gen>", "eval")))
+                nodes.append(("return", _compile(expr)))
                 continue
             write = re.fullmatch(r"([A-Za-z_]\w*)\.write\((.*)\)", stmt, re.S)
             if write:
                 nodes.append(("write", write.group(1), self._compile_expr(write.group(2))))
+                continue
+            if re.match(r"poke\s*\(", stmt):
+                nodes.append(("call", self._compile_expr(stmt)))
                 continue
             nodes.append(self._parse_assign(stmt))
         if top:
@@ -484,6 +625,9 @@ class GenKernel:
         raise UnsupportedKernel("unterminated block (missing '}')")
 
     def _parse_assign(self, stmt: str):
+        aug = re.fullmatch(r"([A-Za-z_]\w*)\s*([-+*/])=\s*(.+)", stmt, re.S)
+        if aug:
+            return ("augassign", aug.group(1), aug.group(2), self._compile_expr(aug.group(3)))
         if "=" not in stmt:
             raise UnsupportedKernel(f"non-assignment statement: {stmt!r}")
         lhs, rhs = stmt.split("=", 1)
@@ -539,9 +683,9 @@ class GenKernel:
     def _count_outs(self, nodes) -> int:
         num = 0
         for node in nodes:
-            if node[0] == "write":
+            if node[0] in ("write", "call"):
                 continue
-            if node[0] in ("assign", "massign"):
+            if node[0] in ("assign", "massign", "augassign"):
                 targets = node[1] if node[0] == "massign" else [node[1]]
                 for target in targets:
                     m = re.fullmatch(r"out(\d+)", target)
@@ -559,8 +703,13 @@ class GenKernel:
         for node in nodes:
             if node[0] == "write":
                 ns[node[1]].write(eval(node[2], {"__builtins__": {}}, ns))  # noqa: S307
+            elif node[0] == "call":
+                eval(node[1], {"__builtins__": {}}, ns)  # noqa: S307
             elif node[0] == "assign":
                 ns[node[1]] = eval(node[2], {"__builtins__": {}}, ns)  # noqa: S307
+            elif node[0] == "augassign":
+                ns[node[1]] = _AUG_OPS[node[2]](
+                    ns[node[1]], eval(node[3], {"__builtins__": {}}, ns))  # noqa: S307
             elif node[0] == "massign":
                 values = eval(node[2], {"__builtins__": {}}, ns)  # noqa: S307
                 if not isinstance(values, tuple) or len(values) != len(node[1]):
@@ -577,11 +726,17 @@ class GenKernel:
                     if node[2] is not None:
                         GenKernel._exec_nodes(node[2], ns)
 
-    def run(self, inputs=None, params=None, samplerate=48000.0, num_samples=None):
+    def run(self, inputs=None, params=None, samplerate=48000.0, num_samples=None,
+            *, seed: int = 0):
         """Run the kernel and return ``{outK: [values...]}``.
 
         inputs: dict ``{"in1": [...], "in2": [...]}`` (or a single list for in1).
         params: dict overriding Param defaults (held constant across the run).
+        seed: seeds ``noise()`` so a run is repeatable.
+
+        Anything the simulator cannot evaluate faithfully mid-run (an unknown
+        name, a division by zero) raises :class:`UnsupportedKernel` naming the
+        sample, never a guessed value.
         """
         if isinstance(inputs, (list, tuple)):
             inputs = {"in1": list(inputs)}
@@ -595,36 +750,80 @@ class GenKernel:
             pvals.update({k: float(v) for k, v in params.items()})
 
         sr = float(samplerate)
-        base = dict(_FUNCS)
+        rng = random.Random(seed)
+        base: dict[str, Any] = dict(_FUNCS)
+        base.update(_DATA_FUNCS)
         base["samplerate"] = sr
         base["mstosamps"] = lambda ms: ms * sr * 0.001
         base["sampstoms"] = lambda samps: samps * 1000.0 / sr
+        base["noise"] = lambda: rng.uniform(-1.0, 1.0)
+
+        def _size(expr: str) -> int:
+            return int(_eval_const(expr, base))
 
         outs = {f"out{k}": [0.0] * num_samples for k in range(1, self.num_outs + 1)}
-        delays = {name: _DelayLine(int(eval(size, {"__builtins__": {}}, base)))  # noqa: S307
-                  for name, size in self.delays.items()}
-        sites = {site: functools.partial(
-                     _FnInstance(self.functions[callee], self.functions).call, base)
+        state: dict = {name: _DelayLine(_size(size)) for name, size in self.delays.items()}
+        for name, args in self.datas.items():
+            sizes = [_size(arg) for arg in _split_top_commas(args)]
+            if not 1 <= len(sizes) <= 2:
+                raise UnsupportedKernel(f"Data {name}({args}): expected (size[, channels])")
+            state[name] = _Data(*sizes)
+        sites = {site: _STATEFUL_OPS[callee]() if callee in _STATEFUL_OPS else
+                 functools.partial(_FnInstance(self.functions[callee], self.functions).call,
+                                   base)
                  for site, callee in self.sites.items()}
-        for n in range(num_samples):
-            ns = dict(base)
-            ns.update(delays)
-            ns.update(hist)
-            ns.update(pvals)
-            ns.update(sites)
-            for name, seq in inputs.items():
-                ns[name] = float(seq[n]) if n < len(seq) else 0.0
-            self._exec_nodes(self.nodes, ns)
-            for h in hist:
-                hist[h] = ns[h]
-            for line in delays.values():
-                line.advance()
-            for k in range(1, self.num_outs + 1):
-                outs[f"out{k}"][n] = ns[f"out{k}"]
+        n = 0
+        try:
+            for n in range(num_samples):
+                ns = dict(base)
+                ns.update(state)
+                ns.update(hist)
+                ns.update(pvals)
+                ns.update(sites)
+                for name, seq in inputs.items():
+                    ns[name] = float(seq[n]) if n < len(seq) else 0.0
+                self._exec_nodes(self.nodes, ns)
+                for h in hist:
+                    hist[h] = ns[h]
+                for line in state.values():
+                    if isinstance(line, _DelayLine):
+                        line.advance()
+                for k in range(1, self.num_outs + 1):
+                    outs[f"out{k}"][n] = ns[f"out{k}"]
+        except UnsupportedKernel as exc:
+            raise UnsupportedKernel(f"sample {n}: {exc}") from exc
+        except NameError as exc:
+            raise UnsupportedKernel(
+                f"sample {n}: unknown name {exc.name!r} (a gen operator the simulator "
+                f"does not model, or a variable read before it is assigned)") from exc
+        except KeyError as exc:
+            raise UnsupportedKernel(
+                f"sample {n}: {exc.args[0]} is not assigned on every sample") from exc
+        except (ArithmeticError, ValueError, TypeError, AttributeError) as exc:
+            raise UnsupportedKernel(
+                f"sample {n}: {type(exc).__name__}: {exc} (gen's own handling of this "
+                f"case is not simulated)") from exc
         return outs
 
 
+def _compile(expr: str):
+    try:
+        return compile(expr, "<gen>", "eval")
+    except SyntaxError as exc:
+        raise UnsupportedKernel(f"cannot parse expression {expr!r}") from exc
+
+
+def _eval_const(expr: str, base: dict) -> float:
+    """Evaluate a declaration size (``Delay d(samplerate)``) against the constants."""
+    try:
+        return eval(_compile(expr.strip()), {"__builtins__": {}}, base)  # noqa: S307
+    except UnsupportedKernel:
+        raise
+    except Exception as exc:  # a size the simulator cannot evaluate up front
+        raise UnsupportedKernel(f"cannot evaluate declaration size {expr!r}: {exc}") from exc
+
+
 def simulate(code: str, inputs=None, params=None, samplerate=48000.0,
-             num_samples=None):
+             num_samples=None, *, seed: int = 0):
     """Parse + run a gen kernel in one call. See :meth:`GenKernel.run`."""
-    return GenKernel(code).run(inputs, params, samplerate, num_samples)
+    return GenKernel(code).run(inputs, params, samplerate, num_samples, seed=seed)
