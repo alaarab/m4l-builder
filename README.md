@@ -101,10 +101,31 @@ m4l watch my_gain/build.py         # rebuild into the User Library on every save
 m4l lint my_gain/build.py          # validation + box lint + GenExpr lint, no write
 m4l preview my_gain/build.py       # render the panel to an SVG (see the gallery above)
 m4l inspect "My Gain.amxd"         # type, size, parameters, box counts (--json too)
+m4l import "Their Device.amxd"     # write a build.py that rebuilds an existing device
 ```
 
 Any script that calls `device.build(path)` works, including everything in
 `examples/`. See the [command line guide](docs/cli.md).
+
+## Bring an existing device
+
+Already have a device made in Max? `m4l import` writes a build script that
+rebuilds it:
+
+```bash
+m4l import "Their Device.amxd"     # -> their_device/build.py (+ its .js / .gendsp files)
+m4l build their_device/build.py
+```
+
+The script uses the right device class, size and theme, writes controls as
+`add_dial` / `add_menu` / ... calls with their ranges and units, objects as
+`add_newobj` and patch cords as `add_line`, and carries gen~ code, scripts and
+subpatchers across. Every call is checked against the source before it is
+written, and the command finishes by rebuilding the device and confirming it
+matches. Anything no library call can reproduce (a plain Max `number` box, a
+gen~ patcher saved by Max) is kept as a raw `add_box` dict marked
+`TODO(m4l import)`, so nothing is dropped. Frozen devices work too. See
+[Bring an existing device](docs/importing.md).
 
 ## Key concepts
 

@@ -69,6 +69,7 @@ nav:
   - Getting started: getting_started.md
   - Command line: cli.md
   - Example gallery: gallery.md
+  - Bring an existing device: importing.md
   - Guides:
       - DSP & UI catalog: catalog.md
       - MIDI Tools (Live 12): midi_tools.md

@@ -1,4 +1,5 @@
-"""The ``m4l`` command line: scaffold, build, watch, lint, preview and inspect devices.
+"""The ``m4l`` command line: scaffold, build, watch, lint, preview, inspect and import
+devices.
 
 Installed as the ``m4l`` console script (also ``python -m m4l_builder``)::
 
@@ -8,6 +9,7 @@ Installed as the ``m4l`` console script (also ``python -m m4l_builder``)::
     m4l lint my_gain/build.py          # validation + box lint + GenExpr lint
     m4l preview my_gain/build.py       # render the presentation view to SVG
     m4l inspect "My Gain.amxd"         # type, size, parameters, box counts
+    m4l import "Their Device.amxd"     # write a build.py that rebuilds it
 
 A build script is any Python file that makes a :class:`~m4l_builder.Device` and
 calls ``device.build(path)``, the way every example does. The CLI runs it as
@@ -569,6 +571,51 @@ def _cmd_inspect(args) -> int:
     return 0
 
 
+def _cmd_import(args) -> int:
+    from .importer import check_import, import_amxd
+
+    source = Path(args.file)
+    target = Path(args.out) if args.out else Path(slugify(source.stem)) / "build.py"
+    if target.suffix != ".py":
+        target = target / "build.py"
+    result = import_amxd(source, script_name=target.name)
+    clashes = [path for path in [target, *(target.parent / name for name in result.files)]
+               if path.exists()]
+    if clashes and not args.force:
+        print(f"m4l import: {clashes[0]} already exists (pass --force to overwrite)",
+              file=sys.stderr)
+        return 1
+    written = result.write(target)
+    print(f"created {target}")
+    for path in written[1:]:
+        print(f"        {path}  (support file)")
+    theme = result.theme_name or "none recognised"
+    print(f"{result.class_name}, theme {theme}: {result.box_count} boxes, "
+          f"{result.line_count} patch lines")
+    if result.raw_boxes:
+        print(f"kept raw: {len(result.raw_boxes)} box(es) no m4l-builder call reproduces "
+              "(marked TODO(m4l import) in the script)")
+        for entry in result.raw_boxes:
+            print(f"  - {entry}")
+    if result.missing:
+        print(f"missing support files: {', '.join(result.missing)} (not inside the device "
+              "or next to it)")
+    if not args.no_check:
+        try:
+            diffs = check_import(result.source, target)
+        except Exception as exc:  # the generated script itself failed to run
+            print(f"round-trip check failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+        if diffs:
+            print("round-trip: the script does NOT rebuild an identical device:")
+            for diff in diffs:
+                print(f"  - {diff}")
+            return 1
+        print("round-trip: the script rebuilds an identical device (box IDs aside)")
+    print(f"next:   m4l build {target}    (or: m4l watch {target})")
+    return 0
+
+
 def watch(script: str | os.PathLike, *, out: str | None = None, interval: float = 0.5) -> int:
     """Rebuild ``script`` every time its mtime changes, until Ctrl-C.
 
@@ -661,6 +708,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("file", help="device (.amxd)")
     p.add_argument("--json", action="store_true", help="print the summary as JSON")
     p.set_defaults(func=_cmd_inspect)
+
+    p = sub.add_parser("import", help="write a build script that rebuilds an existing .amxd")
+    p.add_argument("file", help="device (.amxd), frozen or with its support files beside it")
+    p.add_argument("--out", help="script path or folder (default: <name>/build.py)")
+    p.add_argument("--force", action="store_true", help="overwrite existing files")
+    p.add_argument("--no-check", action="store_true",
+                   help="skip running the script to confirm it rebuilds the device")
+    p.set_defaults(func=_cmd_import)
     return parser
 
 
