@@ -4,13 +4,43 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 10 * * *"
 
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.changed.outputs.code }}
+    steps:
+      - id: changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PULL_REQUEST" ]; then
+            echo 'code=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST/files" --paginate --slurp > changed.json
+          jq -r '
+            add | if length == 0 or length >= 3000 then "code=true"
+            elif all(.[]; [.filename, .previous_filename?] | map(select(. != null))
+              | all(test("^(docs/|[^/]+\\.md$)"))) then "code=false"
+            else "code=true" end
+          ' changed.json >> "$GITHUB_OUTPUT"
+
   lint:
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     name: lint & type-check
     runs-on: ubuntu-latest
     steps:
@@ -28,22 +58,31 @@ jobs:
         run: uv run mypy
 
   test:
+    needs: scope
     name: pytest (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    # Keep the named matrix checks for the branch ruleset. Only one version
+    # installs and runs pytest on code PRs. Main, nightly and manual runs
+    # exercise every supported version.
     steps:
       - uses: actions/checkout@v7.0.1
+        if: &run_tests needs.scope.outputs.code == 'true' && (github.event_name != 'pull_request' || matrix.python-version == '3.12')
       - name: Install uv
+        if: *run_tests
         uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Sync dev dependencies
+        if: *run_tests
         run: uv sync --locked --group dev
       - name: Build package
+        if: *run_tests
         run: uv build
       - name: Pytest
+        if: *run_tests
         run: uv run pytest --cov=m4l_builder --cov-report=term-missing
